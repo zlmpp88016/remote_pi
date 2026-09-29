@@ -50,6 +50,7 @@ beforeEach(async () => {
   testHome = mkdtempSync(join(tmpdir(), "pi-sv-"));
   process.env["REMOTE_PI_HOME"] = testHome;
   supervisor = new Supervisor({
+    skipHost: true,
     // Point at a non-existent extension. The supervisor will try to
     // spawn `<piBin> --mode rpc -e <path>` and the child exits immediately —
     // fine for testing the control surface (we assert on op replies, not on

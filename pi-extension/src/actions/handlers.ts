@@ -15,6 +15,9 @@
  *                                  event when done
  *   - `ctx.newSession()`         — only on `ExtensionCommandContext`;
  *                                  resolves with `{cancelled}` flag
+ *   - `ctx.switchSession(path)`  — plan/67, command ctx only; `{cancelled}`
+ *                                  maps to wire `locked`
+ *   - `listSessions(cwd)`        — injected; production uses SessionManager.list
  *   - `pi.setModel(model)`       — returns `false` if no auth configured
  *   - `pi.setThinkingLevel(lvl)` — synchronous
  *   - `ctx.getModel()`           — optional, undefined before first turn
@@ -91,6 +94,14 @@ export interface ActionCtx {
   newSession?: (options?: {
     withSession?: (ctx: ActionCtx) => Promise<void>;
   }) => Promise<{ cancelled: boolean }>;
+  /** Plan/67 — switch to another session file. Command ctx only. */
+  switchSession?: (
+    sessionPath: string,
+    options?: { withSession?: (ctx: ActionCtx) => Promise<void> },
+  ) => Promise<{ cancelled: boolean }>;
+  cwd?: string;
+  getSessionId?: () => string | undefined;
+  getSessionFile?: () => string | undefined;
   getModel?: () => Model<any> | undefined;
   /**
    * Live session registry from Pi's extension ctx. Includes providers/models
@@ -181,6 +192,20 @@ type SessionNewMsg = Extract<ClientMessage, { type: "session_new" }>;
 type ModelSetMsg = Extract<ClientMessage, { type: "model_set" }>;
 type ThinkingSetMsg = Extract<ClientMessage, { type: "thinking_set" }>;
 type ListModelsMsg = Extract<ClientMessage, { type: "list_models" }>;
+type SessionListMsg = Extract<ClientMessage, { type: "session_list" }>;
+type SessionSwitchMsg = Extract<ClientMessage, { type: "session_switch" }>;
+
+/** Plan/67 — one listed AgentSession. Injected so tests never import the SDK. */
+export interface ListedSession {
+  id: string;
+  path: string;
+  name?: string;
+  mtime: number;
+  preview?: string;
+  cwd?: string;
+}
+
+export type ListSessionsFn = (cwd: string) => Promise<ListedSession[]>;
 
 export function handleSessionCompact(
   ctx: ActionCtx | null,
@@ -297,5 +322,139 @@ export function handleListModels(
       code: "internal_error",
       message: e instanceof Error ? e.message : String(e),
     });
+  }
+}
+
+/** Plan/67 — list AgentSessions for the workspace cwd. */
+export async function handleSessionList(
+  ctx: ActionCtx | null,
+  sender: ActionReplySender,
+  msg: SessionListMsg,
+  listSessions: ListSessionsFn,
+): Promise<void> {
+  const cwd = ctx?.cwd;
+  if (!cwd) {
+    sender.send({
+      type: "action_error",
+      in_reply_to: msg.id,
+      action: "session_list",
+      error: "cwd unavailable (no session ctx)",
+    });
+    return;
+  }
+  try {
+    const listed = await listSessions(cwd);
+    const currentId = ctx.getSessionId?.() ?? null;
+    sender.send({
+      type: "session_list_ok",
+      in_reply_to: msg.id,
+      current_id: currentId,
+      sessions: listed.map((s) => ({
+        id: s.id,
+        name: s.name,
+        mtime: s.mtime,
+        preview: s.preview,
+        live: currentId != null && s.id === currentId,
+        cwd: s.cwd,
+      })),
+    });
+  } catch (e) {
+    sender.send({
+      type: "action_error",
+      in_reply_to: msg.id,
+      action: "session_list",
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+/**
+ * Plan/67 — switch the live AgentSession.
+ * Returns true only when the SDK actually switched (caller must reset the
+ * remote-pi mirror). `cancelled` → wire `locked` (no steal).
+ */
+export async function handleSessionSwitch(
+  ctx: ActionCtx | null,
+  sender: ActionReplySender,
+  msg: SessionSwitchMsg,
+  listSessions: ListSessionsFn,
+  onReplaced?: (freshCtx: ActionCtx) => void,
+): Promise<boolean> {
+  if (!ctx?.switchSession) {
+    sender.send({
+      type: "session_switch_error",
+      in_reply_to: msg.id,
+      code: "no_sdk",
+      message: "switchSession unavailable (no command ctx; daemon needs --resume)",
+    });
+    return false;
+  }
+  const cwd = ctx.cwd;
+  if (!cwd) {
+    sender.send({
+      type: "session_switch_error",
+      in_reply_to: msg.id,
+      code: "unknown",
+      message: "cwd unavailable",
+    });
+    return false;
+  }
+  let listed: ListedSession[];
+  try {
+    listed = await listSessions(cwd);
+  } catch (e) {
+    sender.send({
+      type: "session_switch_error",
+      in_reply_to: msg.id,
+      code: "unknown",
+      message: e instanceof Error ? e.message : String(e),
+    });
+    return false;
+  }
+  const target = listed.find((s) => s.id === msg.session_id);
+  if (!target) {
+    sender.send({
+      type: "session_switch_error",
+      in_reply_to: msg.id,
+      code: "unknown",
+      message: `session "${msg.session_id}" not in this workspace`,
+    });
+    return false;
+  }
+  const currentId = ctx.getSessionId?.();
+  if (currentId && currentId === target.id) {
+    sender.send({
+      type: "session_switch_ok",
+      in_reply_to: msg.id,
+      session_id: target.id,
+      // 0 = unchanged clock; callers must not treat this as a new session.
+      session_started_at: 0,
+    });
+    return false; // already live — do not wipe the mirror
+  }
+  try {
+    const result = await ctx.switchSession(target.path, {
+      withSession: async (freshCtx) => { onReplaced?.(freshCtx); },
+    });
+    if (result.cancelled) {
+      sender.send({
+        type: "session_switch_error",
+        in_reply_to: msg.id,
+        code: "locked",
+        message: "session switch cancelled (in use or hook refused)",
+      });
+      return false;
+    }
+    // Caller (index.ts) sends session_switch_ok AFTER resetting the mirror
+    // so session_started_at matches the empty session_history fan-out.
+    return true;
+  } catch (e) {
+    sender.send({
+      type: "session_switch_error",
+      in_reply_to: msg.id,
+      code: "unknown",
+      message: e instanceof Error ? e.message : String(e),
+    });
+    return false;
   }
 }

@@ -228,6 +228,8 @@ Vocabulário curado de ações tipadas que o app mobile invoca sobre a sessão d
 | Set model | `model_set {provider, model_id}` | `ModelRegistry.find(...)` + `pi.setModel(model)` |
 | Set thinking | `thinking_set {level}` | `pi.setThinkingLevel(level)` |
 | List models | `list_models` | `ModelRegistry.getAvailable()` |
+| List sessions | `session_list` | `SessionManager.list(cwd)` |
+| Switch session | `session_switch {session_id}` | `ctx.switchSession(path)` |
 
 ### Wire — exemplos
 
@@ -264,6 +266,42 @@ Vocabulário curado de ações tipadas que o app mobile invoca sobre a sessão d
 ```
 
 `"xhigh"` só é honrado em famílias de modelo específicas (Anthropic 4.x reasoning, OpenAI o-series). Pi cai pra um nível vizinho quando não suporta — sem erro.
+
+### Session list / switch (plan 67)
+
+Pairing is **machine-level**. Inside a workspace room the app lists and switches Pi AgentSessions (not rooms).
+
+```json
+{ "type": "session_list", "id": "<uuid>" }
+{
+  "type": "session_list_ok",
+  "in_reply_to": "<uuid>",
+  "current_id": "<id or null>",
+  "sessions": [
+    { "id": "<session-id>", "name": "…", "mtime": 0, "preview": "…", "live": true, "cwd": "/abs" }
+  ]
+}
+
+{ "type": "session_switch", "id": "<uuid>", "session_id": "<id>" }
+{ "type": "session_switch_ok", "in_reply_to": "<uuid>", "session_id": "<id>", "session_started_at": 0 }
+{ "type": "session_switch_error", "in_reply_to": "<uuid>", "code": "locked" | "unknown" | "no_sdk", "message": "…" }
+```
+
+`session_switch_ok` **resets the transcript mirror** the same way as `session_new` (empty `session_history` + new `session_started_at`). `locked` means the SDK hook cancelled the switch (do not steal a TUI session). `no_sdk` means there is no command ctx (`switchSession` unavailable — typical of a daemon until `--resume` spawn).
+
+### Host room (`room=host`, plan 67)
+
+`pi-supervisord` opens a second WS on the same Pi-key with reserved `room_id = "host"`. Catalog = registered daemons only (no disk scan). Unregistered cwd → `action_error.error = "not_registered"`.
+
+```json
+{ "type": "workspace_list", "id": "<uuid>" }
+{ "type": "workspace_list_ok", "in_reply_to": "<uuid>", "workspaces": [
+  { "cwd": "/abs", "daemon_id": "a1b2c3d4", "room_id": "…", "name": "…", "live": true, "daemon": true }
+]}
+{ "type": "workspace_start", "id": "<uuid>", "cwd": "/abs" }
+{ "type": "workspace_start_ok", "in_reply_to": "<uuid>", "cwd": "/abs", "room_id": "…", "daemon_id": "a1b2c3d4" }
+{ "type": "workspace_stop", "id": "<uuid>", "daemon_id": "a1b2c3d4" }
+```
 
 ### Side-effects
 

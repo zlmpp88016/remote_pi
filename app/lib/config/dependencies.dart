@@ -9,6 +9,7 @@ import 'package:app/data/local/boxes.dart';
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/data/repositories/home_read_repository.dart';
 import 'package:app/data/repositories/session_read_repository.dart';
+import 'package:app/data/sessions/session_catalog.dart';
 import 'package:app/data/sync/sync_service.dart';
 import 'package:app/data/transport/channel.dart'; // IChannel
 import 'package:app/data/transport/connection_manager.dart';
@@ -126,6 +127,9 @@ Future<void> setupDependencies() async {
   // Repositories
   _injector.addRepository<IActionsRepository>(
     () => ActionsRepository(_injector.get<ConnectionManager>()),
+  );
+  _injector.addInstance<SessionCatalog>(
+    SessionCatalog(_injector.get<ConnectionManager>()),
   );
 
   // ViewModels

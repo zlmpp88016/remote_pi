@@ -542,8 +542,15 @@ class HomePage extends StatelessWidget {
     // the detail pane reacts to the selection above — no nav needed.
     if (!isWideLayout(context)) {
       context.push(
-        '/chat',
-        extra: {'title': title, 'device': device, 'online': online},
+        '/sessions',
+        extra: {
+          'epk': peer.remoteEpk,
+          'roomId': room.roomId,
+          'cwd': room.cwd,
+          'title': title,
+          'device': device,
+          'online': online,
+        },
       );
     }
   }

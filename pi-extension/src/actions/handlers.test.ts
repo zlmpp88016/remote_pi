@@ -17,11 +17,14 @@ import {
   handleModelSet,
   handleThinkingSet,
   handleListModels,
+  handleSessionList,
+  handleSessionSwitch,
   wireFromModel,
   type ActionCtx,
   type ActionPi,
   type ActionModelRegistry,
   type SdkModelLike,
+  type ListedSession,
 } from "./handlers.js";
 import type { ServerMessage } from "../protocol/types.js";
 
@@ -379,5 +382,173 @@ describe("wireFromModel", () => {
   test("vision=false when model.input is text-only", () => {
     const textOnly: SdkModelLike = { ...sampleModel, input: ["text"] };
     expect(wireFromModel(textOnly).vision).toBe(false);
+  });
+});
+
+// ── session_list / session_switch (plan/67) ────────────────────────────────
+
+const sampleListed: ListedSession[] = [
+  {
+    id: "aaa",
+    path: "/tmp/sessions/aaa.jsonl",
+    name: "first",
+    mtime: 1000,
+    preview: "hello",
+    cwd: "/proj",
+  },
+  {
+    id: "bbb",
+    path: "/tmp/sessions/bbb.jsonl",
+    name: "second",
+    mtime: 2000,
+    cwd: "/proj",
+  },
+];
+
+describe("handleSessionList", () => {
+  test("happy path marks the live session", async () => {
+    const ctx: ActionCtx = { cwd: "/proj", getSessionId: () => "aaa" };
+    const sender = makeSender();
+    await handleSessionList(ctx, sender, { type: "session_list", id: "r7" }, async () => sampleListed);
+    expect(sender.sent[0]).toMatchObject({
+      type: "session_list_ok",
+      in_reply_to: "r7",
+      current_id: "aaa",
+    });
+    const ok = sender.sent[0] as Extract<ServerMessage, { type: "session_list_ok" }>;
+    expect(ok.sessions).toHaveLength(2);
+    expect(ok.sessions[0]?.live).toBe(true);
+    expect(ok.sessions[1]?.live).toBe(false);
+  });
+
+  test("missing cwd → action_error", async () => {
+    const sender = makeSender();
+    await handleSessionList(null, sender, { type: "session_list", id: "r7" }, async () => sampleListed);
+    expect(sender.sent[0]).toMatchObject({
+      type: "action_error",
+      action: "session_list",
+      error: expect.stringContaining("cwd unavailable"),
+    });
+  });
+});
+
+describe("handleSessionSwitch", () => {
+  test("happy path returns true and does not send ok (caller sends after reset)", async () => {
+    const switched: string[] = [];
+    const ctx: ActionCtx = {
+      cwd: "/proj",
+      getSessionId: () => "aaa",
+      switchSession: async (path) => {
+        switched.push(path);
+        return { cancelled: false };
+      },
+    };
+    const sender = makeSender();
+    const changed = await handleSessionSwitch(
+      ctx,
+      sender,
+      { type: "session_switch", id: "r8", session_id: "bbb" },
+      async () => sampleListed,
+    );
+    expect(changed).toBe(true);
+    expect(switched).toEqual(["/tmp/sessions/bbb.jsonl"]);
+    expect(sender.sent).toEqual([]);
+  });
+
+  test("already live → session_switch_ok without reset", async () => {
+    const ctx: ActionCtx = {
+      cwd: "/proj",
+      getSessionId: () => "aaa",
+      switchSession: async () => ({ cancelled: false }),
+    };
+    const sender = makeSender();
+    const changed = await handleSessionSwitch(
+      ctx,
+      sender,
+      { type: "session_switch", id: "r8", session_id: "aaa" },
+      async () => sampleListed,
+    );
+    expect(changed).toBe(false);
+    expect(sender.sent[0]).toMatchObject({
+      type: "session_switch_ok",
+      session_id: "aaa",
+    });
+  });
+
+  test("unknown id → session_switch_error unknown", async () => {
+    const ctx: ActionCtx = {
+      cwd: "/proj",
+      switchSession: async () => ({ cancelled: false }),
+    };
+    const sender = makeSender();
+    const changed = await handleSessionSwitch(
+      ctx,
+      sender,
+      { type: "session_switch", id: "r8", session_id: "zzz" },
+      async () => sampleListed,
+    );
+    expect(changed).toBe(false);
+    expect(sender.sent[0]).toMatchObject({
+      type: "session_switch_error",
+      code: "unknown",
+    });
+  });
+
+  test("cancelled hook → locked (no steal)", async () => {
+    const ctx: ActionCtx = {
+      cwd: "/proj",
+      getSessionId: () => "aaa",
+      switchSession: async () => ({ cancelled: true }),
+    };
+    const sender = makeSender();
+    const changed = await handleSessionSwitch(
+      ctx,
+      sender,
+      { type: "session_switch", id: "r8", session_id: "bbb" },
+      async () => sampleListed,
+    );
+    expect(changed).toBe(false);
+    expect(sender.sent[0]).toMatchObject({
+      type: "session_switch_error",
+      code: "locked",
+    });
+  });
+
+  test("no switchSession on ctx → no_sdk", async () => {
+    const sender = makeSender();
+    const changed = await handleSessionSwitch(
+      { cwd: "/proj" },
+      sender,
+      { type: "session_switch", id: "r8", session_id: "bbb" },
+      async () => sampleListed,
+    );
+    expect(changed).toBe(false);
+    expect(sender.sent[0]).toMatchObject({
+      type: "session_switch_error",
+      code: "no_sdk",
+    });
+  });
+
+  test("forwards withSession ctx via onReplaced", async () => {
+    const fresh: ActionCtx = { cwd: "/proj" };
+    const ctx: ActionCtx = {
+      cwd: "/proj",
+      getSessionId: () => "aaa",
+      switchSession: async (_path, opts) => {
+        await opts?.withSession?.(fresh);
+        return { cancelled: false };
+      },
+    };
+    const sender = makeSender();
+    let recaptured: ActionCtx | null = null;
+    const changed = await handleSessionSwitch(
+      ctx,
+      sender,
+      { type: "session_switch", id: "r8", session_id: "bbb" },
+      async () => sampleListed,
+      (c) => { recaptured = c; },
+    );
+    expect(changed).toBe(true);
+    expect(recaptured).toBe(fresh);
   });
 });

@@ -51,7 +51,7 @@ Numeração `00-` é proposital: este arquivo carrega antes dos planos numerados
 | ~~**Project scope via git root**~~ | ~~App pareado vê só sessões do projeto onde `/remote-pi` rodou. Detecção: subir a árvore procurando `.git`, `package.json`, `pyproject.toml`, `Cargo.toml`. Fallback: cwd exato~~ |
 | ~~**Refutados**: cwd-exato (perde sessões da raiz quando entra `src/`) e Mac-inteiro (vaza projetos pessoais)~~ | |
 | ~~**Pareamento global, vista por projeto**~~ | ~~Chave de longo prazo é por Mac (singleton). Lista de sessões filtra por project scope do Pi que tá rodando~~ |
-| **Pareamento = 1 sessão (MVP)** | Revertido em 2026-05-18. Razão: enxugar MVP. QR gerado por `/remote-pi` é específico da sessão Pi corrente. App vê apenas essa sessão. Sem project scope, sem session manager, sem listagem multi-sessão por projeto. Multi-sessão volta a ser considerado em v2 (`plan/07-v2-multi-session.md` quando aparecer demanda real) |
+| ~~**Pareamento = 1 sessão (MVP)**~~ | ~~Revertido em 2026-05-18. Razão: enxugar MVP. QR gerado por `/remote-pi` é específico da sessão Pi corrente. App vê apenas essa sessão. Sem project scope, sem session manager, sem listagem multi-sessão por projeto. Multi-sessão volta a ser considerado em v2 (`plan/07-v2-multi-session.md` quando aparecer demanda real)~~ — **reaberto 2026-09-28 (plano 67)**: pairing volta a ser **máquina** (Pi-key). QR `rm` é workspace default. Depois do par, o app escolhe workspace (cwd) e AgentSession. Sem scan de disco; catálogo = daemons registrados ∪ rooms live. |
 
 ## Multi-instância (vários Pi)
 
@@ -60,18 +60,18 @@ Numeração `00-` é proposital: este arquivo carrega antes dos planos numerados
 | **App pareado com N Pis (fechado 2026-05-19, plano 08 Q1)** | Sim — `peers.json` (Mac) e Keychain (mobile) já são listas. App mostra todos em Settings com switcher. Só 1 ativo por vez no `ConnectionManager` |
 | ~~**Pi pareado com N devices (fechado 2026-05-19, plano 08 Q2)**~~ | ~~Opção C: storage suporta N (`peers.json`), **mas só 1 device conectado simultaneamente** (`_peerChannel` é singleton). Outros pareados ficam dormentes. Modelo broadcast/multi-ativo cortado por complexidade~~ — **revisada 2026-05-23 (plan 23 Wave 2C)**: invariante "1 conn por `(peer, room)`" no relay relaxada pra broadcast. Devices com mesma Owner-key (plan 23) podem coexistir conectados e recebem a mesma mensagem do Pi. `_peerChannel` continua singleton no pi-ext porque o broadcast acontece no relay — pi-ext envia 1 envelope, relay distribui. Skip-sender via `from_conn_id` evita eco |
 | 2 terminais Pi na mesma pasta | Cada um gera QR próprio → 2 pareamentos independentes. Zero conflito (mantida — compatível com MVP 1-pareamento-1-sessão) |
-| ~~Pi A pediu `switch_session X`, X está LIVE em Pi B~~ | ~~`AgentSessionRuntime.resume(X)` lança `SessionLockedError`. App mostra "em uso em outro terminal"~~ (revertida 2026-05-18: sem switch_session no MVP) |
+| ~~Pi A pediu `switch_session X`, X está LIVE em Pi B~~ | ~~`AgentSessionRuntime.resume(X)` lança `SessionLockedError`. App mostra "em uso em outro terminal"~~ (revertida 2026-05-18: sem switch_session no MVP) — **parcialmente reaberto 2026-09-28 (plano 67)**: `session_switch` existe de novo. Se a sessão está LIVE no TUI, o app recebe `locked` e **não** rouba. |
 | ~~Pi numa subpasta (`projeto-a/src`)~~ | ~~Resolve project root = `projeto-a/` via marcador → mesmo conjunto de sessões~~ (revertida 2026-05-18: sem project scope no MVP) |
-| App listando pareamentos | Cada item = um pareamento ativo = uma sessão. Estado: **online** (Pi rodando) ou **offline** (Pi fechado/inalcançável). Sem "histórico", sem "em outro Pi", sem cores de estado multi-instância. |
+| App listando pareamentos | **(revisto 2026-09-28, plano 67)** Cada item = uma **máquina** (Pi-key). Drill-in: workspaces → sessões. Online = host room ou qualquer workspace room announced. |
 
 ## UI / produto
 
 | Decisão | Razão / nota |
 |---|---|
 | ~~**Hierarquia Peer → Projeto → Sessão**~~ | ~~Não árvore como home. Inbox de approvals + sessões ativas + recentes~~ (revertida 2026-05-18) |
-| **Hierarquia plana: Pareamento ↔ Sessão (1:1)** | Lista de pareamentos = lista de sessões. Sem camada de projeto. Substitui a hierarquia anterior. |
-| ~~**Sessão histórica = read-only**~~ | ~~Tap abre histórico completo. Botão "Continuar essa sessão" dispara `switch_session` → vira active no Pi → libera write~~ (revertida 2026-05-18: sem conceito de sessão histórica no MVP) |
-| ~~**Mobile pode ativar sessão histórica**~~ | ~~Não precisa o dev resumir no terminal. App envia `switch_session` e Pi process faz `AgentSessionRuntime.resume()`~~ (revertida 2026-05-18: sem switch_session no MVP) |
+| ~~**Hierarquia plana: Pareamento ↔ Sessão (1:1)**~~ | ~~Lista de pareamentos = lista de sessões. Sem camada de projeto. Substitui a hierarquia anterior.~~ **(2026-09-28, plano 67)** Hierarquia **Máquina → Workspace (cwd/room) → AgentSession → chat**. |
+| ~~**Sessão histórica = read-only**~~ | ~~Tap abre histórico completo. Botão "Continuar essa sessão" dispara `switch_session` → vira active no Pi → libera write~~ (revertida 2026-05-18) — **reaberto 2026-09-28 (plano 67)**: lista + `session_switch` no workspace Pi; mirror reset obrigatório. |
+| ~~**Mobile pode ativar sessão histórica**~~ | ~~Não precisa o dev resumir no terminal. App envia `switch_session` e Pi process faz `AgentSessionRuntime.resume()`~~ (revertida 2026-05-18) — **reaberto 2026-09-28 (plano 67)**: mobile envia `session_switch`; se locked no TUI, falha (não steal). |
 | ~~**Rename em 3 níveis**~~ | ~~Peer no Keychain (local), Projeto em `~/.pi/remote/projects.json` (sincroniza p/ outros celulares pareados), Sessão no metadata JSONL (sincroniza bidirecionalmente com a CLI)~~ (revertida 2026-05-18) |
 | **Rename apenas do pareamento** | Local no Keychain/Keystore do mobile. Nome default = cwd onde o Pi rodou (ex: `remote_pi · feature/protocol`). Sem 3 níveis. |
 | **Trabalho paralelo** | Emerge da arquitetura: N Pi processes pareados = N sessões no app. App mostra todas com swipe entre elas |

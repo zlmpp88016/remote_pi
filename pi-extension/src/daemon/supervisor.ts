@@ -29,6 +29,8 @@ import {
   type NewJobInput,
 } from "./cron_registry.js";
 import { appendCronLog, readCronLog, type CronResult } from "./cron_log.js";
+import { HostBridge } from "./host_bridge.js";
+import type { FleetOps } from "./host_control.js";
 
 /**
  * Central process that owns the daemon fleet (plan/26).
@@ -100,6 +102,8 @@ export interface SupervisorOptions {
   extensionPath: string;
   /** Override the `pi` binary path. Defaults to "pi" on PATH. */
   piBin?: string;
+  /** Plan/67 — skip the host-room relay (unit tests / offline). */
+  skipHost?: boolean;
 }
 
 /** Pure decision for `fireJob` (plan/39) — picks the action from the daemon's
@@ -130,6 +134,8 @@ export class Supervisor {
   /** Live croner schedules, keyed by cron job id (plan/39). */
   private readonly cronJobs = new Map<string, Cron>();
   private shuttingDown = false;
+  /** Plan/67 — always-on relay room `host`. */
+  private host: HostBridge | null = null;
 
   constructor(private readonly opts: SupervisorOptions) {}
 
@@ -144,11 +150,19 @@ export class Supervisor {
     // Cron (plan/39): schedule all enabled jobs, then run any missed catchup.
     this._reconcileCron();
     this._runCatchup();
+    if (!this.opts.skipHost) {
+      this.host = new HostBridge({ fleet: this._fleetOps() });
+      void this.host.start().catch((err) => {
+        process.stderr.write(`[pi-supervisord] host room failed: ${String(err)}\n`);
+      });
+    }
   }
 
   /** Graceful shutdown: stop all children, close UDS. */
   async stop(): Promise<void> {
     this.shuttingDown = true;
+    await this.host?.stop();
+    this.host = null;
     // Stop all cron schedules (plan/39) so no fire races with teardown.
     for (const c of this.cronJobs.values()) c.stop();
     this.cronJobs.clear();
@@ -626,6 +640,30 @@ export class Supervisor {
       slot.child.noteRestart();
       slot.child.spawn();
     }, delay);
+  }
+
+  /** Plan/67 — fleet surface for the host room. */
+  private _fleetOps(): FleetOps {
+    return {
+      list: () => this._listInfo().map((d) => ({
+        id: d.id,
+        cwd: d.cwd,
+        name: d.name,
+        live: d.state === "running",
+      })),
+      start: (id) => {
+        const r = this._opStart(id);
+        if (!r.ok) return { ok: false, error: r.error };
+        const data = r.data as { started?: boolean } | undefined;
+        return { ok: true, started: data?.started !== false };
+      },
+      stop: async (id) => {
+        const r = await this._opStop(id);
+        if (!r.ok) return { ok: false, error: r.error };
+        const data = r.data as { stopped?: boolean } | undefined;
+        return { ok: true, stopped: data?.stopped !== false };
+      },
+    };
   }
 }
 

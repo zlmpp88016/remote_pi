@@ -47,6 +47,18 @@ void main() {
       expect(ListModels(id: 'r6').toJson(),
           {'type': 'list_models', 'id': 'r6'});
     });
+
+    test('SessionList encodes as session_list', () {
+      expect(SessionList(id: 'r7').toJson(),
+          {'type': 'session_list', 'id': 'r7'});
+    });
+
+    test('SessionSwitch encodes session_id', () {
+      expect(
+        SessionSwitch(id: 'r8', sessionId: 'abc').toJson(),
+        {'type': 'session_switch', 'id': 'r8', 'session_id': 'abc'},
+      );
+    });
   });
 
   group('ThinkingLevel — wire round-trip', () {
@@ -165,6 +177,53 @@ void main() {
       final list = m as ModelsList;
       expect(list.current, isNull);
       expect(list.models, isEmpty);
+    });
+
+    test('session_list_ok parses sessions and current_id', () {
+      final m = ServerMessage.fromJson({
+        'type': 'session_list_ok',
+        'in_reply_to': 'r7',
+        'current_id': 'aaa',
+        'sessions': [
+          {
+            'id': 'aaa',
+            'name': 'first',
+            'mtime': 1000,
+            'preview': 'hello',
+            'live': true,
+            'cwd': '/proj',
+          },
+        ],
+      });
+      final ok = m as SessionListOk;
+      expect(ok.currentId, 'aaa');
+      expect(ok.sessions, hasLength(1));
+      expect(ok.sessions.first.live, isTrue);
+      expect(ok.sessions.first.id, 'aaa');
+    });
+
+    test('session_switch_ok parses session_id', () {
+      final m = ServerMessage.fromJson({
+        'type': 'session_switch_ok',
+        'in_reply_to': 'r8',
+        'session_id': 'bbb',
+        'session_started_at': 42,
+      });
+      final ok = m as SessionSwitchOk;
+      expect(ok.sessionId, 'bbb');
+      expect(ok.sessionStartedAt, 42);
+    });
+
+    test('session_switch_error locked maps code', () {
+      final m = ServerMessage.fromJson({
+        'type': 'session_switch_error',
+        'in_reply_to': 'r8',
+        'code': 'locked',
+        'message': 'in use',
+      });
+      final err = m as SessionSwitchError;
+      expect(err.code, SessionSwitchErrorCode.locked);
+      expect(err.message, 'in use');
     });
   });
 }

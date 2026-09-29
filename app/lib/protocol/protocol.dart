@@ -405,7 +405,8 @@ class UnsupportedTypeException implements Exception {
 }
 
 // --- ClientMessage (app → extension) ---
-// MVP: 1 pairing = 1 Pi session — no session management messages.
+// Plan/67: pairing is machine-level; session_list / session_switch select
+// an AgentSession inside the current workspace room.
 
 sealed class ClientMessage {
   Map<String, dynamic> toJson();
@@ -596,7 +597,12 @@ enum ActionName {
   sessionNew('session_new'),
   sessionCompact('session_compact'),
   modelSet('model_set'),
-  thinkingSet('thinking_set');
+  thinkingSet('thinking_set'),
+  sessionList('session_list'),
+  sessionSwitch('session_switch'),
+  workspaceList('workspace_list'),
+  workspaceStart('workspace_start'),
+  workspaceStop('workspace_stop');
 
   final String wire;
   const ActionName(this.wire);
@@ -751,6 +757,71 @@ class ListModels extends ClientMessage {
   Map<String, dynamic> toJson() => {'type': 'list_models', 'id': id};
 }
 
+/// Plan/67 — list AgentSessions for the current workspace cwd.
+class SessionList extends ClientMessage {
+  final String id;
+  SessionList({required this.id});
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'session_list', 'id': id};
+}
+
+/// Plan/67 — switch the live AgentSession. `sessionId` is the Pi
+/// SessionManager id from [SessionListOk].
+class SessionSwitch extends ClientMessage {
+  final String id;
+  final String sessionId;
+  SessionSwitch({required this.id, required this.sessionId});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'session_switch',
+    'id': id,
+    'session_id': sessionId,
+  };
+}
+
+/// Plan/67 — reserved room_id for the supervisor host control plane.
+const kHostRoomId = 'host';
+
+class WorkspaceList extends ClientMessage {
+  final String id;
+  WorkspaceList({required this.id});
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'workspace_list', 'id': id};
+}
+
+class WorkspaceStart extends ClientMessage {
+  final String id;
+  final String? cwd;
+  final String? daemonId;
+  WorkspaceStart({required this.id, this.cwd, this.daemonId});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'workspace_start',
+    'id': id,
+    if (cwd != null) 'cwd': cwd,
+    if (daemonId != null) 'daemon_id': daemonId,
+  };
+}
+
+class WorkspaceStop extends ClientMessage {
+  final String id;
+  final String? cwd;
+  final String? daemonId;
+  WorkspaceStop({required this.id, this.cwd, this.daemonId});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'workspace_stop',
+    'id': id,
+    if (cwd != null) 'cwd': cwd,
+    if (daemonId != null) 'daemon_id': daemonId,
+  };
+}
+
 // --- ServerMessage (extension → app) ---
 // 1 pairing = 1 session: no session_id on any message.
 // Sealed: all subtypes in this file — switch exhaustiveness enforced by compiler.
@@ -787,6 +858,12 @@ sealed class ServerMessage {
       'action_ok' => ActionOk.fromJson(json),
       'action_error' => ActionError.fromJson(json),
       'models_list' => ModelsList.fromJson(json),
+      'session_list_ok' => SessionListOk.fromJson(json),
+      'session_switch_ok' => SessionSwitchOk.fromJson(json),
+      'session_switch_error' => SessionSwitchError.fromJson(json),
+      'workspace_list_ok' => WorkspaceListOk.fromJson(json),
+      'workspace_start_ok' => WorkspaceStartOk.fromJson(json),
+      'workspace_stop_ok' => WorkspaceStopOk.fromJson(json),
       // Plan/57 — interactive extension prompt (ask_user via pi-ask). Mirrors
       // the SDK's extension_ui_request RPC contract; optional `ask` envelope
       // carries pi-ask's full question so the app renders multi/preview/notes.
@@ -1358,6 +1435,178 @@ class ModelsList extends ServerMessage {
       current: cur is Map<String, dynamic> ? WireModel.fromJson(cur) : null,
     );
   }
+}
+
+/// Plan/67 — one AgentSession in `session_list_ok`.
+class WireSessionInfo {
+  final String id;
+  final String? name;
+  final int mtime;
+  final String? preview;
+  final bool live;
+  final String? cwd;
+  const WireSessionInfo({
+    required this.id,
+    this.name,
+    required this.mtime,
+    this.preview,
+    required this.live,
+    this.cwd,
+  });
+
+  factory WireSessionInfo.fromJson(Map<String, dynamic> j) => WireSessionInfo(
+    id: j['id'] as String,
+    name: j['name'] as String?,
+    mtime: (j['mtime'] as num?)?.toInt() ?? 0,
+    preview: j['preview'] as String?,
+    live: j['live'] as bool? ?? false,
+    cwd: j['cwd'] as String?,
+  );
+}
+
+class SessionListOk extends ServerMessage {
+  final String inReplyTo;
+  final String? currentId;
+  final List<WireSessionInfo> sessions;
+  SessionListOk({
+    required this.inReplyTo,
+    this.currentId,
+    required this.sessions,
+  });
+
+  factory SessionListOk.fromJson(Map<String, dynamic> j) => SessionListOk(
+    inReplyTo: j['in_reply_to'] as String,
+    currentId: j['current_id'] as String?,
+    sessions: (j['sessions'] as List<dynamic>? ?? const <dynamic>[])
+        .map((e) => WireSessionInfo.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
+}
+
+class SessionSwitchOk extends ServerMessage {
+  final String inReplyTo;
+  final String sessionId;
+  final int sessionStartedAt;
+  SessionSwitchOk({
+    required this.inReplyTo,
+    required this.sessionId,
+    required this.sessionStartedAt,
+  });
+
+  factory SessionSwitchOk.fromJson(Map<String, dynamic> j) => SessionSwitchOk(
+    inReplyTo: j['in_reply_to'] as String,
+    sessionId: j['session_id'] as String,
+    sessionStartedAt: (j['session_started_at'] as num?)?.toInt() ?? 0,
+  );
+}
+
+enum SessionSwitchErrorCode {
+  locked('locked'),
+  unknown('unknown'),
+  noSdk('no_sdk');
+
+  final String wire;
+  const SessionSwitchErrorCode(this.wire);
+
+  static SessionSwitchErrorCode fromWire(String s) => switch (s) {
+    'locked' => SessionSwitchErrorCode.locked,
+    'no_sdk' => SessionSwitchErrorCode.noSdk,
+    _ => SessionSwitchErrorCode.unknown,
+  };
+}
+
+class SessionSwitchError extends ServerMessage {
+  final String inReplyTo;
+  final SessionSwitchErrorCode code;
+  final String message;
+  SessionSwitchError({
+    required this.inReplyTo,
+    required this.code,
+    required this.message,
+  });
+
+  factory SessionSwitchError.fromJson(Map<String, dynamic> j) =>
+      SessionSwitchError(
+        inReplyTo: j['in_reply_to'] as String,
+        code: SessionSwitchErrorCode.fromWire((j['code'] as String?) ?? ''),
+        message: (j['message'] as String?) ?? '',
+      );
+}
+
+class WireWorkspaceInfo {
+  final String cwd;
+  final String daemonId;
+  final String roomId;
+  final String name;
+  final bool live;
+  final bool daemon;
+  const WireWorkspaceInfo({
+    required this.cwd,
+    required this.daemonId,
+    required this.roomId,
+    required this.name,
+    required this.live,
+    required this.daemon,
+  });
+
+  factory WireWorkspaceInfo.fromJson(Map<String, dynamic> j) => WireWorkspaceInfo(
+    cwd: j['cwd'] as String,
+    daemonId: j['daemon_id'] as String,
+    roomId: j['room_id'] as String,
+    name: (j['name'] as String?) ?? '',
+    live: j['live'] as bool? ?? false,
+    daemon: j['daemon'] as bool? ?? true,
+  );
+}
+
+class WorkspaceListOk extends ServerMessage {
+  final String inReplyTo;
+  final List<WireWorkspaceInfo> workspaces;
+  WorkspaceListOk({required this.inReplyTo, required this.workspaces});
+
+  factory WorkspaceListOk.fromJson(Map<String, dynamic> j) => WorkspaceListOk(
+    inReplyTo: j['in_reply_to'] as String,
+    workspaces: (j['workspaces'] as List<dynamic>? ?? const <dynamic>[])
+        .map((e) => WireWorkspaceInfo.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
+}
+
+class WorkspaceStartOk extends ServerMessage {
+  final String inReplyTo;
+  final String cwd;
+  final String roomId;
+  final String daemonId;
+  WorkspaceStartOk({
+    required this.inReplyTo,
+    required this.cwd,
+    required this.roomId,
+    required this.daemonId,
+  });
+
+  factory WorkspaceStartOk.fromJson(Map<String, dynamic> j) => WorkspaceStartOk(
+    inReplyTo: j['in_reply_to'] as String,
+    cwd: j['cwd'] as String,
+    roomId: j['room_id'] as String,
+    daemonId: j['daemon_id'] as String,
+  );
+}
+
+class WorkspaceStopOk extends ServerMessage {
+  final String inReplyTo;
+  final String cwd;
+  final String daemonId;
+  WorkspaceStopOk({
+    required this.inReplyTo,
+    required this.cwd,
+    required this.daemonId,
+  });
+
+  factory WorkspaceStopOk.fromJson(Map<String, dynamic> j) => WorkspaceStopOk(
+    inReplyTo: j['in_reply_to'] as String,
+    cwd: j['cwd'] as String,
+    daemonId: j['daemon_id'] as String,
+  );
 }
 
 class Bye extends ServerMessage {

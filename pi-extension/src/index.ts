@@ -83,8 +83,11 @@ import {
   handleModelSet,
   handleThinkingSet,
   handleListModels,
+  handleSessionList,
+  handleSessionSwitch,
   type ActionCtx,
 } from "./actions/handlers.js";
+import { listWorkspaceSessions, sessionFieldsFromRaw } from "./actions/sessions.js";
 import { ensureModelRegistry } from "./actions/registry.js";
 import {
   ensureGlobalDirs,
@@ -4607,7 +4610,44 @@ export function _routeClientMessageFrom(
         msg,
       );
       break;
+    case "session_list": {
+      const raw = _lastCtx ?? _lastEventCtx;
+      void handleSessionList(
+        _asActionCtx(raw),
+        sender,
+        msg,
+        listWorkspaceSessions,
+      );
+      break;
+    }
+    case "session_switch": {
+      const actionCtx = _asActionCtx(_lastCtx);
+      void (async () => {
+        const switched = await handleSessionSwitch(
+          actionCtx,
+          sender,
+          msg,
+          listWorkspaceSessions,
+          (fresh) => { _lastCtx = fresh as unknown as typeof _lastCtx; },
+        );
+        if (!switched) return;
+        _resetSessionForNew(msg.id);
+        sender.send({
+          type: "session_switch_ok",
+          in_reply_to: msg.id,
+          session_id: msg.session_id,
+          session_started_at: _sessionStartedAt ?? Date.now(),
+        });
+      })();
+      break;
+    }
   }
+}
+
+function _asActionCtx(raw: unknown): ActionCtx | null {
+  if (!raw) return null;
+  const fields = sessionFieldsFromRaw(raw);
+  return { ...(raw as ActionCtx), ...fields };
 }
 
 /**

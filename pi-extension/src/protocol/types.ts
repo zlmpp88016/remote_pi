@@ -198,6 +198,13 @@ export type ClientMessage =
   | { type: "model_set"; id: string; provider: string; model_id: string }
   | { type: "thinking_set"; id: string; level: ThinkingLevel }
   | { type: "list_models"; id: string }
+  // Plan/67 — list/switch AgentSessions for the current workspace cwd.
+  | { type: "session_list"; id: string }
+  | { type: "session_switch"; id: string; session_id: string }
+  // Plan/67 — host room (`room=host`) control plane on the supervisor.
+  | { type: "workspace_list"; id: string }
+  | { type: "workspace_start"; id: string; cwd?: string; daemon_id?: string }
+  | { type: "workspace_stop"; id: string; cwd?: string; daemon_id?: string }
   // Plan/57 — interactive extension prompt response (ask_user via pi-ask).
   // Mirrors RpcExtensionUIResponse; the optional `ask` envelope carries
   // pi-ask's structured answer so multi/preview/notes survive the round-trip.
@@ -333,6 +340,42 @@ export type ServerMessage =
   | { type: "action_ok"; in_reply_to: string; action: ActionName }
   | { type: "action_error"; in_reply_to: string; action: ActionName; error: string }
   | { type: "models_list"; in_reply_to: string; models: WireModel[]; current?: WireModel }
+  | {
+      type: "session_list_ok";
+      in_reply_to: string;
+      current_id: string | null;
+      sessions: WireSessionInfo[];
+    }
+  | {
+      type: "session_switch_ok";
+      in_reply_to: string;
+      session_id: string;
+      session_started_at: number;
+    }
+  | {
+      type: "session_switch_error";
+      in_reply_to: string;
+      code: SessionSwitchErrorCode;
+      message: string;
+    }
+  | {
+      type: "workspace_list_ok";
+      in_reply_to: string;
+      workspaces: WireWorkspaceInfo[];
+    }
+  | {
+      type: "workspace_start_ok";
+      in_reply_to: string;
+      cwd: string;
+      room_id: string;
+      daemon_id: string;
+    }
+  | {
+      type: "workspace_stop_ok";
+      in_reply_to: string;
+      cwd: string;
+      daemon_id: string;
+    }
   // Plan/57 — interactive extension prompt (ask_user via pi-ask). Mirrors
   // RpcExtensionUIRequest (select/confirm/input/editor/notify); the optional
   // `ask` envelope carries pi-ask's full question so the app renders richly.
@@ -347,7 +390,36 @@ export type ActionName =
   | "session_new"
   | "session_compact"
   | "model_set"
-  | "thinking_set";
+  | "thinking_set"
+  | "session_list"
+  | "session_switch"
+  | "workspace_list"
+  | "workspace_start"
+  | "workspace_stop";
+
+/** Plan/67 — one row in `session_list_ok`. `id` is the Pi SessionManager id. */
+export interface WireSessionInfo {
+  id: string;
+  name?: string;
+  mtime: number;
+  preview?: string;
+  live: boolean;
+  cwd?: string;
+}
+
+export type SessionSwitchErrorCode = "locked" | "unknown" | "no_sdk";
+
+/** Plan/67 — reserved relay room_id for the machine-level supervisor. */
+export const HOST_ROOM_ID = "host";
+
+export interface WireWorkspaceInfo {
+  cwd: string;
+  daemon_id: string;
+  room_id: string;
+  name: string;
+  live: boolean;
+  daemon: boolean;
+}
 
 /**
  * Plan/28 — Mirror of the SDK's `ThinkingLevel` (defined in

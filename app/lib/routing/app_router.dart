@@ -11,8 +11,11 @@ import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
 import 'package:app/ui/chat/widgets/detail_placeholder.dart';
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/data/sessions/session_catalog.dart';
 import 'package:app/ui/home/home_page.dart';
 import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
+import 'package:app/ui/sessions/session_list_page.dart';
+import 'package:app/ui/sessions/viewmodels/session_list_viewmodel.dart';
 import 'package:app/ui/onboarding/onboarding_page.dart';
 import 'package:app/ui/onboarding/viewmodels/onboarding_viewmodel.dart';
 import 'package:app/ui/pairing/pairing_page.dart';
@@ -337,6 +340,47 @@ GoRouter buildRouter(
       // first `room_meta_updated` to arrive. Keeps reactivity to
       // room metadata changes that come later through the
       // ChatViewModel.
+      GoRoute(
+        path: '/sessions',
+        builder: (ctx, st) {
+          final extra = st.extra;
+          var epk = '';
+          var roomId = 'main';
+          String? cwd;
+          String title = 'Sessions';
+          String? device;
+          var online = false;
+          if (extra is Map) {
+            final e = extra['epk'];
+            if (e is String) epk = e;
+            final r = extra['roomId'];
+            if (r is String && r.isNotEmpty) roomId = r;
+            final c = extra['cwd'];
+            if (c is String && c.isNotEmpty) cwd = c;
+            final t = extra['title'];
+            if (t is String && t.isNotEmpty) title = t;
+            final d = extra['device'];
+            if (d is String && d.isNotEmpty) device = d;
+            online = extra['online'] == true;
+          }
+          return ChangeNotifierProvider(
+            create: (_) => SessionListViewModel(
+              injector.get<SessionCatalog>(),
+              injector.get<ConnectionManager>(),
+              injector.get<Preferences>(),
+              epk: epk,
+              roomId: roomId,
+              cwd: cwd,
+            ),
+            child: SessionListPage(
+              title: title,
+              device: device,
+              online: online,
+            ),
+          );
+        },
+      ),
+
       GoRoute(
         path: '/chat',
         builder: (ctx, st) {
