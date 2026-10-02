@@ -20,4 +20,10 @@ devices of the same Apple ID via iCloud Keychain.
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386',
   }
   s.swift_version = '5.0'
+
+  # O manifest vai num bundle proprio para o CocoaPods empacota-lo no app (sem
+  # isso o arquivo existe no repo mas nunca chega ao .app). Conteudo declarado
+  # como vazio de proposito: este plugin so usa a Keychain (SecItem*), que nao
+  # e uma required-reason API.
+  s.resource_bundles = { 'remote_pi_identity_privacy' => ['Resources/PrivacyInfo.xcprivacy'] }
 end

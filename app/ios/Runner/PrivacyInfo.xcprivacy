@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Manifesto de privacidade do app (exigido pela App Store).
+
+	     Declaramos aqui os APIs "required reason" cujo uso acaba atribuido ao
+	     binario Runner. Nenhum deles vem de codigo nativo NOSSO: Runner so tem
+	     AppDelegate/SceneDelegate, sem uso direto dessas APIs. Eles vem da
+	     camada abaixo (Flutter.framework + plugins) e aparecem em Runner porque
+	     parte da arvore e linkada estaticamente — mobile_scanner declara
+	     `static_framework = true` e arrasta o GoogleMLKit junto.
+
+	     Lista derivada do NOSSO grafo de dependencias real (Podfile.lock +
+	     pubspec.lock), nao copiada de comentario de issue:
+	       - FileTimestamp  : package_info_plus usa attributesOfItemAtPath
+	                          (document dir + bundle); o engine usa
+	                          getResourceValue em FlutterSharedApplication.mm.
+	                          Os dois plugins declaram manifest VAZIO, entao a
+	                          cobertura precisa sair daqui.
+	       - SystemBootTime : NSProcessInfo.systemUptime em FlutterViewController.mm
+	                          (timestamp dos eventos de ponteiro).
+	       - UserDefaults   : GoogleUtilities/UserDefaults (vem via MLKit).
+	       - DiskSpace      : camada de download de modelo on-device do MLKit
+	                          checa espaco livre antes de gravar.
+
+	     Ver flutter/flutter#145269 (email ITMS-91053 real de app Flutter) e
+	     #166210 (manifest do engine ja vai dentro do Flutter.framework). -->
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array><string>CA92.1</string></array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array><string>C617.1</string></array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array><string>E174.1</string></array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array><string>35F9.1</string></array>
+		</dict>
+	</array>
+</dict>
+</plist>
