@@ -28,13 +28,16 @@ class AgentMarkdown extends StatelessWidget {
       data,
       style: typo.mono,
       onLinkTap: (url, _) => _openLink(context, url),
-      // Inline `code` — subtle highlight, keeps the baseline.
-      highlightBuilder: (context, text, style) => Text(
-        text,
-        style: typo.mono.copyWith(
-          color: colors.highlight,
-          backgroundColor: colors.codeBg,
-        ),
+      // Inline `code` — the chip (fill, outline, radius, padding) is painted by
+      // the package, so only the colours need overriding. `highlightBuilder`
+      // was deprecated in gpt_markdown 1.3.0: it returned a Widget, which had
+      // to sit in a WidgetSpan — off the baseline, unable to wrap across
+      // lines, and skipped by text selection.
+      inlineCodeStyle: InlineCodeStyle(
+        fontFamily: kMonoFamily,
+        color: colors.highlight,
+        backgroundColor: colors.codeBg,
+        borderColor: Colors.transparent,
       ),
       // Fenced ``` blocks — dark card + copy button.
       codeBuilder: (context, name, code, closed) =>
