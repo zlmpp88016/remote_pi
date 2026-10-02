@@ -56,6 +56,25 @@ class ChatReady extends ChatState {
   /// dead end when pi-ask rejects an answer.
   final String? pendingUiError;
 
+  /// Plan 01 — latest runtime status from the Pi (model / thinking / usage /
+  /// cost / context). Drives the AppBar subtitle and the detail sheet. Empty
+  /// until the first `runtime_status` arrives.
+  final RuntimeStatus runtimeStatus;
+
+  /// Plan 01 — whether the transcript has older pages behind what is loaded.
+  /// False on a pre-pagination extension, which hides the affordance entirely.
+  final bool hasOlder;
+
+  /// Plan 01 — current session-tree snapshot (null until fetched). Identity
+  /// compared; the ViewModel replaces the instance on each snapshot.
+  final TreeSnapshot? treeSnapshot;
+
+  /// Plan 01 — last tree/branching error code (null when none).
+  final String? treeError;
+
+  /// Plan 01 — draft text from a fork/navigate, for the composer.
+  final String? forkDraft;
+
   String? get queuedText =>
       queuedMessages.isEmpty ? null : queuedMessages.first.text;
 
@@ -70,6 +89,11 @@ class ChatReady extends ChatState {
     this.queuedMessages = const [],
     this.pendingUiRequest,
     this.pendingUiError,
+    this.runtimeStatus = const RuntimeStatus(),
+    this.hasOlder = false,
+    this.treeSnapshot,
+    this.treeError,
+    this.forkDraft,
   });
 
   ChatReady copyWith({
@@ -88,6 +112,14 @@ class ChatReady extends ChatState {
     bool clearPendingUiRequest = false,
     String? pendingUiError,
     bool clearPendingUiError = false,
+    RuntimeStatus? runtimeStatus,
+    bool? hasOlder,
+    TreeSnapshot? treeSnapshot,
+    bool clearTreeSnapshot = false,
+    String? treeError,
+    bool clearTreeError = false,
+    String? forkDraft,
+    bool clearForkDraft = false,
   }) =>
       ChatReady(
         messages: messages ?? this.messages,
@@ -108,6 +140,13 @@ class ChatReady extends ChatState {
         pendingUiError: clearPendingUiError
             ? null
             : (pendingUiError ?? this.pendingUiError),
+        runtimeStatus: runtimeStatus ?? this.runtimeStatus,
+        hasOlder: hasOlder ?? this.hasOlder,
+        treeSnapshot: clearTreeSnapshot
+            ? null
+            : (treeSnapshot ?? this.treeSnapshot),
+        treeError: clearTreeError ? null : (treeError ?? this.treeError),
+        forkDraft: clearForkDraft ? null : (forkDraft ?? this.forkDraft),
       );
 
   @override
@@ -122,7 +161,12 @@ class ChatReady extends ChatState {
       other.isWorking == isWorking &&
       other.queuedMessages == queuedMessages &&
       other.pendingUiRequest == pendingUiRequest &&
-      other.pendingUiError == pendingUiError;
+      other.pendingUiError == pendingUiError &&
+      other.runtimeStatus == runtimeStatus &&
+      other.hasOlder == hasOlder &&
+      other.treeSnapshot == treeSnapshot &&
+      other.treeError == treeError &&
+      other.forkDraft == forkDraft;
 
   @override
   int get hashCode => Object.hash(
@@ -136,6 +180,11 @@ class ChatReady extends ChatState {
         queuedMessages,
         pendingUiRequest,
         pendingUiError,
+        runtimeStatus,
+        hasOlder,
+        treeSnapshot,
+        treeError,
+        forkDraft,
       );
 }
 

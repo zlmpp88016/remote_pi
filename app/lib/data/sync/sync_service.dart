@@ -23,6 +23,7 @@ import 'package:app/domain/session_state.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/protocol/uuid7.dart';
 import 'package:flutter/foundation.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 class SyncService extends Service {
   final ConnectionManager _conn;
@@ -78,6 +79,35 @@ class SyncService extends Service {
   // pill, no box-key matching needed).
   bool _working = false;
   bool _sawRemoteWorking = false;
+
+  // Plan 01 — latest runtime status snapshot from the Pi (model, thinking,
+  // usage, cost, context occupancy). In-memory only: the Pi re-sends it after
+  // every turn, and a stale one would be misleading after a reconnect.
+  RuntimeStatus _runtimeStatus = const RuntimeStatus();
+  final StreamController<RuntimeStatus> _runtimeStatusController =
+      StreamController<RuntimeStatus>.broadcast();
+
+  // Plan 01 — transcript paging. The Pi hands back an opaque cursor with each
+  // page; we echo it in `session_sync.before` for the next one. An extension
+  // old enough not to send `older_cursor` leaves `_hasOlder` false, which
+  // degrades to exactly the pre-pagination behaviour.
+  String? _olderCursor;
+  bool _hasOlder = false;
+  String? _pendingOlderRequestId;
+  final StreamController<OlderPageState> _olderStateController =
+      StreamController<OlderPageState>.broadcast();
+
+  // Plan 01 — session tree. The snapshot stream feeds the picker; the error
+  // stream carries the fence rejections (`session_busy` / `tree_state_changed`)
+  // so the sheet can tell the user to re-open instead of silently failing.
+  final StreamController<TreeSnapshot> _treeSnapshotController =
+      StreamController<TreeSnapshot>.broadcast();
+  final StreamController<String> _treeErrorController =
+      StreamController<String>.broadcast();
+  // Plan 01 — text of a forked prompt, delivered to the composer. Never
+  // auto-sent.
+  final StreamController<String> _forkDraftController =
+      StreamController<String>.broadcast();
   // Id of the user message the in-flight reply is answering — the `cancel`
   // target while working. Null when idle.
   String? _workingReplyTo;
@@ -132,6 +162,31 @@ class SyncService extends Service {
   /// `cancel` target for the in-flight reply (null when idle).
   String? get workingReplyTo => _workingReplyTo;
 
+  /// Plan 01 — latest runtime status from the Pi (empty until the first
+  /// `runtime_status` arrives).
+  RuntimeStatus get runtimeStatus => _runtimeStatus;
+
+  /// Plan 01 — stream of runtime status updates for the chat header.
+  Stream<RuntimeStatus> get runtimeStatusStream =>
+      _runtimeStatusController.stream;
+
+  /// Plan 01 — whether an older page can still be fetched.
+  bool get hasOlder => _hasOlder;
+
+  /// Plan 01 — stream of paging availability, so the list can show or hide the
+  /// "load earlier" affordance without polling.
+  Stream<OlderPageState> get olderPageStream => _olderStateController.stream;
+
+  /// Plan 01 — session tree snapshots for the picker sheet.
+  Stream<TreeSnapshot> get treeSnapshotStream =>
+      _treeSnapshotController.stream;
+
+  /// Plan 01 — tree/branching errors, as the raw wire error code.
+  Stream<String> get treeErrorStream => _treeErrorController.stream;
+
+  /// Plan 01 — draft text for the composer after a fork.
+  Stream<String> get forkDraftStream => _forkDraftController.stream;
+
   String? get activeEpk => _activeEpk;
   String get activeRoomId => _activeRoomId;
 
@@ -149,6 +204,9 @@ class SyncService extends Service {
     // the Pi, and Home keeps showing it via the relay's per-room
     // `meta.working` broadcast.
     _resetTurnState();
+    // Plan 01 — a new session has its own transcript, so a cursor issued for
+    // the previous one must never be replayed against it.
+    _resetPaging();
     _activeEpk = epk;
     _activeRoomId = room;
     await _loadIndex();
@@ -381,6 +439,73 @@ class SyncService extends Service {
     ch.send(SessionSync(id: _newId()));
   }
 
+  /// Plan 01 — fetch the page older than what is on screen.
+  ///
+  /// No-op when the Pi never advertised a cursor (older extension) or a page
+  /// request is already in flight, so a fast scroll cannot queue duplicate
+  /// requests for the same page.
+  void requestOlderPage() {
+    final ch = _conn.channel;
+    final cursor = _olderCursor;
+    if (ch == null || _activeEpk == null) return;
+    if (!_hasOlder || cursor == null || _pendingOlderRequestId != null) return;
+    final id = _newId();
+    _pendingOlderRequestId = id;
+    ch.send(SessionSync(id: id, before: cursor));
+  }
+
+  /// Plan 01 — reset paging state. A session switch or a fresh sync restarts
+  /// the cursor chain, so a cursor from the previous session must never be
+  /// replayed against the new one.
+  void _resetPaging() {
+    _olderCursor = null;
+    _hasOlder = false;
+    _pendingOlderRequestId = null;
+  }
+
+  /// Plan 01 — request the session tree snapshot.
+  Future<void> requestTree() async {
+    final ch = _conn.channel;
+    if (ch == null || _activeEpk == null) return;
+    await ch.send(TreeGet(id: _newId()));
+  }
+
+  /// Plan 01 — move the active branch. [fence] must come from the snapshot the
+  /// user was looking at; the Pi rejects a stale one with `tree_state_changed`.
+  Future<void> navigateTree(
+    String targetEntryId,
+    TreeFence fence, {
+    bool summarize = false,
+  }) async {
+    final ch = _conn.channel;
+    if (ch == null || _activeEpk == null) return;
+    await ch.send(
+      TreeNavigate(
+        id: _newId(),
+        targetEntryId: targetEntryId,
+        fence: fence,
+        summarize: summarize,
+      ),
+    );
+  }
+
+  /// Plan 01 — branch before a user message. The Pi answers with the prompt
+  /// text for the composer; it is never auto-sent.
+  Future<void> forkSession(String targetEntryId, TreeFence fence) async {
+    final ch = _conn.channel;
+    if (ch == null || _activeEpk == null) return;
+    await ch.send(
+      SessionFork(id: _newId(), targetEntryId: targetEntryId, fence: fence),
+    );
+  }
+
+  /// Plan 01 — duplicate the active branch into a new session.
+  Future<void> cloneSession(TreeFence fence) async {
+    final ch = _conn.channel;
+    if (ch == null || _activeEpk == null) return;
+    await ch.send(SessionClone(id: _newId(), fence: fence));
+  }
+
   /// Plan/28 — `session_new` acked: wipe the active session's rows + index.
   Future<void> clearActiveSession() async {
     final epk = _activeEpk;
@@ -391,6 +516,9 @@ class SyncService extends Service {
     _discardStreamingState();
     _setQueuedMessages(const []);
     _setWorking(false);
+    // Plan 01 — a new session has no older transcript, so drop any cursor
+    // pointing at the previous one.
+    _resetPaging();
     await _enqueue(() async {
       if (_activeEpk != epk || _activeRoomId != room) return;
       final box = await _boxes.msgsBox(epk, room);
@@ -618,8 +746,28 @@ class SyncService extends Service {
         }
 
       case SessionHistory():
-        // ignore: discarded_futures
-        _applyHistory(msg);
+        // Plan 01 — a response to an `older` page request must MERGE in front
+        // of the window; a response to a plain sync replaces it. Either way
+        // the cursor advances, and a fresh sync supersedes any page request
+        // still in flight (otherwise a lost reply would block paging forever).
+        final isOlderPage = _pendingOlderRequestId != null &&
+            msg.inReplyTo == _pendingOlderRequestId;
+        // Cleared either way: this reply settles the request, and a plain sync
+        // supersedes any page request still in flight (a lost reply must not
+        // block paging forever).
+        _pendingOlderRequestId = null;
+        _olderCursor = msg.olderCursor;
+        _hasOlder = msg.hasOlder;
+        if (!_olderStateController.isClosed) {
+          _olderStateController.add(OlderPageState(_hasOlder, _olderCursor));
+        }
+        if (isOlderPage) {
+          // ignore: discarded_futures
+          _applyOlderHistory(msg);
+        } else {
+          // ignore: discarded_futures
+          _applyHistory(msg);
+        }
 
       case ErrorMessage(:final code, :final message):
         if (code.contains('unknown_peer')) {
@@ -652,12 +800,60 @@ class SyncService extends Service {
         // Surface to the UI; never persist (it's a live request, not history).
         _extensionUiController.add(msg);
         break;
+      case RuntimeStatusMessage(:final status):
+        // Plan 01 — live header figures (model / thinking / usage / cost /
+        // context). Transient: never persisted, mirrors the extension's
+        // in-memory-only snapshot.
+        _runtimeStatus = status;
+        if (!_runtimeStatusController.isClosed) {
+          _runtimeStatusController.add(status);
+        }
+
+      case TreeSnapshotOk(:final snapshot):
+        if (!_treeSnapshotController.isClosed) {
+          _treeSnapshotController.add(snapshot);
+        }
+
+      case SessionForkOk(:final editorText):
+        if (!_forkDraftController.isClosed) {
+          _forkDraftController.add(editorText);
+        }
+
+      case TreeNavigateOk(:final editorText):
+        // A navigate may also return draft text (edit_prompt entries).
+        if (editorText != null && editorText.isNotEmpty) {
+          if (!_forkDraftController.isClosed) {
+            _forkDraftController.add(editorText);
+          }
+        }
+
+      case SessionCloneOk():
+        break;
+
+      case ActionError(:final action, :final error):
+        // Plan 01 — only the tree/branching actions are surfaced here; the
+        // session actions keep their existing (silent) handling.
+        if (action == ActionName.treeGet ||
+            action == ActionName.treeNavigate ||
+            action == ActionName.sessionFork ||
+            action == ActionName.sessionClone) {
+          if (!_treeErrorController.isClosed) {
+            _treeErrorController.add(error);
+          }
+        }
+        break;
+
       case Pong():
       case PairOk():
       case PairError():
       case ActionOk():
-      case ActionError():
       case ModelsList():
+      case SessionListOk():
+      case SessionSwitchOk():
+      case SessionSwitchError():
+      case WorkspaceListOk():
+      case WorkspaceStartOk():
+      case WorkspaceStopOk():
         break;
     }
   }
@@ -711,43 +907,7 @@ class SyncService extends Service {
         for (var j = 0; j < preserved.length; j++)
           preserved[j].copyWith(seq: rows.length + j),
       ];
-      // Reconcile the box to `desired` with the MINIMUM number of writes.
-      //
-      // The old path did `box.clear()` + re-put every row. Hive emits a watch
-      // event per deleted AND per put key, so the read repo re-emitted ~2N
-      // times — tearing the whole list down to EMPTY and rebuilding it — on
-      // EVERY SessionHistory the relay re-delivered (which it does on every
-      // reconnect). That was the flicker/"embaralha e some". Diffing instead
-      // means a re-sent identical history produces ZERO box writes → ZERO
-      // emits → no rebuild; a changed history only rewrites the rows that
-      // actually differ.
-      for (final k in box.keys.toList()) {
-        if ((k as num).toInt() >= desired.length) {
-          await box.delete(k);
-        }
-      }
-      for (var i = 0; i < desired.length; i++) {
-        final newJson = desired[i].toJson();
-        final curRaw = box.get(i);
-        // Normalise the stored value through fromJson→toJson so the compare is
-        // independent of however Hive ordered the persisted map.
-        final curNorm = curRaw == null
-            ? null
-            : jsonEncode(MessageRecord.fromJson(_coerce(curRaw)).toJson());
-        if (curNorm != jsonEncode(newJson)) {
-          await box.put(i, newJson);
-        }
-      }
-      if (_activeEpk == epk && _activeRoomId == room) {
-        _idToSeq
-          ..clear()
-          ..addEntries([
-            for (var i = 0; i < desired.length; i++)
-              MapEntry(_key(desired[i].role, desired[i].id), i),
-          ]);
-        _nextSeq = desired.length;
-        _indexLoaded = true;
-      }
+      await _reconcileRows(box, epk, room, desired);
     });
     if (_activeEpk == epk && _activeRoomId == room) {
       final started = h.sessionStartedAt;
@@ -756,6 +916,82 @@ class SyncService extends Service {
           sessionStartedAt: DateTime.fromMillisecondsSinceEpoch(started),
         ),
       );
+    }
+  }
+
+  /// Plan 01 — merge one older page in front of the rows already on screen.
+  ///
+  /// Unlike [_applyHistory] (a reconnect replay that *replaces* the window),
+  /// paging accumulates: the incoming page is older than everything held, so
+  /// it is prepended. Rows are keyed by `_key(role, id)`, so a page that
+  /// overlaps the current window (the Pi deliberately returns one overlapping
+  /// boundary entry) dedupes instead of duplicating.
+  Future<void> _applyOlderHistory(SessionHistory h) async {
+    final epk = _activeEpk;
+    if (epk == null) return;
+    final room = _activeRoomId;
+    final older = _convertHistory(h.events);
+    await _enqueue(() async {
+      final box = await _boxes.msgsBox(epk, room);
+      final current = [
+        for (final v in box.values) MessageRecord.fromJson(_coerce(v)),
+      ]..sort((a, b) => a.seq.compareTo(b.seq));
+      // Prepend, keeping the first occurrence so an overlapping boundary entry
+      // does not shift the rows the user is already reading.
+      final seen = <String>{};
+      final merged = <MessageRecord>[];
+      for (final r in [...older, ...current]) {
+        if (seen.add(_key(r.role, r.id))) merged.add(r);
+      }
+      final desired = [
+        for (var i = 0; i < merged.length; i++) merged[i].copyWith(seq: i),
+      ];
+      await _reconcileRows(box, epk, room, desired);
+    });
+  }
+
+  /// Reconcile the message box to [desired] with the MINIMUM number of writes.
+  ///
+  /// The old path did `box.clear()` + re-put every row. Hive emits a watch
+  /// event per deleted AND per put key, so the read repo re-emitted ~2N
+  /// times — tearing the whole list down to EMPTY and rebuilding it — on
+  /// EVERY SessionHistory the relay re-delivered (which it does on every
+  /// reconnect). That was the flicker/"embaralha e some". Diffing instead
+  /// means a re-sent identical history produces ZERO box writes → ZERO
+  /// emits → no rebuild; a changed history only rewrites the rows that
+  /// actually differ.
+  Future<void> _reconcileRows(
+    Box<dynamic> box,
+    String epk,
+    String room,
+    List<MessageRecord> desired,
+  ) async {
+    for (final k in box.keys.toList()) {
+      if ((k as num).toInt() >= desired.length) {
+        await box.delete(k);
+      }
+    }
+    for (var i = 0; i < desired.length; i++) {
+      final newJson = desired[i].toJson();
+      final curRaw = box.get(i);
+      // Normalise the stored value through fromJson→toJson so the compare is
+      // independent of however Hive ordered the persisted map.
+      final curNorm = curRaw == null
+          ? null
+          : jsonEncode(MessageRecord.fromJson(_coerce(curRaw)).toJson());
+      if (curNorm != jsonEncode(newJson)) {
+        await box.put(i, newJson);
+      }
+    }
+    if (_activeEpk == epk && _activeRoomId == room) {
+      _idToSeq
+        ..clear()
+        ..addEntries([
+          for (var i = 0; i < desired.length; i++)
+            MapEntry(_key(desired[i].role, desired[i].id), i),
+        ]);
+      _nextSeq = desired.length;
+      _indexLoaded = true;
     }
   }
 
@@ -1180,5 +1416,10 @@ class SyncService extends Service {
     _extensionUiController.close();
     _workingController.close();
     _queuedController.close();
+    _runtimeStatusController.close();
+    _olderStateController.close();
+    _treeSnapshotController.close();
+    _treeErrorController.close();
+    _forkDraftController.close();
   }
 }

@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/domain/session_state.dart';
+import 'package:app/domain/transcript_rows.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/core/themes/themes.dart';
@@ -10,11 +13,14 @@ import 'package:app/ui/chat/states/chat_state.dart';
 import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
 import 'package:app/ui/chat/widgets/attach_sheet.dart';
+import 'package:app/ui/chat/widgets/activity_group_card.dart';
 import 'package:app/ui/chat/widgets/input_bar.dart';
 import 'package:app/ui/chat/widgets/message_bubble.dart';
 import 'package:app/ui/chat/widgets/streaming_bubble.dart';
 import 'package:app/ui/chat/widgets/tool_request_card.dart';
 import 'package:app/ui/chat/widgets/extension_ui_sheet.dart';
+import 'package:app/ui/chat/widgets/runtime_status_sheet.dart';
+import 'package:app/ui/chat/widgets/session_tree_sheet.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -191,6 +197,17 @@ class ChatPage extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
+                    // Plan 01 — context-window occupancy, tappable to open the
+                    // full runtime-status sheet. Only rendered once the Pi has
+                    // reported a real figure, so nothing shifts for a peer that
+                    // never sends `runtime_status`.
+                    if (state is ChatReady && state.runtimeStatus.context != null)
+                      _ContextChip(
+                        status: state.runtimeStatus,
+                        onTap: () =>
+                            showRuntimeStatusSheet(context, vm: vm),
+                      ),
+                    const SizedBox(width: 6),
                     Builder(
                       builder: (_) {
                         // Plan-18 follow-up — 4-state pill:
@@ -237,6 +254,15 @@ class ChatPage extends StatelessWidget {
                   ],
                 ),
               ],
+            ),
+          ),
+          // Plan 01 — session tree / branching entry point. The sheet asks the
+          // ViewModel for a fresh snapshot and rebuilds itself live.
+          IconButton(
+            icon: Icon(LucideIcons.gitBranch, size: 18, color: colors.muted2),
+            tooltip: 'Session tree',
+            onPressed: () => unawaited(
+              showSessionTreeSheet(context, vm: vm),
             ),
           ),
           // Plan/32g follow-up: ALWAYS render the info button. Gating it on the
@@ -386,7 +412,7 @@ class ChatPage extends StatelessWidget {
         actionLabel: 'Re-pair',
         onAction: () => context.go('/pair'),
       ),
-      ChatReady(:final messages, :final streaming) => () {
+      ChatReady(:final messages, :final streaming, :final hasOlder) => () {
         final visible = hideToolCalls
             ? messages.where((m) => m is! ToolEvent).toList()
             : messages;
@@ -403,6 +429,10 @@ class ChatPage extends StatelessWidget {
           messages: visible,
           streaming: streaming,
           onDecide: (id, decision) => vm.approveTool(id, decision),
+          // Paging only makes sense when tool-call rows are not being hidden;
+          // otherwise the "load earlier" spinner would appear to do nothing.
+          hasOlder: hasOlder && !hideToolCalls,
+          onLoadOlder: vm.loadOlder,
         );
       }(),
     };
@@ -452,6 +482,9 @@ class ChatPage extends StatelessWidget {
       // so a read() is enough here.
       voice: context.read<VoiceInputViewModel>(),
       onVoiceHint: (hint) => _handleVoiceHint(context, hint),
+      // Plan 01 — a fork/navigate injects the branched prompt here. Read from
+      // a ready state only (the draft is only produced by the tree sheet).
+      draft: isReady ? state.forkDraft : null,
       // Plan/30 — image attachments. takeImageForSend() reads + clears the
       // attached image so the inline image rides along with the (optionally
       // empty) caption. Attach-button gating by vision / already-attached is
@@ -563,55 +596,163 @@ class ChatPage extends StatelessWidget {
 
 // ---------------------------------------------------------------------------
 
-class _MessageList extends StatelessWidget {
+class _MessageList extends StatefulWidget {
   final List<ChatMessage> messages;
   final StreamingMessage? streaming;
   final void Function(String, ApproveDecision) onDecide;
+  final bool hasOlder;
+  final VoidCallback onLoadOlder;
 
   const _MessageList({
     required this.messages,
     required this.streaming,
     required this.onDecide,
+    required this.hasOlder,
+    required this.onLoadOlder,
   });
 
   @override
+  State<_MessageList> createState() => _MessageListState();
+}
+
+class _MessageListState extends State<_MessageList> {
+  final ScrollController _controller = ScrollController();
+
+  /// How close to the top (in logical px) triggers the next page. Large enough
+  /// that the fetch starts before the user hits the very end, so the older rows
+  /// are usually there by the time they arrive.
+  static const double _loadThreshold = 320;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_maybeLoadOlder);
+    // A short transcript may not be scrollable at all, so the drag-to-top
+    // trigger can never fire and the user would be stuck. After the first
+    // frame, if we are already at (or near) the top and older rows exist,
+    // fetch immediately.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeLoadOlder());
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_maybeLoadOlder);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _maybeLoadOlder() {
+    if (!widget.hasOlder) return;
+    if (!_controller.hasClients) return;
+    final pos = _controller.position;
+    // `reverse: true` — the oldest content sits at maxScrollExtent, so "top of
+    // the conversation" is the far end of the scroll range.
+    if (pos.maxScrollExtent - pos.pixels <= _loadThreshold) {
+      widget.onLoadOlder();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_MessageList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // A page just landed (or paging became available): re-check in case the
+    // list is still short enough that no scroll event will occur.
+    if (widget.hasOlder && !oldWidget.hasOlder) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeLoadOlder());
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final itemCount = messages.length + (streaming != null ? 1 : 0);
+    final rows = groupTranscriptRows(widget.messages);
+    // Reversed list: index 0 = bottom = newest. The "load earlier" row goes
+    // last, which renders at the top of the conversation.
+    final itemCount =
+        rows.length + (widget.streaming != null ? 1 : 0) + (widget.hasOlder ? 1 : 0);
+    final loadOlderIndex = itemCount - 1;
 
     // `reverse: true` anchors the viewport to the bottom (offset 0 = newest)
     // and keeps it there as content arrives — no manual scroll-to-bottom is
     // needed. The previous animateTo-on-every-rebuild fought this and caused
     // overlapping animations (flicker / runaway scroll) during streaming.
     return ListView.separated(
+      controller: _controller,
       reverse: true,
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
       itemCount: itemCount,
       separatorBuilder: (context, idx) => const SizedBox(height: 14),
       itemBuilder: (_, i) {
+        if (i == loadOlderIndex) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Center(
+              child: _LoadOlderButton(onTap: widget.onLoadOlder),
+            ),
+          );
+        }
         // Index 0 = bottom = newest. Stable keys are REQUIRED here: when the
         // streaming bubble appears/disappears at index 0 every other item's
         // index shifts by 1, and without keys Flutter re-matches elements by
         // position — briefly painting the wrong message at a slot (the
         // momentary C/B/A → B/C/A reorder). Keying by message id makes it
         // match by identity instead.
-        if (streaming != null && i == 0) {
+        if (widget.streaming != null && i == 0) {
           return KeyedSubtree(
             key: const ValueKey('streaming'),
-            child: StreamingBubble(streaming!),
+            child: StreamingBubble(widget.streaming!),
           );
         }
-        final msgIdx = messages.length - 1 - (i - (streaming != null ? 1 : 0));
-        final msg = messages[msgIdx];
+        final rowIdx =
+            rows.length - 1 - (i - (widget.streaming != null ? 1 : 0));
+        final row = rows[rowIdx];
         return KeyedSubtree(
-          key: ValueKey(msg.id),
-          child: switch (msg) {
-            UserMsg() => UserBubble(msg),
-            AssistantMsg() => AssistantBubble(msg),
-            ToolEvent() => ToolRequestCard(tool: msg, onDecide: onDecide),
-            CompactionMsg() => CompactionBubble(msg),
+          key: ValueKey(switch (row) {
+            SingleMessageRow(:final message) => message.id,
+            ToolGroupRow(:final tools) => 'tools_${tools.first.id}',
+          }),
+          child: switch (row) {
+            SingleMessageRow(:final message) => switch (message) {
+              UserMsg() => UserBubble(message),
+              AssistantMsg() => AssistantBubble(message),
+              ToolEvent() => ToolRequestCard(
+                tool: message,
+                onDecide: widget.onDecide,
+              ),
+              CompactionMsg() => CompactionBubble(message),
+            },
+            ToolGroupRow(:final tools) => ActivityGroupCard(tools: tools),
           },
         );
       },
+    );
+  }
+}
+
+/// Row at the top of the transcript while older pages remain.
+///
+/// An explicit tappable label rather than a permanent spinner: a spinner implies
+/// work in progress, but this row sits idle until the user reaches it. Scrolling
+/// to the top also triggers the fetch, so the label is an affordance, not the
+/// only path. Repeated taps are harmless — `requestOlderPage` ignores a request
+/// while one is already in flight.
+class _LoadOlderButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _LoadOlderButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        foregroundColor: context.colors.accent,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: const Text(
+        'Load earlier messages',
+        style: TextStyle(fontFamily: kMonoFamily, fontSize: 11),
+      ),
     );
   }
 }
@@ -695,6 +836,48 @@ class _RevokedBanner extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Plan 01 — compact context-window readout in the AppBar, e.g. `19.8k/200k 10%`.
+/// Tapping it opens the full runtime-status sheet. Only shown once the Pi has
+/// reported a real figure.
+class _ContextChip extends StatelessWidget {
+  final RuntimeStatus status;
+  final VoidCallback onTap;
+  const _ContextChip({required this.status, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final ctx = status.context!;
+    final tokens = ctx.tokens ?? 0;
+    final pct = (ctx.percent ?? 0).round();
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          border: Border.all(color: colors.border),
+          borderRadius: BorderRadius.circular(3),
+        ),
+        child: Text(
+          '${_compactTokens(tokens)}/${_compactTokens(ctx.contextWindow)} $pct%',
+          style: TextStyle(
+            fontFamily: kMonoFamily,
+            fontSize: 9,
+            color: colors.muted,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 19800 → '19.8k'; below 1000 → the raw number.
+  static String _compactTokens(int n) {
+    if (n < 1000) return '$n';
+    final k = n / 1000;
+    return k >= 100 ? '${k.round()}k' : '${k.toStringAsFixed(1)}k';
   }
 }
 

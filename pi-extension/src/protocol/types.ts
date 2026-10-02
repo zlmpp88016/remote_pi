@@ -188,7 +188,10 @@ export type ClientMessage =
   | { type: "approve_tool"; id: string; tool_call_id: string; decision: "allow" | "deny" }
   | { type: "cancel"; id: string; target_id: string }
   | { type: "ping"; id: string }
-  | { type: "session_sync"; id: string; limit?: number }
+  // Plan 01 — `before` is an opaque pagination cursor from a previous
+  // `session_history.older_cursor`. Omitted → the newest window (today's
+  // behaviour), so an older app keeps working unchanged.
+  | { type: "session_sync"; id: string; limit?: number; before?: string }
   // Plan/28 — Typed app actions on the paired Pi session. Each carries a
   // structured payload (no string parsing) and gets either `action_ok` or
   // `action_error` back. Visible side-effects (chat output, model change
@@ -201,6 +204,35 @@ export type ClientMessage =
   // Plan/67 — list/switch AgentSessions for the current workspace cwd.
   | { type: "session_list"; id: string }
   | { type: "session_switch"; id: string; session_id: string }
+  // Plan 01 — session tree + branching. The version fields are the double
+  // fence from the snapshot the app rendered: `base_snapshot_version` guards
+  // entry content, `base_branch_version` guards position, and `base_leaf_id`
+  // must match the leaf the user was looking at.
+  | { type: "tree_get"; id: string }
+  | {
+      type: "tree_navigate";
+      id: string;
+      target_entry_id: string;
+      base_snapshot_version: string;
+      base_branch_version: string;
+      base_leaf_id: string | null;
+      summarize?: boolean;
+    }
+  | {
+      type: "session_fork";
+      id: string;
+      target_entry_id: string;
+      base_snapshot_version: string;
+      base_branch_version: string;
+      base_leaf_id: string | null;
+    }
+  | {
+      type: "session_clone";
+      id: string;
+      base_snapshot_version: string;
+      base_branch_version: string;
+      base_leaf_id: string | null;
+    }
   // Plan/67 — host room (`room=host`) control plane on the supervisor.
   | { type: "workspace_list"; id: string }
   | { type: "workspace_start"; id: string; cwd?: string; daemon_id?: string }
@@ -329,7 +361,15 @@ export type ServerMessage =
       events: SessionHistoryEvent[];
       eos: boolean;
       truncated: boolean;
+      // Plan 01 — cursor for the next older page, and whether one exists.
+      // Absent when paging is unavailable (memory-buffer fallback), which the
+      // app reads as "no older history reachable" rather than as an error.
+      older_cursor?: string | null;
+      has_older?: boolean;
     }
+  // Plan 01 — runtime status snapshot (model / thinking / usage / cost /
+  // context occupancy). Published only when the comparable snapshot changes.
+  | { type: "runtime_status"; status: RuntimeStatusWire }
   // Plan/28 — Replies for typed app actions.
   // `action_ok` / `action_error` carry the original `ActionName` so the
   // app can demultiplex by action type rather than having to remember
@@ -340,6 +380,26 @@ export type ServerMessage =
   | { type: "action_ok"; in_reply_to: string; action: ActionName }
   | { type: "action_error"; in_reply_to: string; action: ActionName; error: string }
   | { type: "models_list"; in_reply_to: string; models: WireModel[]; current?: WireModel }
+  // Plan 01 — tree snapshot reply, plus the outcome of a navigate/fork/clone.
+  // Errors reuse `action_error` with the matching `ActionName`, so the app has
+  // one demultiplexing path for all typed actions.
+  | { type: "tree_snapshot_ok"; in_reply_to: string; snapshot: TreeSnapshotWire }
+  | {
+      type: "tree_navigate_ok";
+      in_reply_to: string;
+      leaf_id: string | null;
+      snapshot_version: string;
+      branch_version: string;
+      editor_text?: string;
+    }
+  | {
+      type: "session_fork_ok";
+      in_reply_to: string;
+      // Text of the forked user prompt, returned for the composer. Never
+      // auto-sent: the user decides whether to re-run it.
+      editor_text: string;
+    }
+  | { type: "session_clone_ok"; in_reply_to: string }
   | {
       type: "session_list_ok";
       in_reply_to: string;
@@ -395,7 +455,12 @@ export type ActionName =
   | "session_switch"
   | "workspace_list"
   | "workspace_start"
-  | "workspace_stop";
+  | "workspace_stop"
+  // Plan 01 — session tree navigation + branching.
+  | "tree_get"
+  | "tree_navigate"
+  | "session_fork"
+  | "session_clone";
 
 /** Plan/67 — one row in `session_list_ok`. `id` is the Pi SessionManager id. */
 export interface WireSessionInfo {
@@ -464,3 +529,72 @@ export interface WireModel {
 }
 
 export type ByeReason = "peer_stop" | "session_replaced" | "shutdown";
+
+/**
+ * Plan 01 — Runtime status snapshot sent to the app.
+ *
+ * Mirrors the reference implementation's `RuntimeStatus`. snake_case on the
+ * wire because every other field in this protocol is snake_case; the
+ * collector's camelCase shape is mapped at the boundary.
+ */
+export interface RuntimeStatusWire {
+  model: {
+    provider: string;
+    id: string;
+    name?: string;
+    context_window?: number;
+    reasoning?: boolean;
+  } | null;
+  thinking_level: ThinkingLevel | null;
+  usage: {
+    input: number;
+    output: number;
+    cache_read: number;
+    cache_write: number;
+    cost: {
+      input: number;
+      output: number;
+      cache_read: number;
+      cache_write: number;
+      total: number;
+    };
+  };
+  context: { tokens: number | null; context_window: number; percent: number | null } | null;
+  updated_at: string;
+}
+
+/**
+ * Plan 01 — One flat session-tree entry for the app's tree picker. `preview` is
+ * already bounded by the producer (see `TREE_PREVIEW_LIMIT`).
+ */
+export interface TreeEntryWire {
+  id: string;
+  parent_id: string | null;
+  type: string;
+  role?: string;
+  custom_type?: string;
+  tool_name?: string;
+  title: string;
+  preview: string;
+  timestamp: string;
+  is_current_leaf: boolean;
+  is_on_active_branch: boolean;
+  is_forkable: boolean;
+  navigation_behavior: "edit_prompt" | "navigate";
+}
+
+/**
+ * Plan 01 — Session-tree snapshot.
+ *
+ * `snapshot_version` covers entry content; `branch_version` covers the current
+ * position. Clients echo both back on navigate/fork/clone so a stale view
+ * cannot be acted on.
+ */
+export interface TreeSnapshotWire {
+  snapshot_version: string;
+  branch_version: string;
+  leaf_id: string | null;
+  entries: TreeEntryWire[];
+  default_filter: string;
+  filters: string[];
+}

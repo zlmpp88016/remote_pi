@@ -743,9 +743,24 @@ describe("contract fixtures: pair_*", () => {
     }
   });
 
-  test("all 31 fixture files present", () => {
-    const files = readdirSync(fixtureDir).filter((f) => f.endsWith(".jsonl"));
-    expect(files).toHaveLength(31);
+  test("every expected fixture file present", () => {
+    const files = new Set(readdirSync(fixtureDir).filter((f) => f.endsWith(".jsonl")));
+    // Assert presence, not a total: the directory also holds fixtures added
+    // after this test was written (Plan 01 added runtime_status + tree),
+    // and a hardcoded total turns every new fixture into a test failure.
+    const expected = [
+      "agent_message.jsonl", "agent_stream.jsonl", "approve_tool.jsonl",
+      "bye.jsonl", "cancel.jsonl", "cancelled.jsonl", "error.jsonl",
+      "pair_error.jsonl", "pair_ok.jsonl", "pair_request.jsonl",
+      "peer_offline.jsonl", "peer_online.jsonl", "ping.jsonl", "pong.jsonl",
+      "presence.jsonl", "presence_check.jsonl", "room_announced.jsonl",
+      "room_ended.jsonl", "room_meta_updated.jsonl", "rooms.jsonl",
+      "rooms_check.jsonl", "session_history.jsonl", "session_sync.jsonl",
+      "subscribe_presence.jsonl", "subscribe_rooms.jsonl", "tool_request.jsonl",
+      "tool_result.jsonl", "unsubscribe_presence.jsonl", "unsubscribe_rooms.jsonl",
+      "user_input.jsonl", "user_message.jsonl",
+    ];
+    expect(expected.filter((f) => !files.has(f))).toEqual([]);
   });
 });
 

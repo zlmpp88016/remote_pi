@@ -572,16 +572,317 @@ class PairRequest extends ClientMessage {
 /// session. With the mirror-cache strategy (plan/16) the app no longer
 /// negotiates incremental since_ts; it just asks for the latest N
 /// events and replaces local state with whatever Pi returns.
+/// Plan 01 — runtime status snapshot from the Pi (model / thinking / usage /
+/// cost / context occupancy). Mirrors `RuntimeStatusWire` in the extension.
+class RuntimeStatus {
+  final RuntimeModelInfo? model;
+  final ThinkingLevel? thinkingLevel;
+  final RuntimeUsage usage;
+  final RuntimeContextInfo? context;
+  final DateTime? updatedAt;
+
+  const RuntimeStatus({
+    this.model,
+    this.thinkingLevel,
+    this.usage = const RuntimeUsage.empty(),
+    this.context,
+    this.updatedAt,
+  });
+
+  factory RuntimeStatus.fromJson(Map<String, dynamic> j) => RuntimeStatus(
+    model: j['model'] == null
+        ? null
+        : RuntimeModelInfo.fromJson(j['model'] as Map<String, dynamic>),
+    thinkingLevel: ThinkingLevel.fromWire(
+      (j['thinking_level'] as String?) ?? '',
+    ),
+    usage: j['usage'] == null
+        ? const RuntimeUsage.empty()
+        : RuntimeUsage.fromJson(j['usage'] as Map<String, dynamic>),
+    context: j['context'] == null
+        ? null
+        : RuntimeContextInfo.fromJson(j['context'] as Map<String, dynamic>),
+    updatedAt: DateTime.tryParse((j['updated_at'] as String?) ?? ''),
+  );
+}
+
+class RuntimeModelInfo {
+  final String provider;
+  final String id;
+  final String? name;
+  final int? contextWindow;
+  final bool reasoning;
+
+  const RuntimeModelInfo({
+    required this.provider,
+    required this.id,
+    this.name,
+    this.contextWindow,
+    this.reasoning = false,
+  });
+
+  /// What to show in the header: the display name when the provider supplied
+  /// one, otherwise the bare id (never an empty string).
+  String get displayName => (name != null && name!.isNotEmpty) ? name! : id;
+
+  factory RuntimeModelInfo.fromJson(Map<String, dynamic> j) => RuntimeModelInfo(
+    provider: (j['provider'] as String?) ?? '',
+    id: (j['id'] as String?) ?? '',
+    name: j['name'] as String?,
+    contextWindow: (j['context_window'] as num?)?.toInt(),
+    reasoning: (j['reasoning'] as bool?) ?? false,
+  );
+}
+
+class RuntimeUsage {
+  final int input;
+  final int output;
+  final int cacheRead;
+  final int cacheWrite;
+  final RuntimeCost cost;
+
+  const RuntimeUsage({
+    this.input = 0,
+    this.output = 0,
+    this.cacheRead = 0,
+    this.cacheWrite = 0,
+    this.cost = const RuntimeCost.empty(),
+  });
+
+  const RuntimeUsage.empty()
+      : input = 0,
+        output = 0,
+        cacheRead = 0,
+        cacheWrite = 0,
+        cost = const RuntimeCost.empty();
+
+  factory RuntimeUsage.fromJson(Map<String, dynamic> j) => RuntimeUsage(
+    input: (j['input'] as num?)?.toInt() ?? 0,
+    output: (j['output'] as num?)?.toInt() ?? 0,
+    cacheRead: (j['cache_read'] as num?)?.toInt() ?? 0,
+    cacheWrite: (j['cache_write'] as num?)?.toInt() ?? 0,
+    cost: j['cost'] == null
+        ? const RuntimeCost.empty()
+        : RuntimeCost.fromJson(j['cost'] as Map<String, dynamic>),
+  );
+}
+
+class RuntimeCost {
+  final double input;
+  final double output;
+  final double cacheRead;
+  final double cacheWrite;
+  final double total;
+
+  const RuntimeCost({
+    this.input = 0,
+    this.output = 0,
+    this.cacheRead = 0,
+    this.cacheWrite = 0,
+    this.total = 0,
+  });
+
+  const RuntimeCost.empty()
+      : input = 0,
+        output = 0,
+        cacheRead = 0,
+        cacheWrite = 0,
+        total = 0;
+
+  factory RuntimeCost.fromJson(Map<String, dynamic> j) => RuntimeCost(
+    input: (j['input'] as num?)?.toDouble() ?? 0,
+    output: (j['output'] as num?)?.toDouble() ?? 0,
+    cacheRead: (j['cache_read'] as num?)?.toDouble() ?? 0,
+    cacheWrite: (j['cache_write'] as num?)?.toDouble() ?? 0,
+    total: (j['total'] as num?)?.toDouble() ?? 0,
+  );
+}
+
+/// Plan 01 — context-window occupancy. `tokens`/`percent` are null right after
+/// a compaction, before the next provider response.
+class RuntimeContextInfo {
+  final int? tokens;
+  final int contextWindow;
+  final double? percent;
+
+  const RuntimeContextInfo({
+    required this.contextWindow,
+    this.tokens,
+    this.percent,
+  });
+
+  factory RuntimeContextInfo.fromJson(Map<String, dynamic> j) => RuntimeContextInfo(
+    tokens: (j['tokens'] as num?)?.toInt(),
+    contextWindow: (j['context_window'] as num?)?.toInt() ?? 0,
+    percent: (j['percent'] as num?)?.toDouble(),
+  );
+}
+
+/// Plan 01 — one session-tree entry. `snapshotVersion`/`branchVersion` ride on
+/// the enclosing [TreeSnapshot]; clients echo both back when acting.
+class TreeEntry {
+  final String id;
+  final String? parentId;
+  final String type;
+  final String? role;
+  final String? customType;
+  final String? toolName;
+  final String title;
+  final String preview;
+  final DateTime? timestamp;
+  final bool isCurrentLeaf;
+  final bool isOnActiveBranch;
+  final bool isForkable;
+
+  /// `edit_prompt` entries (user and custom messages) branch from their parent
+  /// and may return editor text; others navigate in place.
+  final String navigationBehavior;
+
+  const TreeEntry({
+    required this.id,
+    required this.parentId,
+    required this.type,
+    required this.title,
+    required this.preview,
+    required this.isCurrentLeaf,
+    required this.isOnActiveBranch,
+    required this.isForkable,
+    required this.navigationBehavior,
+    this.role,
+    this.customType,
+    this.toolName,
+    this.timestamp,
+  });
+
+  factory TreeEntry.fromJson(Map<String, dynamic> j) => TreeEntry(
+    id: j['id'] as String,
+    parentId: j['parent_id'] as String?,
+    type: (j['type'] as String?) ?? 'other',
+    role: j['role'] as String?,
+    customType: j['custom_type'] as String?,
+    toolName: j['tool_name'] as String?,
+    title: (j['title'] as String?) ?? '',
+    preview: (j['preview'] as String?) ?? '',
+    timestamp: DateTime.tryParse((j['timestamp'] as String?) ?? ''),
+    isCurrentLeaf: (j['is_current_leaf'] as bool?) ?? false,
+    isOnActiveBranch: (j['is_on_active_branch'] as bool?) ?? false,
+    isForkable: (j['is_forkable'] as bool?) ?? false,
+    navigationBehavior: (j['navigation_behavior'] as String?) ?? 'navigate',
+  );
+}
+
+/// Plan 01 — session-tree snapshot with the double version fence.
+class TreeSnapshot {
+  final String snapshotVersion;
+  final String branchVersion;
+  final String? leafId;
+  final List<TreeEntry> entries;
+  final String defaultFilter;
+  final List<String> filters;
+
+  const TreeSnapshot({
+    required this.snapshotVersion,
+    required this.branchVersion,
+    required this.leafId,
+    required this.entries,
+    this.defaultFilter = 'default',
+    this.filters = const [],
+  });
+
+  factory TreeSnapshot.fromJson(Map<String, dynamic> j) => TreeSnapshot(
+    snapshotVersion: (j['snapshot_version'] as String?) ?? '',
+    branchVersion: (j['branch_version'] as String?) ?? '',
+    leafId: j['leaf_id'] as String?,
+    entries: ((j['entries'] as List<dynamic>?) ?? const [])
+        .map((e) => TreeEntry.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    defaultFilter: (j['default_filter'] as String?) ?? 'default',
+    filters: ((j['filters'] as List<dynamic>?) ?? const [])
+        .map((f) => f as String)
+        .toList(),
+  );
+}
+
+class RuntimeStatusMessage extends ServerMessage {
+  final RuntimeStatus status;
+  const RuntimeStatusMessage(this.status);
+
+  factory RuntimeStatusMessage.fromJson(Map<String, dynamic> j) =>
+      RuntimeStatusMessage(RuntimeStatus.fromJson(j['status'] as Map<String, dynamic>));
+}
+
+class TreeSnapshotOk extends ServerMessage {
+  final String inReplyTo;
+  final TreeSnapshot snapshot;
+  const TreeSnapshotOk({required this.inReplyTo, required this.snapshot});
+
+  factory TreeSnapshotOk.fromJson(Map<String, dynamic> j) => TreeSnapshotOk(
+    inReplyTo: j['in_reply_to'] as String,
+    snapshot: TreeSnapshot.fromJson(j['snapshot'] as Map<String, dynamic>),
+  );
+}
+
+class TreeNavigateOk extends ServerMessage {
+  final String inReplyTo;
+  final String? leafId;
+  final String snapshotVersion;
+  final String branchVersion;
+  final String? editorText;
+
+  const TreeNavigateOk({
+    required this.inReplyTo,
+    required this.leafId,
+    required this.snapshotVersion,
+    required this.branchVersion,
+    this.editorText,
+  });
+
+  factory TreeNavigateOk.fromJson(Map<String, dynamic> j) => TreeNavigateOk(
+    inReplyTo: j['in_reply_to'] as String,
+    leafId: j['leaf_id'] as String?,
+    snapshotVersion: (j['snapshot_version'] as String?) ?? '',
+    branchVersion: (j['branch_version'] as String?) ?? '',
+    editorText: j['editor_text'] as String?,
+  );
+}
+
+class SessionForkOk extends ServerMessage {
+  final String inReplyTo;
+
+  /// Text of the forked user prompt, offered to the composer. Never auto-sent.
+  final String editorText;
+  const SessionForkOk({required this.inReplyTo, required this.editorText});
+
+  factory SessionForkOk.fromJson(Map<String, dynamic> j) => SessionForkOk(
+    inReplyTo: j['in_reply_to'] as String,
+    editorText: (j['editor_text'] as String?) ?? '',
+  );
+}
+
+class SessionCloneOk extends ServerMessage {
+  final String inReplyTo;
+  const SessionCloneOk({required this.inReplyTo});
+
+  factory SessionCloneOk.fromJson(Map<String, dynamic> j) =>
+      SessionCloneOk(inReplyTo: j['in_reply_to'] as String);
+}
+
 class SessionSync extends ClientMessage {
   final String id;
   final int? limit;
-  SessionSync({required this.id, this.limit});
+
+  /// Plan 01 — opaque cursor from a previous `session_history.older_cursor`.
+  /// Omitted → the newest window (the pre-pagination behaviour).
+  final String? before;
+
+  SessionSync({required this.id, this.limit, this.before});
 
   @override
   Map<String, dynamic> toJson() => {
     'type': 'session_sync',
     'id': id,
     if (limit != null) 'limit': limit,
+    if (before != null) 'before': before,
   };
 }
 
@@ -602,7 +903,12 @@ enum ActionName {
   sessionSwitch('session_switch'),
   workspaceList('workspace_list'),
   workspaceStart('workspace_start'),
-  workspaceStop('workspace_stop');
+  workspaceStop('workspace_stop'),
+  // Plan 01 — session tree navigation and branching.
+  treeGet('tree_get'),
+  treeNavigate('tree_navigate'),
+  sessionFork('session_fork'),
+  sessionClone('session_clone');
 
   final String wire;
   const ActionName(this.wire);
@@ -784,6 +1090,101 @@ class SessionSwitch extends ClientMessage {
 /// Plan/67 — reserved room_id for the supervisor host control plane.
 const kHostRoomId = 'host';
 
+/// Plan 01 — the double fence every tree mutation carries.
+///
+/// Both versions AND the leaf id must match the Pi's live tree, otherwise the
+/// Pi rejects the request with `tree_state_changed`. Sending a stale leaf is
+/// the failure the fence exists to prevent: the user's pick came from a tree
+/// that has since moved.
+class TreeFence {
+  final String snapshotVersion;
+  final String branchVersion;
+  final String? leafId;
+
+  const TreeFence({
+    required this.snapshotVersion,
+    required this.branchVersion,
+    required this.leafId,
+  });
+
+  /// Build a fence from a snapshot this client just received.
+  factory TreeFence.fromSnapshot(TreeSnapshot s) => TreeFence(
+    snapshotVersion: s.snapshotVersion,
+    branchVersion: s.branchVersion,
+    leafId: s.leafId,
+  );
+}
+
+class TreeGet extends ClientMessage {
+  final String id;
+  TreeGet({required this.id});
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'tree_get', 'id': id};
+}
+
+class TreeNavigate extends ClientMessage {
+  final String id;
+  final String targetEntryId;
+  final TreeFence fence;
+  final bool summarize;
+
+  TreeNavigate({
+    required this.id,
+    required this.targetEntryId,
+    required this.fence,
+    this.summarize = false,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'tree_navigate',
+    'id': id,
+    'target_entry_id': targetEntryId,
+    'base_snapshot_version': fence.snapshotVersion,
+    'base_branch_version': fence.branchVersion,
+    'base_leaf_id': fence.leafId,
+    'summarize': summarize,
+  };
+}
+
+class SessionFork extends ClientMessage {
+  final String id;
+  final String targetEntryId;
+  final TreeFence fence;
+
+  SessionFork({
+    required this.id,
+    required this.targetEntryId,
+    required this.fence,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'session_fork',
+    'id': id,
+    'target_entry_id': targetEntryId,
+    'base_snapshot_version': fence.snapshotVersion,
+    'base_branch_version': fence.branchVersion,
+    'base_leaf_id': fence.leafId,
+  };
+}
+
+class SessionClone extends ClientMessage {
+  final String id;
+  final TreeFence fence;
+
+  SessionClone({required this.id, required this.fence});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'session_clone',
+    'id': id,
+    'base_snapshot_version': fence.snapshotVersion,
+    'base_branch_version': fence.branchVersion,
+    'base_leaf_id': fence.leafId,
+  };
+}
 class WorkspaceList extends ClientMessage {
   final String id;
   WorkspaceList({required this.id});
@@ -868,6 +1269,12 @@ sealed class ServerMessage {
       // the SDK's extension_ui_request RPC contract; optional `ask` envelope
       // carries pi-ask's full question so the app renders multi/preview/notes.
       'extension_ui_request' => ExtensionUiRequest.fromJson(json),
+      // Plan 01 — runtime status + session tree/branching replies.
+      'runtime_status' => RuntimeStatusMessage.fromJson(json),
+      'tree_snapshot_ok' => TreeSnapshotOk.fromJson(json),
+      'tree_navigate_ok' => TreeNavigateOk.fromJson(json),
+      'session_fork_ok' => SessionForkOk.fromJson(json),
+      'session_clone_ok' => SessionCloneOk.fromJson(json),
       // forward-compat: unknown types are not fatal — callers catch and log
       _ => throw UnsupportedTypeException(type ?? ''),
     };
@@ -1210,12 +1617,23 @@ class SessionHistory extends ServerMessage {
   final List<SessionHistoryEvent> events;
   final bool eos;
   final bool truncated;
+
+  /// Plan 01 — cursor for the next older page, or null when there is none.
+  /// Absent on the wire (older Pi extension) reads as null: paging simply is
+  /// unavailable, which is exactly the pre-feature behaviour.
+  final String? olderCursor;
+
+  /// Plan 01 — whether an older page is reachable via [olderCursor].
+  final bool hasOlder;
+
   SessionHistory({
     required this.inReplyTo,
     required this.sessionStartedAt,
     required this.events,
     required this.eos,
     this.truncated = false,
+    this.olderCursor,
+    this.hasOlder = false,
   });
 
   factory SessionHistory.fromJson(Map<String, dynamic> j) => SessionHistory(
@@ -1227,6 +1645,8 @@ class SessionHistory extends ServerMessage {
     eos: j['eos'] as bool,
     // Tolerate absence during the protocol transition window.
     truncated: (j['truncated'] as bool?) ?? false,
+    olderCursor: j['older_cursor'] as String?,
+    hasOlder: (j['has_older'] as bool?) ?? false,
   );
 }
 

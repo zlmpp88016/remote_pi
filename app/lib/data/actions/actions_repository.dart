@@ -193,6 +193,14 @@ class ActionsRepository extends Repository implements IActionsRepository {
             ModelsCatalogue(models: models, current: current),
           );
         }
+      case SessionListOk():
+      case SessionSwitchOk():
+      case SessionSwitchError():
+      case WorkspaceListOk():
+      case WorkspaceStartOk():
+      case WorkspaceStopOk():
+        // Plan/67 — consumed by workspace/session pickers, not here.
+        break;
       default:
         // All other ServerMessages are owned by SessionRepository.
         break;

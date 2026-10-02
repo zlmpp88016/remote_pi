@@ -18,3 +18,12 @@ class PeerWentOffline extends SessionEvent {
   final String rawReason;
   const PeerWentOffline(this.rawReason);
 }
+
+/// Plan 01 — paging availability for the transcript. `cursor` is the opaque
+/// marker the Pi expects back in `session_sync.before`; it is released when a
+/// new `session_history` arrives (a fresh sync invalidates the old chain).
+class OlderPageState {
+  final bool hasOlder;
+  final String? cursor;
+  const OlderPageState(this.hasOlder, this.cursor);
+}

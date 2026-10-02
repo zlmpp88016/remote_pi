@@ -15,6 +15,12 @@ const SERVER_TYPES = new Set<ServerMessage["type"]>([
   "pong",
   "bye",
   "session_history",
+  // Plan 01 — runtime status + session tree / branching replies.
+  "runtime_status",
+  "tree_snapshot_ok",
+  "tree_navigate_ok",
+  "session_fork_ok",
+  "session_clone_ok",
   // Plan/57 — interactive extension prompt (ask_user via pi-ask).
   "extension_ui_request",
 ]);

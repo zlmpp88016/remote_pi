@@ -1,0 +1,80 @@
+# 行尾符与文本规范化。
+#
+# 背景：仓库此前没有任何 .gitattributes，而工作区（Windows 挂载盘）里的文件
+# 大量是 CRLF，导致 `git status` 把 1690 个**内容完全一致、仅行尾符不同**的
+# 文件报成已修改，真实改动被淹没。这里固定规范，让 diff 只反映内容变化。
+#
+# 默认：文本文件入库统一 LF，检出时按平台自动转换。
+* text=auto eol=lf
+
+# ── 显式声明为文本（按扩展名，防止被误判）────────────────────────────
+*.dart    text
+*.ts      text
+*.tsx     text
+*.js      text
+*.jsx     text
+*.mjs     text
+*.rs      text
+*.swift   text
+*.kt      text
+*.kts     text
+*.c       text
+*.cc      text
+*.cpp     text
+*.h       text
+*.md      text
+*.txt     text
+*.yaml    text
+*.yml     text
+*.json    text
+*.jsonl   text
+*.xml     text
+*.toml    text
+*.properties text
+*.sh      text eol=lf
+*.svg     text
+*.html    text
+*.lock    text
+*.plist   text
+*.xcconfig text
+*.xcworkspacedata text
+*.xcsettings text
+*.xcscheme text
+*.storyboard text
+*.pbxproj text
+*.podspec text
+*.template text
+*.resolved text
+*.metadata text
+
+# ── 显式声明为二进制（禁止任何行尾符/编码转换）────────────────────────
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.webp    binary
+*.bmp     binary
+*.ico     binary
+*.icns    binary
+*.ttf     binary
+*.otf     binary
+*.woff    binary
+*.woff2   binary
+*.jar     binary
+*.keystore binary
+*.jks     binary
+*.p12     binary
+*.mobileprovision binary
+*.so      binary
+*.dylib   binary
+*.dll     binary
+*.a       binary
+*.zip     binary
+*.gz      binary
+*.tar     binary
+*.ipa     binary
+*.apk     binary
+*.aab     binary
+
+# ── 派生/生成目录：不参与语言统计 ────────────────────────────────────
+cockpit/lib/**/generated/** linguist-generated=true

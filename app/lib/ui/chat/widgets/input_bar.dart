@@ -63,6 +63,12 @@ class InputBar extends StatefulWidget {
   /// button (offline/streaming); vision/has-image gating is internal.
   final VoidCallback? onOpenAttach;
 
+  /// Plan 01 — text pushed into the composer by a fork/navigate (the Pi
+  /// returns the branched prompt). Applied once per distinct value, like a
+  /// voice transcript: the field is replaced, never concatenated, and never
+  /// auto-sent. Null (the default) leaves the composer untouched.
+  final String? draft;
+
   const InputBar({
     super.key,
     required this.onSend,
@@ -75,6 +81,7 @@ class InputBar extends StatefulWidget {
     this.voice,
     this.onVoiceHint,
     this.attachment,
+    this.draft,
     this.onOpenAttach,
     this.disabled = false,
     this.streaming = false,
@@ -116,6 +123,18 @@ class _InputBarState extends State<InputBar> {
       _transcriptSub?.cancel();
       _subscribeTranscripts();
     }
+    // Plan 01 — apply an injected fork/navigate draft. Guarded on identity so
+    // a rebuild that merely re-passes the same text does not re-clobber
+    // whatever the user has since typed.
+    if (widget.draft != null && widget.draft != old.draft) {
+      _applyDraft(widget.draft!);
+    }
+  }
+
+  void _applyDraft(String text) {
+    if (text.isEmpty) return;
+    _controller.text = text;
+    _controller.selection = TextSelection.collapsed(offset: text.length);
   }
 
   void _subscribeTranscripts() {

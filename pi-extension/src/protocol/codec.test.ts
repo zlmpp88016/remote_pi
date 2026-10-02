@@ -20,13 +20,19 @@ const SERVER_TYPE_FILES = new Set([
   "pong.jsonl",
   "bye.jsonl",
   "session_history.jsonl",
+  // Plan 01 — runtime status + session tree/branching replies.
+  "runtime_status.jsonl",
+  "tree_snapshot.jsonl",
+  "tree_navigate.jsonl",
+  "session_fork.jsonl",
+  "session_clone.jsonl",
 ]);
 
 describe("fixtures", () => {
   const files = readdirSync(fixtureDir).filter((f) => f.endsWith(".jsonl"));
 
-  test("31 fixture files present", () => {
-    expect(files).toHaveLength(31);
+  test("36 fixture files present", () => {
+    expect(files).toHaveLength(36);
   });
 
   for (const file of files) {

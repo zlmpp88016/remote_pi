@@ -12,6 +12,7 @@ import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/chat/states/chat_state.dart';
 import 'package:app/ui/core/viewmodel/viewmodel.dart';
+import 'package:flutter/widgets.dart';
 
 /// Plan/31 — ChatViewModel is now a thin composer over the local SSOT.
 ///
@@ -34,6 +35,11 @@ class ChatViewModel extends ViewModel<ChatState> {
   StreamSubscription<List<QueuedMsg>>? _queuedSub;
   StreamSubscription<SessionEvent>? _eventSub;
   StreamSubscription<ExtensionUiRequest>? _uiReqSub;
+  StreamSubscription<RuntimeStatus>? _runtimeStatusSub;
+  StreamSubscription<OlderPageState>? _olderSub;
+  StreamSubscription<TreeSnapshot>? _treeSub;
+  StreamSubscription<String>? _treeErrorSub;
+  StreamSubscription<String>? _forkDraftSub;
   StreamSubscription<Map<String, List<RoomInfo>>>? _roomsSub;
   StreamSubscription<ConnectionStatus>? _statusSub;
 
@@ -53,6 +59,14 @@ class ChatViewModel extends ViewModel<ChatState> {
   // at a closed/dismissed flow that's still blocked on desktop.
   String? _pendingUiError;
   RuntimeRecord _runtime = const RuntimeRecord();
+  // Plan 01 — live runtime status (model/thinking/usage/cost/context) and
+  // transcript paging availability, both owned by SyncService.
+  RuntimeStatus _runtimeStatus = const RuntimeStatus();
+  bool _hasOlder = false;
+  // Plan 01 — session tree state for the picker sheet.
+  TreeSnapshot? _treeSnapshot;
+  String? _treeError;
+  String? _forkDraft;
   bool _pairingRevoked = false;
   String? _peerOfflineReason;
   ConnectionStatus? _lastStatus;
@@ -69,6 +83,11 @@ class ChatViewModel extends ViewModel<ChatState> {
     _queuedSub = _sync.queuedStream.listen(_onQueued);
     _eventSub = _sync.events.listen(_onEvent);
     _uiReqSub = _sync.extensionUiRequestStream.listen(_onExtensionUiRequest);
+    _runtimeStatusSub = _sync.runtimeStatusStream.listen(_onRuntimeStatus);
+    _olderSub = _sync.olderPageStream.listen(_onOlderPage);
+    _treeSub = _sync.treeSnapshotStream.listen(_onTreeSnapshot);
+    _treeErrorSub = _sync.treeErrorStream.listen(_onTreeError);
+    _forkDraftSub = _sync.forkDraftStream.listen(_onForkDraft);
     _roomsSub = _conn.roomsStream.listen((_) => _recompute());
     _statusSub = _conn.statusStream.listen(_onStatus);
     // ignore: discarded_futures
@@ -122,6 +141,40 @@ class ChatViewModel extends ViewModel<ChatState> {
   List<QueuedMsg> get queuedMessages => _queuedMessages;
   String? get queuedText =>
       _queuedMessages.isEmpty ? null : _queuedMessages.first.text;
+
+  /// Plan 01 — runtime status for the AppBar subtitle and detail sheet.
+  RuntimeStatus get runtimeStatus => _runtimeStatus;
+
+  /// Plan 01 — show/hide the "load earlier" affordance.
+  bool get hasOlder => _hasOlder;
+
+  /// Plan 01 — latest session tree snapshot (null until requested/fetched).
+  TreeSnapshot? get treeSnapshot => _treeSnapshot;
+
+  /// Plan 01 — last tree/branching error, as the raw wire code
+  /// (`session_busy`, `tree_state_changed`, `target_not_forkable`, ...).
+  String? get treeError => _treeError;
+
+  /// Plan 01 — draft text produced by a fork/navigate, for the composer.
+  String? get forkDraft => _forkDraft;
+
+  /// Plan 01 — fetch the transcript page older than the loaded window.
+  void loadOlder() => _sync.requestOlderPage();
+
+  /// Plan 01 — session tree + branching. All four delegate to [SyncService],
+  /// which owns the channel; the UI never talks to the wire directly.
+  Future<void> refreshTree() => _sync.requestTree();
+
+  Future<void> navigateTree(
+    String entryId,
+    TreeFence fence, {
+    bool summarize = false,
+  }) => _sync.navigateTree(entryId, fence, summarize: summarize);
+
+  Future<void> forkSession(String entryId, TreeFence fence) =>
+      _sync.forkSession(entryId, fence);
+
+  Future<void> cloneSession(TreeFence fence) => _sync.cloneSession(fence);
 
   void queueMessage(String text) {
     unawaited(_sync.queueMessage(text));
@@ -199,6 +252,47 @@ class ChatViewModel extends ViewModel<ChatState> {
   void _onWorking(bool working) {
     _working = working;
     _recompute();
+  }
+
+  /// Plan 01 — runtime status changed (model/thinking/usage/cost/context).
+  void _onRuntimeStatus(RuntimeStatus status) {
+    _runtimeStatus = status;
+    _recompute();
+  }
+
+  /// Plan 01 — paging availability changed.
+  void _onOlderPage(OlderPageState state) {
+    _hasOlder = state.hasOlder;
+    _recompute();
+  }
+
+  /// Plan 01 — a fresh tree snapshot arrived; clearing the error makes a
+  /// retry after `tree_state_changed` show a clean sheet.
+  void _onTreeSnapshot(TreeSnapshot snapshot) {
+    _treeSnapshot = snapshot;
+    _treeError = null;
+    _recompute();
+  }
+
+  void _onTreeError(String error) {
+    _treeError = error;
+    _recompute();
+  }
+
+  void _onForkDraft(String text) {
+    if (text.isEmpty) return;
+    _forkDraft = text;
+    _recompute();
+    // One-shot: drop it once the frame carrying it has built, so the composer
+    // takes the text exactly once. Without the clear, forking the same prompt
+    // twice would produce an identical `forkDraft`, the state-equality check
+    // would suppress the second notification, and the composer would get
+    // nothing.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_disposed || _forkDraft == null) return;
+      _forkDraft = null;
+      _recompute();
+    });
   }
 
   void _onQueued(List<QueuedMsg> messages) {
@@ -308,6 +402,11 @@ class ChatViewModel extends ViewModel<ChatState> {
       queuedMessages: _queuedMessages,
       pendingUiRequest: _pendingUiRequest,
       pendingUiError: _pendingUiError,
+      runtimeStatus: _runtimeStatus,
+      hasOlder: _hasOlder,
+      treeSnapshot: _treeSnapshot,
+      treeError: _treeError,
+      forkDraft: _forkDraft,
     );
   }
 
@@ -376,6 +475,11 @@ class ChatViewModel extends ViewModel<ChatState> {
     _queuedSub?.cancel();
     _eventSub?.cancel();
     _uiReqSub?.cancel();
+    _runtimeStatusSub?.cancel();
+    _olderSub?.cancel();
+    _treeSub?.cancel();
+    _treeErrorSub?.cancel();
+    _forkDraftSub?.cancel();
     _roomsSub?.cancel();
     _statusSub?.cancel();
     super.dispose();

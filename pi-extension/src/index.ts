@@ -39,6 +39,31 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { SettingsManager, convertToPng } from "@earendil-works/pi-coding-agent";
 import { type Ed25519Keypair } from "./pairing/crypto.js";
+// Plan 01 — transcript pagination, canonical ids, session tree, runtime status.
+// Ported from zerray/pi-remote-control; see docs/plan/01-adopt-pi-remote-control.md.
+import {
+  activeBranchEntryIds,
+  InvalidTranscriptCursorError,
+  readTranscriptEntries,
+} from "./session/transcript.js";
+import {
+  transcriptEventsBefore,
+  transcriptEventsRecent,
+  type HistoryFormatting,
+} from "./session/history.js";
+import { buildTreeSnapshot } from "./session/tree.js";
+import { toTreeSnapshotWire, toRuntimeStatusWire } from "./session/wire.js";
+import {
+  collectRuntimeStatus,
+  comparableRuntimeStatus,
+} from "./session/runtime_status.js";
+import {
+  handleSessionClone,
+  handleSessionFork,
+  handleTreeGet,
+  handleTreeNavigate,
+  type TreeActionContext,
+} from "./actions/tree.js";
 import { buildQRUri, qrSession, renderQRAscii, clampPairTtlMs, TOKEN_TTL_MS } from "./pairing/qr.js";
 import {
   addPeer,
@@ -65,6 +90,7 @@ import type {
   ServerMessage,
   SessionHistoryEvent,
   ThinkingLevel,
+  TreeSnapshotWire,
   WireImage,
   QueuedMessageItem,
 } from "./protocol/types.js";
@@ -324,6 +350,43 @@ function _publishWorking(working: boolean): void {
   if (_relay && _myRoomId) {
     _relay.sendControl({ type: "room_meta_update", room_id: _myRoomId, meta: { working } });
   }
+}
+
+/**
+ * Plan 01 — last published runtime status, comparable form (no timestamp).
+ * Used to suppress re-sends: the collector runs on every forwarded event, so
+ * an unchanged snapshot would otherwise spam the peer channel.
+ */
+let _lastRuntimeStatusComparable: string | null = null;
+
+/**
+ * Plan 01 — publish a runtime status snapshot when it actually changed.
+ *
+ * Model and thinking level already ride the relay's `room_meta`; this adds the
+ * usage/cost/context figures that channel does not carry. Both are kept: the
+ * room meta drives the Home tiles, this drives the chat header.
+ */
+function _publishRuntimeStatusIfChanged(force = false): void {
+  if (!_anyPeerActive()) return;
+  try {
+    const ctx = _liveCtx();
+    const status = collectRuntimeStatus({
+      model: (ctx as { model?: unknown } | null)?.model,
+      pi: _pi,
+      ctx,
+    });
+    const comparable = comparableRuntimeStatus(status);
+    if (!force && comparable === _lastRuntimeStatusComparable) return;
+    _lastRuntimeStatusComparable = comparable;
+    _broadcastToActive({ type: "runtime_status", status: toRuntimeStatusWire(status) });
+  } catch {
+    // Status is cosmetic — never let it break an event handler.
+  }
+}
+
+/** Plan 01 — drop the cached status so a replaced session re-publishes. */
+function _resetRuntimeStatusCache(): void {
+  _lastRuntimeStatusComparable = null;
 }
 
 function _imageCacheRootDir(): string {
@@ -1232,6 +1295,10 @@ function _anyPeerActive(): boolean {
 function _attachPeerChannel(appPeerId: string, channel: PlainPeerChannel): void {
   _activePeers.set(appPeerId, channel);
   _peerShort = appPeerId.slice(0, 8);
+  // Plan 01 — seed the newly attached peer with the current runtime status.
+  // Freshly attached is the one moment the app has no figures at all, and
+  // waiting for the next turn would leave the header empty on an idle Pi.
+  _publishRuntimeStatusIfChanged(true);
 }
 
 /** Detaches a single owner's channel + removes it from the map. Used by
@@ -2252,6 +2319,8 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
   });
 
   pi.on("agent_end", () => {
+    // Plan 01 — runtime status after a turn settles: usage/cost/context move.
+    _publishRuntimeStatusIfChanged();
     // Buffer is fed by `message_end`; here we only finalize the outbound
     // turn signal to every connected owner. No buffer mutation.
     if (_anyPeerActive() && _currentTurnId) {
@@ -4641,7 +4710,109 @@ export function _routeClientMessageFrom(
       })();
       break;
     }
+    // Plan 01 — session tree navigation and branching. The context is built
+    // fresh per request (see _treeActionContext) because a captured command
+    // ctx goes stale after a session replacement, and fork/clone 
+    // deliberately cause one.
+    case "tree_get":
+      void handleTreeGet(_treeActionContext(), sender, msg);
+      break;
+    case "tree_navigate":
+      void handleTreeNavigate(_treeActionContext(), sender, msg);
+      break;
+    case "session_clone": {
+      const ctx = _treeActionContext();
+      void (async () => {
+        await handleSessionClone(ctx, sender, msg, _afterSessionReplaced);
+        if (ctx) _afterSessionReplaced();
+      })();
+      break;
+    }
+    case "session_fork": {
+      const ctx = _treeActionContext();
+      void (async () => {
+        await handleSessionFork(ctx, sender, msg, _afterSessionReplaced);
+        if (ctx) _afterSessionReplaced();
+      })();
+      break;
+    }
   }
+}
+
+/**
+ * Plan 01 — build the tree-action context from the live extension ctx.
+ *
+ * Returns null when no live ctx (or no tree support) is available, which the
+ * handlers surface as an action error rather than a crash.
+ */
+function _treeActionContext(): TreeActionContext | null {
+  const raw = _liveCtx();
+  if (!raw) return null;
+  const ctx = raw as unknown as {
+    isIdle?: () => boolean;
+    navigateTree?: TreeActionContext["navigateTree"];
+    fork?: TreeActionContext["fork"];
+    sessionManager?: {
+      getTree?: () => readonly unknown[];
+      getLeafId?: () => string | null;
+      getEntry?: (id: string) => unknown;
+    };
+  };
+  if (typeof ctx.navigateTree !== "function" || typeof ctx.fork !== "function") return null;
+  return {
+    isIdle: () => (typeof ctx.isIdle === "function" ? ctx.isIdle() : true),
+    navigateTree: ctx.navigateTree.bind(ctx),
+    fork: ctx.fork.bind(ctx),
+    buildSnapshot: () => _buildTreeSnapshotWire(ctx.sessionManager),
+    entryText: (entryId) => _treeEntryText(ctx.sessionManager, entryId),
+  };
+}
+
+/** Build the current snapshot, or null when the tree is unavailable. */
+function _buildTreeSnapshotWire(
+  sessionManager: { getTree?: () => readonly unknown[]; getLeafId?: () => string | null } | undefined,
+): TreeSnapshotWire | null {
+  try {
+    const roots = sessionManager?.getTree?.();
+    if (!roots) return null;
+    const leafId = sessionManager?.getLeafId?.() ?? null;
+    return toTreeSnapshotWire(buildTreeSnapshot({ roots: roots as never, leafId }));
+  } catch {
+    return null;
+  }
+}
+
+/** Text of a user-message entry, used as a fork's returned draft. */
+function _treeEntryText(
+  sessionManager: { getEntry?: (id: string) => unknown } | undefined,
+  entryId: string,
+): string {
+  try {
+    const entry = sessionManager?.getEntry?.(entryId) as { message?: { role?: unknown; content?: unknown } } | undefined;
+    const message = entry?.message;
+    if (!message || message.role !== "user") return "";
+    const content = message.content;
+    if (typeof content === "string") return content;
+    if (!Array.isArray(content)) return "";
+    return content
+      .flatMap((block) => {
+        if (!block || typeof block !== "object") return [];
+        const record = block as { type?: unknown; text?: unknown };
+        return record.type === "text" && typeof record.text === "string" ? [record.text] : [];
+      })
+      .join("");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Plan 01 — after fork/clone the running session has been replaced, so refresh
+ * the cached ctx and re-stamp the mirror. Without this the extension would keep
+ * answering from the replaced session's buffer.
+ */
+function _afterSessionReplaced(): void {
+  _resetSessionForNew(randomUUID());
 }
 
 function _asActionCtx(raw: unknown): ActionCtx | null {
@@ -4685,16 +4856,38 @@ function _handleSessionSync(
       events: [],
       eos: true,
       truncated: false,
+      older_cursor: null,
+      has_older: false,
     });
     return;
   }
 
-  // Mirror semantics: always return the last N events. App SUBSTITUTES its
-  // local cache with this response — no delta/since_ts logic.
   const serverLimit = _getSyncLimit();
   const requested = msg.limit ?? serverLimit;
   const effectiveLimit = Math.min(requested, serverLimit);  // server clamps
 
+  // Plan 01 — prefer the Pi session file, which is the durable transcript and
+  // the only source that can serve pages older than this process's buffer.
+  // Falls back to the in-memory mirror when there is no session file (daemon
+  // boot, control channel) or when the read fails, preserving old behaviour.
+  const paged = _pagedHistoryFromSessionFile(msg.before, effectiveLimit);
+  if (paged) {
+    sender.send({
+      type: "session_history",
+      in_reply_to: msg.id,
+      session_started_at: _sessionStartedAt,
+      events: paged.events,
+      eos: true,
+      truncated: false,
+      older_cursor: paged.olderCursor,
+      has_older: paged.hasOlder,
+    });
+    _replayPendingUiRequests(sender);
+    return;
+  }
+
+  // Mirror fallback: always return the last N events. App SUBSTITUTES its
+  // local cache with this response — no delta/since_ts logic.
   const allEvents = _mapAgentMessagesToEvents(_messageBuffer);
   const slice = effectiveLimit > 0 ? allEvents.slice(-effectiveLimit) : [];
   const truncated = allEvents.length > effectiveLimit;
@@ -4706,16 +4899,83 @@ function _handleSessionSync(
     events: slice,
     eos: true,
     truncated,
+    // The buffer holds only a capped tail, so no older page is reachable.
+    older_cursor: null,
+    has_older: false,
   });
 
-  // Plan/57 — replay ask_user flows still awaiting an answer. The bridge
-  // broadcasts `started` once; a peer that connects afterwards would otherwise
-  // see the tool call as plain history text while the desktop stays blocked on
-  // the TUI dialog (reproduced: close the app, fire ask_user, reopen → no
-  // sheet). Sent AFTER the history so the modal opens over a synced chat, and
-  // per-sender like the rest of this handler — a sync from owner A must not
-  // pop a modal on owner B. Flows past FLOW_TTL_MS are already gone from the
-  // bridge, so an abandoned flow is never resurrected.
+  _replayPendingUiRequests(sender);
+}
+
+/**
+ * Plan 01 — serve a history page from the Pi session JSONL file, filtered to
+ * the active branch.
+ *
+ * Returns null when paging is unavailable, so the caller can fall back to the
+ * in-memory mirror. An invalid cursor also falls back rather than erroring:
+ * the shipped app cannot send one, so the only source is a stale client after
+ * a session reset, which the newest window answers correctly.
+ */
+function _pagedHistoryFromSessionFile(
+  before: string | undefined,
+  limit: number,
+): { events: SessionHistoryEvent[]; olderCursor: string | null; hasOlder: boolean } | null {
+  const sessionFile = _sessionFileFromCtx();
+  if (!sessionFile) return null;
+  try {
+    const leafId = _leafIdFromCtx();
+    // Filtering to the active branch keeps abandoned-branch messages out of the
+    // transcript; when the branch cannot be resolved we read linearly rather
+    // than serve nothing.
+    const entryIds = leafId ? activeBranchEntryIds(sessionFile, leafId) : undefined;
+    const entries = readTranscriptEntries(sessionFile, entryIds ? { entryIds } : {});
+    if (entries.length === 0) return null;
+    const formatting: HistoryFormatting = {
+      stringifyContent: _stringifyContent,
+      stringifyToolResult: _stringifyToolResult,
+      imagesFromContent: _imagesFromContent,
+    };
+    return before
+      ? transcriptEventsBefore(entries, before, limit, formatting)
+      : transcriptEventsRecent(entries, limit, formatting);
+  } catch (err) {
+    // A history read must never take down the agent or the sync path.
+    if (err instanceof InvalidTranscriptCursorError) return null;
+    return null;
+  }
+}
+
+/** The session file for the live context, or null when unavailable. */
+function _sessionFileFromCtx(): string | null {
+  const ctx = _liveCtx() as { sessionManager?: { getSessionFile?: () => string | undefined } } | null;
+  try {
+    return ctx?.sessionManager?.getSessionFile?.() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** The current leaf id, or null. Drives active-branch transcript filtering. */
+function _leafIdFromCtx(): string | null {
+  const ctx = _liveCtx() as { sessionManager?: { getLeafId?: () => string | null } } | null;
+  try {
+    return ctx?.sessionManager?.getLeafId?.() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Plan/57 — replay ask_user flows still awaiting an answer. The bridge
+ * broadcasts `started` once; a peer that connects afterwards would otherwise
+ * see the tool call as plain history text while the desktop stays blocked on
+ * the TUI dialog (reproduced: close the app, fire ask_user, reopen → no
+ * sheet). Sent AFTER the history so the modal opens over a synced chat, and
+ * per-sender like the rest of this handler — a sync from owner A must not
+ * pop a modal on owner B. Flows past FLOW_TTL_MS are already gone from the
+ * bridge, so an abandoned flow is never resurrected.
+ */
+function _replayPendingUiRequests(sender: PlainPeerChannel): void {
   for (const req of _extensionUiBridge?.pendingRequests() ?? []) {
     sender.send(req);
   }
@@ -4741,6 +5001,11 @@ function _resetSessionForNew(inReplyTo: string): void {
   _pendingSteers = [];
   _lastConsumedSteerText = null;
   _resetQueuedItems({ broadcast: true });
+  // Plan 01 — the replacement session has its own model/usage/context, so drop
+  // the cached runtime status. Without this the next unchanged comparison
+  // would suppress the publish and the app would keep showing the previous
+  // session's figures.
+  _resetRuntimeStatusCache();
   _sessionStartedAt = Date.now();
   _broadcastToActive({
     type: "session_history",
@@ -4898,7 +5163,7 @@ function _stringArg(args: ToolArgs, keys: string[]): string {
   return "";
 }
 
-function _stringifyContent(content: unknown): string {
+export function _stringifyContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
@@ -4919,7 +5184,7 @@ function _stringifyContent(content: unknown): string {
  * (same as `_stringifyContent`); any other object → readable JSON; other
  * primitives → `String()`; null/undefined → "". Never "[object Object]".
  */
-function _stringifyToolResult(value: unknown): string {
+export function _stringifyToolResult(value: unknown): string {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return _stringifyContent(value);
   if (value !== null && typeof value === "object") {
@@ -4941,7 +5206,7 @@ function _stringifyToolResult(value: unknown): string {
  * Used by the history mapper so a re-synced image bubble keeps its bytes —
  * `_stringifyContent` only pulls text and would otherwise drop the image.
  */
-function _imagesFromContent(content: unknown): WireImage[] {
+export function _imagesFromContent(content: unknown): WireImage[] {
   if (!Array.isArray(content)) return [];
   const out: WireImage[] = [];
   for (const c of content) {
