@@ -1,6 +1,13 @@
 name: Build iOS IPA
 on: workflow_dispatch
 
+# Pinado de proposito. `channel: stable` sem versao resolve hoje para um stable
+# bem mais novo (3.47.x) — o job pularia a fronteira 3.44.0, onde o Swift Package
+# Manager passou a ser default-on e a integracao de plugins do iOS mudou. O
+# `app-release.yml` pina a MESMA versao, para os dois jobs nao divergirem.
+env:
+  FLUTTER_VERSION: "3.44.4"
+
 jobs:
   build:
     runs-on: macos-latest
@@ -9,7 +16,9 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
 
       # 指定在 app 子目录下运行（如果子目录名为 mobile，请改为 mobile）
       - name: Flutter Pub Get
