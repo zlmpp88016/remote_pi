@@ -25,12 +25,32 @@ jobs:
         working-directory: app
         run: flutter pub get
 
-      - name: Build IPA
+      # `--no-codesign` porque o CI nao tem certificado: o Flutter archiveia o
+      # .app e para ai (nao exporta IPA). O .ipa sai no passo seguinte,
+      # empacotado a mao.
+      - name: Build (arquivo sem assinatura)
         working-directory: app
         run: flutter build ipa --no-codesign
 
-      - name: Upload Artifact
+      # Um .ipa e so um zip com Payload/Runner.app na raiz. Sem isso o artefato
+      # seria o .app cru, que nao e instalavel por ferramenta de sideload.
+      # A assinatura continua por sua conta (Sideloadly/AltStore/Xcode).
+      - name: Empacotar .ipa
+        working-directory: app
+        run: |
+          APP="build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app"
+          test -d "$APP" || { echo "::error::archive nao gerou Runner.app"; exit 1; }
+          rm -rf Payload RemotePi-unsigned.ipa
+          mkdir -p Payload
+          ditto "$APP" "Payload/Runner.app"
+          zip -qry RemotePi-unsigned.ipa Payload
+          echo '--- conteudo do ipa ---'
+          unzip -l RemotePi-unsigned.ipa | head -20
+          ls -lh RemotePi-unsigned.ipa
+
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: unsigned-ipa
-          path: app/build/ios/archive/Runner.xcarchive/Products/Applications/
+          name: RemotePi-unsigned-ipa
+          path: app/RemotePi-unsigned.ipa
+          if-no-files-found: error
