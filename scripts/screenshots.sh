@@ -36,8 +36,24 @@ for arg in "$@"; do
   esac
 done
 
+# `flutter` costuma nao estar no PATH do Git Bash no Windows (so existir em
+# D:/flutter/bin). Procura nos locais conhecidos antes de desistir, para o
+# script rodar sem precisar de `export PATH=...` antes.
+if ! command -v flutter >/dev/null 2>&1; then
+  for candidate in /d/flutter/bin /c/flutter/bin /d/src/flutter/bin \
+                   "$HOME/flutter/bin" /c/src/flutter/bin; do
+    if [ -x "$candidate/flutter" ] || [ -x "$candidate/flutter.bat" ]; then
+      PATH="$candidate:$PATH"
+      export PATH
+      break
+    fi
+  done
+fi
+
 command -v flutter >/dev/null 2>&1 || {
-  echo "erro: flutter nao esta no PATH (esperado em D:/flutter/bin)" >&2; exit 1
+  echo "erro: nao achei o flutter. Instale o SDK ou rode:" >&2
+  echo "      export PATH=\"/d/flutter/bin:\$PATH\"" >&2
+  exit 1
 }
 
 rm -rf "$STAGE" "$SHOTS"

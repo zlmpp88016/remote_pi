@@ -45,16 +45,41 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# `gh` pode nao estar no PATH (ex: instalado fora do gerenciador de pacotes).
-if ! command -v gh >/dev/null 2>&1; then
-  for candidate in /d/flutter-work/ghcli/bin/gh.exe "$HOME/.local/bin/gh"; do
-    if [ -x "$candidate" ]; then
-      gh() { "$candidate" "$@"; }
+# `gh` pode nao estar no PATH no Git Bash (ex: instalado fora do gerenciador
+# de pacotes). Procura nos locais conhecidos antes de desistir.
+GH_BIN=""
+if command -v gh >/dev/null 2>&1; then
+  GH_BIN="gh"
+else
+  for candidate in "$HOME/.local/bin/gh" /usr/local/bin/gh \
+                   "/c/Program Files/GitHub CLI/gh.exe" \
+                   /d/flutter-work/ghcli/bin/gh.exe; do
+    if [ -x "$candidate" ]; then GH_BIN="$candidate"; break; fi
+  done
+fi
+gh() { "$GH_BIN" "$@"; }
+
+if [ -z "$GH_BIN" ]; then
+  echo "erro: gh CLI nao encontrado. Instale: https://cli.github.com" >&2
+  exit 1
+fi
+
+# A auth vive no config dir. Se o default nao tem credencial, procura um
+# config alternativo conhecido (uma instalacao portatil, por exemplo).
+if [ -z "${GH_CONFIG_DIR:-}" ]; then
+  for cfg in "$HOME/.config/gh" /d/flutter-work/ghconfig; do
+    if [ -f "$cfg/hosts.yml" ]; then
+      export GH_CONFIG_DIR="$cfg"
       break
     fi
   done
 fi
-command -v gh >/dev/null 2>&1 || { echo "erro: gh CLI nao encontrado no PATH" >&2; exit 1; }
+
+if ! gh auth status >/dev/null 2>&1; then
+  echo "erro: gh nao esta autenticado. Rode: gh auth login" >&2
+  [ -n "${GH_CONFIG_DIR:-}" ] && echo "      (config em $GH_CONFIG_DIR)" >&2
+  exit 1
+fi
 
 # Confirma que estamos num repo com remoto GitHub antes de qualquer coisa.
 git -C "$ROOT" remote get-url origin >/dev/null 2>&1 || {
