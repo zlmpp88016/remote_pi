@@ -53,6 +53,12 @@ class HomeViewModel extends ViewModel<HomeState> {
   /// no fresh signal on any room.
   bool get isRelayConnected => _relayConnected;
 
+  /// The peer the transport is currently bound to. Only one peer is
+  /// connected at a time (`ConnectionManager._activePeer`), so this is
+  /// the machine an outbound `workspace_list` would reach — the workspace
+  /// picker must target it (or switch to the intended peer first).
+  PeerRecord? get activePeer => _conn.activePeer;
+
   /// `true` when `(epk, roomId)`'s agent is currently mid-turn. Drives
   /// the blue "working" dot on the Home tile.
   ///
@@ -210,6 +216,14 @@ class HomeViewModel extends ViewModel<HomeState> {
   /// Long-press menu — rename a single room locally (Pi never sees it).
   Future<void> renameRoom(String epk, String roomId, String? name) =>
       _conn.setRoomLocalName(epk, roomId, name);
+
+  /// Plan/67 — make [peer] the machine the transport is bound to.
+  ///
+  /// Only one peer is connected at a time, so before asking a machine for
+  /// its registered workdirs (`workspace_list` is addressed to that
+  /// peer's `host` room) the connection has to be pointed at it. No-op
+  /// when it is already active.
+  Future<void> focusPeer(PeerRecord peer) => _conn.switchTo(peer);
 
   /// Long-press menu — delete a cached room locally. Caller should
   /// gate on `!isRoomLive` (only offline rooms can be removed).

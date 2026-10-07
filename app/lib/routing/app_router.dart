@@ -16,6 +16,8 @@ import 'package:app/ui/home/home_page.dart';
 import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
 import 'package:app/ui/sessions/session_list_page.dart';
 import 'package:app/ui/sessions/viewmodels/session_list_viewmodel.dart';
+import 'package:app/ui/workspaces/viewmodels/workspace_list_viewmodel.dart';
+import 'package:app/ui/workspaces/workspace_list_page.dart';
 import 'package:app/ui/onboarding/onboarding_page.dart';
 import 'package:app/ui/onboarding/viewmodels/onboarding_viewmodel.dart';
 import 'package:app/ui/pairing/pairing_page.dart';
@@ -374,6 +376,37 @@ GoRouter buildRouter(
             ),
             child: SessionListPage(
               title: title,
+              device: device,
+              online: online,
+            ),
+          );
+        },
+      ),
+
+      // Plan/67 — workdir picker. Home lists only announced rooms, so a
+      // registered-but-not-running workdir is invisible there; this route
+      // queries the machine's `host` room (`workspace_list`) and can start
+      // one (`workspace_start`) before handing off to /sessions.
+      GoRoute(
+        path: '/workspaces',
+        builder: (ctx, st) {
+          final extra = st.extra;
+          var epk = '';
+          String? device;
+          var online = false;
+          if (extra is Map) {
+            final e = extra['epk'];
+            if (e is String) epk = e;
+            final d = extra['device'];
+            if (d is String && d.isNotEmpty) device = d;
+            online = extra['online'] == true;
+          }
+          return ChangeNotifierProvider(
+            create: (_) =>
+                WorkspaceListViewModel(injector.get<SessionCatalog>()),
+            child: WorkspaceListPage(
+              epk: epk,
+              title: 'Workspaces',
               device: device,
               online: online,
             ),

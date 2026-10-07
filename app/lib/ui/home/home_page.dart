@@ -95,6 +95,18 @@ class HomePage extends StatelessWidget {
       toolbarHeight: 56,
       automaticallyImplyLeading: false,
       actions: [
+        // Plan/67 — open the workdir picker. A machine with no running
+        // session has no tile to long-press (HomeList.items drops
+        // room-less peers), so this is the only way to reach a folder
+        // that is registered but not started. Targets the peer the
+        // transport is bound to.
+        if (vm.activePeer != null)
+          IconButton(
+            tooltip: 'Open another folder',
+            icon: Icon(LucideIcons.folderOpen, color: colors.muted2),
+            onPressed: () =>
+                _openWorkspaces(context, vm, vm.activePeer!),
+          ),
         IconButton(
           tooltip: 'Settings',
           icon: Icon(LucideIcons.settings, color: colors.muted2),
@@ -390,6 +402,21 @@ class HomePage extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
+                leading: Icon(LucideIcons.folderOpen, color: colors.accent),
+                title: Text(
+                  'Open another folder',
+                  style: TextStyle(color: colors.text),
+                ),
+                subtitle: Text(
+                  'List the workdirs registered on this machine',
+                  style: TextStyle(color: colors.muted, fontSize: 11),
+                ),
+                onTap: () {
+                  Navigator.of(sheetCtx).pop();
+                  _openWorkspaces(context, vm, it.peer);
+                },
+              ),
+              ListTile(
                 leading: Icon(LucideIcons.pencil, color: colors.accent),
                 title: Text(
                   'Rename session',
@@ -507,6 +534,29 @@ class HomePage extends StatelessWidget {
     );
     if (ok != true) return;
     await vm.deleteRoom(it.peer.remoteEpk, it.room.roomId);
+  }
+
+  /// Plan/67 — open the workdir picker for [peer].
+  ///
+  /// `workspace_list`/`workspace_start` are addressed to the machine's
+  /// `host` room, and the transport carries ONE destination peer + room at
+  /// a time — so point it at [peer] first. Without this the request would
+  /// reach whichever machine happened to be connected.
+  static Future<void> _openWorkspaces(
+    BuildContext context,
+    HomeViewModel vm,
+    PeerRecord peer,
+  ) async {
+    await vm.focusPeer(peer);
+    if (!context.mounted) return;
+    context.push(
+      '/workspaces',
+      extra: {
+        'epk': peer.remoteEpk,
+        'device': _deviceFor(peer),
+        'online': vm.isRelayConnected,
+      },
+    );
   }
 
   static Future<void> _open(
