@@ -23,6 +23,18 @@ const SERVER_TYPES = new Set<ServerMessage["type"]>([
   "session_clone_ok",
   // Plan/57 — interactive extension prompt (ask_user via pi-ask).
   "extension_ui_request",
+  // Plan/67–68 — host room: workspace catalog + filesystem navigation.
+  "workspace_list_ok",
+  "workspace_start_ok",
+  "workspace_stop_ok",
+  "fs_list_ok",
+  // Plan/68 — Pi surface (skills + packages) snapshot and management acks.
+  "pi_surface_ok",
+  "skill_invoke_ok",
+  "skill_set_enabled_ok",
+  "package_op_ok",
+  "action_ok",
+  "action_error",
 ]);
 
 export class DecodeError extends Error {

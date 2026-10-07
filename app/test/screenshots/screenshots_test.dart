@@ -31,11 +31,15 @@ import 'package:app/ui/home/home_page.dart';
 import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
 import 'package:app/ui/onboarding/onboarding_page.dart';
 import 'package:app/ui/onboarding/viewmodels/onboarding_viewmodel.dart';
+import 'package:app/ui/pi_surface/pi_surface_page.dart';
+import 'package:app/ui/pi_surface/viewmodels/pi_surface_viewmodel.dart';
 import 'package:app/ui/sessions/session_list_page.dart';
 import 'package:app/ui/sessions/viewmodels/session_list_viewmodel.dart';
 import 'package:app/ui/settings/settings_page.dart';
 import 'package:app/ui/settings/viewmodels/settings_viewmodel.dart';
 import 'package:app/ui/update/viewmodels/update_banner_viewmodel.dart';
+import 'package:app/ui/workspaces/viewmodels/workspace_browser_viewmodel.dart';
+import 'package:app/ui/workspaces/workspace_browser_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -233,6 +237,57 @@ class _Channel implements IChannel, IControlLink {
             sessionStartedAt: 1759500000,
           ),
         );
+      // Plan/68 — o navegador de pastas do host.
+      case FsList(:final id, :final path):
+        _server.add(_fsListOk(id, path));
+      // Plan/68 — a superficie Pi (skills + packages).
+      case PiSurface(:final id):
+        _server.add(
+          PiSurfaceOk(
+            inReplyTo: id,
+            runtime: const PiSurfaceRuntime(
+              running: true,
+              model: 'anthropic/claude-opus-4-7',
+              thinking: ThinkingLevel.medium,
+            ),
+            skills: const [
+              WireSkill(
+                name: 'code-review',
+                description: 'Revisa o diff atual procurando bugs e regressoes',
+                source: SkillSource.project,
+                path: '/Users/jacob/Projects/remote_pi/.pi/skills/code-review/SKILL.md',
+                enabled: true,
+              ),
+              WireSkill(
+                name: 'pdf-tools',
+                description: 'Extrai texto e tabelas de PDFs',
+                source: SkillSource.user,
+                path: '/Users/jacob/.pi/agent/skills/pdf-tools/SKILL.md',
+                enabled: true,
+              ),
+              WireSkill(
+                name: 'commit-style',
+                description: 'Convencoes de mensagem de commit',
+                source: SkillSource.package,
+                path: '/Users/jacob/.pi/agent/npm/node_modules/pi-extras/skills/commit-style/SKILL.md',
+                enabled: true,
+                disableModelInvocation: true,
+              ),
+            ],
+            packages: const [
+              WirePackage(
+                source: 'npm:@remote-pi/extras@0.4.1',
+                scope: PackageScope.user,
+                resources: ['skills', 'prompts'],
+              ),
+              WirePackage(
+                source: 'git:github.com/example/pi-team-tools',
+                scope: PackageScope.project,
+                resources: ['skills'],
+              ),
+            ],
+          ),
+        );
       default:
         break;
     }
@@ -246,6 +301,50 @@ class _Channel implements IChannel, IControlLink {
 
   void pushControl(ControlInbound c) {
     if (!_control.isClosed) _control.add(c);
+  }
+
+  /// Uma árvore de pastas plausível para a captura do seletor de workspace.
+  /// O `path` pedido define o nível, para o breadcrumb não ficar vazio.
+  FsListOk _fsListOk(String replyTo, String path) {
+    const home = '/Users/jacob';
+    if (path == home) {
+      return FsListOk(
+        inReplyTo: replyTo,
+        path: home,
+        parent: '/Users',
+        entries: const [
+          WireFsEntry(name: 'Projects', kind: 'dir'),
+          WireFsEntry(name: 'Documents', kind: 'dir'),
+          WireFsEntry(name: 'Movies', kind: 'dir'),
+          WireFsEntry(name: '.config', kind: 'dir'),
+          WireFsEntry(name: 'notes.md', kind: 'file'),
+        ],
+      );
+    }
+    final projects = '$home/Projects';
+    if (path == projects) {
+      return FsListOk(
+        inReplyTo: replyTo,
+        path: projects,
+        parent: home,
+        entries: const [
+          WireFsEntry(name: 'remote_pi', kind: 'dir', isRepo: true),
+          WireFsEntry(name: 'cockpit', kind: 'dir', isRepo: true),
+          WireFsEntry(name: 'sandbox', kind: 'dir'),
+          WireFsEntry(name: 'README.md', kind: 'file'),
+        ],
+      );
+    }
+    return FsListOk(
+      inReplyTo: replyTo,
+      path: path,
+      parent: projects,
+      entries: const [
+        WireFsEntry(name: 'lib', kind: 'dir'),
+        WireFsEntry(name: 'test', kind: 'dir'),
+        WireFsEntry(name: 'pubspec.yaml', kind: 'file'),
+      ],
+    );
   }
 }
 
@@ -381,6 +480,51 @@ Future<_Scenario> _sessionList(WidgetTester tester) async {
   );
 }
 
+Future<_Scenario> _workspaceBrowser(WidgetTester tester) async {
+  final ch = _Channel();
+  final conn = ConnectionManager(
+    factory: (_, _) async => ch,
+    storage: _FakeStorage([_peer()]),
+    emitDebounce: Duration.zero,
+  );
+  await conn.connectTo(_peer());
+  await _real(tester);
+  final vm = WorkspaceBrowserViewModel(SessionCatalog(conn));
+  await _real(tester, 80);
+  // Entra em ~/Projects para a captura mostrar o nível interessante (repos).
+  vm.openTyped('/Users/jacob/Projects');
+  await _real(tester, 80);
+  return _Scenario(
+    providers: [ChangeNotifierProvider<WorkspaceBrowserViewModel>.value(value: vm)],
+    child: const WorkspaceBrowserPage(epk: _epk, device: 'Mac de Teste'),
+    dispose: () {
+      vm.dispose();
+      conn.dispose();
+    },
+  );
+}
+
+Future<_Scenario> _piSurface(WidgetTester tester) async {
+  final ch = _Channel();
+  final conn = ConnectionManager(
+    factory: (_, _) async => ch,
+    storage: _FakeStorage([_peer()]),
+    emitDebounce: Duration.zero,
+  );
+  await conn.connectTo(_peer());
+  await _real(tester);
+  final vm = PiSurfaceViewModel(SessionCatalog(conn));
+  await _real(tester, 80);
+  return _Scenario(
+    providers: [ChangeNotifierProvider<PiSurfaceViewModel>.value(value: vm)],
+    child: const PiSurfacePage(device: 'Mac de Teste'),
+    dispose: () {
+      vm.dispose();
+      conn.dispose();
+    },
+  );
+}
+
 Future<_Scenario> _onboarding(WidgetTester tester) async {
   final prefs = Preferences(_FakeSecureStorage());
   final vm = OnboardingViewModel(prefs);
@@ -430,6 +574,10 @@ final _pages = <String, Future<_Scenario> Function(WidgetTester)>{
   'sessions': _sessionList,
   'onboarding': _onboarding,
   'settings': _settings,
+  // Plan/68 — o caminho novo: escolher workspace caminhando no host e
+  // gerenciar as skills/packages do Pi daquela máquina.
+  'workspace-browser': _workspaceBrowser,
+  'pi-surface': _piSurface,
 };
 
 // ---------------------------------------------------------------------------

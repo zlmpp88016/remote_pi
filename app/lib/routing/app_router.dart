@@ -17,7 +17,11 @@ import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
 import 'package:app/ui/sessions/session_list_page.dart';
 import 'package:app/ui/sessions/viewmodels/session_list_viewmodel.dart';
 import 'package:app/ui/workspaces/viewmodels/workspace_list_viewmodel.dart';
+import 'package:app/ui/workspaces/viewmodels/workspace_browser_viewmodel.dart';
+import 'package:app/ui/workspaces/workspace_browser_page.dart';
 import 'package:app/ui/workspaces/workspace_list_page.dart';
+import 'package:app/ui/pi_surface/pi_surface_page.dart';
+import 'package:app/ui/pi_surface/viewmodels/pi_surface_viewmodel.dart';
 import 'package:app/ui/onboarding/onboarding_page.dart';
 import 'package:app/ui/onboarding/viewmodels/onboarding_viewmodel.dart';
 import 'package:app/ui/pairing/pairing_page.dart';
@@ -320,7 +324,7 @@ GoRouter buildRouter(
       // Onboarding (plan 14) — 3-step flow shown when the app has
       // never been paired AND the user hasn't opted out. Provides
       // both OnboardingViewModel (state machine) AND PairingViewModel
-      // (step 3 embeds the QR scanner reusing existing pair flow).
+      // (step 3 embeds the pairing flow — plan/68: paste the pairing code).
       GoRoute(
         path: '/onboarding',
         builder: (ctx, st) => MultiProvider(
@@ -410,6 +414,53 @@ GoRouter buildRouter(
               device: device,
               online: online,
             ),
+          );
+        },
+      ),
+
+      // Plan/68 — pick ANY folder by walking the machine's filesystem (not
+      // only the registered daemons). "Use this folder" registers + starts it.
+      GoRoute(
+        path: '/workspaces/browse',
+        builder: (ctx, st) {
+          final extra = st.extra;
+          var epk = '';
+          String? device;
+          var online = false;
+          if (extra is Map) {
+            final e = extra['epk'];
+            if (e is String) epk = e;
+            final d = extra['device'];
+            if (d is String && d.isNotEmpty) device = d;
+            online = extra['online'] == true;
+          }
+          return ChangeNotifierProvider(
+            create: (_) =>
+                WorkspaceBrowserViewModel(injector.get<SessionCatalog>()),
+            child: WorkspaceBrowserPage(
+              epk: epk,
+              device: device,
+              online: online,
+            ),
+          );
+        },
+      ),
+
+      // Plan/68 — the workspace's Pi surface: skills + packages. Reached from
+      // the workspace list; it describes the machine's Pi, so it takes no
+      // workspace argument of its own.
+      GoRoute(
+        path: '/pi',
+        builder: (ctx, st) {
+          final extra = st.extra;
+          String? device;
+          if (extra is Map) {
+            final d = extra['device'];
+            if (d is String && d.isNotEmpty) device = d;
+          }
+          return ChangeNotifierProvider(
+            create: (_) => PiSurfaceViewModel(injector.get<SessionCatalog>()),
+            child: PiSurfacePage(device: device),
           );
         },
       ),

@@ -1,5 +1,10 @@
 # Plano 04 — Pareamento (E2E)
 
+> **Nota (plan/68, 2026-10-08):** o meio de exibição mudou — o pareamento agora é
+> **só por colagem** de um endereço `remotepi://pair?…` (sem QR, sem escaneamento).
+> O payload em si é **inalterado** e segue um contrato congelado. Este plano
+> descreve o MVP histórico; leia "QR" abaixo como "o endereço colável".
+
 Objetivo: implementar pareamento QR + cripto E2E entre **app** (Flutter) e **pi-extension** (Node) via **relay** (Rust). Modelo MVP: **1 pareamento = 1 sessão**.
 
 Resultado esperado ao final: rodar `/remote-pi` num Pi vivo gera QR, mobile escaneia, handshake fecha, app conversa com aquela sessão por canal cifrado. Quando Pi fecha, pareamento marca offline. Para outra sessão, novo QR.
@@ -215,19 +220,18 @@ Em cada reconexão:
 **Função**: gerar QR efêmero, responder ao handshake Noise XX vindo do app, persistir peer.
 
 **Comandos novos expostos pelo Pi**:
-- `/remote-pi` — gera QR (60s, rotaciona até alguém parear ou comando cancelar)
+- `/remote-pi` — gera o código de pareamento (60s, rotaciona até alguém parear ou comando cancelar)
 - `/remote-pi list` — lista peers persistidos
 - `/remote-pi revoke <nome>` — previsto no contrato, deixar como `TODO` no MVP
 
 **Dependências a instalar** (pi-extension/package.json):
 - `noise-protocol` — Noise XX puro (decidido)
-- `qrcode-terminal` — render QR no terminal
 - `keytar` — wrapper Keychain Node
 - `tweetnacl` ou `@noble/ed25519` — só pra assinar challenge do relay (Ed25519 separado do X25519 do Noise)
 
 **Critério de aceite**:
-- `/remote-pi` no Pi rodando exibe QR escaneável (~30 chars/lado)
-- QR é regenerado a cada 60s
+- `/remote-pi` no Pi rodando exibe o código de pareamento colável (~30 chars/lado se renderizado como QR — hoje é texto)
+- o código é regenerado a cada 60s
 - Mobile escaneia → handshake fecha → safety number aparece em ambos os lados
 - `~/.pi/remote/peers.json` ganha entrada
 - Test roundtrip em `pairing.test.ts` simula app local com Noise initiator e fecha handshake

@@ -11,17 +11,22 @@ import { getOrCreateEd25519Keypair, listPeers } from "../pairing/storage.js";
 import { resolveRelayUrl, toWebSocketUrl } from "../config.js";
 import { HOST_ROOM_ID, type ClientMessage, type ServerMessage } from "../protocol/types.js";
 import {
+  handleWorkspaceAdd,
   handleWorkspaceList,
+  handleWorkspaceRemove,
   handleWorkspaceStart,
   handleWorkspaceStop,
   type FleetOps,
   type HostReplySender,
 } from "./host_control.js";
+import { handleFsList } from "./fs_nav.js";
 
 export interface HostBridgeOptions {
   fleet: FleetOps;
   /** Injected for tests. */
   relayFactory?: (url: string, keypair: Awaited<ReturnType<typeof getOrCreateEd25519Keypair>>) => RelayClient;
+  /** Injected for tests: the peer allow-list source (defaults to `listPeers`). */
+  listPeersFn?: () => Promise<Array<{ remote_epk: string }>>;
 }
 
 interface OuterEnvelope {
@@ -67,7 +72,7 @@ export class HostBridge {
       ? this.opts.relayFactory(wsUrl, keypair)
       : new RelayClient(wsUrl, keypair);
     this.relay = relay;
-    const peers = await listPeers();
+    const peers = await (this.opts.listPeersFn ?? listPeers)();
     this.allowedPeers = new Set(peers.map((p) => p.remote_epk));
     try {
       await relay.connect({
@@ -115,6 +120,16 @@ export class HostBridge {
         break;
       case "workspace_stop":
         void handleWorkspaceStop(this.opts.fleet, sender, inner);
+        break;
+      // Plan/68 — host filesystem navigation + explicit workspace catalog.
+      case "fs_list":
+        handleFsList(sender, inner);
+        break;
+      case "workspace_add":
+        handleWorkspaceAdd(this.opts.fleet, sender, inner);
+        break;
+      case "workspace_remove":
+        handleWorkspaceRemove(this.opts.fleet, sender, inner);
         break;
       case "ping":
         sender.send({ type: "pong", in_reply_to: inner.id });

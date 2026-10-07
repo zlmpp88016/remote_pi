@@ -1,8 +1,8 @@
-import 'package:app/pairing/qr_scanner.dart';
+import 'package:app/pairing/pair_payload.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('QrPairPayload.tryParse', () {
+  group('PairPayload.tryParse', () {
     const goodToken = 'AAAAAAAAAAAAAAAAAAAAAA'; // 16 bytes base64url
     const goodEpk = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'; // 32 bytes
     const sessionName = 'test+session';
@@ -10,7 +10,7 @@ void main() {
     test('parses legacy QR with relay (r=) param', () {
       final raw = 'remotepi://pair?t=$goodToken&epk=$goodEpk&'
           'r=ws%3A%2F%2Flocalhost&n=$sessionName';
-      final qr = QrPairPayload.tryParse(raw);
+      final qr = PairPayload.tryParse(raw);
       expect(qr, isNotNull);
       expect(qr!.token, goodToken);
       expect(qr.epk, goodEpk);
@@ -22,7 +22,7 @@ void main() {
     test('parses new QR WITHOUT r= param — relayUrl is null', () {
       final raw =
           'remotepi://pair?t=$goodToken&epk=$goodEpk&n=$sessionName';
-      final qr = QrPairPayload.tryParse(raw);
+      final qr = PairPayload.tryParse(raw);
       expect(qr, isNotNull);
       expect(qr!.token, goodToken);
       expect(qr.epk, goodEpk);
@@ -34,28 +34,28 @@ void main() {
     test('rejects when t is missing or wrong length', () {
       final missingT =
           'remotepi://pair?epk=$goodEpk&n=$sessionName';
-      expect(QrPairPayload.tryParse(missingT), isNull);
+      expect(PairPayload.tryParse(missingT), isNull);
 
       final badT = 'remotepi://pair?t=AAAA&epk=$goodEpk&n=$sessionName';
-      expect(QrPairPayload.tryParse(badT), isNull);
+      expect(PairPayload.tryParse(badT), isNull);
     });
 
     test('rejects when epk has wrong byte length', () {
       final raw =
           'remotepi://pair?t=$goodToken&epk=AAAAAAAAA&n=$sessionName';
-      expect(QrPairPayload.tryParse(raw), isNull);
+      expect(PairPayload.tryParse(raw), isNull);
     });
 
     test('rejects non-remotepi scheme', () {
       const raw =
           'https://example.com/pair?t=x&epk=y&n=z';
-      expect(QrPairPayload.tryParse(raw), isNull);
+      expect(PairPayload.tryParse(raw), isNull);
     });
 
     test('empty r= is treated as null (not the empty string)', () {
       final raw = 'remotepi://pair?t=$goodToken&epk=$goodEpk&'
           'r=&n=$sessionName';
-      final qr = QrPairPayload.tryParse(raw);
+      final qr = PairPayload.tryParse(raw);
       expect(qr, isNotNull);
       expect(qr!.relayUrl, isNull);
     });
@@ -66,7 +66,7 @@ void main() {
       () {
         final raw = 'remotepi://pair?t=$goodToken&epk=$goodEpk&'
             'rm=abc123def456&n=$sessionName';
-        final qr = QrPairPayload.tryParse(raw);
+        final qr = PairPayload.tryParse(raw);
         expect(qr, isNotNull);
         expect(qr!.roomId, 'abc123def456');
       },
@@ -74,7 +74,7 @@ void main() {
 
     test('QR without `rm` (legacy) leaves roomId null', () {
       final raw = 'remotepi://pair?t=$goodToken&epk=$goodEpk&n=$sessionName';
-      final qr = QrPairPayload.tryParse(raw);
+      final qr = PairPayload.tryParse(raw);
       expect(qr, isNotNull);
       expect(qr!.roomId, isNull);
     });
@@ -82,9 +82,25 @@ void main() {
     test('empty rm= is treated as null', () {
       final raw = 'remotepi://pair?t=$goodToken&epk=$goodEpk&'
           'rm=&n=$sessionName';
-      final qr = QrPairPayload.tryParse(raw);
+      final qr = PairPayload.tryParse(raw);
       expect(qr, isNotNull);
       expect(qr!.roomId, isNull);
+    });
+
+    // Plan/68 — the payload is a frozen contract; removing the QR scan changed
+    // only how the user obtains the string. Pin the app-side parser against the
+    // exact byte string the extension's `buildQRUri` emits (all-zero 32-byte
+    // key → "AAAA…"), so a builder/parser divergence fails here.
+    test('parses the frozen extension payload byte-for-byte', () {
+      const frozen =
+          'remotepi://pair?t=$goodToken&epk=$goodEpk&n=test+session';
+      final qr = PairPayload.tryParse(frozen);
+      expect(qr, isNotNull);
+      expect(qr!.token, goodToken);
+      expect(qr.epk, goodEpk);
+      expect(qr.sessionName, 'test session');
+      expect(qr.relayUrl, isNull);
+      expect(qr.roomId, isNull);
     });
   });
 }

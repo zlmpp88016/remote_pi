@@ -78,7 +78,15 @@ class SyncService extends Service {
   // session index (durable, for Home) and exposed in-memory (for the chat
   // pill, no box-key matching needed).
   bool _working = false;
-  bool _sawRemoteWorking = false;
+  // Plan/32 Q4 — anti-flicker. The source (pi-ext) emits raw turn_start /
+  // turn_end transitions; the app coalesces them into the durable index.
+  // The OFF is the lazy side: `working:false` arms `_workingOffTimer` instead
+  // of clearing immediately, so a turn_start arriving inside the window
+  // cancels it. Without this a burst of `RoomMetaUpdated` inside one
+  // `_emitDebounce` window can drop the intermediate `working:true` frame
+  // entirely, leaving a stale indicator that nothing later clears.
+  static const Duration _workingOffDelay = Duration(milliseconds: 200);
+  Timer? _workingOffTimer;
 
   // Plan 01 — latest runtime status snapshot from the Pi (model, thinking,
   // usage, cost, context occupancy). In-memory only: the Pi re-sends it after
@@ -222,7 +230,8 @@ class SyncService extends Service {
     _chunkBuffer.clear();
     _chunkReplyTo = '';
     _workingReplyTo = null;
-    _sawRemoteWorking = false;
+    _workingOffTimer?.cancel();
+    _workingOffTimer = null;
     _setQueuedMessages(const []);
     // Session switch: the previous chat's in-flight sends are no longer ours
     // to confirm — drop their backstops so a stale timer can't fire later.
@@ -854,6 +863,15 @@ class SyncService extends Service {
       case WorkspaceListOk():
       case WorkspaceStartOk():
       case WorkspaceStopOk():
+      // Plan/68 — fs_list replies are consumed by the picker's request future
+      // (SessionCatalog._expect), never by the chat stream.
+      case FsListOk():
+      // Plan/68 — Pi surface replies are consumed by the skills/plugins page's
+      // request future, same as fs_list above.
+      case PiSurfaceOk():
+      case SkillInvokeOk():
+      case SkillSetEnabledOk():
+      case PackageOpOk():
         break;
     }
   }
@@ -1240,16 +1258,26 @@ class SyncService extends Service {
   void _syncTurnStateFromRoomMeta() {
     final epk = _activeEpk;
     if (epk == null) return;
-    final remoteWorking = _conn.isRoomWorking(epk, _activeRoomId);
-    if (remoteWorking) {
-      _sawRemoteWorking = true;
+    // The room_meta broadcast is the single writer for the durable index:
+    // `working:true` lights the indicator immediately (Q1c/Part B), while
+    // `working:false` is applied lazily via [_workingOffTimer] so a
+    // turn_start racing inside the debounce window wins (Q4).
+    if (_conn.isRoomWorking(epk, _activeRoomId)) {
+      _workingOffTimer?.cancel();
+      _workingOffTimer = null;
       return;
     }
-    if (_sawRemoteWorking && _working) {
+    if (!_working || _workingOffTimer != null) return;
+    _workingOffTimer = Timer(_workingOffDelay, () {
+      _workingOffTimer = null;
+      final liveEpk = _activeEpk;
+      // Session switched (or disposed) during the window — nothing to clear.
+      if (liveEpk == null || _activeEpk != epk) return;
+      // A newer turn_start re-armed working; leave it alone.
+      if (_conn.isRoomWorking(liveEpk, _activeRoomId)) return;
       _discardStreamingState();
       _setWorking(false);
-    }
-    _sawRemoteWorking = false;
+    });
   }
 
   void _setWorking(bool on, {String? preview, String? replyTo}) {
@@ -1263,10 +1291,11 @@ class SyncService extends Service {
       _conn.markRoomWorking(epk, _activeRoomId, on);
     }
     if (on) {
+      _workingOffTimer?.cancel();
+      _workingOffTimer = null;
       if (replyTo != null) _workingReplyTo = replyTo;
     } else {
       _workingReplyTo = null;
-      _sawRemoteWorking = false;
     }
     if (_working == on) return;
     _working = on;
@@ -1406,6 +1435,7 @@ class SyncService extends Service {
   void dispose() {
     _flushTimer?.cancel();
     _syncDebounce?.cancel();
+    _workingOffTimer?.cancel();
     _cancelAllSendTimers();
     _connSub?.cancel();
     _msgSub?.cancel();

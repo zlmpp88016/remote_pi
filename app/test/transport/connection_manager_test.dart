@@ -1140,7 +1140,11 @@ void _registerRoomsTests() {
           cwd: '/Users/x',
           startedAt: 1000,
         ));
-        await Future<void>.delayed(const Duration(milliseconds: 5));
+        // `_scheduleRoomsEmit` always defers through a Timer (even with
+        // `emitDebounce: Duration.zero`), so the emit needs an event-loop
+        // turn to land. 5ms was not reliably enough — bump to 20ms, matching
+        // the other waits in this file.
+        await Future<void>.delayed(const Duration(milliseconds: 20));
 
         expect(cm.roomsFor('epkA'), hasLength(1));
         expect(cm.roomsFor('epkA').single.roomId, 'r1');
@@ -1151,7 +1155,7 @@ void _registerRoomsTests() {
           roomId: 'r1',
           sinceTs: 2000,
         ));
-        await Future<void>.delayed(const Duration(milliseconds: 5));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
         // Plan-17 follow-up: RoomEnded keeps the room CACHED so the
         // tile stays in Home (marked offline) — only the live set
         // shrinks. isRoomLive now distinguishes the two.
@@ -1162,7 +1166,7 @@ void _registerRoomsTests() {
           RoomInfo(roomId: 'rA', startedAt: 3000, cwd: '/a'),
           RoomInfo(roomId: 'rB', startedAt: 4000, cwd: '/b'),
         ]));
-        await Future<void>.delayed(const Duration(milliseconds: 5));
+        await Future<void>.delayed(const Duration(milliseconds: 20));
         // Plan-17 follow-up: snapshots MERGE with cached rooms (so a
         // room going offline keeps its tile). r1 is still in cache
         // (offline), rA and rB are now live → total 3.

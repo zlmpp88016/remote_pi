@@ -904,6 +904,17 @@ enum ActionName {
   workspaceList('workspace_list'),
   workspaceStart('workspace_start'),
   workspaceStop('workspace_stop'),
+  // Plan/68 — host filesystem navigation + explicit workspace catalog.
+  fsList('fs_list'),
+  workspaceAdd('workspace_add'),
+  workspaceRemove('workspace_remove'),
+  // Plan/68 — Pi surface (skills + packages).
+  piSurface('pi_surface'),
+  skillInvoke('skill_invoke'),
+  skillSetEnabled('skill_set_enabled'),
+  packageInstall('package_install'),
+  packageRemove('package_remove'),
+  packageUpdate('package_update'),
   // Plan 01 — session tree navigation and branching.
   treeGet('tree_get'),
   treeNavigate('tree_navigate'),
@@ -1223,6 +1234,148 @@ class WorkspaceStop extends ClientMessage {
   };
 }
 
+/// Plan/68 — ask the host to list one directory so the user can pick a cwd
+/// by walking the host's tree. The client never resolves a path itself.
+class FsList extends ClientMessage {
+  final String id;
+  final String path;
+  final bool showHidden;
+  FsList({required this.id, required this.path, this.showHidden = false});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'fs_list',
+    'id': id,
+    'path': path,
+    'show_hidden': showHidden,
+  };
+}
+
+/// Plan/68 — persist a workspace the user added from the picker.
+class WorkspaceAdd extends ClientMessage {
+  final String id;
+  final String path;
+  WorkspaceAdd({required this.id, required this.path});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'workspace_add',
+    'id': id,
+    'path': path,
+  };
+}
+
+/// Plan/68 — drop an added workspace (never a registered daemon).
+class WorkspaceRemove extends ClientMessage {
+  final String id;
+  final String path;
+  WorkspaceRemove({required this.id, required this.path});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'workspace_remove',
+    'id': id,
+    'path': path,
+  };
+}
+
+/// Plan/68 — ask the machine for its Pi surface: runtime, skills, packages.
+class PiSurface extends ClientMessage {
+  final String id;
+  PiSurface({required this.id});
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'pi_surface', 'id': id};
+}
+
+/// Plan/68 — force a skill by name. `args` is appended to the skill body as a
+/// user request (`/skill:<name> <args>`), so the result flows through chat.
+class SkillInvoke extends ClientMessage {
+  final String id;
+  final String name;
+  final String? args;
+  SkillInvoke({required this.id, required this.name, this.args});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'skill_invoke',
+    'id': id,
+    'name': name,
+    if (args != null && args!.isNotEmpty) 'args': args,
+  };
+}
+
+/// Plan/68 — enable/disable one skill for the workspace.
+class SkillSetEnabled extends ClientMessage {
+  final String id;
+  final String name;
+  final bool enabled;
+  SkillSetEnabled({required this.id, required this.name, required this.enabled});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'skill_set_enabled',
+    'id': id,
+    'name': name,
+    'enabled': enabled,
+  };
+}
+
+/// Plan/68 — install a Pi package. Packages execute code, so
+/// [confirmThirdParty] must be true (the extension refuses otherwise).
+class PackageInstall extends ClientMessage {
+  final String id;
+  final String source;
+  final PackageScope scope;
+  final bool confirmThirdParty;
+  PackageInstall({
+    required this.id,
+    required this.source,
+    required this.scope,
+    required this.confirmThirdParty,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'package_install',
+    'id': id,
+    'source': source,
+    'scope': scope.wire,
+    'confirm_third_party': confirmThirdParty,
+  };
+}
+
+/// Plan/68 — remove a configured package source.
+class PackageRemove extends ClientMessage {
+  final String id;
+  final String source;
+  final PackageScope? scope;
+  PackageRemove({required this.id, required this.source, this.scope});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'package_remove',
+    'id': id,
+    'source': source,
+    if (scope != null) 'scope': scope!.wire,
+  };
+}
+
+/// Plan/68 — reconcile one package, or every installed one when [source] is
+/// omitted.
+class PackageUpdate extends ClientMessage {
+  final String id;
+  final String? source;
+  PackageUpdate({required this.id, this.source});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'package_update',
+    'id': id,
+    if (source != null) 'source': source,
+  };
+}
+
 // --- ServerMessage (extension → app) ---
 // 1 pairing = 1 session: no session_id on any message.
 // Sealed: all subtypes in this file — switch exhaustiveness enforced by compiler.
@@ -1265,6 +1418,13 @@ sealed class ServerMessage {
       'workspace_list_ok' => WorkspaceListOk.fromJson(json),
       'workspace_start_ok' => WorkspaceStartOk.fromJson(json),
       'workspace_stop_ok' => WorkspaceStopOk.fromJson(json),
+      // Plan/68 — host filesystem navigation for the workspace picker.
+      'fs_list_ok' => FsListOk.fromJson(json),
+      // Plan/68 — Pi surface (skills + packages) and its management acks.
+      'pi_surface_ok' => PiSurfaceOk.fromJson(json),
+      'skill_invoke_ok' => SkillInvokeOk.fromJson(json),
+      'skill_set_enabled_ok' => SkillSetEnabledOk.fromJson(json),
+      'package_op_ok' => PackageOpOk.fromJson(json),
       // Plan/57 — interactive extension prompt (ask_user via pi-ask). Mirrors
       // the SDK's extension_ui_request RPC contract; optional `ask` envelope
       // carries pi-ask's full question so the app renders multi/preview/notes.
@@ -1960,6 +2120,10 @@ class WireWorkspaceInfo {
   final String name;
   final bool live;
   final bool daemon;
+  /// Plan/68 — `"daemon"` came from the machine's `daemons.json`;
+  /// `"added"` was picked by navigating the host filesystem (or by starting
+  /// an unregistered cwd) and lives in `workspaces.json`.
+  final String source;
   const WireWorkspaceInfo({
     required this.cwd,
     required this.daemonId,
@@ -1967,6 +2131,7 @@ class WireWorkspaceInfo {
     required this.name,
     required this.live,
     required this.daemon,
+    this.source = 'daemon',
   });
 
   factory WireWorkspaceInfo.fromJson(Map<String, dynamic> j) => WireWorkspaceInfo(
@@ -1976,6 +2141,243 @@ class WireWorkspaceInfo {
     name: (j['name'] as String?) ?? '',
     live: j['live'] as bool? ?? false,
     daemon: j['daemon'] as bool? ?? true,
+    source: (j['source'] as String?) ?? 'daemon',
+  );
+}
+
+/// Plan/68 — one entry in an `fs_list_ok` directory listing.
+class WireFsEntry {
+  final String name;
+  /// `"dir"` | `"file"`.
+  final String kind;
+  /// Hint only: the directory contains a `.git` marker.
+  final bool isRepo;
+  const WireFsEntry({required this.name, required this.kind, this.isRepo = false});
+
+  bool get isDir => kind == 'dir';
+
+  factory WireFsEntry.fromJson(Map<String, dynamic> j) => WireFsEntry(
+    name: j['name'] as String,
+    kind: (j['kind'] as String?) ?? 'file',
+    isRepo: j['is_repo'] as bool? ?? false,
+  );
+}
+
+class FsListOk extends ServerMessage {
+  final String inReplyTo;
+  /// The host-resolved absolute realpath of the listed directory.
+  final String path;
+  /// `null` at the filesystem root.
+  final String? parent;
+  final List<WireFsEntry> entries;
+  FsListOk({
+    required this.inReplyTo,
+    required this.path,
+    required this.parent,
+    required this.entries,
+  });
+
+  factory FsListOk.fromJson(Map<String, dynamic> j) => FsListOk(
+    inReplyTo: j['in_reply_to'] as String,
+    path: j['path'] as String,
+    parent: j['parent'] as String?,
+    entries: (j['entries'] as List<dynamic>? ?? const <dynamic>[])
+        .map((e) => WireFsEntry.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
+}
+
+/// Plan/68 — runtime part of a `pi_surface_ok`. Every field is nullable because
+/// the host reports `null` rather than fabricating a value it cannot determine.
+class PiSurfaceRuntime {
+  final bool running;
+  /// `<provider>/<id>`, or `null` when undetermined.
+  final String? model;
+  final ThinkingLevel? thinking;
+  const PiSurfaceRuntime({required this.running, this.model, this.thinking});
+
+  factory PiSurfaceRuntime.fromJson(Map<String, dynamic> j) => PiSurfaceRuntime(
+    running: j['running'] as bool? ?? false,
+    model: j['model'] as String?,
+    thinking: j['thinking'] != null
+        ? ThinkingLevel.fromWire(j['thinking'] as String)
+        : null,
+  );
+}
+
+/// Plan/68 — where a discovered skill came from. Mirrors the extension's
+/// `SkillSource` (`user` | `project` | `package`).
+enum SkillSource {
+  user('user'),
+  project('project'),
+  package('package');
+
+  final String wire;
+  const SkillSource(this.wire);
+
+  static SkillSource fromWire(String? s) {
+    for (final v in values) {
+      if (v.wire == s) return v;
+    }
+    // Unknown provenance is reported as user rather than dropped, so an older
+    // host that omits the field still renders a usable row.
+    return SkillSource.user;
+  }
+}
+
+/// Plan/68 — one skill in the Pi surface.
+class WireSkill {
+  final String name;
+  final String description;
+  final SkillSource source;
+  /// Absolute path of the `SKILL.md` on the machine.
+  final String path;
+  /// `false` when an exclusion pattern disables it; `null` when the host could
+  /// not determine it. Never assume `true` for `null` in the UI.
+  final bool? enabled;
+  /// `disable-model-invocation` — invokable only via `/skill:<name>`.
+  final bool disableModelInvocation;
+  const WireSkill({
+    required this.name,
+    required this.description,
+    required this.source,
+    required this.path,
+    required this.enabled,
+    this.disableModelInvocation = false,
+  });
+
+  factory WireSkill.fromJson(Map<String, dynamic> j) => WireSkill(
+    name: j['name'] as String,
+    description: (j['description'] as String?) ?? '',
+    source: SkillSource.fromWire(j['source'] as String?),
+    path: (j['path'] as String?) ?? '',
+    enabled: j['enabled'] as bool?,
+    disableModelInvocation: j['disable_model_invocation'] as bool? ?? false,
+  );
+}
+
+/// Plan/68 — the scope a package is declared in.
+enum PackageScope {
+  user('user'),
+  project('project');
+
+  final String wire;
+  const PackageScope(this.wire);
+
+  static PackageScope fromWire(String? s) =>
+      s == 'project' ? PackageScope.project : PackageScope.user;
+}
+
+/// Plan/68 — one configured Pi package.
+class WirePackage {
+  final String source;
+  final PackageScope scope;
+  /// Resource kinds the package contributes (`extensions`, `skills`, ...).
+  final List<String> resources;
+  const WirePackage({
+    required this.source,
+    required this.scope,
+    this.resources = const [],
+  });
+
+  factory WirePackage.fromJson(Map<String, dynamic> j) => WirePackage(
+    source: j['source'] as String,
+    scope: PackageScope.fromWire(j['scope'] as String?),
+    resources: (j['resources'] as List<dynamic>? ?? const <dynamic>[])
+        .map((e) => e as String)
+        .toList(),
+  );
+}
+
+/// The operation a `package_op_ok` confirms.
+enum PackageOp {
+  install('install'),
+  remove('remove'),
+  update('update');
+
+  final String wire;
+  const PackageOp(this.wire);
+
+  static PackageOp fromWire(String? s) {
+    for (final v in values) {
+      if (v.wire == s) return v;
+    }
+    return PackageOp.update;
+  }
+}
+
+class PiSurfaceOk extends ServerMessage {
+  final String inReplyTo;
+  final PiSurfaceRuntime runtime;
+  final List<WireSkill> skills;
+  final List<WirePackage> packages;
+  PiSurfaceOk({
+    required this.inReplyTo,
+    required this.runtime,
+    required this.skills,
+    required this.packages,
+  });
+
+  factory PiSurfaceOk.fromJson(Map<String, dynamic> j) => PiSurfaceOk(
+    inReplyTo: j['in_reply_to'] as String,
+    runtime: PiSurfaceRuntime.fromJson(
+      (j['runtime'] as Map<String, dynamic>?) ?? const {},
+    ),
+    skills: (j['skills'] as List<dynamic>? ?? const <dynamic>[])
+        .map((e) => WireSkill.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    packages: (j['packages'] as List<dynamic>? ?? const <dynamic>[])
+        .map((e) => WirePackage.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
+}
+
+class SkillInvokeOk extends ServerMessage {
+  final String inReplyTo;
+  final String name;
+  SkillInvokeOk({required this.inReplyTo, required this.name});
+
+  factory SkillInvokeOk.fromJson(Map<String, dynamic> j) => SkillInvokeOk(
+    inReplyTo: j['in_reply_to'] as String,
+    name: j['name'] as String,
+  );
+}
+
+class SkillSetEnabledOk extends ServerMessage {
+  final String inReplyTo;
+  final String name;
+  final bool enabled;
+  SkillSetEnabledOk({
+    required this.inReplyTo,
+    required this.name,
+    required this.enabled,
+  });
+
+  factory SkillSetEnabledOk.fromJson(Map<String, dynamic> j) => SkillSetEnabledOk(
+    inReplyTo: j['in_reply_to'] as String,
+    name: j['name'] as String,
+    enabled: j['enabled'] as bool? ?? true,
+  );
+}
+
+class PackageOpOk extends ServerMessage {
+  final String inReplyTo;
+  final PackageOp op;
+  final String source;
+  /// `null` when the op was not scoped (e.g. `package_update` with no source).
+  final PackageScope? scope;
+  PackageOpOk({
+    required this.inReplyTo,
+    required this.op,
+    required this.source,
+    this.scope,
+  });
+
+  factory PackageOpOk.fromJson(Map<String, dynamic> j) => PackageOpOk(
+    inReplyTo: j['in_reply_to'] as String,
+    op: PackageOp.fromWire(j['op'] as String?),
+    source: (j['source'] as String?) ?? '',
+    scope: j['scope'] != null ? PackageScope.fromWire(j['scope'] as String) : null,
   );
 }
 

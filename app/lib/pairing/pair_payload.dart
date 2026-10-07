@@ -18,7 +18,7 @@ import 'dart:convert';
 //         `rm` make the app fall back to `'main'` during pair_request
 //         and rely on subscribe_rooms-based discovery afterwards.
 
-class QrPairPayload {
+class PairPayload {
   final String token;
   final String epk; // base64url Ed25519 — relay peer ID
   /// Optional legacy relay URL embedded in the QR. `null` for new QRs.
@@ -31,7 +31,7 @@ class QrPairPayload {
   /// `'main'` and discover the real room id via subscribe_rooms.
   final String? roomId;
 
-  const QrPairPayload({
+  const PairPayload({
     required this.token,
     required this.epk,
     required this.sessionName,
@@ -39,7 +39,7 @@ class QrPairPayload {
     this.roomId,
   });
 
-  static QrPairPayload? tryParse(String raw) {
+  static PairPayload? tryParse(String raw) {
     try {
       final uri = Uri.parse(raw);
       if (uri.scheme != 'remotepi' || uri.host != 'pair') return null;
@@ -56,7 +56,7 @@ class QrPairPayload {
       if (t == null || epk == null || n == null) return null;
       if (base64Url.decode(_pad(t)).length != 16) return null;
       if (base64Url.decode(_pad(epk)).length != 32) return null;
-      return QrPairPayload(
+      return PairPayload(
         token: t,
         epk: epk,
         sessionName: n,

@@ -237,6 +237,28 @@ export type ClientMessage =
   | { type: "workspace_list"; id: string }
   | { type: "workspace_start"; id: string; cwd?: string; daemon_id?: string }
   | { type: "workspace_stop"; id: string; cwd?: string; daemon_id?: string }
+  // Plan/68 — host filesystem navigation + explicit workspace catalog. The host
+  // resolves every path; the client never receives local-path access.
+  | { type: "fs_list"; id: string; path: string; show_hidden?: boolean }
+  | { type: "workspace_add"; id: string; path: string }
+  | { type: "workspace_remove"; id: string; path: string }
+  // Plan/68 — Pi surface: what this Pi has installed (skills + packages) and
+  // the three closed-vocabulary management actions. No free shell on the wire.
+  | { type: "pi_surface"; id: string }
+  // `skill_invoke` forces a skill: the handler appends `args` as a user request
+  // and dispatches `/skill:<name> <args>` through Pi's own expansion.
+  | { type: "skill_invoke"; id: string; name: string; args?: string }
+  | { type: "skill_set_enabled"; id: string; name: string; enabled: boolean }
+  // `confirm_third_party` is mandatory-true: packages execute extension code.
+  | {
+      type: "package_install";
+      id: string;
+      source: string;
+      scope: "user" | "project";
+      confirm_third_party?: boolean;
+    }
+  | { type: "package_remove"; id: string; source: string; scope?: "user" | "project" }
+  | { type: "package_update"; id: string; source?: string }
   // Plan/57 — interactive extension prompt response (ask_user via pi-ask).
   // Mirrors RpcExtensionUIResponse; the optional `ask` envelope carries
   // pi-ask's structured answer so multi/preview/notes survive the round-trip.
@@ -423,6 +445,40 @@ export type ServerMessage =
       in_reply_to: string;
       workspaces: WireWorkspaceInfo[];
     }
+  // Plan/68 — directory listing for the workspace picker (host-side listing).
+  | {
+      type: "fs_list_ok";
+      in_reply_to: string;
+      path: string;
+      parent: string | null;
+      entries: WireFsEntry[];
+    }
+  // Plan/68 — Pi surface snapshot (skills + packages) and its management acks.
+  | {
+      type: "pi_surface_ok";
+      in_reply_to: string;
+      runtime: PiSurfaceRuntimeWire;
+      skills: PiSurfaceSkillWire[];
+      packages: PiSurfacePackageWire[];
+    }
+  | {
+      type: "skill_invoke_ok";
+      in_reply_to: string;
+      name: string;
+    }
+  | {
+      type: "skill_set_enabled_ok";
+      in_reply_to: string;
+      name: string;
+      enabled: boolean;
+    }
+  | {
+      type: "package_op_ok";
+      in_reply_to: string;
+      op: PackageOp;
+      source: string;
+      scope: "user" | "project" | null;
+    }
   | {
       type: "workspace_start_ok";
       in_reply_to: string;
@@ -456,6 +512,17 @@ export type ActionName =
   | "workspace_list"
   | "workspace_start"
   | "workspace_stop"
+  // Plan/68 — filesystem navigation + explicit workspace catalog.
+  | "fs_list"
+  | "workspace_add"
+  | "workspace_remove"
+  // Plan/68 — Pi surface (skills + packages).
+  | "pi_surface"
+  | "skill_invoke"
+  | "skill_set_enabled"
+  | "package_install"
+  | "package_remove"
+  | "package_update"
   // Plan 01 — session tree navigation + branching.
   | "tree_get"
   | "tree_navigate"
@@ -484,6 +551,67 @@ export interface WireWorkspaceInfo {
   name: string;
   live: boolean;
   daemon: boolean;
+  /**
+   * Plan/68 — provenance of the row: `"daemon"` came from `daemons.json`,
+   * `"added"` was picked by navigating the host filesystem (or by starting an
+   * unregistered cwd) and lives in `workspaces.json`.
+   */
+  source: "daemon" | "added";
+}
+
+/** Plan/68 — one entry in an `fs_list_ok` directory listing. */
+export interface WireFsEntry {
+  name: string;
+  kind: "dir" | "file";
+  /** Hint only: the directory contains a `.git` marker. Never recursed. */
+  is_repo?: boolean;
+}
+
+/**
+ * Plan/68 — Pi surface (skills + packages) wire shapes.
+ *
+ * **Never fabricate.** A field the host cannot determine is `null`, never a
+ * guessed value: the app renders "unknown" rather than a plausible lie.
+ */
+export interface PiSurfaceRuntimeWire {
+  /** The paired Pi session is live (the surface was built from a real ctx). */
+  running: boolean;
+  /** `<provider>/<id>` of the current model, or `null` when undetermined. */
+  model: string | null;
+  thinking: ThinkingLevel | null;
+}
+
+/** Where a discovered skill came from. Mirrors the SDK's `sourceInfo.scope`. */
+export type SkillSource = "user" | "project" | "package";
+
+export interface PiSurfaceSkillWire {
+  name: string;
+  description: string;
+  source: SkillSource;
+  /** Absolute path to the `SKILL.md` the host discovered. */
+  path: string;
+  /**
+   * Whether the skill is enabled. `false` when an exclusion pattern in the
+   * effective `skills` settings matches it (`-<path>`), `null` when the host
+   * could not determine it.
+   */
+  enabled: boolean | null;
+  /** `disable-model-invocation: true` — explicit `/skill:<name>` only. */
+  disable_model_invocation: boolean;
+}
+
+/** A package operation, echoed back on `package_op_ok`. */
+export type PackageOp = "install" | "remove" | "update";
+
+export interface PiSurfacePackageWire {
+  source: string;
+  scope: "user" | "project";
+  /**
+   * Resource kinds this package declares — the four conventional resource
+   * directories Pi discovers (`extensions`, `skills`, `prompts`, `themes`).
+   * Empty when the package declares nothing discoverable.
+   */
+  resources: string[];
 }
 
 /**

@@ -104,17 +104,20 @@ class _FakeSecureStorage implements FlutterSecureStorage {
 }
 
 /// Synchronous Preferences subclass for tests. Pre-set relay URL to
-/// `ws://localhost` so it matches `_qrUri` (which still embeds the
-/// legacy `r=ws://localhost`); avoids tripping the relay-mismatch
-/// guard in `pair_request_flow.performPairing`. Pass `null` to force
-/// a different URL and exercise the mismatch path.
+/// `ws://localhost` so it matches `_qrUri` (which embeds the legacy
+/// `r=ws://localhost`). The field is mutable so tests can observe the
+/// relay-adoption path (`setRelayUrl` writes are reflected by [relayUrl]).
 class _PrefsForTest extends Preferences {
-  final String? _relay;
+  String? _relay;
   _PrefsForTest({String? relay = 'ws://localhost'})
     : _relay = relay,
       super(_FakeSecureStorage());
   @override
   String? get relayUrl => _relay;
+  @override
+  Future<void> setRelayUrl(String? value) async {
+    _relay = (value != null && value.isNotEmpty) ? value : null;
+  }
 }
 
 class _FakeStorage extends PairingStorage {
@@ -142,6 +145,14 @@ const _qrUri =
     'remotepi://pair?t=AAAAAAAAAAAAAAAAAAAAAA&'
     'epk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&'
     'r=ws%3A%2F%2Flocalhost&n=test+session';
+
+/// Same payload WITHOUT the legacy `r=` relay field — the canonical shape
+/// produced since plan/14. Needed to exercise paths that must NOT trip the
+/// relay-mismatch guard.
+const _qrUriNoRelay =
+    'remotepi://pair?t=AAAAAAAAAAAAAAAAAAAAAA&'
+    'epk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&'
+    'n=test+session';
 
 /// A pairing transport factory that runs a fake "Pi" responder which replies
 /// with the given inner message to whatever `pair_request` it receives.
@@ -222,7 +233,7 @@ void main() {
         _PrefsForTest(),
         bridge,
       );
-      await vm.onQrScanned('https://example.com/not-a-qr');
+      await vm.submitPairingCode('https://example.com/not-a-qr');
       expect(vm.state, isA<PairingScanning>());
       vm.dispose();
     });
@@ -243,7 +254,7 @@ void main() {
         bridge,
       );
 
-      final fut = vm.onQrScanned(_qrUri);
+      final fut = vm.submitPairingCode(_qrUri);
       expect(vm.state, isA<PairingConnecting>());
 
       await fut;
@@ -275,7 +286,7 @@ void main() {
         bridge,
       );
 
-      await vm.onQrScanned(_qrUri);
+      await vm.submitPairingCode(_qrUri);
       await Future<void>.delayed(const Duration(milliseconds: 30));
 
       expect(vm.state, isA<PairingError>());
@@ -300,13 +311,116 @@ void main() {
           bridge,
         );
 
-        await vm.onQrScanned(_qrUri);
+        await vm.submitPairingCode(_qrUri);
         expect(vm.state, isA<PairingError>());
         expect((vm.state as PairingError).canRetry, isTrue);
 
         vm.retry();
         expect(vm.state, isA<PairingScanning>());
 
+        vm.dispose();
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // Regression — the timeout message must name the relay actually dialled.
+    //
+    // Since plan/14 the QR carries no relay, so an App/Pi relay mismatch has
+    // EXACTLY one symptom: this timeout. Without the address the message reads
+    // as "the Pi is down" and the real cause stays invisible (this incident).
+    // -------------------------------------------------------------------------
+
+    test(
+      'pair_timeout names the relay currently configured in Preferences',
+      () async {
+        final storage = _FakeStorage();
+        final bridge = await _bootedBridge(storage);
+        // A silent transport: the fake "Pi" never replies → timeout.
+        Future<PeerTransport> neverReplies(qr, key) async {
+          final q1 = _Q();
+          return _MemTransport(send: q1, recv: _Q());
+        }
+        final vm = PairingViewModel(
+          storage,
+          neverReplies,
+          _SpyConn(),
+          _PrefsForTest(relay: 'https://relay.880160.xyz'),
+          bridge,
+          pairTimeout: const Duration(milliseconds: 50),
+        );
+
+        // No `r=` in the QR → the mismatch guard can't fire; the failure is a
+        // real timeout, exactly like an App/Pi relay mismatch in production.
+        await vm.submitPairingCode(_qrUriNoRelay);
+
+        expect(vm.state, isA<PairingError>());
+        final msg = (vm.state as PairingError).message;
+        expect(msg, contains('relay.880160.xyz'),
+            reason: 'the timeout must expose the relay it dialled');
+        expect(msg, contains('same relay'),
+            reason: 'and hint at the mismatch as a cause');
+
+        vm.dispose();
+      },
+    );
+
+    test(
+      'QR relay is ADOPTED into Preferences before dialling',
+      () async {
+        final storage = _FakeStorage();
+        final bridge = await _bootedBridge(storage);
+        // Reply with pair_ok so the flow completes; we assert on the relay
+        // that was persisted, not on the outcome.
+        final factory = _factoryReplyingWith({
+          'type': 'pair_ok',
+          'session_name': 'test session',
+        });
+        final prefs = _PrefsForTest(relay: 'https://app-relay.example');
+        final vm = PairingViewModel(
+          storage,
+          factory,
+          _SpyConn(),
+          prefs,
+          bridge,
+        );
+
+        await vm.submitPairingCode(_qrUri); // qr carries r=ws://localhost
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        // ws://localhost is a legacy scheme the app rejects for storage, so it
+        // must NOT be adopted — the preference stays intact.
+        expect(prefs.relayUrl, 'https://app-relay.example');
+        vm.dispose();
+      },
+    );
+
+    test(
+      'a valid QR relay is adopted (self-host works with zero config)',
+      () async {
+        final storage = _FakeStorage();
+        final bridge = await _bootedBridge(storage);
+        final factory = _factoryReplyingWith({
+          'type': 'pair_ok',
+          'session_name': 'test session',
+        });
+        // Preferences on the app's default; QR names the self-hosted relay.
+        final prefs = _PrefsForTest(relay: 'https://relay-rp1.jacobmoura.work');
+        final vm = PairingViewModel(
+          storage,
+          factory,
+          _SpyConn(),
+          prefs,
+          bridge,
+        );
+
+        const qrRelay = 'remotepi://pair?t=AAAAAAAAAAAAAAAAAAAAAA&'
+            'epk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&'
+            'r=https%3A%2F%2Frelay.880160.xyz&n=self+hosted';
+        await vm.submitPairingCode(qrRelay);
+        await Future<void>.delayed(const Duration(milliseconds: 30));
+
+        expect(prefs.relayUrl, 'https://relay.880160.xyz',
+            reason: 'the QR relay must be adopted before dialling');
         vm.dispose();
       },
     );
@@ -343,7 +457,7 @@ void main() {
       );
 
       await tester.runAsync(() async {
-        await vm.onQrScanned(_qrUri);
+        await vm.submitPairingCode(_qrUri);
         await Future<void>.delayed(const Duration(milliseconds: 50));
       });
       await tester.pump();
@@ -382,7 +496,7 @@ void main() {
       );
 
       await tester.runAsync(() async {
-        await vm.onQrScanned(_qrUri);
+        await vm.submitPairingCode(_qrUri);
         await Future<void>.delayed(const Duration(milliseconds: 50));
       });
       await tester.pump();

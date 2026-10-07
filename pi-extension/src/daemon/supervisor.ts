@@ -3,6 +3,7 @@ import { createConnection, createServer, type Server, type Socket } from "node:n
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { addDaemon, listDaemons, migrateRegistryNames, removeDaemon } from "./registry.js";
+import { addWorkspace, listWorkspaces, removeWorkspace } from "./workspaces.js";
 import { daemonIdForCwd } from "./id.js";
 import { defaultAgentName, type LocalConfig } from "../session/local_config.js";
 import { ipcAddress, usesNamedPipe } from "../session/ipc.js";
@@ -30,7 +31,7 @@ import {
 } from "./cron_registry.js";
 import { appendCronLog, readCronLog, type CronResult } from "./cron_log.js";
 import { HostBridge } from "./host_bridge.js";
-import type { FleetOps } from "./host_control.js";
+import type { FleetEntry, FleetOps } from "./host_control.js";
 
 /**
  * Central process that owns the daemon fleet (plan/26).
@@ -340,12 +341,23 @@ export class Supervisor {
     return { ok: true, data: { stopped, already_stopped: already } };
   }
 
-  /** Stop a single registered daemon by id. Idempotent: a daemon that isn't
-   *  running returns `stopped: false`. Unknown id → ok:false. Mirrors the
-   *  per-id semantics of `_opStart`. Cancels any pending restart backoff so a
-   *  deliberate stop stays stopped. */
+  /**
+   * Plan/68 — resolve an id to a cwd across both catalogs. `daemons.json`
+   * wins when a cwd appears in both, mirroring `_catalogEntries`.
+   */
+  private _findEntry(id: string): { id: string; cwd: string; name: string } | undefined {
+    const daemon = listDaemons().find((d) => d.id === id);
+    if (daemon) return daemon;
+    const ws = listWorkspaces().find((w) => daemonIdForCwd(w.cwd) === id);
+    return ws ? { id, cwd: ws.cwd, name: ws.name } : undefined;
+  }
+
+  /** Stop a single registered daemon (or an added workspace) by id. Idempotent:
+   *  one that isn't running returns `stopped: false`. Unknown id → ok:false.
+   *  Mirrors the per-id semantics of `_opStart`. Cancels any pending restart
+   *  backoff so a deliberate stop stays stopped. */
   private async _opStop(id: string): Promise<ControlReply<unknown>> {
-    const entry = listDaemons().find((d) => d.id === id);
+    const entry = this._findEntry(id);
     if (!entry) return { ok: false, error: `no daemon with id ${id}` };
     const slot = this.children.get(id);
     if (!slot || slot.child.state !== "running") {
@@ -642,20 +654,39 @@ export class Supervisor {
     }, delay);
   }
 
-  /** Plan/67 — fleet surface for the host room. */
+  /** Plan/67–68 — fleet surface for the host room (daemons ∪ added workspaces). */
   private _fleetOps(): FleetOps {
     return {
-      list: () => this._listInfo().map((d) => ({
-        id: d.id,
-        cwd: d.cwd,
-        name: d.name,
-        live: d.state === "running",
-      })),
+      list: () => this._catalogEntries(),
+      // Plan/68 — persist an unregistered cwd in workspaces.json (NOT
+      // daemons.json) so `workspace_start` can boot a folder picked by
+      // navigating the host filesystem, without promoting it to a supervised
+      // always-on daemon.
+      ensure: (cwd) => {
+        try {
+          const { cwd: resolved } = addWorkspace(cwd);
+          return { ok: true, id: daemonIdForCwd(resolved), cwd: resolved, name: defaultAgentName(resolved) };
+        } catch (e) {
+          const message = (e as Error).message;
+          return { ok: false, error: /ENOENT|not directory|ENOTDIR|required/i.test(message) ? "not_found" : message };
+        }
+      },
       start: (id) => {
-        const r = this._opStart(id);
-        if (!r.ok) return { ok: false, error: r.error };
-        const data = r.data as { started?: boolean } | undefined;
-        return { ok: true, started: data?.started !== false };
+        // Registered daemon → normal supervised start.
+        if (listDaemons().some((d) => d.id === id)) {
+          const r = this._opStart(id);
+          if (!r.ok) return { ok: false, error: r.error };
+          const data = r.data as { started?: boolean } | undefined;
+          return { ok: true, started: data?.started !== false };
+        }
+        // Plan/68 — added workspace: spawn a slot for it (in-memory; it is not
+        // in daemons.json, so it is not auto-started on supervisor boot).
+        const entry = this._findEntry(id);
+        if (!entry) return { ok: false, error: `no workspace with id ${id}` };
+        const slot = this.children.get(id);
+        if (slot && slot.child.state === "running") return { ok: true, started: false };
+        this._spawnEntry(entry.id, entry.cwd, entry.name);
+        return { ok: true, started: true };
       },
       stop: async (id) => {
         const r = await this._opStop(id);
@@ -663,12 +694,74 @@ export class Supervisor {
         const data = r.data as { stopped?: boolean } | undefined;
         return { ok: true, stopped: data?.stopped !== false };
       },
+      addWorkspace: (cwd) => {
+        try {
+          const { cwd: resolved, added } = addWorkspace(cwd);
+          return { ok: true, cwd: resolved, added };
+        } catch (e) {
+          const message = (e as Error).message;
+          return { ok: false, error: /ENOENT|not directory|ENOTDIR|required/i.test(message) ? "not_found" : message };
+        }
+      },
+      removeWorkspace: (cwd) => {
+        try {
+          const { cwd: resolved, removed } = removeWorkspace(cwd);
+          return { ok: true, cwd: resolved, removed };
+        } catch (e) {
+          return { ok: false, error: (e as Error).message };
+        }
+      },
     };
+  }
+
+  /**
+   * Plan/68 — the host-room catalog: registered daemons ∪ explicitly added
+   * workspaces. A cwd present in both is reported once, as its daemon row
+   * (the daemon is the stronger identity: it has a real supervisor slot).
+   */
+  private _catalogEntries(): FleetEntry[] {
+    const rows: FleetEntry[] = [];
+    const seen = new Set<string>();
+    for (const d of this._listInfo()) {
+      seen.add(d.cwd);
+      rows.push({
+        id: d.id,
+        cwd: d.cwd,
+        name: d.name,
+        live: d.state === "running",
+        source: "daemon",
+      });
+    }
+    for (const w of listWorkspaces()) {
+      if (seen.has(w.cwd)) continue;
+      rows.push({
+        id: daemonIdForCwd(w.cwd),
+        cwd: w.cwd,
+        name: w.name,
+        // An added workspace has no supervisor slot yet: it is not `live`
+        // until the user starts it (which promotes it to a fleet slot).
+        live: this.children.get(daemonIdForCwd(w.cwd))?.child.state === "running",
+        source: "added",
+      });
+    }
+    return rows;
   }
 }
 
 /** Test helper: derive id from cwd without going through the registry. */
 export function _idForCwdForTest(cwd: string): string { return daemonIdForCwd(cwd); }
+
+/** Test helper: read the host-room catalog (registered ∪ added) off a live
+ *  supervisor without opening the relay. Used by plan/68 catalog tests. */
+export function _catalogEntriesForTest(s: Supervisor): FleetEntry[] {
+  return (s as unknown as { _catalogEntries(): FleetEntry[] })._catalogEntries();
+}
+
+/** Test helper: the host-room fleet surface (plan/68), for tests that drive
+ *  `ensure`/`start` directly without a relay round-trip. */
+export function _fleetOpsForTest(s: Supervisor): FleetOps {
+  return (s as unknown as { _fleetOps(): FleetOps })._fleetOps();
+}
 
 /** Exported for the bin/supervisord entry + tests to know where the
  *  supervisor will bind. */

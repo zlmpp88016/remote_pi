@@ -75,6 +75,14 @@ class _Channel implements IChannel, IControlLink {
             ),
           );
         }
+      case WorkspaceRemove(:final id):
+        _server.add(
+          ActionOk(
+            inReplyTo: id,
+            action: ActionName.workspaceRemove,
+            rawAction: 'workspace_remove',
+          ),
+        );
       default:
         break;
     }
@@ -203,14 +211,21 @@ void main() {
     expect(find.text('/proj/b'), findsOneWidget);
   });
 
-  testWidgets('lista vazia ensina a registrar uma pasta', (tester) async {
+  testWidgets('lista vazia ensina a navegar no host', (tester) async {
     await _pump(tester, _Channel());
 
-    expect(find.text('No workspaces registered'), findsOneWidget);
+    // Plan/68 — o catálogo deixou de ser "só daemons registrados": o estado
+    // vazio agora aponta para o navegador de pastas do host.
+    expect(find.text('No workspaces yet'), findsOneWidget);
     expect(
-      find.textContaining('remote-pi create'),
+      find.textContaining("Browse the machine's folders"),
       findsOneWidget,
-      reason: 'o operador precisa saber como registrar um cwd',
+      reason: 'o usuário precisa saber como escolher uma pasta',
+    );
+    expect(
+      find.text('Browse folders on the machine'),
+      findsOneWidget,
+      reason: 'atalho para o picker do filesystem do host',
     );
   });
 
@@ -266,6 +281,54 @@ void main() {
     expect(find.text(_sessionsMarker), findsNothing);
   });
 
+  testWidgets('workspace adicionado tem badge \'added\' e botão de remover', (
+    tester,
+  ) async {
+    final ch = _Channel(
+      workspaces: const [
+        WireWorkspaceInfo(
+          cwd: '/proj/a',
+          daemonId: 'd1',
+          roomId: 'r-a',
+          name: 'proj-a',
+          live: false,
+          daemon: false,
+          source: 'added',
+        ),
+      ],
+    );
+    final vm = await _pump(tester, ch);
+
+    expect(find.text('added · /proj/a'), findsOneWidget);
+    expect(find.byTooltip('Remove from list'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Remove from list'));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 30)),
+    );
+    await _settle(tester);
+    final s = vm.state as WorkspaceListReady;
+    expect(s.workspaces, isEmpty, reason: 'some da lista após remover');
+  });
+
+  testWidgets('workspace registrado (daemon) não oferece remover', (tester) async {
+    final ch = _Channel(
+      workspaces: const [
+        WireWorkspaceInfo(
+          cwd: '/proj/a',
+          daemonId: 'd1',
+          roomId: 'r-a',
+          name: 'proj-a',
+          live: true,
+          daemon: true,
+        ),
+      ],
+    );
+    await _pump(tester, ch);
+    expect(find.byTooltip('Remove from list'), findsNothing);
+    expect(find.text('Browse folders on the machine'), findsOneWidget);
+  });
+
   testWidgets('o estado vazio respeita a largura máxima de conteúdo', (
     tester,
   ) async {
@@ -275,7 +338,7 @@ void main() {
     await _pump(tester, _Channel(), size: const Size(1024, 1366));
 
     final box = find.ancestor(
-      of: find.text('No workspaces registered'),
+      of: find.text('No workspaces yet'),
       matching: find.byType(ConstrainedBox),
     );
     expect(box, findsWidgets);

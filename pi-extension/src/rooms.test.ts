@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { describe, expect, test } from "vitest";
 import { roomIdForCwd, roomIdFor } from "./rooms.js";
 import { defaultAgentName } from "./session/local_config.js";
+import { canCreateSymlinks, SYMLINK_SKIP_REASON } from "./test_support/posix_fs.js";
+
+const hasSymlinks = canCreateSymlinks();
 
 describe("roomIdForCwd", () => {
   test("deterministic for the same cwd", () => {
@@ -23,7 +26,7 @@ describe("roomIdForCwd", () => {
     expect(id).toMatch(/^[A-Za-z0-9_-]{12}$/);
   });
 
-  test("realpath: symlinks resolve to the same id", () => {
+  test.skipIf(!hasSymlinks)("realpath: symlinks resolve to the same id", () => {
     // Real fs setup: dir + symlink → dir. Both must produce identical ids.
     const tmp = mkdtempSync(join(tmpdir(), "remote-pi-rooms-"));
     const real = join(tmp, "real");
@@ -67,7 +70,9 @@ describe("roomIdFor (plan/41 — App↔Pi room per (cwd, name))", () => {
     expect(roomIdFor(cwd, dflt)).not.toBe(roomIdFor(cwd, `${dflt}#2`));
   });
 
-  test("realpath: a symlinked cwd yields the SAME name-scoped id as the real dir", () => {
+  test.skipIf(!hasSymlinks)(
+    "realpath: a symlinked cwd yields the SAME name-scoped id as the real dir",
+    () => {
     const tmp = mkdtempSync(join(tmpdir(), "remote-pi-rooms41-"));
     const real = join(tmp, "real");
     mkdirSync(real);
@@ -77,7 +82,8 @@ describe("roomIdFor (plan/41 — App↔Pi room per (cwd, name))", () => {
     // Custom name (≠ either basename) → both take the scoped branch, which
     // canonicalizes via realpath → identical id despite different basenames.
     expect(roomIdFor(real, "reviewer")).toBe(roomIdFor(link, "reviewer"));
-  });
+    },
+  );
 
   test("scoped id is 12-char base64url", () => {
     expect(roomIdFor(cwd, "reviewer")).toMatch(/^[A-Za-z0-9_-]{12}$/);

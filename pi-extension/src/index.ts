@@ -64,7 +64,7 @@ import {
   handleTreeNavigate,
   type TreeActionContext,
 } from "./actions/tree.js";
-import { buildQRUri, qrSession, renderQRAscii, clampPairTtlMs, TOKEN_TTL_MS } from "./pairing/qr.js";
+import { buildQRUri, qrSession, clampPairTtlMs, TOKEN_TTL_MS } from "./pairing/qr.js";
 import {
   addPeer,
   getOrCreateEd25519Keypair,
@@ -115,6 +115,17 @@ import {
 } from "./actions/handlers.js";
 import { listWorkspaceSessions, sessionFieldsFromRaw } from "./actions/sessions.js";
 import { ensureModelRegistry } from "./actions/registry.js";
+import {
+  handlePiSurface,
+  handlePackageInstall,
+  handlePackageRemove,
+  handlePackageUpdate,
+  handleSkillInvoke,
+  handleSkillSetEnabled,
+  type DispatchUserMessageFn,
+  type SurfaceRuntime,
+} from "./pi_surface/handlers.js";
+import { ensureSurfaceDeps } from "./pi_surface/deps.js";
 import {
   ensureGlobalDirs,
   LOCAL_SESSION_NAME,
@@ -1060,6 +1071,16 @@ export function _resetAutoInitedForTest(): void { _autoInited = false; }
 
 /** Test-only: set the auto-init gate for lifecycle replacement tests. */
 export function _setAutoInitedForTest(value: boolean): void { _autoInited = value; }
+
+/**
+ * Test-only: install a command ctx. Interactive hosts capture one from a
+ * command handler (or `session_start`); an RPC-mode daemon never does, which
+ * is why some session actions answer `no_sdk` there. E2E tests that need the
+ * command-ctx path install one through this seam instead of faking the wire.
+ */
+export function _setLastCtxForTest(ctx: unknown): void {
+  _lastCtx = (ctx ?? null) as typeof _lastCtx;
+}
 
 /** Test-only: true when this instance holds a live local-mesh node. */
 export function _hasMeshNodeForTest(): boolean { return _meshNode !== null; }
@@ -3231,32 +3252,32 @@ async function _cmdPair(ctx: Pick<ExtensionContext, "ui" | "cwd">, args = ""): P
   const ttlMs = ttlMatch ? clampPairTtlMs(Number(ttlMatch[1]) * 1000) : TOKEN_TTL_MS;
   const { token, expiresAt } = qrSession.issueToken(ttlMs);
   const roomId = _myRoomId ?? roomIdFor(cwd, sessionName);
-  const qrUri = buildQRUri(token, edKp.publicKey, sessionName, roomId);
-  // Render both the QR ASCII and the copy-paste URI inside the Pi TUI's
-  // chat panel via `pi.sendMessage` — the same channel the SDK uses for
-  // agent responses + tool results. `process.stderr.write` (the old QR
-  // path via `displayQR`) broke the TUI layout because it bypassed the
-  // chat widget and bled into the prompt area. qrcode-terminal v0.12
-  // small mode is pure Unicode (█ ▀ ▄ space, no ANSI escapes — see
-  // `lib/main.js:48-53`), so embedding the ASCII inside a sendMessage
-  // content string renders correctly without raw escape bytes.
+  // Carry the relay this Pi is ACTUALLY on. `_relayUrl` is the live connection
+  // URL; fall back to the resolved config so a QR generated before the relay
+  // is up still names the right relay. Without this the app dials its own
+  // default and a self-hosted relay produces a bare timeout (plan/14 removed
+  // `r` on the wrong assumption that both sides always share a relay).
+  const pairRelayUrl = _relayUrl ?? resolveRelayUrl().url;
+  const qrUri = buildQRUri(token, edKp.publicKey, sessionName, roomId, pairRelayUrl);
+  // Plan/68 — pairing is a copy-paste step. The URI is printed inside the Pi
+  // TUI's chat panel via `pi.sendMessage` (the same channel the SDK uses for
+  // agent responses + tool results); `process.stderr.write` would bypass the
+  // chat widget and bleed into the prompt area. No QR is rendered anymore.
   if (_pi) {
-    const qrAscii = renderQRAscii(qrUri);
     _pi.sendMessage({
       customType: "remote-pi:pair-code",
       content:
-        `📱 Scan to pair:\n\n${qrAscii}\n` +
-        `📋 Or copy this pairing code (camera-less devices):\n\n${qrUri}`,
-      // Structured payload for RPC clients (e.g. Cockpit): render their own QR
-      // from `uri` + show the expiry, without scraping the display string.
+        `🔗 Pairing code — copy this into the app:\n\n${qrUri}`,
+      // Structured payload for RPC clients (e.g. Cockpit): consume the URI
+      // directly and show the expiry, without scraping the display string.
       details: { uri: qrUri, token, expiresAt, roomId, name: sessionName },
       display: true,
     });
   }
 
   ctx.ui.notify(
-    `[remote-pi] QR ready — valid until ${new Date(expiresAt).toLocaleTimeString()}. ` +
-    `Scan with the app, or copy the pairing code printed above.`,
+    `[remote-pi] Pairing code ready — valid until ${new Date(expiresAt).toLocaleTimeString()}. ` +
+    `Copy it and paste it into the app.`,
     "info",
   );
   // Returns immediately; the auto-listener transitions to 'paired' on pair_request.
@@ -4710,6 +4731,39 @@ export function _routeClientMessageFrom(
       })();
       break;
     }
+    // Plan/68 — Pi surface: report and manage the Pi's skills + packages.
+    // Same for every room: the surface describes the *paired machine's* Pi, and
+    // the SDK accessors are already resolved defensively from the live ctx.
+    case "pi_surface": {
+      const { deps, runtime } = _surfaceContext();
+      void handlePiSurface(deps, runtime, sender, msg);
+      break;
+    }
+    case "skill_invoke": {
+      const { deps } = _surfaceContext();
+      void handleSkillInvoke(deps, _dispatchSkillInvocation, sender, msg);
+      break;
+    }
+    case "skill_set_enabled": {
+      const { deps } = _surfaceContext();
+      void handleSkillSetEnabled(deps, sender, msg);
+      break;
+    }
+    case "package_install": {
+      const { deps } = _surfaceContext();
+      void handlePackageInstall(deps, sender, msg);
+      break;
+    }
+    case "package_remove": {
+      const { deps } = _surfaceContext();
+      void handlePackageRemove(deps, sender, msg);
+      break;
+    }
+    case "package_update": {
+      const { deps } = _surfaceContext();
+      void handlePackageUpdate(deps, sender, msg);
+      break;
+    }
     // Plan 01 — session tree navigation and branching. The context is built
     // fresh per request (see _treeActionContext) because a captured command
     // ctx goes stale after a session replacement, and fork/clone 
@@ -4745,8 +4799,51 @@ export function _routeClientMessageFrom(
  * Returns null when no live ctx (or no tree support) is available, which the
  * handlers surface as an action error rather than a crash.
  */
-function _treeActionContext(): TreeActionContext | null {
-  const raw = _liveCtx();
+/**
+ * Plan/68 — build the Pi-surface dependencies for the CURRENT workspace.
+ *
+ * `cwd` comes from the live ctx; when there is none (daemon boot, control
+ * channel) the surface still resolves the user scope and reports what it can
+ * rather than refusing the request. The model/thinking accessors read through
+ * functions so a ctx that goes stale between here and the read degrades to
+ * null instead of throwing.
+ */
+function _surfaceContext(): {
+  deps: ReturnType<typeof ensureSurfaceDeps>["deps"];
+  runtime: ReturnType<typeof ensureSurfaceDeps>["runtime"];
+} {
+  const ctx = _asActionCtx(_liveCtx());
+  return ensureSurfaceDeps({
+    cwd: (ctx?.cwd as string | undefined) ?? null,
+    model: () => {
+      const m = (ctx?.getModel?.() as { provider?: string; id?: string } | undefined);
+      if (!m?.provider || !m.id) return undefined;
+      return { provider: m.provider, id: m.id };
+    },
+    thinking: () => _pi?.getThinkingLevel() ?? "off",
+  });
+}
+
+/**
+ * Plan/68 — hand a `/skill:<name> <args>` command to Pi with prompt expansion
+ * enabled, which is what makes Pi substitute the skill body (docs/skills.md).
+ * Mirrors `_wakeAgent`'s delivery mode so a skill invocation while the agent
+ * is busy is queued as a steer instead of being rejected as a busy prompt.
+ */
+const _dispatchSkillInvocation: DispatchUserMessageFn = (text, options) => {
+  if (!_pi) return { ok: false, detail: "agent session not bound yet" };
+  try {
+    _pi.sendUserMessage(text, {
+      ...options,
+      deliverAs: _myRoomMeta?.working === true || _currentTurnId !== null ? "steer" : undefined,
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, detail: err instanceof Error ? err.message : String(err) };
+  }
+};
+
+function _treeActionContext(): TreeActionContext | null {  const raw = _liveCtx();
   if (!raw) return null;
   const ctx = raw as unknown as {
     isIdle?: () => boolean;
@@ -4768,8 +4865,7 @@ function _treeActionContext(): TreeActionContext | null {
   };
 }
 
-/** Build the current snapshot, or null when the tree is unavailable. */
-function _buildTreeSnapshotWire(
+/** Build the current snapshot, or null when the tree is unavailable. */function _buildTreeSnapshotWire(
   sessionManager: { getTree?: () => readonly unknown[]; getLeafId?: () => string | null } | undefined,
 ): TreeSnapshotWire | null {
   try {

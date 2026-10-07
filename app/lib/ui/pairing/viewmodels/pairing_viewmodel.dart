@@ -6,7 +6,7 @@ import 'package:app/data/transport/peer_channel.dart';
 import 'package:app/data/transport/relay_config.dart';
 import 'package:app/pairing/owner_identity_bridge.dart';
 import 'package:app/pairing/pair_request_flow.dart' as pair_flow;
-import 'package:app/pairing/qr_scanner.dart';
+import 'package:app/pairing/pair_payload.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/ui/core/viewmodel/viewmodel.dart';
 import 'package:app/ui/pairing/states/pairing_state.dart';
@@ -16,7 +16,7 @@ import 'package:cryptography/cryptography.dart';
 // Production: WsTransport.connect(...). Tests: in-memory pipe.
 typedef PairingTransportFactory =
     Future<pair_flow.PeerTransport> Function(
-      QrPairPayload qr,
+      PairPayload qr,
       SimpleKeyPair deviceEd25519,
     );
 
@@ -31,26 +31,53 @@ class PairingViewModel extends ViewModel<PairingState> {
   pair_flow.PeerTransport? _transport;
   PlainPeerChannel? _liveChannel;
 
+  /// Relay the LAST pairing attempt dialled — surfaced in the timeout message
+  /// so a relay mismatch is visible instead of blaming the Pi. Reset per
+  /// attempt in [submitPairingCode].
+  String? _lastRelayUrl;
+
+  /// Overall deadline for the pair_request/pair_ok exchange. Injectable so
+  /// tests can exercise the timeout branch without waiting 30 real seconds.
+  final Duration _pairTimeout;
+
   PairingViewModel(
     this._storage,
     this._transportFactory,
     this._conn,
     this._prefs,
-    this._ownerBridge,
-  ) : super(const PairingScanning());
+    this._ownerBridge, {
+    Duration pairTimeout = const Duration(seconds: 30),
+  }) : _pairTimeout = pairTimeout,
+       super(const PairingScanning());
 
   // ---------------------------------------------------------------------------
   // Actions
   // ---------------------------------------------------------------------------
 
   /// Called when MobileScanner detects a barcode.
-  Future<void> onQrScanned(String rawUri) async {
+  Future<void> submitPairingCode(String rawUri) async {
     if (state is PairingConnecting) return;
 
-    final qr = QrPairPayload.tryParse(rawUri);
+    final qr = PairPayload.tryParse(rawUri);
     if (qr == null) return; // not a remotepi:// QR — ignore silently
 
     emit(PairingConnecting(sessionName: qr.sessionName));
+
+    // A QR generated since the `r=` fix names the relay the Pi is actually on.
+    // ADOPT it (persist into Preferences) before dialling: the pairing
+    // transport resolves the relay from Preferences, so this is what makes a
+    // self-hosted relay work with zero manual configuration — the user just
+    // pastes the code. A legacy QR (no `r`) keeps the app's own preference.
+    if (qr.relayUrl != null &&
+        qr.relayUrl!.isNotEmpty &&
+        !relayUrlsMatch(qr.relayUrl!, resolveRelayUrl(_prefs))) {
+      if (isValidRelayUrl(qr.relayUrl!)) {
+        await _prefs.setRelayUrl(qr.relayUrl!);
+      }
+    }
+
+    // Capture the relay this attempt will dial, for the timeout message.
+    _lastRelayUrl = resolveRelayUrl(_prefs);
 
     try {
       // Close any active session before opening a new WS to the relay.
@@ -76,7 +103,7 @@ class PairingViewModel extends ViewModel<PairingState> {
             currentRelayUrl: resolveRelayUrl(_prefs),
           )
           .timeout(
-            const Duration(seconds: 30),
+            _pairTimeout,
             onTimeout: () => throw const pair_flow.PairingError(
               code: 'pair_timeout',
               message:
@@ -132,11 +159,19 @@ class PairingViewModel extends ViewModel<PairingState> {
     _transport = null;
   }
 
-  static String _friendlyError(pair_flow.PairingError e) => switch (e.code) {
+  String _friendlyError(pair_flow.PairingError e) => switch (e.code) {
     'token_expired' => 'QR expired — generate a new one on your Mac',
     'token_consumed' => 'QR already used — generate a new one',
     'token_unknown' => 'QR not recognized by Mac — re-run /remote-pi pair',
-    'pair_timeout' => 'Timed out — make sure /remote-pi is running on your Mac',
+    // Include the relay this attempt dialled: since plan 14 the QR carries no
+    // relay, and the ONLY symptom of an App/Pi relay mismatch is this timeout.
+    // Without the address the error reads as "the Pi is down" and the real
+    // cause (both sides on different relays) stays invisible.
+    'pair_timeout' => _lastRelayUrl == null
+        ? 'Timed out — make sure /remote-pi is running on your Mac'
+        : 'Timed out talking to $_lastRelayUrl — make sure /remote-pi is '
+            'running AND that the Pi uses this same relay (check '
+            '/remote-pi config on it).',
     _ => e.message.isEmpty ? e.code : e.message,
   };
 

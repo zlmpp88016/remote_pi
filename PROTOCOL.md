@@ -9,7 +9,7 @@ Atualizada em 2026-07-18.
 
 - **Mesh de agentes coding** rodando em múltiplos PCs do mesmo usuário
 - **Cada PC** roda o `pi-extension` (Node.js daemon) com **uma Pi-key** Ed25519 no Keychain do sistema (macOS/Linux/Windows)
-- **Celular** é o **autenticador inicial** (estilo WhatsApp Web QR) — depois do pareamento, PCs operam autonomamente entre si
+- **Celular** é o **autenticador inicial** (plan/68: pareamento por código colável, sem QR) — depois do pareamento, PCs operam autonomamente entre si
 - **Owner-key** Ed25519 vive no Keychain do celular (iOS Keychain / Android Block Store), sincroniza entre devices do mesmo Apple ID / Google Account
 - **Relay** WebSocket roteia e armazena/verifica `mesh_versions` assinadas pelo Owner; autoriza co-membership direta
 - **Cross-PC routing** por Pi-key canônica no Relay; a Extension `0.6` mantém por uma release o prefixo wire legado para interoperar com Extensions antigas, sem substituir aliases receiver-local públicos
@@ -291,17 +291,91 @@ Pairing is **machine-level**. Inside a workspace room the app lists and switches
 
 ### Host room (`room=host`, plan 67)
 
-`pi-supervisord` opens a second WS on the same Pi-key with reserved `room_id = "host"`. Catalog = registered daemons only (no disk scan). Unregistered cwd → `action_error.error = "not_registered"`.
+`pi-supervisord` opens a second WS on the same Pi-key with reserved `room_id = "host"`. Catalog = registered daemons ∪ workspaces added by the app (plan/68 — **no recursive disk scan**; the listing is always explicit).
 
 ```json
 { "type": "workspace_list", "id": "<uuid>" }
 { "type": "workspace_list_ok", "in_reply_to": "<uuid>", "workspaces": [
-  { "cwd": "/abs", "daemon_id": "a1b2c3d4", "room_id": "…", "name": "…", "live": true, "daemon": true }
+  { "cwd": "/abs", "daemon_id": "a1b2c3d4", "room_id": "…", "name": "…", "live": true, "daemon": true,
+    "source": "daemon" | "added" }
 ]}
 { "type": "workspace_start", "id": "<uuid>", "cwd": "/abs" }
 { "type": "workspace_start_ok", "in_reply_to": "<uuid>", "cwd": "/abs", "room_id": "…", "daemon_id": "a1b2c3d4" }
 { "type": "workspace_stop", "id": "<uuid>", "daemon_id": "a1b2c3d4" }
 ```
+
+`source` distinguishes a workspace that came from `daemons.json` (`"daemon"`) from one the app added by navigating the host filesystem (`"added"`, persisted in `~/.pi/remote/workspaces.json`).
+
+### Filesystem navigation (plan 68)
+
+Lets the app pick **any** directory on the host instead of only pre-registered daemons. The client never touches a local path — the host resolves and lists.
+
+```json
+{ "type": "fs_list", "id": "<uuid>", "path": "~/ws", "show_hidden": false }
+{ "type": "fs_list_ok", "in_reply_to": "<uuid>", "path": "/abs/resolved", "parent": "/abs" | null,
+  "entries": [ { "name": "remote_pi", "kind": "dir" | "file", "is_repo": true } ] }
+```
+
+- `path` accepts `~` and absolute paths; the reply carries the resolved `realpath` so the client can sync its breadcrumb.
+- `parent` is `null` at the filesystem root. `entries` lists directories first; `is_repo` is a hint (`.git` present) and is optional.
+- `show_hidden` defaults to `false`.
+
+Errors (as `action_error`, see "Erros tipados" below):
+
+| `error` | When |
+|---|---|
+| `not_found` | Path does not exist |
+| `not_a_directory` | Path exists but is a file |
+| `permission_denied` | Host cannot read the directory |
+| `spawn_failed` | (`workspace_start` only) the daemon could not be spawned |
+
+### Workspace add / remove (plan 68)
+
+```json
+{ "type": "workspace_add", "id": "<uuid>", "path": "/abs" }
+{ "type": "workspace_remove", "id": "<uuid>", "path": "/abs" }
+```
+
+Both reply through the standard `action_ok` / `action_error` pair. `workspace_add` persists the cwd in `~/.pi/remote/workspaces.json` (host-side, using `REMOTE_PI_HOME` when set) and makes it appear in `workspace_list_ok` with `source: "added"` on every subsequent connection. `workspace_start` on a cwd that is neither in `daemons.json` nor in `workspaces.json` registers it first, then spawns — that is the plan/68 replacement for the old `not_registered` error.
+
+### Pi surface — skills and packages (plan 68)
+
+Reports what the Pi in this workspace actually has, so the app can drive it without a generic command picker (same rationale as plan/28).
+
+```json
+{ "type": "pi_surface", "id": "<uuid>" }
+{ "type": "pi_surface_ok", "in_reply_to": "<uuid>",
+  "runtime": { "running": true, "model": "…" | null, "thinking": "off" | … | null },
+  "skills": [
+    { "name": "pdf-tools", "description": "…", "source": "user" | "project" | "package",
+      "path": "/abs/SKILL.md", "enabled": true, "disable_model_invocation": false }
+  ],
+  "packages": [
+    { "source": "npm:@example/pi-tools@1.0.0", "scope": "user" | "project",
+      "resources": ["extensions", "skills", "prompts", "themes"] }
+  ]
+}
+```
+
+- `source` for a skill: `user` (`~/.pi/agent/skills`), `project` (`.pi/skills` of the workspace cwd) or `package` (shipped by a Pi package).
+- `scope` for a package: `user` = `~/.pi/agent/settings.json`, `project` = `.pi/settings.json` (requires project trust).
+- **Never fabricate**: a field the host cannot determine is `null` with a reason, never a guessed value.
+
+```json
+{ "type": "skill_invoke", "id": "<uuid>", "name": "pdf-tools", "args": "extract report.pdf" }
+{ "type": "skill_set_enabled", "id": "<uuid>", "name": "pdf-tools", "enabled": false }
+```
+
+`skill_invoke` forces the skill by appending `args` as a user request (`/skill:<name> <args>`, per Pi's skills spec). The skill's output flows through the normal chat channels — the `action_ok` reply only confirms dispatch.
+
+```json
+{ "type": "package_install", "id": "<uuid>", "source": "npm:@example/pi-tools@1.0.0",
+  "scope": "user" | "project", "confirm_third_party": true }
+{ "type": "package_remove", "id": "<uuid>", "source": "npm:@example/pi-tools@1.0.0" }
+{ "type": "package_update", "id": "<uuid>" }
+```
+
+**`package_install` without `confirm_third_party: true` is refused** with `action_error` — packages execute extension code. `source` accepts the same forms as the CLI (`npm:`, `git:`, a local path). `package_update` reconciles installed packages (`pi update --extensions`).
 
 ### Side-effects
 
@@ -404,13 +478,26 @@ relay; restart perde o estado.
 
 ## Pareamento
 
-QR code mostra Pi-pubkey + room hint + token de uso único.
+O código de pareamento é um **endereço colável** (`remotepi://pair?…`) mostrado pelo Pi — não há mais QR nem escaneamento (plan/68). O app recebe a string por colagem e o formato do payload é um contrato congelado:
 
-1. App escaneia QR, conecta no relay como peer efêmero
-2. App envia `pair_request` assinado com **Owner-sk** (prova autoridade)
-3. Pi-extension valida assinatura, adiciona App-key na sua `peers.json` local
-4. App adiciona Pi-pubkey no seu `mesh_versions` local + publica versão nova no relay
-5. Pi-extension passa a aceitar mensagens daquele Owner
+```
+remotepi://pair?t=<token>&epk=<base64url>&n=<nome>[&rm=<roomId>][&r=<relayUrl>]
+```
+
+| Param | Conteúdo |
+|---|---|
+| `t` | Token efêmero de uso único (rotaciona por `--ttl`, padrão 60s) |
+| `epk` | Pi-key Ed25519 do host (base64url) — identidade do peer |
+| `n` | Nome da sessão/workspace, para preview antes do `pair_ok` |
+| `rm` | Room id do workspace default (opcional) |
+| `r` | Relay em que o Pi está de fato conectado (opcional, mas essencial para relay self-hosted) |
+
+1. Usuário cola o endereço no app; o app adota `r` como relay efetivo quando presente
+2. App conecta no relay como peer efêmero
+3. App envia `pair_request` assinado com **Owner-sk** (prova autoridade)
+4. Pi-extension valida assinatura, adiciona App-key na sua `peers.json` local
+5. App adiciona Pi-pubkey no seu `mesh_versions` local + publica versão nova no relay
+6. Pi-extension passa a aceitar mensagens daquele Owner
 
 Múltiplos Owners podem parear o mesmo PC (concomitância — `peers.json` aceita N entries).
 

@@ -1,3 +1,4 @@
+import 'package:app/protocol/protocol.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/workspaces/states/workspace_list_state.dart';
@@ -47,6 +48,17 @@ class WorkspaceListPage extends StatelessWidget {
               ),
           ],
         ),
+        actions: [
+          // Plan/68 — the machine's Pi surface (skills + packages).
+          IconButton(
+            tooltip: 'Pi skills and packages',
+            onPressed: () => context.push(
+              '/pi',
+              extra: {if (device != null) 'device': device},
+            ),
+            icon: Icon(LucideIcons.sparkles, color: colors.muted, size: 18),
+          ),
+        ],
       ),
       body: switch (state) {
         WorkspaceListLoading() => Center(
@@ -75,93 +87,154 @@ class WorkspaceListPage extends StatelessWidget {
           ),
         ),
         WorkspaceListReady(:final workspaces, :final starting) =>
-          workspaces.isEmpty
-              ? Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(LucideIcons.folderOpen, color: colors.muted, size: 48),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No workspaces registered',
-                            style: TextStyle(color: colors.muted2, fontSize: 14),
+          Column(
+            children: [
+              Expanded(
+                child: workspaces.isEmpty
+                    ? Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
+                          child: Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(LucideIcons.folderOpen, color: colors.muted, size: 48),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No workspaces yet',
+                                  style: TextStyle(color: colors.muted2, fontSize: 14),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Browse the machine\'s folders to pick one.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(color: colors.muted, fontSize: 12),
+                                ),
+                              ],
+                            ),
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'On the machine, run "remote-pi create <folder>" '
-                            'to register one.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: colors.muted, fontSize: 12),
-                          ),
-                        ],
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: workspaces.length,
+                        separatorBuilder: (_, _) =>
+                            Divider(height: 1, color: colors.border),
+                        itemBuilder: (ctx, i) {
+                          final w = workspaces[i];
+                          final isAdded = w.source == 'added';
+                          return ListTile(
+                            enabled: !starting,
+                            leading: Icon(
+                              w.live ? LucideIcons.folder : LucideIcons.folder,
+                              color: w.live ? colors.accent : colors.muted,
+                            ),
+                            title: Text(
+                              w.name.isNotEmpty ? w.name : w.cwd,
+                              style: TextStyle(color: colors.text),
+                            ),
+                            subtitle: Text(
+                              [
+                                if (w.live) 'running',
+                                if (isAdded) 'added',
+                                w.cwd,
+                              ].join(' · '),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: colors.muted, fontSize: 12),
+                            ),
+                            trailing: starting
+                                ? SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: colors.accent,
+                                    ),
+                                  )
+                                : (isAdded
+                                    ? IconButton(
+                                        tooltip: 'Remove from list',
+                                        onPressed: () => vm.remove(w.cwd),
+                                        icon: Icon(
+                                          LucideIcons.trash2,
+                                          color: colors.muted,
+                                          size: 18,
+                                        ),
+                                      )
+                                    : Icon(
+                                        LucideIcons.chevronRight,
+                                        color: colors.muted,
+                                        size: 18,
+                                      )),
+                            onTap: () => _open(ctx, vm, w),
+                          );
+                        },
+                      ),
+              ),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _browse(context, epk, device, online),
+                      icon: Icon(LucideIcons.folderSearch, size: 18, color: colors.accent),
+                      label: Text(
+                        'Browse folders on the machine',
+                        style: TextStyle(color: colors.accent, fontSize: 13),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(color: colors.accent),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(8)),
+                        ),
                       ),
                     ),
                   ),
-                )
-              : ListView.separated(
-                  itemCount: workspaces.length,
-                  separatorBuilder: (_, _) =>
-                      Divider(height: 1, color: colors.border),
-                  itemBuilder: (ctx, i) {
-                    final w = workspaces[i];
-                    return ListTile(
-                      enabled: !starting,
-                      leading: Icon(
-                        LucideIcons.folder,
-                        color: w.live ? colors.accent : colors.muted,
-                      ),
-                      title: Text(
-                        w.name.isNotEmpty ? w.name : w.cwd,
-                        style: TextStyle(color: colors.text),
-                      ),
-                      subtitle: Text(
-                        [if (w.live) 'running', w.cwd].join(' · '),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: colors.muted, fontSize: 12),
-                      ),
-                      trailing: starting
-                          ? SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: colors.accent,
-                              ),
-                            )
-                          : Icon(
-                              LucideIcons.chevronRight,
-                              color: colors.muted,
-                              size: 18,
-                            ),
-                      onTap: () async {
-                        final ok = await vm.start(
-                          daemonId: w.daemonId,
-                          cwd: w.cwd,
-                        );
-                        if (ok == null || !ctx.mounted) return;
-                        // Hand off to the existing sessions screen, which
-                        // lists the AgentSessions of the now-live room and
-                        // is where the user actually opens a chat.
-                        ctx.push(
-                          '/sessions',
-                          extra: {
-                            'epk': epk,
-                            'roomId': ok.roomId,
-                            'cwd': ok.cwd,
-                            'title': w.name.isNotEmpty ? w.name : ok.cwd,
-                            'device': device,
-                            'online': online,
-                          },
-                        );
-                      },
-                    );
-                  },
                 ),
+              ),
+            ],
+          ),
+      },
+    );
+  }
+
+  /// Plan/68 — open the host-filesystem picker (any folder, not just the
+  /// registered daemons).
+  static void _browse(
+    BuildContext context,
+    String epk,
+    String? device,
+    bool online,
+  ) {
+    context.push(
+      '/workspaces/browse',
+      extra: {'epk': epk, 'device': device, 'online': online},
+    );
+  }
+
+  Future<void> _open(
+    BuildContext ctx,
+    WorkspaceListViewModel vm,
+    WireWorkspaceInfo w,
+  ) async {
+    final ok = await vm.start(daemonId: w.daemonId, cwd: w.cwd);
+    if (ok == null || !ctx.mounted) return;
+    // Hand off to the existing sessions screen, which lists the
+    // AgentSessions of the now-live room and is where the user actually
+    // opens a chat.
+    ctx.push(
+      '/sessions',
+      extra: {
+        'epk': epk,
+        'roomId': ok.roomId,
+        'cwd': ok.cwd,
+        'title': w.name.isNotEmpty ? w.name : ok.cwd,
+        'device': device,
+        'online': online,
       },
     );
   }

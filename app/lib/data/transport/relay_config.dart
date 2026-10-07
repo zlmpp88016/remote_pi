@@ -94,3 +94,44 @@ String? relayUrlValidationMessage(String url) {
   if (isValidRelayUrl(url)) return null;
   return kRelayUrlInvalidGeneric;
 }
+
+/// Canonical form for relay COMPARISON (not for dialling).
+///
+/// Lowercases the host, drops a default port and any trailing slash, so
+/// `https://Relay.Example:443/` and `https://relay.example` compare equal.
+/// Without this the pairing relay-mismatch guard is a false-positive trap:
+/// the QR carries the Pi's configured URL and Preferences may hold the same
+/// relay written slightly differently, which would hard-block pairing with a
+/// `relay_mismatch` error even though both sides are on the same relay.
+///
+/// Returns the input unchanged when it cannot be parsed (callers then compare
+/// literally, preserving the old behavior for malformed values).
+String normalizeRelayUrlForCompare(String url) {
+  final trimmed = url.trim();
+  final Uri uri;
+  try {
+    uri = Uri.parse(trimmed);
+  } catch (_) {
+    return trimmed;
+  }
+  if (uri.host.isEmpty) return trimmed;
+  final scheme = uri.scheme.toLowerCase();
+  final host = uri.host.toLowerCase();
+  final isDefaultPort = (scheme == 'http' && uri.port == 80) ||
+      (scheme == 'https' && uri.port == 443) ||
+      (scheme == 'ws' && uri.port == 80) ||
+      (scheme == 'wss' && uri.port == 443) ||
+      !uri.hasPort;
+  final port = isDefaultPort ? '' : ':${uri.port}';
+  // Path is kept (a self-hosted relay may mount under a prefix) but a lone
+  // trailing "/" is dropped, matching how the two sides are usually written.
+  var path = uri.path;
+  if (path == '/') path = '';
+  return '$scheme://$host$port$path';
+}
+
+/// True when [a] and [b] point at the same relay, ignoring cosmetic
+/// differences (scheme http↔ws, host case, default port, trailing slash).
+bool relayUrlsMatch(String a, String b) =>
+    normalizeRelayUrlForCompare(toWsRelayUrl(a)) ==
+    normalizeRelayUrlForCompare(toWsRelayUrl(b));

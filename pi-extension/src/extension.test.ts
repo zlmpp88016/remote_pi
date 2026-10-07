@@ -13,6 +13,8 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getCapabilities, setCapabilities } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
+import type { ServerMessage } from "./protocol/types.js";
 
 const _convertToPngMock = vi.hoisted(() => vi.fn(async () => null));
 
@@ -163,7 +165,6 @@ vi.mock("./pairing/qr.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("./pairing/qr.js")>();
   return {
     ...orig,
-    displayQR: vi.fn(),  // suppress side effects (terminal spawn) in tests
     qrSession: {
       issueToken: vi.fn().mockReturnValue({
         token: "test-token",
@@ -222,6 +223,7 @@ const {
   _getCurrentTurnIdForTest,
   _getPendingSteerIdsForTest,
   _connectForTest,
+  _stopForTest,
   _startRelayForTest,
   _getCachedPublicKeyForTest,
   _hasActivePeerForTest,
@@ -236,9 +238,11 @@ const {
   _resetCwdLockForTest,
   _handleControl,
   _routeClientMessageFrom,
+  _setLastCtxForTest,
   _deliverMeshMessageToAgentForTest,
   CTRL_PREFIX,
 } = indexModule;
+const { _resetSurfaceDepsForTests } = await import("./pi_surface/deps.js");
 const { acquireCwdLock } = await import("./session/cwd_lock.js");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1241,7 +1245,7 @@ describe("multi-channel broadcast (W2D)", () => {
     expect(_hasActivePeerForTest("ownerB__abcdefghij")).toBe(true);
   });
 
-  test("/remote-pi pair without config (idle, first-time) → warns + no QR", async () => {
+  test("/remote-pi pair without config (idle, first-time) → warns + no pairing code", async () => {
     // Isolated empty cwd → no local config on every OS, so we expect the
     // focused first-time message instead of an auto-bootstrap. (Fresh tmpdir —
     // see the "pair without start" test for the cross-platform rationale.)
@@ -1253,23 +1257,23 @@ describe("multi-channel broadcast (W2D)", () => {
 
     const calls = ctx.ui.notify.mock.calls.map((c) => c[0] as string);
     expect(calls.some((m) => m.includes("First-time setup needed"))).toBe(true);
-    expect(calls.every((m) => !m.includes("QR ready"))).toBe(true);
+    expect(calls.every((m) => !m.includes("Pairing code ready"))).toBe(true);
     rmSync(cwd, { recursive: true, force: true });
   });
 
-  test("/remote-pi pair generates QR even when an owner is already attached", async () => {
+  test("/remote-pi pair issues a pairing code even when an owner is already attached", async () => {
     await _pairForTest("ownerA__1234567890");
     expect(_getActivePeerCountForTest()).toBe(1);
 
-    // QR generation must succeed (no "Already paired" rejection).
+    // Pairing-code generation must succeed (no "Already paired" rejection).
     const pair = captureHandler("remote-pi pair");
     const ctx = makeMockCtx();
     await pair("", ctx);
 
-    // Should have notified about a QR being ready, not warned about
+    // Should have notified a pairing code is ready, not warned about
     // an existing pairing.
     const calls = ctx.ui.notify.mock.calls.map((c) => c[0] as string);
-    expect(calls.some((m) => m.includes("QR ready"))).toBe(true);
+    expect(calls.some((m) => m.includes("Pairing code ready"))).toBe(true);
     expect(calls.every((m) => !m.includes("Already paired"))).toBe(true);
   });
 
@@ -3226,6 +3230,31 @@ describe("QR payload (no r field, with rm)", () => {
     const url = new URL(uri.replace("remotepi:", "https:"));
     expect(url.searchParams.get("rm")).toBeNull();
   });
+
+  // Plan/68 — the PAYLOAD is a frozen contract: removing the QR scan changed
+  // only how the user obtains the string, never its bytes. Pin the exact
+  // serialization (field ORDER + separator) so a future refactor of the
+  // builder cannot silently break parity with the app parser.
+  test("payload is byte-identical to the frozen pairing contract", async () => {
+    const { buildQRUri } = await import("./pairing/qr.js");
+    // all-zero 32-byte key → deterministic base64url
+    const epk = Buffer.alloc(32, 0x00);
+    const uri = buildQRUri("tok", epk, "sess");
+    // epk: 32 zero bytes → "AAAA…" (43 chars, unpadded base64url)
+    expect(uri).toBe(
+      "remotepi://pair?t=tok&epk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&n=sess",
+    );
+  });
+
+  test("payload with roomId + relay keeps t,epk,n,rm,r order", async () => {
+    const { buildQRUri } = await import("./pairing/qr.js");
+    const epk = Buffer.alloc(32, 0x00);
+    const uri = buildQRUri("tok", epk, "sess", "room12345678", "wss://r.example");
+    expect(uri).toBe(
+      "remotepi://pair?t=tok&epk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+        "&n=sess&rm=room12345678&r=wss%3A%2F%2Fr.example",
+    );
+  });
 });
 
 // ── rooms: _cmdStart sends roomId/roomMeta; PeerChannel includes room ────────
@@ -4444,6 +4473,148 @@ describe("session_shutdown teardown", () => {
   });
 });
 
+describe("plan/68 — Pi surface dispatch (index wiring)", () => {
+  /**
+   * These assert the *index.ts* wiring, not the handlers: a fake channel
+   * collects the server frames a real `PlainPeerChannel` would encode. The
+   * agent dir is pointed at a throwaway home so the surface describes a known
+   * catalog instead of whatever the developer has installed.
+   */
+  let home: string;
+  let prevAgentDir: string | undefined;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), "remote-pi-surface-"));
+    mkdirSync(join(home, "skills", "pdf-tools"), { recursive: true });
+    writeFileSync(
+      join(home, "skills", "pdf-tools", "SKILL.md"),
+      "---\nname: pdf-tools\ndescription: Extract text from PDFs\n---\nbody\n",
+    );
+    prevAgentDir = process.env["PI_CODING_AGENT_DIR"];
+    process.env["PI_CODING_AGENT_DIR"] = home;
+    _resetSurfaceDepsForTests();
+  });
+
+  afterEach(() => {
+    if (prevAgentDir === undefined) delete process.env["PI_CODING_AGENT_DIR"];
+    else process.env["PI_CODING_AGENT_DIR"] = prevAgentDir;
+    _resetSurfaceDepsForTests();
+    try { rmSync(home, { recursive: true, force: true }); } catch { /* best-effort */ }
+  });
+
+  test("pi_surface replies pi_surface_ok listing the machine's skills", async () => {
+    captureHandler("remote-pi");
+    await _connectForTest(makeMockCtx(home));
+
+    const sent: ServerMessage[] = [];
+    _routeClientMessageFrom({ send: (m) => sent.push(m) }, { type: "pi_surface", id: "r1" }, makeMockCtx());
+
+    await vi.waitFor(() => expect(sent.some((m) => m.type === "pi_surface_ok")).toBe(true));
+    const ok = sent.find((m) => m.type === "pi_surface_ok") as Extract<ServerMessage, { type: "pi_surface_ok" }>;
+    expect(ok.in_reply_to).toBe("r1");
+    expect(ok.skills.map((s) => s.name)).toContain("pdf-tools");
+    expect(ok.skills.find((s) => s.name === "pdf-tools")!.source).toBe("user");
+
+    await _stopForTest(makeMockCtx(home));
+  });
+
+  test("package_install without confirm_third_party is refused on the wire", async () => {
+    captureHandler("remote-pi");
+    await _connectForTest(makeMockCtx(home));
+
+    const sent: ServerMessage[] = [];
+    _routeClientMessageFrom({ send: (m) => sent.push(m) }, {
+      type: "package_install",
+      id: "r2",
+      source: "npm:@example/pi-tools@1.0.0",
+      scope: "user",
+    }, makeMockCtx());
+
+    await vi.waitFor(() => expect(sent.some((m) => m.type === "action_error")).toBe(true));
+    const err = sent.find((m) => m.type === "action_error") as Extract<ServerMessage, { type: "action_error" }>;
+    expect(err.action).toBe("package_install");
+    expect(err.error).toContain("confirm_third_party");
+
+    await _stopForTest(makeMockCtx(home));
+  });
+
+  test("skill_set_enabled flips a skill and a following pi_surface sees it", async () => {
+    captureHandler("remote-pi");
+    await _connectForTest(makeMockCtx(home));
+
+    const sent: ServerMessage[] = [];
+    const sender = { send: (m: ServerMessage) => sent.push(m) };
+    _routeClientMessageFrom(sender, {
+      type: "skill_set_enabled",
+      id: "r3",
+      name: "pdf-tools",
+      enabled: false,
+    }, makeMockCtx());
+    await vi.waitFor(() => expect(sent.some((m) => m.type === "skill_set_enabled_ok")).toBe(true));
+
+    sent.length = 0;
+    _routeClientMessageFrom(sender, { type: "pi_surface", id: "r4" }, makeMockCtx());
+    await vi.waitFor(() => expect(sent.some((m) => m.type === "pi_surface_ok")).toBe(true));
+    const ok = sent.find((m) => m.type === "pi_surface_ok") as Extract<ServerMessage, { type: "pi_surface_ok" }>;
+    expect(ok.skills.find((s) => s.name === "pdf-tools")!.enabled).toBe(false);
+
+    await _stopForTest(makeMockCtx(home));
+  });
+
+  test("_setLastCtxForTest installs the command ctx session actions read", async () => {
+    // Em modo RPC (daemon) nunca há um handler de comando, e ações de sessão
+    // respondem `no_sdk`. Este seam é o que os testes e2e usam para exercitar
+    // o caminho COM ctx, então ele precisa realmente chegar no handler.
+    captureHandler("remote-pi");
+    await _connectForTest(makeMockCtx(home));
+
+    const switched: string[] = [];
+    _setLastCtxForTest({
+      cwd: home,
+      getSessionId: () => "current",
+      switchSession: async (path: string) => {
+        switched.push(path);
+        return { cancelled: false };
+      },
+    });
+
+    // Uma sessão de verdade para haver o que trocar. O SessionManager só
+    // materializa o arquivo depois de um turno com assistant — daí o par.
+    const seeded = SessionManager.create(home, undefined, { name: "historica" });
+    seeded.appendMessage({ role: "user", content: "pergunta antiga" });
+    seeded.appendMessage({ role: "assistant", content: [{ type: "text", text: "resposta" }] });
+
+    const sent: ServerMessage[] = [];
+    _routeClientMessageFrom(
+      { send: (m) => sent.push(m) },
+      { type: "session_list", id: "r5" },
+      makeMockCtx(home),
+    );
+    await vi.waitFor(() => expect(sent.some((m) => m.type === "session_list_ok")).toBe(true));
+    const list = sent.find((m) => m.type === "session_list_ok") as Extract<ServerMessage, { type: "session_list_ok" }>;
+    const target = list.sessions.find((s) => s.id === seeded.getSessionId());
+    expect(target).toBeDefined();
+
+    sent.length = 0;
+    _routeClientMessageFrom(
+      { send: (m) => sent.push(m) },
+      { type: "session_switch", id: "r6", session_id: target!.id },
+      makeMockCtx(home),
+    );
+    await vi.waitFor(() => expect(sent.some((m) => m.type === "session_switch_ok")).toBe(true));
+    // O wire não expõe o caminho do arquivo; o que importa é que o handler
+    // resolveu o id recebido e chamou `switchSession` com o arquivo daquela sessão.
+    expect(switched).toHaveLength(1);
+    expect(switched[0]).toContain(seeded.getSessionId());
+    expect(sent.find((m) => m.type === "session_switch_ok")).toMatchObject({
+      session_id: seeded.getSessionId(),
+    });
+
+    _setLastCtxForTest(null);
+    await _stopForTest(makeMockCtx(home));
+  });
+});
+
 // ── remote-pi:name-assigned event (Cockpit consumes the effective name) ────────
 
 describe("remote-pi:name-assigned event", () => {
@@ -4788,9 +4959,13 @@ describe("session_start auto-init skips relay in print/-p mode (#44)", () => {
     const onSessionStart = captureEventHandler("session_start");
     _resetAutoInitedForTest();
     onSessionStart({ type: "session_start" }, makeMockCtx("/home/user/projects/rp-interactive"));
-    await new Promise<void>((r) => setTimeout(r, 20));
 
-    expect(_hasMeshNodeForTest()).toBe(true);
+    // Deterministic wait: the auto-init runs `void _cmdRoot(initCtx)` in the
+    // background, so a fixed sleep raced under load and left the root in
+    // flight — which then short-circuited the NEXT test's `_cmdRoot`
+    // (`_cmdRootInFlight` non-null → status instead of join). Polling both
+    // asserts the outcome and guarantees the root has fully settled.
+    await vi.waitFor(() => expect(_hasMeshNodeForTest()).toBe(true));
   });
 });
 

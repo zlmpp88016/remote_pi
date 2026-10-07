@@ -12,6 +12,9 @@ import {
   removeDaemon,
   saveRegistry,
 } from "./registry.js";
+import { canCreateSymlinks } from "../test_support/posix_fs.js";
+
+const hasSymlinks = canCreateSymlinks();
 import { daemonIdForCwd } from "./id.js";
 import { defaultAgentName } from "../session/local_config.js";
 
@@ -61,7 +64,7 @@ describe("normalizeCwd", () => {
     expect(() => normalizeCwd("/no/such/path/anywhere/xyz-pi-test")).toThrow();
   });
 
-  test("symlinks resolve to canonical realpath", () => {
+  test.skipIf(!hasSymlinks)("symlinks resolve to canonical realpath", () => {
     const tmp = mkdtempSync(join(tmpdir(), "pi-symlink-"));
     const real = join(tmp, "real");
     mkdirSync(real);
@@ -117,7 +120,7 @@ describe("addDaemon", () => {
     expect(() => addDaemon(tmp)).toThrow(/already registered/i);
   });
 
-  test("relative path canonicalizes to same entry as absolute", () => {
+  test.skipIf(!hasSymlinks)("relative path canonicalizes to same entry as absolute", () => {
     const tmp = mkdtempSync(join(tmpdir(), "pi-relabs-"));
     addDaemon(tmp);
     // Trying to add via a symlink → same normalized path → duplicate.

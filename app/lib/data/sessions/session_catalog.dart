@@ -53,6 +53,136 @@ class SessionCatalog {
     );
   }
 
+  /// Plan/68 — list one directory on the host so the user can pick a cwd by
+  /// walking the machine's tree. Errors come back typed (`not_found`,
+  /// `not_a_directory`, `permission_denied`) via [WorkspaceControlFailure].
+  Future<FsListOk> listDirectory(String path, {bool showHidden = false}) {
+    return _expect<FsListOk>(
+      FsList(id: uuid7(), path: path, showHidden: showHidden),
+      (id, msg) {
+        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'fs_list') {
+          throw WorkspaceControlFailure(msg.error);
+        }
+        return msg is FsListOk && msg.inReplyTo == id;
+      },
+      room: kHostRoomId,
+    );
+  }
+
+  /// Plan/68 — persist a workspace the user added from the picker.
+  Future<void> addWorkspace(String path) {
+    return _expectAction(
+      WorkspaceAdd(id: uuid7(), path: path),
+      'workspace_add',
+    );
+  }
+
+  /// Plan/68 — drop an added workspace (never a registered daemon).
+  Future<void> removeWorkspace(String path) {
+    return _expectAction(
+      WorkspaceRemove(id: uuid7(), path: path),
+      'workspace_remove',
+    );
+  }
+
+  /// Expects the plain `action_ok` / `action_error` pair for [action].
+  Future<void> _expectAction(ClientMessage request, String action) {
+    return _expect<ActionOk>(request, (id, msg) {
+      if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == action) {
+        throw WorkspaceControlFailure(msg.error);
+      }
+      return msg is ActionOk && msg.inReplyTo == id && msg.rawAction == action;
+    }, room: kHostRoomId);
+  }
+
+  // ── Plan/68 — Pi surface (skills + packages) ──────────────────────────────
+  //
+  // Unlike the workspace ops above, these are handled by the paired Pi itself
+  // (`pi-extension/src/index.ts`), so they go on the ACTIVE room (the workspace
+  // session the app is talking to) — no room override.
+
+  /// Ask the machine for its runtime + installed skills and packages.
+  Future<PiSurfaceOk> piSurface() {
+    return _expect<PiSurfaceOk>(
+      PiSurface(id: uuid7()),
+      (id, msg) {
+        if (msg is ActionError && msg.inReplyTo == id) {
+          throw WorkspaceControlFailure(msg.error);
+        }
+        return msg is PiSurfaceOk && msg.inReplyTo == id;
+      },
+    );
+  }
+
+  /// Force a skill; the output flows through the normal chat channels.
+  Future<SkillInvokeOk> invokeSkill(String name, {String? args}) {
+    return _expect<SkillInvokeOk>(
+      SkillInvoke(id: uuid7(), name: name, args: args),
+      (id, msg) {
+        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'skill_invoke') {
+          throw WorkspaceControlFailure(msg.error);
+        }
+        return msg is SkillInvokeOk && msg.inReplyTo == id;
+      },
+    );
+  }
+
+  Future<SkillSetEnabledOk> setSkillEnabled(String name, bool enabled) {
+    return _expect<SkillSetEnabledOk>(
+      SkillSetEnabled(id: uuid7(), name: name, enabled: enabled),
+      (id, msg) {
+        if (msg is ActionError &&
+            msg.inReplyTo == id &&
+            msg.rawAction == 'skill_set_enabled') {
+          throw WorkspaceControlFailure(msg.error);
+        }
+        return msg is SkillSetEnabledOk && msg.inReplyTo == id;
+      },
+    );
+  }
+
+  /// Install a package. [confirmThirdParty] must be true — the extension
+  /// refuses without it, and the UI only sets it after an explicit accept.
+  Future<PackageOpOk> installPackage({
+    required String source,
+    required PackageScope scope,
+    required bool confirmThirdParty,
+  }) {
+    return _packageOp(
+      PackageInstall(
+        id: uuid7(),
+        source: source,
+        scope: scope,
+        confirmThirdParty: confirmThirdParty,
+      ),
+      'package_install',
+    );
+  }
+
+  Future<PackageOpOk> removePackage(String source, {PackageScope? scope}) {
+    return _packageOp(
+      PackageRemove(id: uuid7(), source: source, scope: scope),
+      'package_remove',
+    );
+  }
+
+  /// Reconcile one package, or every installed one when [source] is omitted.
+  Future<PackageOpOk> updatePackages({String? source}) {
+    return _packageOp(
+      PackageUpdate(id: uuid7(), source: source),
+      'package_update',
+    );
+  }
+
+  Future<PackageOpOk> _packageOp(ClientMessage request, String action) {
+    return _expect<PackageOpOk>(request, (id, msg) {
+      if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == action) {
+        throw WorkspaceControlFailure(msg.error);
+      }
+      return msg is PackageOpOk && msg.inReplyTo == id;
+    });
+  }
+
   Future<T> _expect<T extends ServerMessage>(
     ClientMessage request,
     bool Function(String id, ServerMessage msg) match, {

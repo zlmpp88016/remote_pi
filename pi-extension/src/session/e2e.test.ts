@@ -84,9 +84,23 @@ function capturingRemoteRouter(): {
   };
 }
 
+/**
+ * Drains the UDS round trip (broker write → peer socket `data` → handler).
+ *
+ * Uses ONLY `setImmediate`: several callers install fake timers
+ * (`vi.useFakeTimers({ toFake: ["setTimeout", …] })`) before flushing, so a
+ * timer-based wait would never resolve. Each iteration is one real event-loop
+ * turn for the socket I/O.
+ *
+ * Two turns were not enough on Windows for two envelopes written back to back
+ * (`injectFromRemote` twice in a row): the second frame's `data` event had not
+ * fired yet, so the assertion saw only the first. Bounded loop, no wall-clock
+ * wait, so it stays deterministic and fast.
+ */
 async function flushUds(): Promise<void> {
-  await new Promise<void>((resolve) => setImmediate(resolve));
-  await new Promise<void>((resolve) => setImmediate(resolve));
+  for (let i = 0; i < 20; i++) {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
 }
 
 function observe<T>(promise: Promise<T>): Promise<

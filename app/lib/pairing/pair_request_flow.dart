@@ -15,7 +15,7 @@ import 'package:app/data/transport/relay_config.dart';
 import 'package:app/protocol/protocol.dart' show PairOk;
 import 'package:app/protocol/uuid7.dart';
 
-import 'qr_scanner.dart';
+import 'pair_payload.dart';
 import 'storage.dart';
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,7 @@ class PairingResult {
 // ---------------------------------------------------------------------------
 
 Future<PairingResult> performPairing({
-  required QrPairPayload qr,
+  required PairPayload qr,
   required PeerTransport transport,
   required PairingStorage storage,
   required String deviceName,
@@ -71,14 +71,13 @@ Future<PairingResult> performPairing({
   /// the caller (PairingViewModel reads it from Preferences).
   required String currentRelayUrl,
 }) async {
-  // Plan 14: legacy QRs may carry `r=<url>`. If that URL does not
-  // match the app's configured relay, the device would attempt to
-  // pair on the WRONG relay (or, after we centralised the connect
-  // factory on resolveRelayUrl, would silently pair against the
-  // user's relay while the Pi is waiting on another). Detect and
-  // surface — UI (PairingViewModel) can show "trocar relay?" modal.
-  if (qr.relayUrl != null &&
-      toWsRelayUrl(qr.relayUrl!) != toWsRelayUrl(currentRelayUrl)) {
+  // A QR generated since this fix carries the Pi's relay as `r`. When present
+  // it WINS over the app's preference: the whole point is that a self-hosted
+  // relay is discoverable from the pairing code alone, so pairing must dial
+  // the relay the Pi is actually on. Legacy QRs (no `r`) keep using the
+  // preference. Comparison is normalized so cosmetic differences
+  // (trailing slash, host case, http↔ws) never produce a false mismatch.
+  if (qr.relayUrl != null && !relayUrlsMatch(qr.relayUrl!, currentRelayUrl)) {
     throw PairingError(
       code: 'relay_mismatch',
       message: 'QR points to "${qr.relayUrl}", '
@@ -168,7 +167,7 @@ Future<PairingResult> performPairing({
 /// can still call [performPairing] with an explicit URL.
 Future<PairingResult> performPairingWithRelay(
   String currentRelayUrl, {
-  required QrPairPayload qr,
+  required PairPayload qr,
   required PeerTransport transport,
   required PairingStorage storage,
   required String deviceName,

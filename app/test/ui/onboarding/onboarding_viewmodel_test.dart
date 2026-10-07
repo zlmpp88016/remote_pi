@@ -49,8 +49,14 @@ class _FakeStore implements FlutterSecureStorage {
   dynamic noSuchMethod(Invocation i) => super.noSuchMethod(i);
 }
 
-Future<({Preferences prefs, OnboardingViewModel vm})> _setup() async {
+Future<({Preferences prefs, OnboardingViewModel vm})> _setup({
+  String? storedRelay,
+}) async {
   final prefs = Preferences(_FakeStore());
+  if (storedRelay != null) {
+    await prefs.load();
+    await prefs.setRelayUrl(storedRelay);
+  }
   final vm = OnboardingViewModel(prefs);
   return (prefs: prefs, vm: vm);
 }
@@ -184,5 +190,103 @@ void main() {
       expect(s.prefs.onboardingCompleted, isTrue);
       expect(s.vm.state, isA<OnboardingComplete>());
     });
+
+    // -------------------------------------------------------------------------
+    // Regression — a stored relay must survive re-running onboarding.
+    //
+    // The relay step used to boot with `community` + empty custom URL and then
+    // call `setRelayUrl(null)` on next(), which DELETES the stored key. Users
+    // who hit onboarding twice (revoke the last peer → onboardingCompleted is
+    // reset) silently lost a self-hosted relay and only ever saw a pairing
+    // timeout blaming the Pi.
+    // -------------------------------------------------------------------------
+
+    test('seeds the relay step from a stored override', () async {
+      final s = await _setup(storedRelay: 'https://relay.880160.xyz');
+      final state = s.vm.state as OnboardingInProgress;
+      expect(state.relayChoice, RelayChoice.custom);
+      expect(state.customRelayUrl, 'https://relay.880160.xyz');
+    });
+
+    test('no stored override still seeds community/empty', () async {
+      final s = await _setup();
+      final state = s.vm.state as OnboardingInProgress;
+      expect(state.relayChoice, RelayChoice.community);
+      expect(state.customRelayUrl, isEmpty);
+    });
+
+    test(
+      're-running onboarding without touching the relay step KEEPS the '
+      'stored override',
+      () async {
+        final s = await _setup(storedRelay: 'https://relay.880160.xyz');
+        s.vm.next(); // welcome → relay
+        s.vm.next(); // relay → pair (seeded custom)
+        await Future<void>.delayed(Duration.zero);
+        expect(s.prefs.relayUrl, 'https://relay.880160.xyz',
+            reason: 'the stored relay must not be wiped by a re-run');
+      },
+    );
+
+    test(
+      'explicitly choosing community DOES clear a stored override',
+      () async {
+        final s = await _setup(storedRelay: 'https://relay.880160.xyz');
+        s.vm.next(); // → relay (seeded custom)
+        s.vm.setRelayChoice(RelayChoice.community);
+        s.vm.next(); // → pair
+        await Future<void>.delayed(Duration.zero);
+        expect(s.prefs.relayUrl, isNull,
+            reason: 'a deliberate community choice clears the override');
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // Regression guard RV-001 — "empty custom == default community" is the
+    // step contract (relay_step.dart). Emptying a seeded field must CLEAR the
+    // override, not silently keep the old value.
+    // -------------------------------------------------------------------------
+
+    test(
+      'emptying the seeded custom field clears the override ',
+      () async {
+        final s = await _setup(storedRelay: 'https://relay.880160.xyz');
+        s.vm.next(); // → relay (seeded custom + filled)
+        s.vm.setCustomRelayUrl(''); // user erases the field
+        s.vm.next();
+        await Future<void>.delayed(Duration.zero);
+        expect(s.prefs.relayUrl, isNull,
+            reason: 'empty custom means "use the default relay"');
+      },
+    );
+
+    // -------------------------------------------------------------------------
+    // Regression guard RV-002 — a legacy non-http(s) relay persisted by an old
+    // build must NOT be seeded, or the step opens with Continue permanently
+    // disabled (isValidRelayUrl rejects ws://) on a field the user never
+    // touched.
+    // -------------------------------------------------------------------------
+
+    test(
+      'CRITICAL: the relay step stays advanceable with a legacy ws:// relay '
+      'persisted',
+      () async {
+        final s = await _setup(storedRelay: 'ws://legacy.example:8080');
+        final state = s.vm.state as OnboardingInProgress;
+        expect(state.relayChoice, RelayChoice.community,
+            reason: 'an unseedable value must not open the custom branch');
+        expect(state.customRelayUrl, isEmpty);
+        expect(state.customRelayError, isNull);
+
+        // Must be able to walk through the step and clear the bad value.
+        s.vm.next(); // welcome → relay
+        s.vm.next(); // relay → pair
+        await Future<void>.delayed(Duration.zero);
+        expect((s.vm.state as OnboardingInProgress).step, OnboardingStep.pair,
+            reason: 'Continue must not be stuck on a seeded legacy value');
+        expect(s.prefs.relayUrl, isNull,
+            reason: 'the unusable legacy value is cleared on advance');
+      },
+    );
   });
 }

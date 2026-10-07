@@ -1,15 +1,17 @@
 import 'package:app/ui/core/themes/themes.dart';
 import 'package:app/ui/pairing/states/pairing_state.dart';
 import 'package:app/ui/pairing/viewmodels/pairing_viewmodel.dart';
-import 'package:app/ui/pairing/widgets/paste_qr_sheet.dart';
+import 'package:app/ui/pairing/widgets/paste_pairing_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 
 /// Onboarding step 3 — embeds the existing pairing flow. Watches the
 /// already-registered `PairingViewModel` (Provider) and notifies the
 /// onboarding flow when `pair_ok` lands.
+///
+/// Plan/68 — paste-only: the camera/QR-scan path was removed, so this step
+/// shows the paste entry point directly instead of a live scanner preview.
 class PairStep extends StatefulWidget {
   final VoidCallback onPaired;
   final VoidCallback onBack;
@@ -26,39 +28,14 @@ class PairStep extends StatefulWidget {
 }
 
 class _PairStepState extends State<PairStep> {
-  final _scanner = MobileScannerController();
-  bool _scannerActive = true;
   PairingState? _lastObserved;
 
-  @override
-  void dispose() {
-    _scanner.dispose();
-    super.dispose();
-  }
-
-  void _onDetect(BarcodeCapture capture, PairingViewModel vm) {
-    if (!_scannerActive) return;
-    for (final code in capture.barcodes) {
-      final raw = code.rawValue;
-      if (raw == null) continue;
-      _submitRaw(raw, vm);
-      break;
-    }
-  }
-
-  /// Shared path between camera scan and manual paste. Disarms the
-  /// scanner so the camera doesn't double-fire if both happen to
-  /// resolve the QR at the same time.
   void _submitRaw(String raw, PairingViewModel vm) {
-    if (!_scannerActive) return;
-    _scannerActive = false;
-    // ignore: unawaited_futures
-    _scanner.stop();
-    vm.onQrScanned(raw);
+    vm.submitPairingCode(raw);
   }
 
   Future<void> _openPasteSheet(PairingViewModel vm) async {
-    await showPasteQrSheet(context, onSubmit: (raw) => _submitRaw(raw, vm));
+    await showPastePairingSheet(context, onSubmit: (raw) => _submitRaw(raw, vm));
   }
 
   @override
@@ -115,7 +92,7 @@ class _PairStepState extends State<PairStep> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Scan the QR code that appears:',
+            'Copy the pairing code it prints:',
             style: TextStyle(
                 fontFamily: kMonoFamily, fontSize: 11, color: colors.muted),
           ),
@@ -123,28 +100,9 @@ class _PairStepState extends State<PairStep> {
           Expanded(
             child: ClipRRect(
               borderRadius: const BorderRadius.all(Radius.circular(8)),
-              child: _buildScannerBody(state, vm),
+              child: _buildStatusBody(state, vm),
             ),
           ),
-          const SizedBox(height: 12),
-          // Camera-less fallback: paste the QR payload as text.
-          if (state is PairingScanning || state is PairingIdle)
-            TextButton.icon(
-              onPressed: () => _openPasteSheet(vm),
-              icon: Icon(LucideIcons.clipboardPaste,
-                  size: 16, color: colors.accent),
-              label: Text(
-                "Can't scan? Paste code instead",
-                style: TextStyle(
-                  fontFamily: kMonoFamily,
-                  fontSize: 12,
-                  color: colors.accent,
-                ),
-              ),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-              ),
-            ),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -177,7 +135,7 @@ class _PairStepState extends State<PairStep> {
                   ),
                 ),
                 child: Text(
-                  'Scan later',
+                  'Pair later',
                   style: TextStyle(
                     fontFamily: kMonoFamily,
                     fontSize: 13,
@@ -193,21 +151,40 @@ class _PairStepState extends State<PairStep> {
     );
   }
 
-  Widget _buildScannerBody(PairingState state, PairingViewModel vm) {
-    if (state is PairingScanning) {
-      return Stack(
-        children: [
-          MobileScanner(
-            controller: _scanner,
-            onDetect: (capture) => _onDetect(capture, vm),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: context.colors.accent, width: 2),
-              borderRadius: const BorderRadius.all(Radius.circular(8)),
+  Widget _buildStatusBody(PairingState state, PairingViewModel vm) {
+    if (state is PairingScanning || state is PairingIdle) {
+      final colors = context.colors;
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(LucideIcons.clipboardPaste, color: colors.accent, size: 40),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: FilledButton.icon(
+                onPressed: () => _openPasteSheet(vm),
+                icon: Icon(
+                  LucideIcons.clipboardPaste,
+                  size: 16,
+                  color: colors.onAccent,
+                ),
+                label: Text(
+                  'Paste pairing code',
+                  style: TextStyle(fontFamily: kMonoFamily, fontSize: 12),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.accent,
+                  foregroundColor: colors.onAccent,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                ),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
     }
     if (state is PairingConnecting) {
@@ -221,13 +198,7 @@ class _PairStepState extends State<PairStep> {
         icon: LucideIcons.circleAlert,
         message: state.message,
         actionLabel: state.canRetry ? 'Try again' : null,
-        onAction: state.canRetry
-            ? () {
-                _scannerActive = true;
-                _scanner.start();
-                vm.retry();
-              }
-            : null,
+        onAction: state.canRetry ? vm.retry : null,
       );
     }
     if (state is PairingPaired) {

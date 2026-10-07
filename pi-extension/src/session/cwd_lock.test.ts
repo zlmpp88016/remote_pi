@@ -10,18 +10,27 @@ function tmpCwd(): string {
   return mkdtempSync(join(tmpdir(), "pi-cwdlock-"));
 }
 
-/** Redirect the lock dir away from the developer's real `~/.pi/remote/locks`
- *  so running the suite never binds sockets in the live mesh's directory.
+/**
+ * Short-lived root for the redirected lock home.
  *
- *  Base it on a SHORT root (`/tmp`), NOT `os.tmpdir()`: the lock socket nests
- *  `<home>/.pi/remote/locks/<12-char>.sock`, and on macOS `os.tmpdir()` is a
- *  deep `/var/folders/…/T/` path that pushes the socket past the ~104-char UDS
- *  path limit → `bind` fails → `acquireCwdLock` returns `ok:false` and these
- *  tests fail (and break `prepublishOnly`). `/tmp` keeps the full path short. */
+ * The lock address nests `<home>/.pi/remote/locks/<12-char>.sock`, so on
+ * POSIX this MUST stay a short root: on macOS `os.tmpdir()` is a deep
+ * `/var/folders/…/T/` path that pushes the socket past the ~104-char UDS
+ * limit → `bind` fails → `acquireCwdLock` returns `ok:false` and these tests
+ * fail. `/tmp` keeps the full path short.
+ *
+ * On Windows there is no path length limit to respect (plan/40 — local IPC is
+ * a named pipe, not a socket file) and a bare `/tmp` does not exist, so
+ * `os.tmpdir()` is the correct root there.
+ */
+function lockHomeRoot(): string {
+  return process.platform === "win32" ? tmpdir() : "/tmp";
+}
+
 let testHome: string;
 
 beforeEach(() => {
-  testHome = mkdtempSync("/tmp/rp-cwdlock-");
+  testHome = mkdtempSync(join(lockHomeRoot(), "rp-cwdlock-"));
   process.env["REMOTE_PI_HOME"] = testHome;
 });
 

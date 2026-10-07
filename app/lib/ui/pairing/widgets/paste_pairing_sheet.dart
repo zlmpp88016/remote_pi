@@ -3,16 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// Show a bottom sheet that lets the user paste the QR code payload as
-/// text — useful when the device's camera can't read the on-screen QR
-/// (low-end front cameras, scratched lenses, etc).
+/// Show a bottom sheet that lets the user paste the pairing code payload as
+/// text — the single pairing path since plan/68 (the QR-scan flow was
+/// removed).
 ///
 /// Submits via [onSubmit], which receives the raw `remotepi://pair?…`
 /// string the user typed/pasted. The sheet closes automatically after
 /// submit; if [onSubmit] throws or rejects the value, the sheet is
 /// already gone — the caller surfaces the error through the same
-/// pairing-error path the camera scan uses.
-Future<void> showPasteQrSheet(
+/// pairing-error path a rejected code would use.
+Future<void> showPastePairingSheet(
   BuildContext context, {
   required void Function(String raw) onSubmit,
 }) async {
@@ -49,7 +49,7 @@ class _OnSubmitScope extends InheritedWidget {
         context.dependOnInheritedWidgetOfExactType<_OnSubmitScope>();
     assert(
       scope != null,
-      '_PasteQrSheetBody must be wrapped in a _OnSubmitScope (use showPasteQrSheet).',
+      '_PasteQrSheetBody must be wrapped in a _OnSubmitScope (use showPastePairingSheet).',
     );
     return scope!.onSubmit;
   }
@@ -140,8 +140,8 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
             ),
             const SizedBox(height: 6),
             Text(
-              "Can't scan the QR? Paste the text from your Mac terminal "
-              "below. It starts with remotepi://pair?…",
+              "Paste the pairing code from your computer below. "
+              "It starts with remotepi://pair?…",
               style: TextStyle(
                 fontFamily: kMonoFamily,
                 fontSize: 11,

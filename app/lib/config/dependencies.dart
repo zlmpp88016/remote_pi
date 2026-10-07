@@ -26,7 +26,7 @@ import 'package:app/domain/contracts/update_checker.dart';
 import 'package:app/domain/contracts/url_opener.dart';
 import 'package:app/pairing/owner_identity_bridge.dart';
 import 'package:app/pairing/pair_request_flow.dart';
-import 'package:app/pairing/qr_scanner.dart';
+import 'package:app/pairing/pair_payload.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
@@ -269,7 +269,7 @@ Future<IChannel> _productionConnectionFactory(
 // ---------------------------------------------------------------------------
 
 Future<PeerTransport> _productionPairingTransportFactory(
-  QrPairPayload qr,
+  PairPayload qr,
   SimpleKeyPair deviceEd25519,
 ) async {
   // Plan 14: pairing connects via the GLOBAL relay URL (Preferences),

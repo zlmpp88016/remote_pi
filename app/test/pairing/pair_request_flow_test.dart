@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:app/pairing/pair_request_flow.dart';
-import 'package:app/pairing/qr_scanner.dart';
+import 'package:app/pairing/pair_payload.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -47,7 +47,7 @@ class _FakeStorage extends PairingStorage {
   Future<void> savePeer(PeerRecord r) async => saved.add(r);
 }
 
-QrPairPayload _qr({String? relayUrl}) => QrPairPayload(
+PairPayload _qr({String? relayUrl}) => PairPayload(
       token: 'AAAAAAAAAAAAAAAAAAAAAA',
       epk: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
       sessionName: 'Pi',
@@ -127,7 +127,7 @@ void main() {
         final app = _MemTransport(send: q2, recv: q1);
         final storage = _FakeStorage();
         // QR carries the Pi-side room id explicitly.
-        final qr = QrPairPayload(
+        final qr = PairPayload(
           token: 'AAAAAAAAAAAAAAAAAAAAAA',
           epk: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
           sessionName: 'Pi',
@@ -167,7 +167,7 @@ void main() {
         final q2 = _Q();
         final pi = _MemTransport(send: q1, recv: q2);
         final app = _MemTransport(send: q2, recv: q1);
-        final qr = QrPairPayload(
+        final qr = PairPayload(
           token: 'AAAAAAAAAAAAAAAAAAAAAA',
           epk: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
           sessionName: 'Pi',

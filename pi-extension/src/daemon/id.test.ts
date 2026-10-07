@@ -3,6 +3,9 @@ import { mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { daemonIdForCwd } from "./id.js";
+import { canCreateSymlinks } from "../test_support/posix_fs.js";
+
+const hasSymlinks = canCreateSymlinks();
 
 describe("daemonIdForCwd", () => {
   test("deterministic for the same cwd", () => {
@@ -22,7 +25,7 @@ describe("daemonIdForCwd", () => {
     expect(id).toMatch(/^[0-9a-f]{8}$/);
   });
 
-  test("realpath: symlinks collapse to the same id", () => {
+  test.skipIf(!hasSymlinks)("realpath: symlinks collapse to the same id", () => {
     const tmp = mkdtempSync(join(tmpdir(), "pi-daemonid-"));
     const real = join(tmp, "real");
     mkdirSync(real);

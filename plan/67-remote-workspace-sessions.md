@@ -29,11 +29,11 @@ Máquina (Pi-key / pairing persistente)
 |---|---|---|
 | D-nav | Hierarquia | Máquina → workspace → sessão → chat |
 | D-pair | QR / reconnect | Pairing é **máquina**. `rm` no QR é **workspace default**, não identidade do peer |
-| D-catalog | Lista de workspaces | **Só** daemons registrados ∪ rooms live. Sem scan de disco / git-root |
+| D-catalog | Lista de workspaces | ~~**Só** daemons registrados ∪ rooms live. Sem scan de disco / git-root~~ — **reaberto 2026-10-08 (plano 68)**: registrados ∪ **adicionados pelo app** via navegação do filesystem do host (`fs_list` / `workspace_add`, persistidos em `workspaces.json`). Segue sem scan recursivo de disco |
 | D-lock | Sessão ocupada no TUI | **locked** — app **não** rouba. Erro tipado; opção só-leitura fica fora deste plano |
 | D-switch | Troca de sessão | Reseta o mirror como `session_new` (`session_started_at` novo + `session_sync`) |
 | D-host | Controle da máquina | Supervisor anuncia room reservado **`host`** no mesmo Pi-key |
-| D-offline | Workspace sem processo | Só dá start se estiver em `daemons.json`. Cache Hive **não** é catálogo |
+| D-offline | Workspace sem processo | ~~Só dá start se estiver em `daemons.json`.~~ **reaberto 2026-10-08 (plano 68)**: `workspace_start` aceita cwd fora do `daemons.json` (persiste em `workspaces.json` e sobe o daemon). Cache Hive **não** é catálogo |
 
 Defaults acima fecham as duas perguntas em aberto da análise (catálogo offline + ocupação). Reabrir exige evidência, não silêncio.
 
@@ -42,7 +42,7 @@ Defaults acima fecham as duas perguntas em aberto da análise (catálogo offline
 - Reescrever o data layer Flutter (`plan/31` SSOT fica).
 - Usar Hive / tiles offline como lista de sessões do Pi.
 - Tratar `roomId` como id de AgentSession.
-- Scan de projetos na máquina.
+- Scan recursivo de projetos na máquina (a navegação explícita do plano 68 não é scan).
 - Steal de sessão do TUI desktop.
 - E2E / contas / mudança no relay além de um room_id opaco extra (`host`).
 - Agrupar tiles por cwd no sentido do plano 41 (já é 1 tile por agente).
@@ -173,6 +173,7 @@ Implementação (escolhida no D0):
 - [x] Testes focados: `pi-extension` vitest 806 passed / 3 skipped + `tsc --noEmit`; `app` `flutter test test/protocol/actions_protocol_test.dart` 19 passed (session_list / session_switch / locked)
 - [x] `PROTOCOL.md` documenta as mensagens novas
 - [x] Catálogo de workspace = daemons registrados (sem scan); live rooms still come from existing `room_announced`
+  - **Estendido pelo plano 68 (2026-10-08)**: catálogo = registrados ∪ adicionados pelo app (navegação de filesystem no host)
 
 ## Próximos planos
 

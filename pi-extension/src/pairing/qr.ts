@@ -1,5 +1,4 @@
 import { randomBytes } from "node:crypto";
-import qrTerminal from "qrcode-terminal";
 
 /** Default ephemeral-token lifetime (also the QR rotation period). */
 export const TOKEN_TTL_MS = 60_000;
@@ -58,7 +57,6 @@ export class QRSession {
 export const qrSession = new QRSession();
 
 // ── URI + display ─────────────────────────────────────────────────────────────
-
 export function buildQRUri(
   token: string,
   longtermEdPk: Uint8Array, // Ed25519 — only peer ID after E2E rollback
@@ -70,14 +68,20 @@ export function buildQRUri(
    * cai em room=main e o relay drops com "dest not found").
    */
   roomId?: string,
+  /**
+   * Relay URL this Pi is actually connected to (`resolveRelayUrl().url`).
+   * Emitted as `r` so a SELF-HOSTED relay is discoverable from the pairing
+   * code alone: the app can then adopt it instead of silently dialling its own
+   * default and timing out (the QR carried no relay between plan/14 and this
+   * fix, which made self-hosting undiscoverable). Optional for callers/tests;
+   * omitted when empty.
+   */
+  relayUrl?: string,
 ): string {
-  // `r` (relay URL) removed in plano 14 — relay now comes from app config /
-  // pi-ext env|config|default chain. Keeps QR ~30-50 chars shorter.
-  // `n` (session name) is kept: the app uses it for the pre-pair_ok preview
-  // screen (showing the agent name immediately after scan, before the
-  // handshake completes). Dropping it briefly shrank the QR but the QR
-  // size no longer matters now that the copy-paste URI is rendered via
-  // `pi.sendMessage` into the chat panel (not the QR overflow area).
+  // `r` was removed in plan/14 to shrink the QR, on the assumption that both
+  // sides are configured with the same relay. That assumption fails for any
+  // self-hosted relay, and the only symptom was a bare timeout. Kept `n`
+  // (session name) — the app previews it before pair_ok.
   const epkB64 = Buffer.from(longtermEdPk).toString("base64url");
   const params = new URLSearchParams({
     t: token,
@@ -85,66 +89,16 @@ export function buildQRUri(
     n: sessionName.slice(0, 80),
   });
   if (roomId) params.set("rm", roomId);
+  if (relayUrl) params.set("r", relayUrl);
   return `remotepi://pair?${params.toString()}`;
 }
 
 /**
- * Returns the QR ASCII as a string (pure Unicode block characters —
- * `█ ▀ ▄` and space, NO ANSI escapes — qrcode-terminal v0.12 small mode
- * is escape-free, see lib/main.js:48-53).
+ * Plan/68 — QR rendering was removed: pairing is a copy-paste step only.
  *
- * The caller can either write the string to stderr (legacy path, breaks
- * the Pi TUI layout) or inject it via `pi.sendMessage` (renders inside
- * the chat panel as proper content).
+ * Previously this section rendered the pairing URI as an ASCII QR for the
+ * terminal and for `pi.sendMessage` (via a QR-encoding dependency). Camera-less
+ * devices already had the paste path, and the QR added a dependency plus a
+ * second display path to keep in sync. Only [buildQRUri] remains — the URI
+ * string IS the pairing code now.
  */
-export function renderQRAscii(uri: string): string {
-  let out = "";
-  qrTerminal.generate(uri, { small: true }, (qrcode) => { out = qrcode; });
-  return out;
-}
-
-/**
- * Legacy stderr writer — kept for the standalone CLI mode
- * (`pi-extension/src/index.ts` bottom block, which runs outside a Pi TUI).
- * Inside the Pi TUI extension flow, use `renderQRAscii` + `pi.sendMessage`
- * instead — direct stderr writes from inside an extension break the TUI's
- * scrollable output widget (the QR overflows the panel and other writes
- * collide with the prompt area).
- */
-export function displayQR(uri: string): void {
-  const qrcode = renderQRAscii(uri);
-  process.stderr.write(`\n📱 Scan to pair:\n\n${qrcode}\n`);
-}
-
-/**
- * Starts a rotating QR session: generates a new QR every 60s, printing it
- * to stdout. Returns a `stop()` function that cancels the rotation and clears
- * the active token.
- */
-export function startQRRotation(
-  longtermEdPk: Uint8Array,
-  sessionName: string,
-  roomId?: string,
-): () => void {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let stopped = false;
-
-  const rotate = () => {
-    if (stopped) return;
-    const { token, expiresAt } = qrSession.issueToken();
-    const uri = buildQRUri(token, longtermEdPk, sessionName, roomId);
-    displayQR(uri);
-    console.log(
-      `⏱  Renews at ${new Date(expiresAt).toLocaleTimeString()} — waiting for scan…`,
-    );
-    timer = setTimeout(rotate, TOKEN_TTL_MS);
-  };
-
-  rotate();
-
-  return () => {
-    stopped = true;
-    if (timer !== null) clearTimeout(timer);
-    qrSession.clear();
-  };
-}

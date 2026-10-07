@@ -296,3 +296,66 @@ describe("Supervisor — cron ops", () => {
     expect(r).toMatchObject({ ok: false });
   });
 });
+
+// ── plan/68 — host-room workspace catalog ─────────────────────────────────────
+
+describe("Supervisor — host-room catalog (plan/68)", () => {
+  test("catalog = registered daemons ∪ added workspaces, with provenance", async () => {
+    const { _catalogEntriesForTest } = await import("./supervisor.js");
+    const { addWorkspace } = await import("./workspaces.js");
+
+    const registered = mkdtempSync(join(tmpdir(), "pi-cat-reg-"));
+    const added = mkdtempSync(join(tmpdir(), "pi-cat-add-"));
+    addDaemon(registered);
+    addWorkspace(added);
+
+    const rows = _catalogEntriesForTest(supervisor!);
+    const reg = rows.find((r) => r.cwd === registered);
+    const add = rows.find((r) => r.cwd === added);
+    expect(reg?.source).toBe("daemon");
+    expect(add?.source).toBe("added");
+    expect(add?.live).toBe(false); // never started yet
+
+    rmSync(registered, { recursive: true, force: true });
+    rmSync(added, { recursive: true, force: true });
+  });
+
+  test("a cwd in both daemons.json and workspaces.json appears once, as daemon", async () => {
+    const { _catalogEntriesForTest } = await import("./supervisor.js");
+    const { addWorkspace } = await import("./workspaces.js");
+
+    const dir = mkdtempSync(join(tmpdir(), "pi-cat-dup-"));
+    addDaemon(dir);
+    addWorkspace(dir); // same normalized realpath
+
+    const rows = _catalogEntriesForTest(supervisor!);
+    const matches = rows.filter((r) => r.cwd === dir);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]!.source).toBe("daemon");
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("Supervisor — workspace_start on an unregistered cwd (plan/68)", () => {
+  test("ensure persists into workspaces.json (not daemons.json)", async () => {
+    const { _fleetOpsForTest } = await import("./supervisor.js");
+
+    const dir = mkdtempSync(join(tmpdir(), "pi-startws-"));
+    const ops = _fleetOpsForTest(supervisor!);
+    const ensured = ops.ensure(dir);
+    expect(ensured.ok).toBe(true);
+    if (!ensured.ok) throw new Error("ensure failed");
+
+    // Persisted as an added workspace, NOT a supervised daemon. (We do not
+    // call `start` here: it spawns a real child whose cwd lock would hold this
+    // directory. The start path is covered by host_control_68 with a fake
+    // fleet, and end-to-end by host_bridge_68.)
+    const { listWorkspaces } = await import("./workspaces.js");
+    expect(listWorkspaces().map((w) => w.cwd)).toContain(ensured.cwd);
+    const daemons = await ask({ op: "list" }) as ControlReply<{ daemons: unknown[] }>;
+    expect(daemons.ok && daemons.data!.daemons).toHaveLength(0);
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

@@ -51,6 +51,12 @@ late Directory _dir;
 Future<void> _settle() =>
     Future<void>.delayed(const Duration(milliseconds: 30));
 
+/// Waits past `SyncService._workingOffDelay` (plan/32 Q4 — the `working:false`
+/// transition is applied lazily, so a plain [_settle] returns before the
+/// indicator has cleared).
+Future<void> _settleWorkingOff() =>
+    Future<void>.delayed(const Duration(milliseconds: 300));
+
 void main() {
   setUpAll(() async {
     _dir = Directory.systemTemp.createTempSync('rp_v2_sync_');
@@ -813,7 +819,7 @@ void main() {
           hasThinking: false,
         ),
       );
-      await _settle();
+      await _settleWorkingOff();
       expect(s.conn.isRoomWorking(s.epk, 'main'), isFalse);
       expect(s.sync.isWorking, isFalse);
       expect(s.sync.streaming, isNull);
@@ -901,8 +907,14 @@ void main() {
     test(
       '(c) timers are cancelled on session switch and on dispose (no leak)',
       () async {
+        // This case asserts *cancellation* only (timer count drops to 0), so a
+        // long window is safe: it can never mask a real removal. A tight one
+        // would race the `_settle()` below when the whole suite runs in
+        // parallel and the event loop is loaded.
+        const loose = Duration(seconds: 5);
+
         // Session switch path.
-        final s = await setup(pendingSendTimeout: short);
+        final s = await setup(pendingSendTimeout: loose);
         await s.sync.sendMessage('one');
         await _settle();
         expect(s.sync.debugPendingSendTimerCount, 1);
@@ -916,7 +928,7 @@ void main() {
         );
 
         // dispose path (fresh service so the switch above doesn't mask it).
-        final s2 = await setup(pendingSendTimeout: short);
+        final s2 = await setup(pendingSendTimeout: loose);
         await s2.sync.sendMessage('two');
         await _settle();
         expect(s2.sync.debugPendingSendTimerCount, 1);
