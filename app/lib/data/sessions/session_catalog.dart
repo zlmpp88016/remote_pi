@@ -63,7 +63,11 @@ class SessionCatalog {
       throw const WorkspaceControlFailure('offline');
     }
     final id = (request.toJson()['id'] as String?) ?? '';
-    if (room != null) _conn.switchRoom(room);
+    // A room override (the `host` room for workspace ops) mutates the
+    // connection's GLOBAL active room — the one every outbound envelope
+    // carries, including chat. Restore it when we're done, or the app
+    // would keep talking to `host` forever after one picker visit.
+    final prevRoom = room == null ? null : _conn.activeRoomId;
     final done = Completer<T>();
     late final StreamSubscription sub;
     sub = ch.serverMessages.listen((msg) {
@@ -75,10 +79,17 @@ class SessionCatalog {
       }
     });
     try {
+      if (room != null) _conn.switchRoom(room);
       await ch.send(request);
       return await done.future.timeout(_timeout);
     } finally {
       await sub.cancel();
+      // Guarded so a caller that deliberately moved the active room while
+      // this request was in flight keeps its choice (and so overlapping
+      // requests don't restore a stale value over each other).
+      if (prevRoom != null && _conn.activeRoomId == room) {
+        _conn.switchRoom(prevRoom);
+      }
     }
   }
 }
