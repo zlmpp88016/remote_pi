@@ -151,9 +151,10 @@ done
 echo
 echo "   O .ipa NAO esta assinado. Assine na instalacao (Sideloadly/AltStore/Xcode)."
 
-# Envia pro grupo "三班" no QQ. Falha aqui NAO invalida o build: o .ipa ja esta
-# em dist/ e o usuario pode envia-lo a mao. Por isso o erro vira aviso, nao
-# `exit 1` — perder o arquivo por causa do QQ seria pior que nao notificar.
+# Envia pro grupo "三班" no QQ, na pasta `remote-pi.app.ios` (NAPCAT_FOLDER
+# ajusta). Falha aqui NAO invalida o build: o .ipa ja esta em dist/ e o usuario
+# pode envia-lo a mao. Por isso o erro vira aviso, nao `exit 1` — perder o
+# arquivo por causa do QQ seria pior que nao notificar.
 if [ "$DO_QQ" = "1" ]; then
   echo
   echo ">> enviando pro grupo \"三班\" (QQ, via NapCat)..."

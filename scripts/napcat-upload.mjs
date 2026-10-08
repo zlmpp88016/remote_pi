@@ -9,15 +9,24 @@
 // grupo sem passo manual. O `scripts/ios-ipa.sh` chama este script assim que o
 // download termina (ver "Enviar pro QQ" no fim dele).
 //
+// O IPA vai para a pasta `NAPCAT_FOLDER` (default "remote-pi.app.ios"). A pasta
+// e criada se nao existir — a busca e por nome exato. O grupo de pastas do QQ
+// e de UM nivel so: a API (OneBot -> NapCat core -> kernel do QQ) so aceita
+// (group_id, nome), sem parametro de pai. Por isso o caminho virou um nome
+// pontuado em vez de pastas aninhadas.
+//
 // Por que em Node e nao em bash+curl: o `upload_group_file` exige um URI
 // `file:///...`. Passar um caminho Windows por bash/curl quebra no escape das
 // contrabarras (`D:\a\b` vira `D:workspacegit...`, e o NapCat responde
-// "识别URL失败"). Aqui o URI e montado em JS, sem shell no meio.
+// "识别URL失败"). Aqui o URI e montado em JS, sem shell no meio. O `node -e`
+// inline tambem come as contrabarras, entao nem assim: este arquivo existe
+// justamente para manter os caminhos fora do shell.
 //
 // Config (env sobrescreve):
-//   NAPCAT_ENDPOINT  default http://127.0.0.1:3001
-//   NAPCAT_TOKEN     default 8250u-napcat-token   (token LOCAL do NapCat)
-//   NAPCAT_GROUP_ID  default 317661279            (grupo "三班")
+//   NAPCAT_ENDPOINT   default http://127.0.0.1:3001
+//   NAPCAT_TOKEN      default 8250u-napcat-token   (token LOCAL do NapCat)
+//   NAPCAT_GROUP_ID   default 317661279            (grupo "三班")
+//   NAPCAT_FOLDER     default remote-pi.app.ios    (pasta no grupo; vazio = raiz)
 //
 // Requisitos: o NapCat precisa estar rodando e logado, com o servidor HTTP
 // habilitado. Teste rapido:
@@ -30,10 +39,12 @@ import { pathToFileURL } from "node:url";
 const DEFAULT_ENDPOINT = "http://127.0.0.1:3001";
 const DEFAULT_TOKEN = "8250u-napcat-token";
 const DEFAULT_GROUP_ID = 317661279; // "三班"
+const DEFAULT_FOLDER = "remote-pi.app.ios";
 
 const ENDPOINT = (process.env.NAPCAT_ENDPOINT ?? DEFAULT_ENDPOINT).replace(/\/+$/, "");
 const TOKEN = process.env.NAPCAT_TOKEN ?? DEFAULT_TOKEN;
 const GROUP_ID = Number(process.env.NAPCAT_GROUP_ID ?? DEFAULT_GROUP_ID);
+const FOLDER = process.env.NAPCAT_FOLDER ?? DEFAULT_FOLDER;
 
 /** Chama uma action do OneBot v11. Devolve o JSON ja parseado. */
 async function call(action, body, { timeoutMs = 120_000 } = {}) {
@@ -78,6 +89,36 @@ async function resolveGroup() {
   return hit;
 }
 
+/**
+ * Devolve o folder_id da pasta alvo, criando-a se faltar.
+ *
+ * A busca e necessaria porque `create_group_file_folder` e silencioso em dois
+ * casos ruins: repetir um nome existente e usar um separador proibido (`\`, `/`,
+ * `>`) devolvem `status: ok` com folder_id vazio — nao ha erro para checar. Por
+ * isso nunca criamos as cegas: procuramos primeiro na raiz.
+ */
+async function resolveFolder() {
+  if (!FOLDER) return undefined;
+
+  const root = assertOk("get_group_root_files", await call("get_group_root_files", { group_id: GROUP_ID }));
+  const existing = (root?.folders ?? []).find((f) => f.folder_name === FOLDER);
+  if (existing) return existing.folder_id;
+
+  const made = assertOk(
+    "create_group_file_folder",
+    await call("create_group_file_folder", { group_id: GROUP_ID, name: FOLDER }),
+  );
+  const folderId = made?.groupItem?.folderInfo?.folderId;
+  if (!folderId) {
+    throw new Error(
+      `nao consegui criar a pasta "${FOLDER}". O QQ rejeita ` +
+        "`\\`, `/` e `>` no nome (responde ok, mas nao cria).",
+    );
+  }
+  console.log(`>> pasta criada: ${FOLDER}`);
+  return folderId;
+}
+
 async function upload(filePath, { name, dryRun }) {
   const abs = resolve(filePath);
   if (!existsSync(abs)) throw new Error(`arquivo nao existe: ${abs}`);
@@ -87,6 +128,8 @@ async function upload(filePath, { name, dryRun }) {
 
   const group = await resolveGroup();
   console.log(`>> grupo alvo: ${group.group_name} (${group.group_id})`);
+  const folderId = await resolveFolder();
+  console.log(`>> destino: ${FOLDER || "(raiz do grupo)"}`);
   console.log(`>> arquivo: ${fileName} (${(size / 1024 / 1024).toFixed(1)} MB)`);
 
   if (dryRun) {
@@ -99,7 +142,12 @@ async function upload(filePath, { name, dryRun }) {
   const uri = pathToFileURL(abs).href;
   const data = assertOk(
     "upload_group_file",
-    await call("upload_group_file", { group_id: group.group_id, file: uri, name: fileName }),
+    await call("upload_group_file", {
+      group_id: group.group_id,
+      file: uri,
+      name: fileName,
+      folder_id: folderId,
+    }),
   );
   console.log(`>> enviado. file_id: ${data?.file_id ?? "(sem file_id)"}`);
   return data;
@@ -110,7 +158,12 @@ async function upload(filePath, { name, dryRun }) {
 const argv = process.argv.slice(2);
 if (argv.length === 0 || argv.includes("-h") || argv.includes("--help")) {
   const src = readFileSync(new URL(import.meta.url), "utf8");
-  console.log(src.split("\n").slice(1, 24).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+  const header = [];
+  for (const line of src.split("\n").slice(1)) {
+    if (!line.startsWith("//")) break;
+    header.push(line.replace(/^\/\/ ?/, ""));
+  }
+  console.log(header.join("\n"));
   process.exit(argv.length === 0 ? 2 : 0);
 }
 
