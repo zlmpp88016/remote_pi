@@ -110,11 +110,10 @@ Future<PairingResult> performPairing({
   };
   await transport.send(Uint8List.fromList(utf8.encode(jsonEncode(req))));
 
-  final raw = await transport.receive();
-  final inner = jsonDecode(utf8.decode(raw)) as Map<String, dynamic>;
-  final type = inner['type'] as String?;
+  final inner = await _nextPairReply(transport, id);
+  final type = inner['type'];
 
-  if (type == 'pair_ok' && inner['in_reply_to'] == id) {
+  if (type == 'pair_ok') {
     // Parse via the canonical decoder so PairOk schema evolutions
     // (plan/27 Wave A: `harness`, `hostname`) land in one place.
     final pairOk = PairOk.fromJson(inner);
@@ -149,17 +148,47 @@ Future<PairingResult> performPairing({
     return PairingResult(peer: peer, hostnameHint: pairOk.hostname);
   }
 
-  if (type == 'pair_error') {
-    throw PairingError(
-      code: inner['code'] as String,
-      message: inner['message'] as String? ?? '',
-    );
-  }
-
+  // The helper only returns `pair_ok` or `pair_error`, so reaching here
+  // means the Pi refused the request.
   throw PairingError(
-    code: 'unexpected_response',
-    message: 'Unknown response type: $type',
+    code: inner['code'] as String? ?? 'pair_error',
+    message: inner['message'] as String? ?? '',
   );
+}
+
+/// Reads frames until the reply to [id] arrives.
+///
+/// The pairing transport is a full-duplex relay channel, not a
+/// request/response pipe: while the `pair_request` -> `pair_ok` exchange is
+/// in flight, the Pi also pushes broadcasts on that same channel. The most
+/// immediate one is the `runtime_status` seed it sends the moment the device
+/// is attached — which lands BEFORE the `pair_ok`, because attachment happens
+/// before the reply is written. Reading a single frame made the app report
+/// "Unknown response type: runtime_status" and drop an otherwise successful
+/// pairing.
+///
+/// Skip every frame that is not the correlated reply. The caller wraps this
+/// in `.timeout(...)`, which keeps the loop bounded when the Pi never answers.
+Future<Map<String, dynamic>> _nextPairReply(
+  PeerTransport transport,
+  String id,
+) async {
+  while (true) {
+    final raw = await transport.receive();
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(utf8.decode(raw));
+    } catch (_) {
+      // Undecodable frame — by definition not the correlated reply. The
+      // caller's `.timeout(...)` still bounds the loop, so noise can never
+      // hang pairing.
+      continue;
+    }
+    if (decoded is! Map<String, dynamic>) continue;
+    final type = decoded['type'];
+    final isReply = type == 'pair_ok' || type == 'pair_error';
+    if (isReply && decoded['in_reply_to'] == id) return decoded;
+  }
 }
 
 /// Convenience overload that derives `currentRelayUrl` from a

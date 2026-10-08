@@ -231,4 +231,134 @@ void main() {
       },
     );
   });
+
+  group('performPairing — frames interleaved with the reply', () {
+    // The relay channel carries broadcasts on the SAME socket as the reply.
+    // `_attachOwner` seeds the freshly attached device with a
+    // `runtime_status` BEFORE `pair_ok` is written, so this exact order is
+    // what a real Pi emits. Reading a single frame used to make the app throw
+    // `unexpected_response` and silently drop a successful pairing (the peer
+    // never got persisted, and the mesh self-revoked the PC ~60s later).
+    test(
+      'skips a runtime_status broadcast that arrives before pair_ok',
+      () async {
+        final q1 = _Q();
+        final q2 = _Q();
+        final pi = _MemTransport(send: q1, recv: q2);
+        final app = _MemTransport(send: q2, recv: q1);
+        final qr = _qr(relayUrl: 'wss://relay.example');
+        final storage = _FakeStorage();
+
+        unawaited(() async {
+          final raw = await pi.receive();
+          final req = jsonDecode(utf8.decode(raw)) as Map<String, dynamic>;
+          // 1) The seed broadcast — same order as `_attachPeerChannel`.
+          await pi.send(Uint8List.fromList(utf8.encode(jsonEncode({
+            'type': 'runtime_status',
+            'status': {'model': 'claude-opus-4'},
+          }))));
+          // 2) Then the actual reply.
+          await pi.send(Uint8List.fromList(utf8.encode(jsonEncode({
+            'type': 'pair_ok',
+            'in_reply_to': req['id'],
+            'session_name': 'Pi',
+            'room_id': 'room-1',
+          }))));
+        }());
+
+        final result = await performPairing(
+          qr: qr,
+          transport: app,
+          storage: storage,
+          deviceName: 'phone',
+          currentRelayUrl: 'wss://relay.example',
+        );
+        expect(result.peer.sessionName, 'Pi');
+        expect(result.peer.roomId, 'room-1');
+        expect(storage.saved, hasLength(1),
+            reason: 'the peer must persist despite the interleaved frame');
+      },
+    );
+
+    test(
+      'skips several unrelated broadcasts before the reply',
+      () async {
+        final q1 = _Q();
+        final q2 = _Q();
+        final pi = _MemTransport(send: q1, recv: q2);
+        final app = _MemTransport(send: q2, recv: q1);
+        final qr = _qr(relayUrl: 'wss://relay.example');
+
+        unawaited(() async {
+          final raw = await pi.receive();
+          final req = jsonDecode(utf8.decode(raw)) as Map<String, dynamic>;
+          for (final noise in [
+            {'type': 'runtime_status', 'status': {}},
+            {'type': 'room_meta', 'name': 'Pi'},
+            {'type': 'queued_message_state', 'items': <dynamic>[]},
+            // A reply to a DIFFERENT request must not be mistaken for ours.
+            {'type': 'pair_ok', 'in_reply_to': 'someone-else'},
+          ]) {
+            await pi.send(
+                Uint8List.fromList(utf8.encode(jsonEncode(noise))));
+          }
+          await pi.send(Uint8List.fromList(utf8.encode(jsonEncode({
+            'type': 'pair_ok',
+            'in_reply_to': req['id'],
+            'session_name': 'Pi',
+          }))));
+        }());
+
+        final result = await performPairing(
+          qr: qr,
+          transport: app,
+          storage: _FakeStorage(),
+          deviceName: 'phone',
+          currentRelayUrl: 'wss://relay.example',
+        );
+        expect(result.peer.sessionName, 'Pi');
+      },
+    );
+
+    test(
+      'still surfaces pair_error when it is interleaved with broadcasts',
+      () async {
+        final q1 = _Q();
+        final q2 = _Q();
+        final pi = _MemTransport(send: q1, recv: q2);
+        final app = _MemTransport(send: q2, recv: q1);
+        final qr = _qr(relayUrl: 'wss://relay.example');
+
+        unawaited(() async {
+          final raw = await pi.receive();
+          final req = jsonDecode(utf8.decode(raw)) as Map<String, dynamic>;
+          await pi.send(Uint8List.fromList(utf8.encode(jsonEncode({
+            'type': 'runtime_status',
+            'status': {},
+          }))));
+          await pi.send(Uint8List.fromList(utf8.encode(jsonEncode({
+            'type': 'pair_error',
+            'in_reply_to': req['id'],
+            'code': 'bad_token',
+            'message': 'token expired',
+          }))));
+        }());
+
+        await expectLater(
+          performPairing(
+            qr: qr,
+            transport: app,
+            storage: _FakeStorage(),
+            deviceName: 'phone',
+            currentRelayUrl: 'wss://relay.example',
+          ),
+          throwsA(
+            isA<PairingError>()
+                .having((e) => e.code, 'code', 'bad_token')
+                .having((e) => e.message, 'message', 'token expired'),
+          ),
+        );
+      },
+    );
+  });
 }

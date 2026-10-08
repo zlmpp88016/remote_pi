@@ -192,6 +192,29 @@ export async function runE2E({ log } = {}) {
       pairOk?.type === "pair_ok" && pairOk.room_id === piRoom,
       pairOk ? `room_id=${pairOk.room_id} harness=${pairOk.harness?.version}` : "sem resposta",
     );
+
+    // O canal de pareamento != um pipe request/response: o Pi também EMPURRA
+    // broadcasts nele. O `_attachOwner` semeia o device recém-attachado com um
+    // `runtime_status` (index.ts:1319) que chega ANTES do `pair_ok` — foi o que
+    // fazia o app, que lia um único frame, morrer com
+    // "Unknown response type: runtime_status" e derrubar um pareamento que já
+    // tinha dado certo. Este passo trava a ORDEM real: se a semeadura voltar a
+    // acontecer (ou passar a acontecer depois), o teste avisa.
+    const decodedInbox = pi.inbox
+      .map((o) => {
+        try { return JSON.parse(Buffer.from(o.ct, "base64").toString()); }
+        catch { return null; }
+      })
+      .filter(Boolean);
+    const idxReply = decodedInbox.findIndex(
+      (m) => m.type === "pair_ok" && m.in_reply_to === "pair-1",
+    );
+    const idxSeed = decodedInbox.findIndex((m) => m.type === "runtime_status");
+    record(
+      "1b. o runtime_status semeado chega ANTES do pair_ok (app precisa tolerar)",
+      idxSeed !== -1 && idxReply !== -1 && idxSeed < idxReply,
+      `runtime_status@${idxSeed} pair_ok@${idxReply}`,
+    );
     await new Promise((r) => setTimeout(r, 150));
 
     // ── 2. fs_list navega o filesystem do host ─────────────────────────────
