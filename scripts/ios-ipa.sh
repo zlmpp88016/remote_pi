@@ -2,8 +2,9 @@
 set -euo pipefail
 
 # Dispara o workflow "Build iOS IPA" no GitHub, espera terminar e baixa o
-# .ipa resultante para dist/ na raiz do repositorio. Ao final, envia o .ipa
-# para o grupo "三班" no QQ via NapCat (a menos que --no-qq seja passado).
+# .ipa resultante para dist/ na raiz do repositorio, com timestamp ate o
+# segundo no nome (RemotePi-unsigned-AAAAMMDD-HHMMSS.ipa). Ao final, envia o
+# .ipa para o grupo "三班" no QQ via NapCat (a menos que --no-qq seja passado).
 #
 # Uso:
 #   scripts/ios-ipa.sh                    # dispara, espera, baixa, envia pro QQ
@@ -129,6 +130,18 @@ echo ">> baixando artefato '$ARTIFACT' para $DIST/"
 # Limpa .ipa antigos para nao acumular builds indistinguiveis.
 rm -f "$DIST"/*.ipa
 gh run download "$RUN_ID" -n "$ARTIFACT" -D "$DIST"
+
+# Renomeia com timestamp ate o segundo. Sem isso, todo build sai como
+# `RemotePi-unsigned.ipa`: no disco um sobrescreve o outro, e no grupo do QQ
+# vira uma pilha de homonimos (mesmo nome, tamanhos diferentes) impossivel de
+# distinguir depois. O `gh` so escreve o nome do artefato, entao o stamp e
+# aplicado aqui, no arquivo ja baixado.
+STAMP="$(date +%Y%m%d-%H%M%S)"
+for f in "$DIST"/*.ipa; do
+  [ -e "$f" ] || continue
+  base="$(basename "$f")"
+  mv "$f" "$DIST/${base%.ipa}-$STAMP.ipa"
+done
 
 echo
 echo ">> ok"
