@@ -2,18 +2,21 @@
 set -euo pipefail
 
 # Dispara o workflow "Build iOS IPA" no GitHub, espera terminar e baixa o
-# .ipa resultante para dist/ na raiz do repositorio.
+# .ipa resultante para dist/ na raiz do repositorio. Ao final, envia o .ipa
+# para o grupo "三班" no QQ via NapCat (a menos que --no-qq seja passado).
 #
 # Uso:
-#   scripts/ios-ipa.sh                    # dispara, espera, baixa
+#   scripts/ios-ipa.sh                    # dispara, espera, baixa, envia pro QQ
 #   scripts/ios-ipa.sh --download-only    # so baixa o ultimo run bem-sucedido
 #   scripts/ios-ipa.sh --no-wait          # dispara e sai (nao baixa)
+#   scripts/ios-ipa.sh --no-qq            # nao envia pro QQ
 #   scripts/ios-ipa.sh --branch <ref>     # branch/tag alvo (default: branch atual)
 #   scripts/ios-ipa.sh --run <id>         # baixa um run especifico
 #
 # Exemplos:
 #   scripts/ios-ipa.sh
 #   scripts/ios-ipa.sh --download-only --run 37147157376
+#   scripts/ios-ipa.sh --no-qq
 #
 # Por que existe: o artefato do CI e um .ipa SEM assinatura (o runner nao tem
 # certificado). A assinatura fica por conta de quem instala — Sideloadly,
@@ -28,9 +31,10 @@ BRANCH=""
 RUN_ID=""
 DO_WAIT=1
 DO_DOWNLOAD=1
+DO_QQ=1
 
 usage() {
-  sed -n '3,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '3,22p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
   exit "${1:-0}"
 }
 
@@ -38,6 +42,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --download-only) DO_WAIT=0; shift ;;
     --no-wait)       DO_DOWNLOAD=0; shift ;;
+    --no-qq)         DO_QQ=0; shift ;;
     --branch)        BRANCH="${2:?--branch exige um valor}"; shift 2 ;;
     --run)           RUN_ID="${2:?--run exige um id}"; DO_WAIT=0; shift 2 ;;
     --help|-h)       usage 0 ;;
@@ -132,3 +137,18 @@ find "$DIST" -maxdepth 1 -name '*.ipa' -print0 | while IFS= read -r -d '' f; do
 done
 echo
 echo "   O .ipa NAO esta assinado. Assine na instalacao (Sideloadly/AltStore/Xcode)."
+
+# Envia pro grupo "三班" no QQ. Falha aqui NAO invalida o build: o .ipa ja esta
+# em dist/ e o usuario pode envia-lo a mao. Por isso o erro vira aviso, nao
+# `exit 1` — perder o arquivo por causa do QQ seria pior que nao notificar.
+if [ "$DO_QQ" = "1" ]; then
+  echo
+  echo ">> enviando pro grupo \"三班\" (QQ, via NapCat)..."
+  ipa="$(find "$DIST" -maxdepth 1 -name '*.ipa' | head -1)"
+  if node "$ROOT/scripts/napcat-upload.mjs" "$ipa"; then
+    echo "   arquivo enviado pro QQ."
+  else
+    echo "   AVISO: nao consegui enviar pro QQ (NapCat fora do ar? veja acima)." >&2
+    echo "          o .ipa continua em $ipa — envie manualmente se precisar." >&2
+  fi
+fi
