@@ -42,6 +42,7 @@ class TranslationsPtBr extends Translations with BaseTranslations<AppLocale, Tra
 	@override late final _Translations$core$pt_BR core = _Translations$core$pt_BR._(_root);
 	@override late final _Translations$common$pt_BR common = _Translations$common$pt_BR._(_root);
 	@override late final _Translations$cockpit$pt_BR cockpit = _Translations$cockpit$pt_BR._(_root);
+	@override late final _Translations$remotePiHost$pt_BR remotePiHost = _Translations$remotePiHost$pt_BR._(_root);
 	@override late final _Translations$settings$pt_BR settings = _Translations$settings$pt_BR._(_root);
 	@override late final _Translations$automation$pt_BR automation = _Translations$automation$pt_BR._(_root);
 	@override late final _Translations$fileOperation$pt_BR fileOperation = _Translations$fileOperation$pt_BR._(_root);
@@ -137,6 +138,25 @@ class _Translations$cockpit$pt_BR extends Translations$cockpit$en {
 	@override late final _Translations$cockpit$notebook$pt_BR notebook = _Translations$cockpit$notebook$pt_BR._(_root);
 	@override late final _Translations$cockpit$layoutPreview$pt_BR layoutPreview = _Translations$cockpit$layoutPreview$pt_BR._(_root);
 	@override late final _Translations$cockpit$telemetry$pt_BR telemetry = _Translations$cockpit$telemetry$pt_BR._(_root);
+}
+
+// Path: remotePiHost
+class _Translations$remotePiHost$pt_BR extends Translations$remotePiHost$en {
+	_Translations$remotePiHost$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
+
+	final TranslationsPtBr _root; // ignore: unused_field
+
+	// Translations
+	@override late final _Translations$remotePiHost$header$pt_BR header = _Translations$remotePiHost$header$pt_BR._(_root);
+	@override late final _Translations$remotePiHost$connect$pt_BR connect = _Translations$remotePiHost$connect$pt_BR._(_root);
+	@override late final _Translations$remotePiHost$daemon$pt_BR daemon = _Translations$remotePiHost$daemon$pt_BR._(_root);
+	@override late final _Translations$remotePiHost$actions$pt_BR actions = _Translations$remotePiHost$actions$pt_BR._(_root);
+	@override late final _Translations$remotePiHost$workspaces$pt_BR workspaces = _Translations$remotePiHost$workspaces$pt_BR._(_root);
+	@override late final _Translations$remotePiHost$workspaceState$pt_BR workspaceState = _Translations$remotePiHost$workspaceState$pt_BR._(_root);
+	@override late final _Translations$remotePiHost$detail$pt_BR detail = _Translations$remotePiHost$detail$pt_BR._(_root);
+	@override late final _Translations$remotePiHost$fs$pt_BR fs = _Translations$remotePiHost$fs$pt_BR._(_root);
+	@override late final _Translations$remotePiHost$chat$pt_BR chat = _Translations$remotePiHost$chat$pt_BR._(_root);
+	@override late final _Translations$remotePiHost$error$pt_BR error = _Translations$remotePiHost$error$pt_BR._(_root);
 }
 
 // Path: settings
@@ -458,6 +478,7 @@ class _Translations$cockpit$welcomeView$pt_BR extends Translations$cockpit$welco
 	@override String get createWorkspace => 'Criar workspace';
 	@override String get openLocalFolder => 'Abrir pasta local';
 	@override String get connectHost => 'Conectar a um host';
+	@override String get connectRemotePi => 'Host Remote Pi';
 	@override String get configureHost => 'Configurar host';
 	@override String get addWorkspace => 'Adicionar workspace';
 }
@@ -1263,6 +1284,143 @@ class _Translations$cockpit$telemetry$pt_BR extends Translations$cockpit$telemet
 	@override String caseTabTitle({required Object type, required Object file}) => '${type} · ${file}';
 }
 
+// Path: remotePiHost.header
+class _Translations$remotePiHost$header$pt_BR extends Translations$remotePiHost$header$en {
+	_Translations$remotePiHost$header$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
+
+	final TranslationsPtBr _root; // ignore: unused_field
+
+	// Translations
+	@override String get back => 'Voltar';
+	@override String get title => 'Remote Pi';
+}
+
+// Path: remotePiHost.connect
+class _Translations$remotePiHost$connect$pt_BR extends Translations$remotePiHost$connect$en {
+	_Translations$remotePiHost$connect$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
+
+	final TranslationsPtBr _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => 'Conectar a um host Remote Pi';
+	@override String get subtitle => 'Cole o código de pareamento gerado na máquina host com `remote-pi pair`. O daemon é residente (tipo sshd): nenhum processo Pi precisa estar rodando, e um Pi morto nunca derruba a conexão.';
+	@override String get relayPlaceholder => 'Endereço do relay (wss://…)';
+	@override String get codePlaceholder => 'Código de pareamento (remotepi://pair?…)';
+	@override String get submit => 'Conectar';
+	@override String get connecting => 'Conectando…';
+	@override String get hint => 'Na máquina host, rode `remote-pi pair` (sem Pi nenhum) e cole a URI aqui. O código é persistente até ser rotacionado com `remote-pi pair --rotate`; `--ephemeral` emite um código de uso único com 60 segundos de validade.';
+}
+
+// Path: remotePiHost.daemon
+class _Translations$remotePiHost$daemon$pt_BR extends Translations$remotePiHost$daemon$en {
+	_Translations$remotePiHost$daemon$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
+
+	final TranslationsPtBr _root; // ignore: unused_field
+
+	// Translations
+	@override String get unknown => 'daemon desconhecido';
+}
+
+// Path: remotePiHost.actions
+class _Translations$remotePiHost$actions$pt_BR extends Translations$remotePiHost$actions$en {
+	_Translations$remotePiHost$actions$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
+
+	final TranslationsPtBr _root; // ignore: unused_field
+
+	// Translations
+	@override String get refresh => 'Atualizar';
+	@override String get disconnect => 'Desconectar';
+	@override String get restart => 'Reiniciar';
+}
+
+// Path: remotePiHost.workspaces
+class _Translations$remotePiHost$workspaces$pt_BR extends Translations$remotePiHost$workspaces$en {
+	_Translations$remotePiHost$workspaces$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
+
+	final TranslationsPtBr _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => 'WORKSPACES';
+	@override String get empty => 'Nenhum workspace ainda. Navegue o filesystem do host e inicie um Pi em qualquer diretório.';
+}
+
+// Path: remotePiHost.workspaceState
+class _Translations$remotePiHost$workspaceState$pt_BR extends Translations$remotePiHost$workspaceState$en {
+	_Translations$remotePiHost$workspaceState$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
+
+	final TranslationsPtBr _root; // ignore: unused_field
+
+	// Translations
+	@override String get running => 'rodando';
+	@override String get starting => 'iniciando';
+	@override String get crashed => 'caiu';
+	@override String get stopped => 'parado';
+	@override String get crashedNoError => 'caiu — sem detalhe de erro';
+}
+
+// Path: remotePiHost.detail
+class _Translations$remotePiHost$detail$pt_BR extends Translations$remotePiHost$detail$en {
+	_Translations$remotePiHost$detail$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
+
+	final TranslationsPtBr _root; // ignore: unused_field
+
+	// Translations
+	@override String get selectWorkspace => 'Selecione um workspace para navegar o filesystem e conversar com o Pi dele.';
+}
+
+// Path: remotePiHost.fs
+class _Translations$remotePiHost$fs$pt_BR extends Translations$remotePiHost$fs$en {
+	_Translations$remotePiHost$fs$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
+
+	final TranslationsPtBr _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => 'FILESYSTEM DO HOST';
+	@override String get home => 'Início';
+	@override String get up => 'Subir';
+	@override String get emptyPath => 'Navegue o filesystem do host para escolher um diretório.';
+	@override String get repoBadge => 'repo';
+	@override String get startHere => 'Iniciar Pi aqui';
+}
+
+// Path: remotePiHost.chat
+class _Translations$remotePiHost$chat$pt_BR extends Translations$remotePiHost$chat$en {
+	_Translations$remotePiHost$chat$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
+
+	final TranslationsPtBr _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => 'Chat';
+	@override String get empty => 'Nenhuma mensagem ainda. Diga algo ao Pi deste workspace.';
+	@override String get placeholder => 'Mensagem para o Pi…';
+	@override String get send => 'Enviar';
+}
+
+// Path: remotePiHost.error
+class _Translations$remotePiHost$error$pt_BR extends Translations$remotePiHost$error$en {
+	_Translations$remotePiHost$error$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
+
+	final TranslationsPtBr _root; // ignore: unused_field
+
+	// Translations
+	@override String connection({required Object detail}) => 'Não foi possível alcançar o relay: ${detail}';
+	@override String handshake({required Object detail}) => 'Handshake com o relay falhou: ${detail}';
+	@override String pairing({required Object message}) => 'O host recusou o pareamento: ${message}';
+	@override String timeout({required Object request}) => 'Sem resposta para ${request} — o host não respondeu a tempo.';
+	@override String protocol({required Object detail}) => 'Resposta inesperada do host: ${detail}';
+	@override String get closed => 'A conexão foi fechada. Tente conectar de novo.';
+	@override String get notFound => 'Caminho não encontrado no host.';
+	@override String get notADirectory => 'O caminho existe mas não é um diretório.';
+	@override String get permissionDenied => 'O host não consegue ler este diretório.';
+	@override String get spawnFailed => 'O host não conseguiu iniciar o Pi neste diretório.';
+	@override String rejected({required Object code}) => 'O host rejeitou a ação: ${code}';
+	@override String get codeNotAUri => 'O código colado não é uma URI.';
+	@override String get codeWrongScheme => 'Esperado uma URI remotepi://pair?…';
+	@override String get codeMissingField => 'O código não tem os campos t/epk/n.';
+	@override String get codeBadToken => 'O token do código está malformado.';
+	@override String get codeBadEpk => 'A chave do host no código está malformada.';
+}
+
 // Path: settings.language
 class _Translations$settings$language$pt_BR extends Translations$settings$language$en {
 	_Translations$settings$language$pt_BR._(TranslationsPtBr root) : this._root = root, super.internal(root);
@@ -2024,6 +2182,7 @@ extension on TranslationsPtBr {
 			'cockpit.welcomeView.createWorkspace' => 'Criar workspace',
 			'cockpit.welcomeView.openLocalFolder' => 'Abrir pasta local',
 			'cockpit.welcomeView.connectHost' => 'Conectar a um host',
+			'cockpit.welcomeView.connectRemotePi' => 'Host Remote Pi',
 			'cockpit.welcomeView.configureHost' => 'Configurar host',
 			'cockpit.welcomeView.addWorkspace' => 'Adicionar workspace',
 			'cockpit.paneView.closePaneTitle' => 'Fechar painel?',
@@ -2362,9 +2521,9 @@ extension on TranslationsPtBr {
 			'cockpit.projectsRail.updateFromParent' => 'Atualizar a partir do pai',
 			'cockpit.projectsRail.forkWorktree' => 'Criar worktree derivada',
 			'cockpit.projectsRail.copyBranch' => 'Copiar branch',
-			'cockpit.projectsRail.remove' => 'Remover',
 			_ => null,
 		} ?? switch (path) {
+			'cockpit.projectsRail.remove' => 'Remover',
 			'cockpit.projectsRail.moveToRealm' => 'Mover para realm',
 			'cockpit.projectsRail.copyWorkspaceId' => 'Copiar id do workspace',
 			'cockpit.projectsRail.rename' => 'Renomear',
@@ -2600,6 +2759,53 @@ extension on TranslationsPtBr {
 			'cockpit.telemetry.byHuman' => 'por você',
 			'cockpit.telemetry.byAgent' => 'pelo agente',
 			'cockpit.telemetry.caseTabTitle' => ({required Object type, required Object file}) => '${type} · ${file}',
+			'remotePiHost.header.back' => 'Voltar',
+			'remotePiHost.header.title' => 'Remote Pi',
+			'remotePiHost.connect.title' => 'Conectar a um host Remote Pi',
+			'remotePiHost.connect.subtitle' => 'Cole o código de pareamento gerado na máquina host com `remote-pi pair`. O daemon é residente (tipo sshd): nenhum processo Pi precisa estar rodando, e um Pi morto nunca derruba a conexão.',
+			'remotePiHost.connect.relayPlaceholder' => 'Endereço do relay (wss://…)',
+			'remotePiHost.connect.codePlaceholder' => 'Código de pareamento (remotepi://pair?…)',
+			'remotePiHost.connect.submit' => 'Conectar',
+			'remotePiHost.connect.connecting' => 'Conectando…',
+			'remotePiHost.connect.hint' => 'Na máquina host, rode `remote-pi pair` (sem Pi nenhum) e cole a URI aqui. O código é persistente até ser rotacionado com `remote-pi pair --rotate`; `--ephemeral` emite um código de uso único com 60 segundos de validade.',
+			'remotePiHost.daemon.unknown' => 'daemon desconhecido',
+			'remotePiHost.actions.refresh' => 'Atualizar',
+			'remotePiHost.actions.disconnect' => 'Desconectar',
+			'remotePiHost.actions.restart' => 'Reiniciar',
+			'remotePiHost.workspaces.title' => 'WORKSPACES',
+			'remotePiHost.workspaces.empty' => 'Nenhum workspace ainda. Navegue o filesystem do host e inicie um Pi em qualquer diretório.',
+			'remotePiHost.workspaceState.running' => 'rodando',
+			'remotePiHost.workspaceState.starting' => 'iniciando',
+			'remotePiHost.workspaceState.crashed' => 'caiu',
+			'remotePiHost.workspaceState.stopped' => 'parado',
+			'remotePiHost.workspaceState.crashedNoError' => 'caiu — sem detalhe de erro',
+			'remotePiHost.detail.selectWorkspace' => 'Selecione um workspace para navegar o filesystem e conversar com o Pi dele.',
+			'remotePiHost.fs.title' => 'FILESYSTEM DO HOST',
+			'remotePiHost.fs.home' => 'Início',
+			'remotePiHost.fs.up' => 'Subir',
+			'remotePiHost.fs.emptyPath' => 'Navegue o filesystem do host para escolher um diretório.',
+			'remotePiHost.fs.repoBadge' => 'repo',
+			'remotePiHost.fs.startHere' => 'Iniciar Pi aqui',
+			'remotePiHost.chat.title' => 'Chat',
+			'remotePiHost.chat.empty' => 'Nenhuma mensagem ainda. Diga algo ao Pi deste workspace.',
+			'remotePiHost.chat.placeholder' => 'Mensagem para o Pi…',
+			'remotePiHost.chat.send' => 'Enviar',
+			'remotePiHost.error.connection' => ({required Object detail}) => 'Não foi possível alcançar o relay: ${detail}',
+			'remotePiHost.error.handshake' => ({required Object detail}) => 'Handshake com o relay falhou: ${detail}',
+			'remotePiHost.error.pairing' => ({required Object message}) => 'O host recusou o pareamento: ${message}',
+			'remotePiHost.error.timeout' => ({required Object request}) => 'Sem resposta para ${request} — o host não respondeu a tempo.',
+			'remotePiHost.error.protocol' => ({required Object detail}) => 'Resposta inesperada do host: ${detail}',
+			'remotePiHost.error.closed' => 'A conexão foi fechada. Tente conectar de novo.',
+			'remotePiHost.error.notFound' => 'Caminho não encontrado no host.',
+			'remotePiHost.error.notADirectory' => 'O caminho existe mas não é um diretório.',
+			'remotePiHost.error.permissionDenied' => 'O host não consegue ler este diretório.',
+			'remotePiHost.error.spawnFailed' => 'O host não conseguiu iniciar o Pi neste diretório.',
+			'remotePiHost.error.rejected' => ({required Object code}) => 'O host rejeitou a ação: ${code}',
+			'remotePiHost.error.codeNotAUri' => 'O código colado não é uma URI.',
+			'remotePiHost.error.codeWrongScheme' => 'Esperado uma URI remotepi://pair?…',
+			'remotePiHost.error.codeMissingField' => 'O código não tem os campos t/epk/n.',
+			'remotePiHost.error.codeBadToken' => 'O token do código está malformado.',
+			'remotePiHost.error.codeBadEpk' => 'A chave do host no código está malformada.',
 			'settings.language.title' => 'Idioma',
 			'settings.language.system' => 'Sistema',
 			'settings.language.english' => 'Inglês',
@@ -2829,6 +3035,8 @@ extension on TranslationsPtBr {
 			'fileOperation.error.cannotMoveIntoItself' => 'Não é possível mover uma pasta para dentro dela mesma.',
 			'fileOperation.error.clipboardEmpty' => 'A área de transferência está vazia.',
 			'fileOperation.error.notScratchTab' => 'Esta aba não é um arquivo temporário.',
+			_ => null,
+		} ?? switch (path) {
 			'fileOperation.error.writeFailed' => 'Não foi possível gravar o arquivo.',
 			'fileOperation.error.formatterEmptyCommand' => 'Comando de formatação vazio.',
 			'fileOperation.error.formatterMissingPlaceholder' => 'O comando de formatação precisa incluir o placeholder %FILE%.',

@@ -7,9 +7,12 @@
  * picked by navigating the host filesystem.
  */
 
+import { hostname } from "node:os";
 import { roomIdFor } from "../rooms.js";
 import { daemonIdForCwd } from "./id.js";
-import type { ServerMessage, ActionName } from "../protocol/types.js";
+import { addPeer } from "../pairing/storage.js";
+import { HOST_ROOM_ID, type ServerMessage, type ActionName, type PairErrorCode } from "../protocol/types.js";
+import type { HostTokenStatus } from "../pairing/host_pairing.js";
 
 export interface FleetEntry {
   id: string;
@@ -34,6 +37,94 @@ export interface FleetOps {
 
 export interface HostReplySender {
   send(msg: ServerMessage): void;
+}
+
+/**
+ * Plan/69 — display name of the machine-level host session.
+ *
+ * The daemon has no Pi session to name, so the pairing URI (`n`) and the
+ * `pair_ok.session_name` echo identify the MACHINE — which is exactly what
+ * the app needs to tell two paired PCs apart when nicknames collide.
+ */
+export function hostSessionName(): string {
+  return hostname();
+}
+
+/** Plan/69 — pairing-token source for the host-room `pair_request` handler.
+ *  `HostPairingSession` (src/pairing/host_pairing.ts) is the production
+ *  implementation; tests inject a stub. */
+export interface PairingOps {
+  consume(token: string): Promise<HostTokenStatus>;
+}
+
+const _PAIR_ERROR_MESSAGES: Record<Exclude<HostTokenStatus, "ok">, { code: PairErrorCode; message: string }> = {
+  expired: {
+    code: "token_expired",
+    message: "Ephemeral token expired. Generate a new code with `remote-pi pair`.",
+  },
+  consumed: {
+    code: "token_consumed",
+    message: "Token already consumed by another pair_request.",
+  },
+  unknown: {
+    code: "token_unknown",
+    message: "Token was not issued by this host.",
+  },
+};
+
+/**
+ * Plan/69 W1 — `pair_request` on the host room, handled by the supervisor
+ * (zero Pi processes involved).
+ *
+ * Mirrors the Pi-side `_handlePairRequest` (src/index.ts) flow: validate the
+ * token, persist the peer via `addPeer`, answer with the typed
+ * `pair_ok`/`pair_error`. The URI payload itself is unchanged, so an app
+ * that paired against an old Pi-issued code pairs against the host with the
+ * same paste step.
+ *
+ * Returns true when a peer was persisted, so the caller can add it to the
+ * host-room allow-list (subsequent non-pair traffic from the new device
+ * must pass the same check as any paired peer).
+ */
+export async function handlePairRequest(
+  pairing: PairingOps,
+  sender: HostReplySender,
+  peer: string,
+  inner: { id: string; token: string; device_name: string },
+): Promise<boolean> {
+  const sendError = (code: PairErrorCode, message: string): void => {
+    sender.send({ type: "pair_error", in_reply_to: inner.id, code, message });
+  };
+
+  const status = await pairing.consume(inner.token);
+  if (status !== "ok") {
+    const { code, message } = _PAIR_ERROR_MESSAGES[status];
+    sendError(code, message);
+    return false;
+  }
+
+  try {
+    await addPeer({
+      name: inner.device_name,
+      remote_epk: peer,
+      paired_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    sendError("internal_error", `Failed to persist peer: ${String(err)}`);
+    return false;
+  }
+
+  sender.send({
+    type: "pair_ok",
+    in_reply_to: inner.id,
+    session_name: hostSessionName(),
+    session_started_at: Date.now(),
+    // The app addresses every subsequent inner to the host room.
+    room_id: HOST_ROOM_ID,
+    // Plan/27 Wave A fields — let the app render a meaningful device row.
+    hostname: hostSessionName(),
+  });
+  return true;
 }
 
 function resolveEntry(
@@ -157,6 +248,58 @@ export async function handleWorkspaceStop(
   }
   sender.send({
     type: "workspace_stop_ok",
+    in_reply_to: msg.id,
+    cwd: entry.cwd,
+    daemon_id: entry.id,
+  });
+}
+
+/**
+ * Plan/69 — restart a workspace by cwd (host room).
+ *
+ * Idempotent by contract (PROTOCOL.md): a workspace that is already running
+ * answers `workspace_restart_ok` WITHOUT respawning — a double-tap or a
+ * reconnecting client must not recycle a healthy Pi. A stopped/crashed
+ * workspace is started again (the recovery path). An unknown cwd is a typed
+ * `not_found`; a failed spawn is `spawn_failed`.
+ */
+export async function handleWorkspaceRestart(
+  ops: FleetOps,
+  sender: HostReplySender,
+  msg: { id: string; cwd: string },
+): Promise<void> {
+  const entry = resolveEntry(ops, msg.cwd, undefined);
+  if (!entry) {
+    sender.send({
+      type: "workspace_restart_error",
+      in_reply_to: msg.id,
+      code: "not_found",
+      message: `no workspace registered for cwd ${msg.cwd}`,
+    });
+    return;
+  }
+
+  // Already live → idempotent ok, no respawn.
+  if (entry.live) {
+    sender.send({
+      type: "workspace_restart_ok",
+      in_reply_to: msg.id,
+      cwd: entry.cwd,
+      daemon_id: entry.id,
+    });
+    return;
+  }
+
+  const result = ops.start(entry.id);
+  if (!result.ok) {
+    // The error code enum is closed (`spawn_failed` | `not_found`); a start
+    // failure that is not a missing workspace IS a spawn failure from the
+    // client's perspective. The real reason rides in `message`.
+    sender.send({ type: "workspace_restart_error", in_reply_to: msg.id, code: "spawn_failed", message: result.error });
+    return;
+  }
+  sender.send({
+    type: "workspace_restart_ok",
     in_reply_to: msg.id,
     cwd: entry.cwd,
     daemon_id: entry.id,

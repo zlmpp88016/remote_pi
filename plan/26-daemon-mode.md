@@ -1,5 +1,7 @@
 # Plano 26 — Daemon mode: agentes Pi rodando 24/7 com supervisor
 
+> **Reaberto 2026-10-08 (plano 69)**: o supervisor deixa de ser só fleet manager e passa a ser a **porta única de conexão** (room `host` já existia desde o plano 67; o pareamento agora é emitido e validado pelo daemon, sem Pi rodando). Nada deste plano é desfeito — o 69 reposiciona.
+
 Objetivo: permitir que o usuário **promova um Pi já configurado a daemon** (processo em background, `pi --mode rpc`) gerenciado por um **supervisor único** que roda como serviço do SO. Casos de uso: agente de edição de vídeo que fica ligado no servidor pra responder pelo celular, batch jobs disparados via cron, fleet de agentes especializados (1 por pasta/projeto).
 
 A primeira viabilização concreta da visão "Pi sempre disponível" (ver memory `project-vision-pc-mesh`). Não substitui o uso interativo do Pi — o daemon mode é **paralelo**, complementar.

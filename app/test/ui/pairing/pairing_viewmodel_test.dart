@@ -1,4 +1,4 @@
-// Tests for PairingViewModel: scan → pair_request → paired.
+// Tests for PairingViewModel: paste → pair_request → paired.
 // Uses in-memory transport so no real WS is needed.
 
 import 'dart:async';
@@ -10,10 +10,13 @@ import 'package:app/data/transport/channel.dart';
 import 'package:app/data/transport/connection_manager.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:app/pairing/owner_identity_bridge.dart';
+import 'package:app/pairing/pair_payload.dart';
 import 'package:app/pairing/pair_request_flow.dart' show PeerTransport;
 import 'package:app/pairing/storage.dart';
 import 'package:app/ui/pairing/states/pairing_state.dart';
 import 'package:app/ui/pairing/viewmodels/pairing_viewmodel.dart';
+import 'package:app/ui/pairing/widgets/paste_pairing_sheet.dart';
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -156,8 +159,19 @@ const _qrUriNoRelay =
 
 /// A pairing transport factory that runs a fake "Pi" responder which replies
 /// with the given inner message to whatever `pair_request` it receives.
-PairingTransportFactory _factoryReplyingWith(Map<String, dynamic> reply) {
-  return (qr, deviceEd25519) async {
+/// Records the relay URL the ViewModel dialled (plan/69 W1: the factory
+/// receives the EFFECTIVE relay, not the Preferences default).
+class _RecordingFactory {
+  final Map<String, dynamic> reply;
+  String? dialledRelay;
+  _RecordingFactory(this.reply);
+
+  Future<PeerTransport> call(
+    PairPayload qr,
+    String relayUrl,
+    SimpleKeyPair deviceEd25519,
+  ) async {
+    dialledRelay = relayUrl;
     final q1 = _Q();
     final q2 = _Q();
     final iTrans = _MemTransport(send: q1, recv: q2);
@@ -173,7 +187,7 @@ PairingTransportFactory _factoryReplyingWith(Map<String, dynamic> reply) {
     }());
 
     return iTrans;
-  };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -214,7 +228,7 @@ void main() {
       final bridge = await _bootedBridge(storage);
       final vm = PairingViewModel(
         storage,
-        (qr, key) async => throw Exception('should not be called'),
+        (qr, relay, key) async => throw Exception('should not be called'),
         _SpyConn(),
         _PrefsForTest(),
         bridge,
@@ -223,32 +237,42 @@ void main() {
       vm.dispose();
     });
 
-    test('invalid QR is ignored — stays PairingScanning', () async {
-      final storage = _FakeStorage();
-      final bridge = await _bootedBridge(storage);
-      final vm = PairingViewModel(
-        storage,
-        (qr, key) async => throw Exception('should not be called'),
-        _SpyConn(),
-        _PrefsForTest(),
-        bridge,
-      );
-      await vm.submitPairingCode('https://example.com/not-a-qr');
-      expect(vm.state, isA<PairingScanning>());
-      vm.dispose();
-    });
+    test(
+      'invalid code → typed invalidPayload error, form stays up',
+      () async {
+        final storage = _FakeStorage();
+        final bridge = await _bootedBridge(storage);
+        final vm = PairingViewModel(
+          storage,
+          (qr, relay, key) async => throw Exception('should not be called'),
+          _SpyConn(),
+          _PrefsForTest(),
+          bridge,
+        );
+        await vm.submitPairingCode('https://example.com/not-a-code');
+
+        expect(vm.state, isA<PairingScanning>());
+        expect(vm.validationError, isNotNull);
+        expect(
+          vm.validationError!.code,
+          PairingValidationCode.invalidPayload,
+        );
+        expect(vm.validationError!.wireCode, 'invalid_payload');
+        vm.dispose();
+      },
+    );
 
     test('scan → connecting → paired (channel adopted)', () async {
       final storage = _FakeStorage();
       final fakeRepo = _SpyConn();
       final bridge = await _bootedBridge(storage);
-      final factory = _factoryReplyingWith({
+      final factory = _RecordingFactory({
         'type': 'pair_ok',
         'session_name': 'test session',
       });
       final vm = PairingViewModel(
         storage,
-        factory,
+        factory.call,
         fakeRepo,
         _PrefsForTest(),
         bridge,
@@ -273,14 +297,14 @@ void main() {
     test('pair_error → PairingError(canRetry: true)', () async {
       final storage = _FakeStorage();
       final bridge = await _bootedBridge(storage);
-      final factory = _factoryReplyingWith({
+      final factory = _RecordingFactory({
         'type': 'pair_error',
         'code': 'token_expired',
         'message': 'Token expired',
       });
       final vm = PairingViewModel(
         storage,
-        factory,
+        factory.call,
         _SpyConn(),
         _PrefsForTest(),
         bridge,
@@ -292,7 +316,7 @@ void main() {
       expect(vm.state, isA<PairingError>());
       final err = vm.state as PairingError;
       expect(err.canRetry, isTrue);
-      expect(err.message, contains('QR expired'));
+      expect(err.message, contains('Code expired'));
       expect(storage._saved, isEmpty);
 
       vm.dispose();
@@ -305,7 +329,7 @@ void main() {
         final bridge = await _bootedBridge(storage);
         final vm = PairingViewModel(
           storage,
-          (qr, key) async => throw Exception('socket exception'),
+          (qr, relay, key) async => throw Exception('socket exception'),
           _SpyConn(),
           _PrefsForTest(),
           bridge,
@@ -325,9 +349,9 @@ void main() {
     // -------------------------------------------------------------------------
     // Regression — the timeout message must name the relay actually dialled.
     //
-    // Since plan/14 the QR carries no relay, so an App/Pi relay mismatch has
-    // EXACTLY one symptom: this timeout. Without the address the message reads
-    // as "the Pi is down" and the real cause stays invisible (this incident).
+    // Since plan/14 the code carries no relay, so an App/host relay mismatch
+    // has EXACTLY one symptom: this timeout. Without the address the message
+    // reads as "the host is down" and the real cause stays invisible.
     // -------------------------------------------------------------------------
 
     test(
@@ -336,7 +360,7 @@ void main() {
         final storage = _FakeStorage();
         final bridge = await _bootedBridge(storage);
         // A silent transport: the fake "Pi" never replies → timeout.
-        Future<PeerTransport> neverReplies(qr, key) async {
+        Future<PeerTransport> neverReplies(qr, relay, key) async {
           final q1 = _Q();
           return _MemTransport(send: q1, recv: _Q());
         }
@@ -349,8 +373,9 @@ void main() {
           pairTimeout: const Duration(milliseconds: 50),
         );
 
-        // No `r=` in the QR → the mismatch guard can't fire; the failure is a
-        // real timeout, exactly like an App/Pi relay mismatch in production.
+        // No `r=` in the code → the mismatch guard can't fire; the failure is
+        // a real timeout, exactly like an App/host relay mismatch in
+        // production.
         await vm.submitPairingCode(_qrUriNoRelay);
 
         expect(vm.state, isA<PairingError>());
@@ -365,65 +390,288 @@ void main() {
     );
 
     test(
-      'QR relay is ADOPTED into Preferences before dialling',
+      'code relay is ADOPTED into Preferences before dialling',
       () async {
         final storage = _FakeStorage();
         final bridge = await _bootedBridge(storage);
         // Reply with pair_ok so the flow completes; we assert on the relay
         // that was persisted, not on the outcome.
-        final factory = _factoryReplyingWith({
+        final factory = _RecordingFactory({
           'type': 'pair_ok',
           'session_name': 'test session',
         });
         final prefs = _PrefsForTest(relay: 'https://app-relay.example');
         final vm = PairingViewModel(
           storage,
-          factory,
+          factory.call,
           _SpyConn(),
           prefs,
           bridge,
         );
 
-        await vm.submitPairingCode(_qrUri); // qr carries r=ws://localhost
+        await vm.submitPairingCode(_qrUri); // code carries r=ws://localhost
         await Future<void>.delayed(const Duration(milliseconds: 30));
 
         // ws://localhost is a legacy scheme the app rejects for storage, so it
         // must NOT be adopted — the preference stays intact.
         expect(prefs.relayUrl, 'https://app-relay.example');
+        // ...but it IS the relay this attempt dialled.
+        expect(factory.dialledRelay, 'ws://localhost');
         vm.dispose();
       },
     );
 
     test(
-      'a valid QR relay is adopted (self-host works with zero config)',
+      'a valid code relay is adopted (self-host works with zero config)',
       () async {
         final storage = _FakeStorage();
         final bridge = await _bootedBridge(storage);
-        final factory = _factoryReplyingWith({
+        final factory = _RecordingFactory({
           'type': 'pair_ok',
           'session_name': 'test session',
         });
-        // Preferences on the app's default; QR names the self-hosted relay.
+        // Preferences on the app's default; the code names the self-hosted
+        // relay.
         final prefs = _PrefsForTest(relay: 'https://relay-rp1.jacobmoura.work');
         final vm = PairingViewModel(
           storage,
-          factory,
+          factory.call,
           _SpyConn(),
           prefs,
           bridge,
         );
 
-        const qrRelay = 'remotepi://pair?t=AAAAAAAAAAAAAAAAAAAAAA&'
+        const codeRelay = 'remotepi://pair?t=AAAAAAAAAAAAAAAAAAAAAA&'
             'epk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&'
             'r=https%3A%2F%2Frelay.880160.xyz&n=self+hosted';
-        await vm.submitPairingCode(qrRelay);
+        await vm.submitPairingCode(codeRelay);
         await Future<void>.delayed(const Duration(milliseconds: 30));
 
         expect(prefs.relayUrl, 'https://relay.880160.xyz',
-            reason: 'the QR relay must be adopted before dialling');
+            reason: 'the code relay must be adopted before dialling');
+        expect(factory.dialledRelay, 'https://relay.880160.xyz');
         vm.dispose();
       },
     );
+
+    // -------------------------------------------------------------------------
+    // Plan/69 W1 — address + code form
+    // -------------------------------------------------------------------------
+
+    group('address + code form (plan/69 W1)', () {
+      test('address auto-fills from the code r= param', () async {
+        final storage = _FakeStorage();
+        final bridge = await _bootedBridge(storage);
+        final vm = PairingViewModel(
+          storage,
+          (qr, relay, key) async => throw Exception('should not be called'),
+          _SpyConn(),
+          _PrefsForTest(relay: null),
+          bridge,
+        );
+
+        expect(vm.address, isEmpty);
+        vm.onCodeChanged(_qrUri);
+        expect(vm.address, 'ws://localhost',
+            reason: 'r= auto-fills the address field');
+        expect(vm.defaultRelayUrl, 'https://relay-rp1.jacobmoura.work');
+        vm.dispose();
+      });
+
+      test('a manual address edit survives later code edits', () async {
+        final storage = _FakeStorage();
+        final bridge = await _bootedBridge(storage);
+        final vm = PairingViewModel(
+          storage,
+          (qr, relay, key) async => throw Exception('should not be called'),
+          _SpyConn(),
+          _PrefsForTest(relay: null),
+          bridge,
+        );
+
+        vm.onCodeChanged(_qrUri);
+        expect(vm.address, 'ws://localhost');
+        vm.onAddressChanged('https://my-relay.example');
+        // Typing more into the code field must NOT clobber the manual edit.
+        vm.onCodeChanged('$_qrUri&x=1');
+        expect(vm.address, 'https://my-relay.example');
+        vm.dispose();
+      });
+
+      test(
+        'empty address dials the Preferences default relay',
+        () async {
+          final storage = _FakeStorage();
+          final bridge = await _bootedBridge(storage);
+          final factory = _RecordingFactory({
+            'type': 'pair_ok',
+            'session_name': 'test session',
+          });
+          final vm = PairingViewModel(
+            storage,
+            factory.call,
+            _SpyConn(),
+            _PrefsForTest(relay: 'https://relay.880160.xyz'),
+            bridge,
+          );
+
+          await vm.submitPairingCode(_qrUriNoRelay);
+          await Future<void>.delayed(const Duration(milliseconds: 30));
+
+          expect(vm.effectiveRelayUrl, 'https://relay.880160.xyz');
+          expect(factory.dialledRelay, 'https://relay.880160.xyz',
+              reason: 'empty address = default relay from Preferences');
+          vm.dispose();
+        },
+      );
+
+      test(
+        'edited address away from the code r= → typed relay_mismatch',
+        () async {
+          final storage = _FakeStorage();
+          final bridge = await _bootedBridge(storage);
+          final vm = PairingViewModel(
+            storage,
+            (qr, relay, key) async => throw Exception('should not be called'),
+            _SpyConn(),
+            _PrefsForTest(relay: null),
+            bridge,
+          );
+
+          vm.onCodeChanged(_qrUri); // auto-fills ws://localhost
+          vm.onAddressChanged('https://other-relay.example');
+          await vm.submitPairing();
+
+          expect(vm.state, isA<PairingScanning>(),
+              reason: 'validation failures keep the form on screen');
+          expect(vm.validationError, isNotNull);
+          expect(
+            vm.validationError!.code,
+            PairingValidationCode.relayMismatch,
+          );
+          expect(vm.validationError!.wireCode, 'relay_mismatch',
+              reason: 'plan/68 relay_mismatch contract preserved');
+          expect(vm.validationError!.message, contains('ws://localhost'));
+          expect(vm.validationError!.message,
+              contains('https://other-relay.example'));
+          vm.dispose();
+        },
+      );
+
+      test(
+        'cleared address with a code that names another relay → '
+        'typed relay_mismatch',
+        () async {
+          final storage = _FakeStorage();
+          final bridge = await _bootedBridge(storage);
+          final vm = PairingViewModel(
+            storage,
+            (qr, relay, key) async => throw Exception('should not be called'),
+            _SpyConn(),
+            _PrefsForTest(relay: 'https://app-relay.example'),
+            bridge,
+          );
+
+          vm.onCodeChanged(_qrUri); // auto-fills ws://localhost
+          vm.onAddressChanged(''); // user cleared it → default relay
+          await vm.submitPairing();
+
+          expect(vm.validationError?.code,
+              PairingValidationCode.relayMismatch);
+          vm.dispose();
+        },
+      );
+
+      test(
+        'code without r= + garbage address → typed invalidRelay',
+        () async {
+          final storage = _FakeStorage();
+          final bridge = await _bootedBridge(storage);
+          final vm = PairingViewModel(
+            storage,
+            (qr, relay, key) async => throw Exception('should not be called'),
+            _SpyConn(),
+            _PrefsForTest(relay: null),
+            bridge,
+          );
+
+          vm.onCodeChanged(_qrUriNoRelay);
+          vm.onAddressChanged('not-a-url');
+          await vm.submitPairing();
+
+          expect(vm.validationError?.code, PairingValidationCode.invalidRelay);
+          expect(vm.validationError!.message, isNotEmpty);
+          vm.dispose();
+        },
+      );
+
+      test(
+        'code without r= + typed valid address dials that address',
+        () async {
+          final storage = _FakeStorage();
+          final bridge = await _bootedBridge(storage);
+          final factory = _RecordingFactory({
+            'type': 'pair_ok',
+            'session_name': 'test session',
+          });
+          final vm = PairingViewModel(
+            storage,
+            factory.call,
+            _SpyConn(),
+            _PrefsForTest(relay: 'https://relay-rp1.jacobmoura.work'),
+            bridge,
+          );
+
+          vm.onCodeChanged(_qrUriNoRelay);
+          vm.onAddressChanged('https://relay.880160.xyz');
+          await vm.submitPairing();
+          await Future<void>.delayed(const Duration(milliseconds: 30));
+
+          expect(factory.dialledRelay, 'https://relay.880160.xyz');
+          vm.dispose();
+        },
+      );
+
+      test('editing a field clears the stale validation error', () async {
+        final storage = _FakeStorage();
+        final bridge = await _bootedBridge(storage);
+        final vm = PairingViewModel(
+          storage,
+          (qr, relay, key) async => throw Exception('should not be called'),
+          _SpyConn(),
+          _PrefsForTest(relay: null),
+          bridge,
+        );
+
+        await vm.submitPairingCode('https://example.com/not-a-code');
+        expect(vm.validationError, isNotNull);
+        vm.onCodeChanged(_qrUriNoRelay);
+        expect(vm.validationError, isNull);
+        vm.dispose();
+      });
+
+      test('retry keeps the typed values and clears the error', () async {
+        final storage = _FakeStorage();
+        final bridge = await _bootedBridge(storage);
+        final vm = PairingViewModel(
+          storage,
+          (qr, relay, key) async => throw Exception('should not be called'),
+          _SpyConn(),
+          _PrefsForTest(relay: null),
+          bridge,
+        );
+
+        await vm.submitPairingCode('https://example.com/not-a-code');
+        vm.onCodeChanged(_qrUri);
+        expect(vm.address, 'ws://localhost');
+        vm.retry();
+        expect(vm.state, isA<PairingScanning>());
+        expect(vm.validationError, isNull);
+        expect(vm.code, _qrUri, reason: 'values survive a retry');
+        expect(vm.address, 'ws://localhost');
+        vm.dispose();
+      });
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -434,14 +682,14 @@ void main() {
     testWidgets('navigates via PairingPaired after pair_ok', (tester) async {
       final storage = _FakeStorage();
       final bridge = await _bootedBridge(storage);
-      final factory = _factoryReplyingWith({
+      final factory = _RecordingFactory({
         'type': 'pair_ok',
         'session_name': 'test session',
       });
       final conn = _SpyConn();
       final vm = PairingViewModel(
         storage,
-        factory,
+        factory.call,
         conn,
         _PrefsForTest(),
         bridge,
@@ -470,7 +718,7 @@ void main() {
     });
 
     testWidgets('shows error view on pair_error', (tester) async {
-      final factory = _factoryReplyingWith({
+      final factory = _RecordingFactory({
         'type': 'pair_error',
         'code': 'token_consumed',
         'message': 'Already used',
@@ -480,7 +728,7 @@ void main() {
       final conn = _SpyConn();
       final vm = PairingViewModel(
         storage,
-        factory,
+        factory.call,
         conn,
         _PrefsForTest(),
         bridge,
@@ -507,6 +755,150 @@ void main() {
       await tester.tap(find.text('Try again'));
       await tester.pump();
       expect(vm.state, isA<PairingScanning>());
+
+      vm.dispose();
+      conn.dispose(); // cancel the watchdog before the timer-pending check
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Paste sheet widget tests — plan/69 W1 address + code form
+  // -------------------------------------------------------------------------
+
+  group('paste pairing sheet (plan/69 W1)', () {
+    Future<({PairingViewModel vm, _SpyConn conn})> pumpSheet(
+      WidgetTester tester, {
+      String relay = 'ws://localhost',
+    }) async {
+      final storage = _FakeStorage();
+      final bridge = await _bootedBridge(storage);
+      final conn = _SpyConn();
+      final vm = PairingViewModel(
+        storage,
+        (qr, relayUrl, key) async => throw Exception('should not be called'),
+        conn,
+        _PrefsForTest(relay: relay),
+        bridge,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => ElevatedButton(
+                child: const Text('open'),
+                onPressed: () => showPastePairingSheet(ctx, vm: vm),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      return (vm: vm, conn: conn);
+    }
+
+    testWidgets('renders address + code fields', (tester) async {
+      final (:vm, :conn) = await pumpSheet(tester);
+
+      expect(find.byKey(const Key('pairing-sheet-address')), findsOneWidget);
+      expect(find.byKey(const Key('pairing-sheet-code')), findsOneWidget);
+      expect(find.text('Relay address'), findsOneWidget);
+      expect(find.text('Pairing code'), findsOneWidget);
+      // Empty address shows the Preferences default as the placeholder.
+      expect(find.text('ws://localhost'), findsOneWidget);
+      expect(find.text('Leave empty to use the default relay'), findsOneWidget);
+
+      vm.dispose();
+      conn.dispose(); // cancel the watchdog before the timer-pending check
+    });
+
+    testWidgets('pasting a code auto-fills the address from r=', (tester) async {
+      final (:vm, :conn) = await pumpSheet(
+        tester,
+        relay: 'https://relay-rp1.jacobmoura.work',
+      );
+
+      await tester.enterText(
+        find.byKey(const Key('pairing-sheet-code')),
+        _qrUri,
+      );
+      await tester.pump();
+
+      expect(vm.address, 'ws://localhost');
+      final addressField = tester.widget<TextField>(
+        find.byKey(const Key('pairing-sheet-address')),
+      );
+      expect(addressField.controller?.text, 'ws://localhost');
+
+      vm.dispose();
+      conn.dispose(); // cancel the watchdog before the timer-pending check
+    });
+
+    testWidgets('invalid code shows the typed error inline', (tester) async {
+      final (:vm, :conn) = await pumpSheet(tester);
+
+      await tester.enterText(
+        find.byKey(const Key('pairing-sheet-code')),
+        'not-a-pairing-code',
+      );
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('pairing-sheet-submit')));
+      await tester.pump();
+
+      expect(vm.validationError?.code, PairingValidationCode.invalidPayload);
+      expect(
+        find.textContaining('not a Remote Pi pairing code'),
+        findsOneWidget,
+      );
+      expect(vm.state, isA<PairingScanning>());
+
+      vm.dispose();
+      conn.dispose(); // cancel the watchdog before the timer-pending check
+    });
+
+    testWidgets('relay mismatch shows the typed error inline', (tester) async {
+      final (:vm, :conn) = await pumpSheet(
+        tester,
+        relay: 'https://relay-rp1.jacobmoura.work',
+      );
+
+      await tester.enterText(
+        find.byKey(const Key('pairing-sheet-code')),
+        _qrUri,
+      );
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const Key('pairing-sheet-address')),
+        'https://other-relay.example',
+      );
+      await tester.tap(find.byKey(const Key('pairing-sheet-submit')));
+      await tester.pump();
+
+      expect(vm.validationError?.code, PairingValidationCode.relayMismatch);
+      expect(find.textContaining('issued for relay'), findsOneWidget);
+
+      vm.dispose();
+      conn.dispose(); // cancel the watchdog before the timer-pending check
+    });
+
+    testWidgets('submit disabled until a code is present', (tester) async {
+      final (:vm, :conn) = await pumpSheet(tester);
+
+      final button = tester.widget<FilledButton>(
+        find.byKey(const Key('pairing-sheet-submit')),
+      );
+      expect(button.onPressed, isNull);
+
+      await tester.enterText(
+        find.byKey(const Key('pairing-sheet-code')),
+        _qrUri,
+      );
+      await tester.pump();
+
+      final enabled = tester.widget<FilledButton>(
+        find.byKey(const Key('pairing-sheet-submit')),
+      );
+      expect(enabled.onPressed, isNotNull);
 
       vm.dispose();
       conn.dispose(); // cancel the watchdog before the timer-pending check

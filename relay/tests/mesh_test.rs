@@ -12,7 +12,7 @@ use base64::{
 };
 use ed25519_dalek::{Signer, SigningKey};
 use relay::{
-    AppState, FirehoseMetrics, MeshAuthCache, MeshStore, PeerRegistry, PresenceManager,
+    AppState, FirehoseMetrics, MeshAuthCache, MeshStore, OriginPolicy, PeerRegistry, PresenceManager,
     RoomManager, build_router,
 };
 use reqwest::StatusCode;
@@ -35,6 +35,8 @@ async fn spawn_relay() -> (String, tempfile::TempDir) {
         metrics.clone(),
     ));
     let mesh_auth = Arc::new(MeshAuthCache::new());
+    // Default (empty) Origin policy — permissive, historical behaviour.
+    let origin_policy = Arc::new(OriginPolicy::default());
     let state = AppState {
         registry,
         presence,
@@ -42,6 +44,7 @@ async fn spawn_relay() -> (String, tempfile::TempDir) {
         mesh,
         mesh_auth,
         metrics,
+        origin_policy,
     };
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

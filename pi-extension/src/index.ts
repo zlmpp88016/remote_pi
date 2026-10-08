@@ -213,6 +213,24 @@ let _relayUrl: string | null = null;  // URL used by current _relay connection
 const _activePeers = new Map<string, PlainPeerChannel>();
 let _peerShort = "";  // shortid of the most recently attached peer (UX hint only)
 
+/**
+ * Plan/69 — the supervisor-proxied channel of a DAEMON child (host-first
+ * mode, REMOTE_PI_DAEMON=1).
+ *
+ * The app anchors on the supervisor's room `host` and forwards workspace
+ * traffic through it (spike decision B): on this Pi's relay connection such
+ * traffic arrives addressed to the machine's OWN Pi-key (the relay rewrites
+ * the supervisor's re-emit with the sender identity), and every reply goes
+ * back addressed `{peer: <own epk>, room: "host"}` so the HostBridge wraps
+ * it as `host_message` and fans it out to the apps.
+ *
+ * This channel is a sender + own-key inbound filter; it is NOT an app peer
+ * and never enters `_activePeers`. Recreated per relay connection (initial
+ * connect + reconnect); null in TUI/interactive mode, which keeps the
+ * legacy direct-only path untouched.
+ */
+let _hostProxyChannel: PlainPeerChannel | null = null;
+
 const REMOTE_PI_RECEIVED_IMAGE_TYPE = "remote-pi:received-image";
 const RECEIVED_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 
@@ -1301,6 +1319,16 @@ function _broadcastToActive(msg: ServerMessage): void {
   for (const ch of _activePeers.values()) {
     try { ch.send(msg); } catch { /* best-effort per channel */ }
   }
+  // Plan/69 — daemon child: the host-first app is NOT a per-owner channel
+  // (it pairs with the SUPERVISOR, not with this Pi), so broadcasts — the
+  // user_message echo, agent_chunk/agent_done, runtime_status — would
+  // otherwise reach nobody. The proxy channel addresses the machine's own
+  // key on room `host`; the bridge re-wraps each frame as `host_message`
+  // and fans it out to the paired apps. Null outside daemon mode, so the
+  // legacy direct path is byte-identical.
+  if (_hostProxyChannel !== null) {
+    try { _hostProxyChannel.send(msg); } catch { /* best-effort */ }
+  }
 }
 
 /** Returns true when at least one owner is attached. Derived `paired` UX. */
@@ -1508,6 +1536,8 @@ function _goIdle(byeReason?: import("./protocol/types.js").ByeReason): void {
     try { ch.detach(); } catch { /* best-effort */ }
   }
   _activePeers.clear();
+  // Plan/69 — drop the host-proxy channel with the rest (daemon mode).
+  _detachHostProxyChannel();
   _peerShort = "";
   _currentTurnId = null;
   _pendingReceivedImagePreviews.length = 0;
@@ -1566,6 +1596,8 @@ function _onRelayClose(closedRelay: RelayClient): void {
   for (const ch of _activePeers.values()) {
     try { ch.detach(); } catch { /* best-effort */ }
   }
+  // Plan/69 — same for the host-proxy channel (recreated on reconnect).
+  _detachHostProxyChannel();
   if (_queuedItems.length > 0) _resetQueuedItems({ broadcast: true });
   _activePeers.clear();
   _peerShort = "";
@@ -1660,6 +1692,9 @@ async function _attemptReconnect(
 
   _relay = relay;
   _reconnectAttempt = 0;
+  // Plan/69 — the proxy channel is per-connection: the old one listened on
+  // the dead relay (detached in _onRelayClose). Recreate for the new one.
+  _ensureHostProxyChannel();
 
   relay.on("close", () => _onRelayClose(relay));
   _stopAutoListener = _installAutoListener(relay);
@@ -1916,6 +1951,53 @@ function _attachOwner(
   return channel;
 }
 
+// ── Host-first proxy channel (plan/69, daemon child) ──────────────────────────
+
+/** True when this Pi process runs as a supervisor-spawned daemon child
+ *  (REMOTE_PI_DAEMON=1). Daemon children speak the host-first proxy path;
+ *  TUI/interactive sessions keep the legacy direct-only path. */
+function _isDaemonChild(): boolean {
+  return process.env["REMOTE_PI_DAEMON"] === "1";
+}
+
+/** This machine's own Pi-key (base64) — the identity the relay connection
+ *  authenticates under, and the address host-proxied traffic carries. */
+function _ownPubkeyB64(): string | null {
+  return _cachedEd25519
+    ? Buffer.from(_cachedEd25519.publicKey).toString("base64")
+    : null;
+}
+
+function _detachHostProxyChannel(): void {
+  if (!_hostProxyChannel) return;
+  try { _hostProxyChannel.detach(); } catch { /* best-effort */ }
+  _hostProxyChannel = null;
+}
+
+/**
+ * (Re)creates the host-proxy channel for the CURRENT relay connection.
+ * Daemon mode only: the channel's `remotePeerId` is the machine's own key,
+ * so its inbound filter accepts exactly the own-key envelopes the
+ * supervisor proxies (direct peer envelopes keep flowing through their own
+ * per-owner channels — both inbound paths coexist). Outbound is addressed
+ * `{peer: <own epk>, room: "host"}` by the channel itself.
+ */
+function _ensureHostProxyChannel(): void {
+  _detachHostProxyChannel();
+  if (!_isDaemonChild() || !_relay) return;
+  const ownPubkey = _ownPubkeyB64();
+  if (ownPubkey === null) return;
+  const channel = new PlainPeerChannel(
+    _relay,
+    ownPubkey,
+    _myRoomId ?? undefined,
+    (msg) => _routeClientMessageFrom(channel, msg, (_liveCtx() as typeof _noopCtx) ?? _noopCtx),
+    undefined,
+    { ownPubkey },
+  );
+  _hostProxyChannel = channel;
+}
+
 // ── Auto-listener ─────────────────────────────────────────────────────────────
 //
 // Installed while in 'started' state. Decodes the outer envelope as
@@ -1942,6 +2024,14 @@ function _installAutoListener(relay: RelayClient): () => void {
     catch { return; }
 
     if (!outer.peer || !outer.ct) return;
+
+    // Plan/69 — host-proxied traffic arrives addressed to our OWN Pi-key;
+    // the host-proxy channel owns those envelopes (daemon mode). Skipping
+    // here keeps exactly one router per line.
+    if (_hostProxyChannel !== null) {
+      const ownPk = _ownPubkeyB64();
+      if (ownPk !== null && outer.peer === ownPk) return;
+    }
 
     if (!hasListenerAuthority()) return;
     // Already-attached owners: their PlainPeerChannel handles routing.
@@ -3095,6 +3185,9 @@ async function _cmdStart(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<voi
   _relayUrl = relayUrl;
   _peerShort = myShort;
   _myRoomId = roomId;
+  // Plan/69 — daemon child: stand up the supervisor-proxied channel for
+  // this connection (no-op in TUI/interactive mode).
+  _ensureHostProxyChannel();
   _state = "started";
   // Set _sessionStartedAt ONLY on first /remote-pi start since process boot.
   // Subsequent start cycles (after stop) preserve the original epoch so the
@@ -5554,6 +5647,30 @@ if (_isDirectRun()) {
         console.log(`Revoked: ${peer.record.name} (${peer.rawHandle.slice(0, 8)}…)`);
       }
     }
+  } else if (subcmd === "pair") {
+    // Plan/69 — daemon-side pairing: the supervisor owns the host pairing
+    // token (~/.pi/remote/pairing.json) AND the host-room pair_request
+    // handler, so this works with ZERO Pi processes running. The in-Pi
+    // `/remote-pi pair` slash command is untouched (old-URI compatibility).
+    const flags = cliArgs.join(" ");
+    const ephemeral = /(^|\s)--ephemeral(\s|$)/.test(flags);
+    const rotate = /(^|\s)--rotate(\s|$)/.test(flags);
+    try {
+      const data = rotate
+        ? await callSupervisor({ op: "pair_rotate", ephemeral })
+        : await callSupervisor({ op: "pair_show", ephemeral });
+      const validity = data.persistent
+        ? "persistent — valid until `remote-pi pair --rotate`"
+        : `ephemeral — expires ${new Date(data.expires_at ?? Date.now()).toLocaleTimeString()}`;
+      console.log(`[remote-pi] Pairing code (room ${data.room_id}, ${validity}):\n${data.uri}`);
+    } catch (err) {
+      if (err instanceof SupervisorOfflineError) {
+        console.error(`[remote-pi] ${err.message}`);
+      } else {
+        console.error(`[remote-pi] pair failed: ${String(err)}`);
+      }
+      process.exit(1);
+    }
   } else if (subcmd === "set-relay") {
     const raw = (cliArgs[0] ?? "").trim();
     if (!raw) {
@@ -5668,6 +5785,9 @@ if (_isDirectRun()) {
       "Devices:",
       "  devices                         List paired phones (peers.json)",
       "  revoke <shortid>                Revoke a paired device",
+      "",
+      "Pairing (no Pi required — talks to the supervisor):",
+      "  pair [--rotate] [--ephemeral]   Print the host pairing code (remotepi://pair?…, rm=host)",
       "",
       "Config:",
       "  set-relay <url>                 Set the relay URL (http:// or https://)",

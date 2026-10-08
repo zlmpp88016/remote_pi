@@ -4,6 +4,7 @@ import 'package:app/data/mesh/mesh_sync_service.dart';
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/data/sync/sync_service.dart';
 import 'package:app/data/transport/connection_manager.dart';
+import 'package:app/domain/value_objects/device_capabilities.dart';
 import 'package:app/pairing/owner_identity_bridge.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/routing/adaptive.dart';
@@ -80,6 +81,13 @@ class _RemotePiAppState extends State<RemotePiApp> with WidgetsBindingObserver {
       providers: [
         ChangeNotifierProvider<Preferences>.value(
           value: injector.get<Preferences>(),
+        ),
+        // Plan/69 W3 — immutable platform capability snapshot (windows
+        // target): camera-less desktop hides camera capture, the picker
+        // routes around the missing compressor, permission snackbars drop
+        // the settings deep-link. Plain Provider — never changes at runtime.
+        Provider<DeviceCapabilities>.value(
+          value: injector.get<DeviceCapabilities>(),
         ),
         ChangeNotifierProvider<SessionSelection>.value(
           value: injector.get<SessionSelection>(),

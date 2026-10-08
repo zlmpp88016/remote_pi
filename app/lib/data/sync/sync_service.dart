@@ -863,6 +863,16 @@ class SyncService extends Service {
       case WorkspaceListOk():
       case WorkspaceStartOk():
       case WorkspaceStopOk():
+      // Plan/69 — host control plane: the handshake reply and the lifecycle
+      // pushes are consumed by the ConnectionManager (hostHelloStream /
+      // workspaceStatesStream); the restart replies are consumed by the
+      // workspace picker's request future (SessionCatalog.restartWorkspace).
+      // `host_message` never reaches this switch — WsTransport unwraps it.
+      case HostHelloOk():
+      case WorkspaceState():
+      case WorkspaceRestartOk():
+      case WorkspaceRestartError():
+      case HostMessage():
       // Plan/68 — fs_list replies are consumed by the picker's request future
       // (SessionCatalog._expect), never by the chat stream.
       case FsListOk():

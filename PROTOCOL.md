@@ -306,6 +306,45 @@ Pairing is **machine-level**. Inside a workspace room the app lists and switches
 
 `source` distinguishes a workspace that came from `daemons.json` (`"daemon"`) from one the app added by navigating the host filesystem (`"added"`, persisted in `~/.pi/remote/workspaces.json`).
 
+### Host-first connection (plan 69)
+
+O daemon residente (`pi-supervisord`) é a **porta única** de conexão: app, web e pc falam com o **host**, nunca com um processo Pi. O room do workspace continua existindo por baixo (multiplex do relay), mas a presença da máquina é o room `host` — Pi morto não derruba a conexão.
+
+```json
+{ "type": "host_hello", "id": "<uuid>" }
+{ "type": "host_hello_ok", "in_reply_to": "<uuid>",
+  "daemon": { "version": "…", "hostname": "…", "platform": "…" },
+  "capabilities": ["host_pairing", "workspace_state", "fs_nav"] }
+```
+
+`host_hello` é enviado no boot/reconnect do cliente; o host responde com versão/hostname reais e as capacidades suportadas (nunca fabrica valor — campo indisponível vem `null` com motivo).
+
+**Ciclo de vida do Pi (push).** O host nunca fabrica estado — espelha o `ChildSlot` do supervisor:
+
+```json
+{ "type": "workspace_state", "cwd": "/abs", "state": "running" | "starting" | "crashed" | "stopped",
+  "last_error": "…" | null, "restarts": 0 }
+```
+
+Emitido em exit de child, restart (backoff), start e stop. `crashed` carrega `last_error`; a conexão da máquina permanece online em todos os estados.
+
+```json
+{ "type": "workspace_restart", "id": "<uuid>", "cwd": "/abs" }
+{ "type": "workspace_restart_ok", "in_reply_to": "<uuid>", "cwd": "/abs", "daemon_id": "a1b2c3d4" }
+{ "type": "workspace_restart_error", "in_reply_to": "<uuid>", "code": "spawn_failed" | "not_found", "message": "…" }
+```
+
+`workspace_restart` é idempotente: workspace já `running` → `workspace_restart_ok` sem respawn.
+
+**Proxy `host_forward`/`host_message` (decisão B do spike, plano 69 W2).** Uma conexão de cliente **não** sustenta room `host` + rooms de workspace — o demux do app descarta envelope de room não-ativa (spike E2c). O cliente ancora só no room `host`; o daemon proxeia:
+
+```json
+{ "type": "host_forward", "id": "<uuid>", "room": "<childRoom>", "ct": "<base64 do ClientMessage>" }
+{ "type": "host_message", "room": "<childRoom>", "ct": "<base64 do ServerMessage>" }
+```
+
+Fluxo: app envia `host_forward` no room `host` → host re-emite `{peer: <machine epk>, room: <childRoom>, ct}` na mesma conexão (o relay entrega no conn do filho, reescrito com peer+room do remetente — `relay/src/handlers/peer.rs`) → o filho em modo daemon responde endereçando a **própria** Pi-key no room `host` → o host detecta `outer.peer == própria pubkey && outer.room != "host"`, reembrulha como `host_message` e faz fan-out para todos os peers allow-listados. O cliente arquiva por `host_message.room`. Filho TUI (não-daemon) mantém o caminho direto intacto.
+
 ### Filesystem navigation (plan 68)
 
 Lets the app pick **any** directory on the host instead of only pre-registered daemons. The client never touches a local path — the host resolves and lists.
@@ -478,7 +517,7 @@ relay; restart perde o estado.
 
 ## Pareamento
 
-O código de pareamento é um **endereço colável** (`remotepi://pair?…`) mostrado pelo Pi — não há mais QR nem escaneamento (plan/68). O app recebe a string por colagem e o formato do payload é um contrato congelado:
+O código de pareamento é um **endereço colável** (`remotepi://pair?…`) mostrado pelo Pi **ou pelo daemon residente** (`remote-pi pair` sem Pi rodando, `rm=host`) — não há mais QR nem escaneamento (plan/68). O app recebe a string por colagem e o formato do payload é um contrato congelado:
 
 ```
 remotepi://pair?t=<token>&epk=<base64url>&n=<nome>[&rm=<roomId>][&r=<relayUrl>]
@@ -486,7 +525,7 @@ remotepi://pair?t=<token>&epk=<base64url>&n=<nome>[&rm=<roomId>][&r=<relayUrl>]
 
 | Param | Conteúdo |
 |---|---|
-| `t` | Token efêmero de uso único (rotaciona por `--ttl`, padrão 60s) |
+| `t` | Token de uso único. **Persistente por padrão** quando emitido pelo daemon (`remote-pi pair` — código "predefinido no host", invalida só com `--rotate`); efêmero de 60s quando emitido por um Pi interativo ou com `--ephemeral` |
 | `epk` | Pi-key Ed25519 do host (base64url) — identidade do peer |
 | `n` | Nome da sessão/workspace, para preview antes do `pair_ok` |
 | `rm` | Room id do workspace default (opcional) |
@@ -501,7 +540,9 @@ remotepi://pair?t=<token>&epk=<base64url>&n=<nome>[&rm=<roomId>][&r=<relayUrl>]
 
 Múltiplos Owners podem parear o mesmo PC (concomitância — `peers.json` aceita N entries).
 
-Detalhes em `plan/04-pairing.md`.
+Quando o código é emitido pelo **daemon** (plano 69), os passos são os mesmos, mas: o `pair_request` trafega no room `host` e é validado pelo `HostBridge` (carve-out de allow-list **somente** para `pair_request` de peer desconhecido); o token é persistente até `--rotate`; `rm=host` e `r=` vêm do daemon. Caminho Pi (URI emitida por Pi interativo) continua intacto para compat.
+
+Detalhes em `plan/04-pairing.md` e `plan/69-host-first-connection.md`.
 
 ---
 

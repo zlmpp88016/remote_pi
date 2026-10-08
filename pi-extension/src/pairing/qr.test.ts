@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   QRSession,
+  buildQRUri,
   clampPairTtlMs,
   TOKEN_TTL_MS,
   PAIR_TTL_MIN_MS,
@@ -61,5 +62,39 @@ describe("QRSession.issueToken — ttl", () => {
     const first = s.issueToken(60_000).token;
     s.issueToken(60_000);
     expect(s.consumeToken(first)).toBe("unknown");
+  });
+});
+
+/**
+ * Plan/69 W1 — frozen payload regression.
+ *
+ * The daemon-issued host code (`remote-pi pair`, rm=host) and the Pi-issued
+ * code (`/remote-pi pair`) share ONE payload format — the app parses both
+ * with the same paste step. Any edit to buildQRUri that changes the bytes
+ * must fail here first.
+ */
+describe("buildQRUri — frozen payload (plan/69 W1)", () => {
+  test("host-issued code keeps the byte-identical remotepi://pair payload", () => {
+    const epk = new Uint8Array(32).fill(7);
+    const uri = buildQRUri("tOkEn-42", epk, "My PC", "host", "https://relay.example.com");
+    expect(uri).toBe(
+      "remotepi://pair?t=tOkEn-42&epk=BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc" +
+        "&n=My+PC&rm=host&r=https%3A%2F%2Frelay.example.com",
+    );
+  });
+
+  test("omitting roomId/relayUrl omits rm/r (the older Pi-issued shape)", () => {
+    const uri = buildQRUri("tok", new Uint8Array(32), "Pi");
+    expect(uri).toBe(
+      "remotepi://pair?t=tok&epk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&n=Pi",
+    );
+  });
+
+  test("param order is stable: t, epk, n, then optional rm, r", () => {
+    const uri = buildQRUri("t", new Uint8Array(32).fill(1), "n", "room-x", "http://r");
+    expect(uri.indexOf("t=t")).toBeLessThan(uri.indexOf("epk="));
+    expect(uri.indexOf("epk=")).toBeLessThan(uri.indexOf("&n="));
+    expect(uri.indexOf("&n=")).toBeLessThan(uri.indexOf("&rm="));
+    expect(uri.indexOf("&rm=")).toBeLessThan(uri.indexOf("&r="));
   });
 });

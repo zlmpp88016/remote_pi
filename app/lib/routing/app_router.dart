@@ -406,8 +406,12 @@ GoRouter buildRouter(
             online = extra['online'] == true;
           }
           return ChangeNotifierProvider(
-            create: (_) =>
-                WorkspaceListViewModel(injector.get<SessionCatalog>()),
+            create: (_) => WorkspaceListViewModel(
+              injector.get<SessionCatalog>(),
+              // Plan/69 — lifecycle (workspace_state push + one-tap
+              // workspace_restart) rides the machine connection.
+              conn: injector.get<ConnectionManager>(),
+            ),
             child: WorkspaceListPage(
               epk: epk,
               title: 'Workspaces',

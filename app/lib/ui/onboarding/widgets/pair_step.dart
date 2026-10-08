@@ -30,12 +30,8 @@ class PairStep extends StatefulWidget {
 class _PairStepState extends State<PairStep> {
   PairingState? _lastObserved;
 
-  void _submitRaw(String raw, PairingViewModel vm) {
-    vm.submitPairingCode(raw);
-  }
-
   Future<void> _openPasteSheet(PairingViewModel vm) async {
-    await showPastePairingSheet(context, onSubmit: (raw) => _submitRaw(raw, vm));
+    await showPastePairingSheet(context, vm: vm);
   }
 
   @override

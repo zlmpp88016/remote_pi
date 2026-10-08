@@ -23,6 +23,7 @@ import 'package:app/domain/contracts/dismissed_update_store.dart';
 import 'package:app/domain/contracts/update_checker.dart';
 import 'package:app/domain/contracts/url_opener.dart';
 import 'package:app/domain/entities/update_info.dart';
+import 'package:app/pairing/owner_identity_bridge.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/routing/adaptive.dart';
@@ -31,6 +32,8 @@ import 'package:app/ui/home/home_page.dart';
 import 'package:app/ui/home/viewmodels/home_viewmodel.dart';
 import 'package:app/ui/onboarding/onboarding_page.dart';
 import 'package:app/ui/onboarding/viewmodels/onboarding_viewmodel.dart';
+import 'package:app/ui/pairing/pairing_page.dart';
+import 'package:app/ui/pairing/viewmodels/pairing_viewmodel.dart';
 import 'package:app/ui/pi_surface/pi_surface_page.dart';
 import 'package:app/ui/pi_surface/viewmodels/pi_surface_viewmodel.dart';
 import 'package:app/ui/sessions/session_list_page.dart';
@@ -39,13 +42,16 @@ import 'package:app/ui/settings/settings_page.dart';
 import 'package:app/ui/settings/viewmodels/settings_viewmodel.dart';
 import 'package:app/ui/update/viewmodels/update_banner_viewmodel.dart';
 import 'package:app/ui/workspaces/viewmodels/workspace_browser_viewmodel.dart';
+import 'package:app/ui/workspaces/viewmodels/workspace_list_viewmodel.dart';
 import 'package:app/ui/workspaces/workspace_browser_page.dart';
+import 'package:app/ui/workspaces/workspace_list_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
+import 'package:remote_pi_identity/remote_pi_identity.dart';
 
 // ---------------------------------------------------------------------------
 // Configuracao
@@ -240,6 +246,9 @@ class _Channel implements IChannel, IControlLink {
       // Plan/68 — o navegador de pastas do host.
       case FsList(:final id, :final path):
         _server.add(_fsListOk(id, path));
+      // Plan/69 — catálogo de workspaces da máquina (room host).
+      case WorkspaceList(:final id):
+        _answerWorkspaceList(id);
       // Plan/68 — a superficie Pi (skills + packages).
       case PiSurface(:final id):
         _server.add(
@@ -301,6 +310,39 @@ class _Channel implements IChannel, IControlLink {
 
   void pushControl(ControlInbound c) {
     if (!_control.isClosed) _control.add(c);
+  }
+
+  /// Injeta uma ServerMessage (push do host) no canal.
+  void pushServer(ServerMessage m) {
+    if (!_server.isClosed) _server.add(m);
+  }
+
+  /// Responde `workspace_list` com o catálogo da máquina (plan/69 — as
+  /// mesmas pastas dos pushes de `workspace_state`).
+  void _answerWorkspaceList(String id) {
+    _server.add(
+      WorkspaceListOk(
+        inReplyTo: id,
+        workspaces: const [
+          WireWorkspaceInfo(
+            cwd: '/Users/jacob/Projects/remote_pi',
+            daemonId: 'd1',
+            roomId: 'r-remote-pi',
+            name: 'remote_pi',
+            live: true,
+            daemon: true,
+          ),
+          WireWorkspaceInfo(
+            cwd: '/Users/jacob/Projects/cockpit',
+            daemonId: 'd2',
+            roomId: 'r-cockpit',
+            name: 'cockpit',
+            live: false,
+            daemon: true,
+          ),
+        ],
+      ),
+    );
   }
 
   /// Uma árvore de pastas plausível para a captura do seletor de workspace.
@@ -375,10 +417,15 @@ class _Scenario {
     required this.providers,
     required this.child,
     this.dispose = _noop,
+    this.interact,
   });
   final List<SingleChildWidget> providers;
   final Widget child;
   final void Function() dispose;
+
+  /// Interação opcional depois do pump inicial (ex.: abrir o bottom sheet
+  /// de pareamento) — roda antes dos pumps de settle.
+  final Future<void> Function(WidgetTester tester)? interact;
 }
 
 void _noop() {}
@@ -567,6 +614,106 @@ Future<_Scenario> _settings(WidgetTester tester) async {
   );
 }
 
+/// Plan/69 — tela de pareamento (endereço + código) com o sheet aberto.
+///
+/// O formulário em si é o `paste_pairing_sheet`: campo de endereço (relay) +
+/// campo de código. A captura toca o botão da página para abri-lo — mesmo
+/// caminho do usuário — e pré-preenche os dois campos com um código de
+/// daemon (`rm=host`).
+Future<_Scenario> _pairingForm(WidgetTester tester) async {
+  final storage = _FakeStorage();
+  final conn = ConnectionManager(
+    factory: (_, _) async => _Channel(),
+    storage: storage,
+    emitDebounce: Duration.zero,
+  );
+  final prefs = Preferences(_FakeSecureStorage());
+  final bridge = OwnerIdentityBridge(InMemoryOwnerIdentityStore(), storage);
+  await bridge.boot();
+  final vm = PairingViewModel(
+    storage,
+    (qr, relay, key) async =>
+        throw StateError('a captura nunca submete o pareamento'),
+    conn,
+    prefs,
+    bridge,
+  );
+  // Código emitido pelo daemon (`remote-pi pair`): carrega rm=host e o
+  // relay em `r=` — o endereço auto-preenche a partir dele.
+  vm.onCodeChanged(
+    'remotepi://pair?t=AAAAAAAAAAAAAAAAAAAAAA&'
+    'epk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&'
+    'n=Mac%20do%20Jacob&rm=host&r=ws%3A%2F%2Frelay.remote-pi.dev',
+  );
+  await _real(tester);
+  return _Scenario(
+    providers: [
+      ChangeNotifierProvider<PairingViewModel>.value(value: vm),
+      ChangeNotifierProvider<Preferences>.value(value: prefs),
+    ],
+    child: const PairingPage(),
+    interact: (t) async {
+      await t.tap(find.text('Paste pairing code'));
+      await t.pump();
+    },
+    dispose: () {
+      vm.dispose();
+      conn.dispose();
+      prefs.dispose();
+      bridge.dispose();
+    },
+  );
+}
+
+/// Plan/69 — card de workspace com estado `crashed` + restart por 1 toque.
+///
+/// O host pusha `workspace_state` (crashed, com last_error e restarts) para
+/// um dos workspaces do catálogo; o card mostra o erro e o botão Reiniciar.
+/// A conexão da máquina segue online — é o ponto do modelo host-first.
+Future<_Scenario> _workspaceState(WidgetTester tester) async {
+  final ch = _Channel();
+  final conn = ConnectionManager(
+    factory: (_, _) async => ch,
+    storage: _FakeStorage([_peer()]),
+    emitDebounce: Duration.zero,
+  );
+  await conn.connectTo(_peer());
+  await _real(tester);
+  final vm = WorkspaceListViewModel(SessionCatalog(conn), conn: conn);
+  await _real(tester, 80);
+  ch.pushServer(
+    WorkspaceState(
+      cwd: '/Users/jacob/Projects/remote_pi',
+      state: WorkspaceStateValue.crashed,
+      lastError: 'Pi process exited with code 1 (SIGKILL)',
+      restarts: 2,
+      rawState: 'crashed',
+    ),
+  );
+  ch.pushServer(
+    WorkspaceState(
+      cwd: '/Users/jacob/Projects/cockpit',
+      state: WorkspaceStateValue.running,
+      lastError: null,
+      restarts: 0,
+      rawState: 'running',
+    ),
+  );
+  await _real(tester, 50);
+  return _Scenario(
+    providers: [ChangeNotifierProvider<WorkspaceListViewModel>.value(value: vm)],
+    child: const WorkspaceListPage(
+      epk: _epk,
+      title: 'Workspaces',
+      device: 'Mac de Teste',
+    ),
+    dispose: () {
+      vm.dispose();
+      conn.dispose();
+    },
+  );
+}
+
 /// Telas capturadas: id -> builder.
 final _pages = <String, Future<_Scenario> Function(WidgetTester)>{
   'home-com-peer': (t) => _home(t),
@@ -578,6 +725,10 @@ final _pages = <String, Future<_Scenario> Function(WidgetTester)>{
   // gerenciar as skills/packages do Pi daquela máquina.
   'workspace-browser': _workspaceBrowser,
   'pi-surface': _piSurface,
+  // Plan/69 — pareamento por endereço + código (formulário) e o card de
+  // workspace com ciclo de vida (crashed + restart por 1 toque).
+  'pairing-address-code': _pairingForm,
+  'workspace-state': _workspaceState,
 };
 
 // ---------------------------------------------------------------------------
@@ -662,6 +813,8 @@ Future<void> _capture(
       ),
     ),
   );
+  // Interação opcional (abrir sheet, tocar botão) antes do settle.
+  await scenario.interact?.call(tester);
   // Pumps limitados: varias telas mostram spinner de Loading que nunca
   // settle, entao `pumpAndSettle` travaria.
   for (var i = 0; i < 6; i++) {

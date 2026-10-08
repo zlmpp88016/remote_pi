@@ -2,6 +2,8 @@
 
 **Status: EM EXECUÇÃO** (aberto 2026-09-28).
 
+> **Reaberto 2026-10-08 (plano 69)**: a hierarquia máquina→workspace→sessão continua, mas a **conexão canônica passa a ser o host** (presença = room `host`, `host_hello`, `workspace_state` push, restart pelo cliente). O pareamento passa a ser daemon-side — ver plano 69 W1.
+
 Objetivo: o app deixa de ser “1 pairing = 1 Pi session” e passa a **controlar o Pi na máquina alvo**: conectar (QR / relay) escolhe a **máquina**, depois o **workspace** (cwd), depois uma **sessão histórica** daquele cwd.
 
 Análise precedente: Session `20260928-analyze-app-session-history` (`ART-d15426153e51477ef5ac`). Viewing do transcript atual já existe; **seleção de AgentSession** exige reabrir `plan/00-decisions.md` (feito neste plano) + protocolo + pi-extension.

@@ -207,6 +207,7 @@
       "createWorkspace": "Criar workspace",
       "openLocalFolder": "Abrir pasta local",
       "connectHost": "Conectar a um host",
+      "connectRemotePi": "Host Remote Pi",
       "configureHost": "Configurar host",
       "addWorkspace": "Adicionar workspace"
     },
@@ -883,6 +884,75 @@
       "byHuman": "por você",
       "byAgent": "pelo agente",
       "caseTabTitle": "${type} · ${file}"
+    }
+  },
+  "remotePiHost": {
+    "header": {
+      "back": "Voltar",
+      "title": "Remote Pi"
+    },
+    "connect": {
+      "title": "Conectar a um host Remote Pi",
+      "subtitle": "Cole o código de pareamento gerado na máquina host com `remote-pi pair`. O daemon é residente (tipo sshd): nenhum processo Pi precisa estar rodando, e um Pi morto nunca derruba a conexão.",
+      "relayPlaceholder": "Endereço do relay (wss://…)",
+      "codePlaceholder": "Código de pareamento (remotepi://pair?…)",
+      "submit": "Conectar",
+      "connecting": "Conectando…",
+      "hint": "Na máquina host, rode `remote-pi pair` (sem Pi nenhum) e cole a URI aqui. O código é persistente até ser rotacionado com `remote-pi pair --rotate`; `--ephemeral` emite um código de uso único com 60 segundos de validade."
+    },
+    "daemon": {
+      "unknown": "daemon desconhecido"
+    },
+    "actions": {
+      "refresh": "Atualizar",
+      "disconnect": "Desconectar",
+      "restart": "Reiniciar"
+    },
+    "workspaces": {
+      "title": "WORKSPACES",
+      "empty": "Nenhum workspace ainda. Navegue o filesystem do host e inicie um Pi em qualquer diretório."
+    },
+    "workspaceState": {
+      "running": "rodando",
+      "starting": "iniciando",
+      "crashed": "caiu",
+      "stopped": "parado",
+      "crashedNoError": "caiu — sem detalhe de erro"
+    },
+    "detail": {
+      "selectWorkspace": "Selecione um workspace para navegar o filesystem e conversar com o Pi dele."
+    },
+    "fs": {
+      "title": "FILESYSTEM DO HOST",
+      "home": "Início",
+      "up": "Subir",
+      "emptyPath": "Navegue o filesystem do host para escolher um diretório.",
+      "repoBadge": "repo",
+      "startHere": "Iniciar Pi aqui"
+    },
+    "chat": {
+      "title": "Chat",
+      "empty": "Nenhuma mensagem ainda. Diga algo ao Pi deste workspace.",
+      "placeholder": "Mensagem para o Pi…",
+      "send": "Enviar"
+    },
+    "error": {
+      "connection": "Não foi possível alcançar o relay: ${detail}",
+      "handshake": "Handshake com o relay falhou: ${detail}",
+      "pairing": "O host recusou o pareamento: ${message}",
+      "timeout": "Sem resposta para ${request} — o host não respondeu a tempo.",
+      "protocol": "Resposta inesperada do host: ${detail}",
+      "closed": "A conexão foi fechada. Tente conectar de novo.",
+      "notFound": "Caminho não encontrado no host.",
+      "notADirectory": "O caminho existe mas não é um diretório.",
+      "permissionDenied": "O host não consegue ler este diretório.",
+      "spawnFailed": "O host não conseguiu iniciar o Pi neste diretório.",
+      "rejected": "O host rejeitou a ação: ${code}",
+      "codeNotAUri": "O código colado não é uma URI.",
+      "codeWrongScheme": "Esperado uma URI remotepi://pair?…",
+      "codeMissingField": "O código não tem os campos t/epk/n.",
+      "codeBadToken": "O token do código está malformado.",
+      "codeBadEpk": "A chave do host no código está malformada."
     }
   },
   "settings": {

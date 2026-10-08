@@ -27,8 +27,17 @@ function ed25519FromRaw(rawB64) {
 }
 
 export class RelayStub extends EventEmitter {
-  constructor() {
+  /**
+   * @param {object} [opts]
+   * @param {boolean} [opts.faithful] Modo fiel ao relay real (plano 69):
+   *   roteia por (peer de destino, room de destino) e reescreve o envelope
+   *   entregue com peer+room do REMETENTE (relay/src/handlers/peer.rs). O
+   *   default continua sendo o modo simples (entrega aos outros peers da
+   *   room do remetente) — do qual o e2e do plan/68 depende.
+   */
+  constructor(opts = {}) {
     super();
+    this.faithful = opts.faithful === true;
     this.server = null;
     this.wss = null;
     /** room_id → Set<PeerConn> */
@@ -102,6 +111,20 @@ export class RelayStub extends EventEmitter {
       if (!msg.ct || !msg.peer) return;
       this.routed.push(msg);
       this.emit("routed", msg);
+      if (this.faithful) {
+        // Relay real: entrega em (dest.peer, dest.room) — default "main" quando
+        // o envelope não traz room — reescrevendo com peer+room do remetente.
+        const destRoom = msg.room || "main";
+        const destSet = this.rooms.get(destRoom);
+        if (!destSet) return;
+        const rewritten = JSON.stringify({ peer: peer.pubkey, room: peer.roomId, ct: msg.ct });
+        for (const other of destSet) {
+          if (other === peer) continue;
+          if (other.pubkey !== msg.peer) continue;
+          if (other.ws.readyState === other.ws.OPEN) other.ws.send(rewritten);
+        }
+        return;
+      }
       const set = this.rooms.get(peer.roomId);
       if (!set) return;
       const line = JSON.stringify(msg);

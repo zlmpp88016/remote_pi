@@ -81,7 +81,7 @@ void main() {
       final future = s.repo.compact();
       // Let the send complete so we can fish the id out.
       await Future<void>.delayed(const Duration(milliseconds: 1));
-      final sent = s.ch.sent.single as SessionCompact;
+      final sent = s.ch.sent.whereType<SessionCompact>().single;
       s.ch.push(
         ActionOk(
           inReplyTo: sent.id,
@@ -97,7 +97,7 @@ void main() {
       final s = await _setup();
       final future = s.repo.compact();
       await Future<void>.delayed(const Duration(milliseconds: 1));
-      final sent = s.ch.sent.single as SessionCompact;
+      final sent = s.ch.sent.whereType<SessionCompact>().single;
       s.ch.push(
         ActionError(
           inReplyTo: sent.id,
@@ -123,7 +123,7 @@ void main() {
       final s = await _setup();
       final future = s.repo.newSession();
       await Future<void>.delayed(const Duration(milliseconds: 1));
-      final sent = s.ch.sent.single as SessionNew;
+      final sent = s.ch.sent.whereType<SessionNew>().single;
       expect(sent.toJson()['type'], 'session_new');
       s.ch.push(
         ActionOk(
@@ -140,7 +140,7 @@ void main() {
       final s = await _setup();
       final future = s.repo.setModel('anthropic', 'claude-opus-4-7');
       await Future<void>.delayed(const Duration(milliseconds: 1));
-      final sent = s.ch.sent.single as ModelSet;
+      final sent = s.ch.sent.whereType<ModelSet>().single;
       expect(sent.provider, 'anthropic');
       expect(sent.modelId, 'claude-opus-4-7');
       s.ch.push(
@@ -158,7 +158,7 @@ void main() {
       final s = await _setup();
       final future = s.repo.setThinking(ThinkingLevel.high);
       await Future<void>.delayed(const Duration(milliseconds: 1));
-      final sent = s.ch.sent.single as ThinkingSet;
+      final sent = s.ch.sent.whereType<ThinkingSet>().single;
       expect(sent.level, ThinkingLevel.high);
       expect(sent.toJson()['level'], 'high');
       s.ch.push(
@@ -178,7 +178,7 @@ void main() {
       final s = await _setup();
       final future = s.repo.listModels();
       await Future<void>.delayed(const Duration(milliseconds: 1));
-      final sent = s.ch.sent.single as ListModels;
+      final sent = s.ch.sent.whereType<ListModels>().single;
       const opus = WireModel(
         id: 'claude-opus-4-7',
         name: 'Claude Opus 4.7',
@@ -212,7 +212,7 @@ void main() {
         final s = await _setup();
         final firstFuture = s.repo.listModels();
         await Future<void>.delayed(const Duration(milliseconds: 1));
-        final sent = s.ch.sent.single as ListModels;
+        final sent = s.ch.sent.whereType<ListModels>().single;
         const m = WireModel(
           id: 'gpt-4o',
           name: 'GPT-4o',
@@ -236,7 +236,7 @@ void main() {
       final s = await _setup();
       final firstFuture = s.repo.listModels();
       await Future<void>.delayed(const Duration(milliseconds: 1));
-      final firstSent = s.ch.sent.single as ListModels;
+      final firstSent = s.ch.sent.whereType<ListModels>().single;
       s.ch.push(ModelsList(inReplyTo: firstSent.id, models: const []));
       await firstFuture;
 
@@ -254,7 +254,7 @@ void main() {
       // Prime the cache.
       final firstList = s.repo.listModels();
       await Future<void>.delayed(const Duration(milliseconds: 1));
-      final firstSent = s.ch.sent.single as ListModels;
+      final firstSent = s.ch.sent.whereType<ListModels>().single;
       s.ch.push(ModelsList(inReplyTo: firstSent.id, models: const []));
       await firstList;
 

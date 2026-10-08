@@ -1234,6 +1234,59 @@ class WorkspaceStop extends ClientMessage {
   };
 }
 
+/// Plan/69 — host-first handshake. Sent on boot/reconnect of the machine
+/// connection (which is anchored on room `host`); the host answers
+/// `host_hello_ok` with its real version/hostname (never fabricated).
+class HostHello extends ClientMessage {
+  final String id;
+  HostHello({required this.id});
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'host_hello', 'id': id};
+}
+
+/// Plan/69 — restart a workspace by cwd. Idempotent host-side: a workspace
+/// that is already `running` answers `workspace_restart_ok` without
+/// respawning anything.
+class WorkspaceRestart extends ClientMessage {
+  final String id;
+  final String cwd;
+  WorkspaceRestart({required this.id, required this.cwd});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'workspace_restart',
+    'id': id,
+    'cwd': cwd,
+  };
+}
+
+/// Plan/69 — proxy envelope (spike decision B). The app anchors on room
+/// `host` ONLY — one connection cannot sustain room `host` plus workspace
+/// rooms because the app-side demux drops envelopes from a non-active room
+/// (spike E2c). A child-addressed ClientMessage therefore rides inside
+/// `host_forward{room, ct}` addressed to the host; `ct` is base64 of the
+/// inner ClientMessage JSON. Replies come back as `host_message`
+/// (`lib/data/transport/host_proxy.dart` does the wrap/unwrap).
+class HostForward extends ClientMessage {
+  final String id;
+
+  /// Child room the host must re-emit to.
+  final String room;
+
+  /// Base64 of the inner ClientMessage JSON.
+  final String ct;
+  HostForward({required this.id, required this.room, required this.ct});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'host_forward',
+    'id': id,
+    'room': room,
+    'ct': ct,
+  };
+}
+
 /// Plan/68 — ask the host to list one directory so the user can pick a cwd
 /// by walking the host's tree. The client never resolves a path itself.
 class FsList extends ClientMessage {
@@ -1418,6 +1471,14 @@ sealed class ServerMessage {
       'workspace_list_ok' => WorkspaceListOk.fromJson(json),
       'workspace_start_ok' => WorkspaceStartOk.fromJson(json),
       'workspace_stop_ok' => WorkspaceStopOk.fromJson(json),
+      // Plan/69 — host-first handshake + workspace lifecycle + restart.
+      'host_hello_ok' => HostHelloOk.fromJson(json),
+      'workspace_state' => WorkspaceState.fromJson(json),
+      'workspace_restart_ok' => WorkspaceRestartOk.fromJson(json),
+      'workspace_restart_error' => WorkspaceRestartError.fromJson(json),
+      // Plan/69 — proxy wrapper. Normally unwrapped by WsTransport before
+      // reaching the channel; registered so a stray frame still decodes.
+      'host_message' => HostMessage.fromJson(json),
       // Plan/68 — host filesystem navigation for the workspace picker.
       'fs_list_ok' => FsListOk.fromJson(json),
       // Plan/68 — Pi surface (skills + packages) and its management acks.
@@ -2428,6 +2489,167 @@ class WorkspaceStopOk extends ServerMessage {
     inReplyTo: j['in_reply_to'] as String,
     cwd: j['cwd'] as String,
     daemonId: j['daemon_id'] as String,
+  );
+}
+
+/// Plan/69 — `daemon` block of `host_hello_ok`. Every field is nullable
+/// because the host reports `null` rather than fabricating a value it
+/// cannot determine (PROTOCOL.md: never fabricate).
+class HostDaemonInfo {
+  final String? version;
+  final String? hostname;
+  final String? platform;
+  const HostDaemonInfo({this.version, this.hostname, this.platform});
+
+  factory HostDaemonInfo.fromJson(Map<String, dynamic> j) => HostDaemonInfo(
+    version: j['version'] as String?,
+    hostname: j['hostname'] as String?,
+    platform: j['platform'] as String?,
+  );
+}
+
+/// Plan/69 — reply to `host_hello`. `capabilities` is the closed
+/// vocabulary the host actually implements (`host_pairing`,
+/// `workspace_state`, `host_forward`, `fs_nav`, …).
+class HostHelloOk extends ServerMessage {
+  final String inReplyTo;
+  final HostDaemonInfo daemon;
+  final List<String> capabilities;
+  HostHelloOk({
+    required this.inReplyTo,
+    required this.daemon,
+    required this.capabilities,
+  });
+
+  factory HostHelloOk.fromJson(Map<String, dynamic> j) => HostHelloOk(
+    inReplyTo: j['in_reply_to'] as String,
+    daemon: HostDaemonInfo.fromJson(
+      (j['daemon'] as Map<String, dynamic>?) ?? const <String, dynamic>{},
+    ),
+    capabilities: ((j['capabilities'] as List<dynamic>?) ?? const <dynamic>[])
+        .map((e) => e as String)
+        .toList(),
+  );
+}
+
+/// Plan/69 — lifecycle state of a workspace Pi, mirroring the supervisor's
+/// ChildSlot. Same closed union as `WorkspaceState` in
+/// `pi-extension/src/protocol/types.ts`.
+enum WorkspaceStateValue {
+  running('running'),
+  starting('starting'),
+  crashed('crashed'),
+  stopped('stopped');
+
+  final String wire;
+  const WorkspaceStateValue(this.wire);
+
+  static WorkspaceStateValue fromWire(String? s) => switch (s) {
+    'running' => WorkspaceStateValue.running,
+    'starting' => WorkspaceStateValue.starting,
+    'crashed' => WorkspaceStateValue.crashed,
+    'stopped' => WorkspaceStateValue.stopped,
+    // Forward-compat: a host newer than the app may add a state. Map it to
+    // the least-alarming known value and keep the raw string so the UI can
+    // show what actually arrived instead of guessing.
+    _ => WorkspaceStateValue.stopped,
+  };
+}
+
+/// Plan/69 — lifecycle PUSH from the host (NOT a reply): emitted when the
+/// supervisor detects a child exit, restart (backoff), start or stop. There
+/// is no `in_reply_to` — it is unsolicited. `crashed` carries `last_error`;
+/// the machine connection stays online in every state.
+class WorkspaceState extends ServerMessage {
+  final String cwd;
+  final WorkspaceStateValue state;
+
+  /// Why the workspace crashed; `null` in every non-crashed state.
+  final String? lastError;
+
+  /// How many times the supervisor respawned this workspace.
+  final int restarts;
+
+  /// Raw wire value of `state` — kept verbatim so a state this build does
+  /// not know about is still displayed honestly.
+  final String rawState;
+
+  WorkspaceState({
+    required this.cwd,
+    required this.state,
+    required this.lastError,
+    required this.restarts,
+    required this.rawState,
+  });
+
+  factory WorkspaceState.fromJson(Map<String, dynamic> j) {
+    final raw = (j['state'] as String?) ?? '';
+    return WorkspaceState(
+      cwd: (j['cwd'] as String?) ?? '',
+      state: WorkspaceStateValue.fromWire(raw),
+      lastError: j['last_error'] as String?,
+      restarts: (j['restarts'] as num?)?.toInt() ?? 0,
+      rawState: raw,
+    );
+  }
+}
+
+/// Plan/69 — reply to `workspace_restart`. Idempotent host-side: a running
+/// workspace answers this without respawning.
+class WorkspaceRestartOk extends ServerMessage {
+  final String inReplyTo;
+  final String cwd;
+  final String daemonId;
+  WorkspaceRestartOk({
+    required this.inReplyTo,
+    required this.cwd,
+    required this.daemonId,
+  });
+
+  factory WorkspaceRestartOk.fromJson(Map<String, dynamic> j) =>
+      WorkspaceRestartOk(
+        inReplyTo: j['in_reply_to'] as String,
+        cwd: j['cwd'] as String,
+        daemonId: j['daemon_id'] as String,
+      );
+}
+
+/// Plan/69 — typed refusal of `workspace_restart`. `code` is kept as the
+/// raw wire string (same convention as `PairError.code` / `ErrorMessage.code`)
+/// so a host newer than the app is not silently dropped.
+class WorkspaceRestartError extends ServerMessage {
+  final String inReplyTo;
+
+  /// `spawn_failed` | `not_found` (closed union host-side).
+  final String code;
+  final String message;
+  WorkspaceRestartError({
+    required this.inReplyTo,
+    required this.code,
+    required this.message,
+  });
+
+  factory WorkspaceRestartError.fromJson(Map<String, dynamic> j) =>
+      WorkspaceRestartError(
+        inReplyTo: j['in_reply_to'] as String,
+        code: (j['code'] as String?) ?? '',
+        message: (j['message'] as String?) ?? '',
+      );
+}
+
+/// Plan/69 — proxy wrapper (spike decision B): the host re-wraps a child
+/// ServerMessage that arrived addressed to the machine's own Pi-key. `ct`
+/// is base64 of the inner ServerMessage; `room` is the child room it came
+/// from, so the client files it per workspace. Unwrapped by the transport
+/// (see `host_proxy.dart`) — consumers above the channel never see it.
+class HostMessage extends ServerMessage {
+  final String room;
+  final String ct;
+  HostMessage({required this.room, required this.ct});
+
+  factory HostMessage.fromJson(Map<String, dynamic> j) => HostMessage(
+    room: (j['room'] as String?) ?? '',
+    ct: (j['ct'] as String?) ?? '',
   );
 }
 

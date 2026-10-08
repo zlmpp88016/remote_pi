@@ -6,6 +6,7 @@ import { addDaemon, listDaemons, migrateRegistryNames, removeDaemon } from "./re
 import { addWorkspace, listWorkspaces, removeWorkspace } from "./workspaces.js";
 import { daemonIdForCwd } from "./id.js";
 import { defaultAgentName, type LocalConfig } from "../session/local_config.js";
+import { resolveRelayUrl } from "../config.js";
 import { ipcAddress, usesNamedPipe } from "../session/ipc.js";
 import { EXIT_DAEMON_FRESH_SESSION, RpcChild, type RpcChildExitEvent, type RpcChildOptions } from "./rpc_child.js";
 import {
@@ -31,7 +32,12 @@ import {
 } from "./cron_registry.js";
 import { appendCronLog, readCronLog, type CronResult } from "./cron_log.js";
 import { HostBridge } from "./host_bridge.js";
-import type { FleetEntry, FleetOps } from "./host_control.js";
+import { hostSessionName, type FleetEntry, type FleetOps } from "./host_control.js";
+import { HostPairingSession } from "../pairing/host_pairing.js";
+import { buildQRUri } from "../pairing/qr.js";
+import { getOrCreateEd25519Keypair } from "../pairing/storage.js";
+import { HOST_ROOM_ID } from "../protocol/types.js";
+import type { HostPairingRecord } from "../pairing/host_pairing.js";
 
 /**
  * Central process that owns the daemon fleet (plan/26).
@@ -105,6 +111,12 @@ export interface SupervisorOptions {
   piBin?: string;
   /** Plan/67 — skip the host-room relay (unit tests / offline). */
   skipHost?: boolean;
+  /** Plan/69 — inject the HostBridge (tests). Defaults to a fresh one bound
+   *  to this supervisor's fleet + pairing; `skipHost` still suppresses it. */
+  host?: HostBridge;
+  /** Plan/69 — override the host pairing-token store (tests). Defaults to a
+   *  fresh `HostPairingSession` bound to `~/.pi/remote/pairing.json`. */
+  pairing?: HostPairingSession;
 }
 
 /** Pure decision for `fireJob` (plan/39) — picks the action from the daemon's
@@ -127,6 +139,10 @@ interface ChildSlot {
   child: RpcChild;
   restartTimer: ReturnType<typeof setTimeout> | null;
   restartAttempt: number;
+  /** Plan/69 — reason of the most recent crash, pushed verbatim in
+   *  `workspace_state.last_error` (never fabricated). Cleared on a fresh
+   *  spawn: a running workspace carries no current error. */
+  lastError: string | null;
 }
 
 export class Supervisor {
@@ -137,8 +153,15 @@ export class Supervisor {
   private shuttingDown = false;
   /** Plan/67 — always-on relay room `host`. */
   private host: HostBridge | null = null;
+  /** Plan/69 — the daemon-side pairing token (`~/.pi/remote/pairing.json`).
+   *  Owned by the supervisor (NOT by any Pi process) so `remote-pi pair`
+   *  works with zero Pi running; shared with the HostBridge, which consumes
+   *  it on the host room. */
+  private readonly pairing: HostPairingSession;
 
-  constructor(private readonly opts: SupervisorOptions) {}
+  constructor(private readonly opts: SupervisorOptions) {
+    this.pairing = opts.pairing ?? new HostPairingSession();
+  }
 
   /** Bind the control UDS + spawn all registered daemons. */
   async start(): Promise<void> {
@@ -152,7 +175,9 @@ export class Supervisor {
     this._reconcileCron();
     this._runCatchup();
     if (!this.opts.skipHost) {
-      this.host = new HostBridge({ fleet: this._fleetOps() });
+      this.host =
+        this.opts.host ??
+        new HostBridge({ fleet: this._fleetOps(), pairing: this.pairing });
       void this.host.start().catch((err) => {
         process.stderr.write(`[pi-supervisord] host room failed: ${String(err)}\n`);
       });
@@ -263,6 +288,8 @@ export class Supervisor {
       case "cron_enable":  return this._opCronEnable(req.job_id, req.enabled);
       case "cron_run":     return this._opCronRun(req.job_id);
       case "cron_log":     return this._opCronLog(req.job_id, req.tail);
+      case "pair_show":    return this._opPairShow(req.ephemeral);
+      case "pair_rotate":  return this._opPairRotate(req.ephemeral);
       default: {
         const unknown = (req as { op: string }).op;
         return { ok: false, error: `unknown op: ${unknown}` };
@@ -486,6 +513,48 @@ export class Supervisor {
     return { ok: true, data: { entries: readCronLog(opts) } };
   }
 
+  // ── Pairing ops (plan/69) ─────────────────────────────────────────────────
+
+  /**
+   * Returns the active host pairing code, issuing a persistent one when
+   * none exists yet (or when the stored one is a spent ephemeral token).
+   * `ephemeral: true` always issues a fresh short-TTL token.
+   */
+  private async _opPairShow(ephemeral?: boolean): Promise<ControlReply<unknown>> {
+    if (ephemeral) return this._pairView(await this.pairing.issue({ ephemeral: true }));
+    const current = await this.pairing.show();
+    if (current && current.persistent) return this._pairView(current);
+    return this._pairView(await this.pairing.issue({}));
+  }
+
+  /** Invalidates the previous code and issues a fresh one (persistent by
+   *  default, ephemeral on request). */
+  private async _opPairRotate(ephemeral?: boolean): Promise<ControlReply<unknown>> {
+    return this._pairView(await this.pairing.issue({ ephemeral }));
+  }
+
+  /**
+   * Builds the frozen pairing URI from the stored token. `epk` is the Pi's
+   * long-term Ed25519 key (the same identity the HostBridge relays under),
+   * `rm=host` addresses the machine room and `r` names the configured relay
+   * so a self-hosted relay is discoverable from the code alone.
+   */
+  private async _pairView(record: HostPairingRecord): Promise<ControlReply<unknown>> {
+    const keypair = await getOrCreateEd25519Keypair();
+    const { url } = resolveRelayUrl();
+    const uri = buildQRUri(record.token, keypair.publicKey, hostSessionName(), HOST_ROOM_ID, url);
+    return {
+      ok: true,
+      data: {
+        uri,
+        token: record.token,
+        expires_at: record.expires_at,
+        persistent: record.persistent,
+        room_id: HOST_ROOM_ID,
+      },
+    };
+  }
+
   private _jobView(job: CronJob): CronJobView {
     const next = nextRunFor(job);
     return { ...job, next_run: next ? next.toISOString() : null };
@@ -608,17 +677,50 @@ export class Supervisor {
     };
     if (this.opts.piBin !== undefined) childOpts.piBin = this.opts.piBin;
     const child = new RpcChild(childOpts);
-    const slot: ChildSlot = { id, cwd, child, restartTimer: null, restartAttempt: 0 };
+    const slot: ChildSlot = { id, cwd, child, restartTimer: null, restartAttempt: 0, lastError: null };
     this.children.set(id, slot);
 
     child.on("exit", (evt: RpcChildExitEvent) => this._onChildExit(id, evt));
     child.spawn();
+    // Plan/69 — the spawn itself is a lifecycle transition (start / restart):
+    // mirror the slot to the host room. `state` is `running` on a successful
+    // spawn (RpcChild.spawn publishes it synchronously).
+    this._pushWorkspaceState(id);
+  }
+
+  /**
+   * Plan/69 — push the ChildSlot's current state to the host room. Mirrors
+   * the slot verbatim: `state` is the child's own DaemonState, `restarts`
+   * its restart counter, `last_error` the recorded crash reason (null when
+   * none / freshly spawned). No-op without a host bridge (skipHost).
+   */
+  private _pushWorkspaceState(id: string): void {
+    const slot = this.children.get(id);
+    if (!slot || !this.host) return;
+    this.host.pushWorkspaceState({
+      cwd: slot.cwd,
+      state: slot.child.state,
+      last_error: slot.lastError,
+      restarts: slot.child.restartCount,
+    });
   }
 
   private _onChildExit(id: string, evt: RpcChildExitEvent): void {
     if (this.shuttingDown) return;
     const slot = this.children.get(id);
     if (!slot) return;
+
+    if (evt.isCrash) {
+      slot.lastError =
+        evt.error ??
+        (evt.signal !== null
+          ? `killed by signal ${evt.signal}`
+          : `exited with code ${evt.code ?? "null"}`);
+    }
+    // Plan/69 — every exit is a transition (crash → `crashed` + last_error;
+    // clean stop → `stopped`), pushed BEFORE any restart decision so the app
+    // sees the down state even when a backoff respawn follows immediately.
+    this._pushWorkspaceState(id);
 
     if (!evt.isCrash) {
       // Clean shutdown (e.g. via `stop_all`). Don't auto-restart.
@@ -629,8 +731,10 @@ export class Supervisor {
       // App-triggered daemon `/new`: this is an intentional recycle, not a
       // crash. Restart immediately and don't burn the crash backoff budget.
       slot.restartAttempt = 0;
+      slot.lastError = null;  // fresh spawn — no current error
       slot.child.noteRestart();
       slot.child.spawn();
+      this._pushWorkspaceState(id);
       return;
     }
 
@@ -649,8 +753,12 @@ export class Supervisor {
     slot.restartTimer = setTimeout(() => {
       slot.restartTimer = null;
       slot.restartAttempt += 1;
+      slot.lastError = null;  // fresh spawn — no current error
       slot.child.noteRestart();
       slot.child.spawn();
+      // Plan/69 — the backoff respawn is the `restart` transition: restarts
+      // counter already bumped by noteRestart(), state now `running`.
+      this._pushWorkspaceState(id);
     }, delay);
   }
 

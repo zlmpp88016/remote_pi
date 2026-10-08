@@ -45,6 +45,12 @@ export function createFleet({ extensionPath, RpcChild, workspaces, registry, id,
   return {
     /** Exposto para o e2e asseverar a persistência real. */
     storedWorkspaces: () => workspaces.listWorkspaces(),
+    /** PID do processo real do workspace (para o e2e matar o Pi de propósito
+     *  e provar que a conexão da máquina sobrevive — plan/69 ciclo de vida). */
+    pidOf: (cwd) => {
+      const daemonId = id.daemonIdForCwd(cwd);
+      return children.get(daemonId)?.pid;
+    },
     daemonsPath: () => registry.registryPath(),
     workspacesPath: () => workspaces.workspacesPath(),
 

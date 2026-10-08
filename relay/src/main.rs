@@ -40,6 +40,22 @@ async fn main() -> anyhow::Result<()> {
     ));
     let mesh_auth = Arc::new(relay::MeshAuthCache::new());
 
+    // Plan 69 W4 — read the Origin allowlist once at startup. Empty/unset
+    // keeps the historical behaviour: every WS origin (and every header-less
+    // native client) is accepted. Log the effective value so ops can confirm
+    // RELAY_ALLOWED_ORIGINS took effect.
+    let origin_policy = Arc::new(relay::OriginPolicy::from_env());
+    if origin_policy.is_enabled() {
+        info!(
+            origins = ?origin_policy.entries(),
+            "origin allowlist active (RELAY_ALLOWED_ORIGINS)"
+        );
+    } else {
+        info!(
+            "origin allowlist disabled (RELAY_ALLOWED_ORIGINS unset/empty) — all WS origins accepted"
+        );
+    }
+
     // Background reporter: drain firehose counters every 10 s and emit a
     // single structured log line. Quiet windows are silent.
     let metrics_for_reporter = metrics.clone();
@@ -59,6 +75,7 @@ async fn main() -> anyhow::Result<()> {
         mesh,
         mesh_auth,
         metrics,
+        origin_policy,
     };
     let app = relay::build_router(state);
 

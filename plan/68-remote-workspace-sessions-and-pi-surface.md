@@ -2,6 +2,8 @@
 
 **Status: APROVADO pelo usuário (2026-10-08)** — executar sem nova consulta.
 
+> **Reaberto 2026-10-08 (plano 69)**: os "Próximos planos" (Windows e Web) **entram no escopo agora**. O pareamento por colagem permanece (payload congelado), mas o emissor pode ser o daemon (`remote-pi pair` sem Pi, `rm=host`) e o cliente web/pc passa a ser cidadão de primeira classe. Ver plano 69.
+
 ## Instruções do usuário (fechadas nesta conversa)
 
 | # | Instrução |

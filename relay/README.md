@@ -115,6 +115,7 @@ state at the next mutation.
 |---|---|---|
 | `REMOTEPI_RELAY_PORT` | `3000` | TCP port that serves the WebSocket upgrade, `/health`, and `/mesh/*` (all on the same port) |
 | `REMOTEPI_MESH_DB_PATH` | `/data/mesh.db` in Docker · `data/mesh.db` (cwd-relative) for bare-metal builds | Path to the SQLite database that stores signed membership versions. The parent directory is created automatically on first boot. The Docker image presets this to `/data/mesh.db` and declares `/data` as a volume — see the volume note above |
+| `RELAY_ALLOWED_ORIGINS` | _(empty)_ | Comma-separated `Origin` allowlist for browser WebSocket upgrades. Empty/unset (the default) accepts every origin; when set, browser handshakes whose `Origin` is not listed are refused with `403`. See the allowlist section below |
 | `RUST_LOG` | _(none)_ | Log level filter — e.g. `info`, `debug`, `warn` |
 
 Example with a custom port and logging (volume mount is the same):
@@ -129,6 +130,46 @@ docker run -d \
   --restart unless-stopped \
   jacobmoura7/remote-pi-relay
 ```
+
+### WebSocket origin allowlist (browser clients)
+
+Browsers attach an `Origin` header to every WebSocket handshake. The relay
+lets you restrict which origins may open **browser** connections without
+affecting native clients:
+
+```bash
+docker run -d \
+  --name remote-pi-relay \
+  -p 3000:3000 \
+  -v remote-pi-data:/data \
+  -e RELAY_ALLOWED_ORIGINS="https://app.example.com,https://cockpit.example.com" \
+  --restart unless-stopped \
+  jacobmoura7/remote-pi-relay
+```
+
+```bash
+RELAY_ALLOWED_ORIGINS="https://app.example.com" RUST_LOG=info ./target/release/relay
+```
+
+- **Unset / empty / whitespace-only (default): every origin is accepted** —
+  the relay's historical behaviour. Deployments that don't serve a web client
+  need no change.
+- **Set:** handshakes carrying an `Origin` outside the list are refused with
+  `403 Forbidden` before the upgrade completes. Entries are matched
+  **exactly** (case-sensitive; scheme + host + port; no wildcards and no
+  paths). Browsers lowercase scheme and host, so write entries in lowercase.
+- **No `Origin` header (app, `pi-extension`, Cockpit): always accepted**, so
+  an active allowlist never breaks native clients.
+
+This is a browser-context restriction, **not** an authentication mechanism —
+a non-browser client can simply omit the header. WebSocket authentication
+remains the Ed25519 hello/challenge handshake.
+
+**WebSocket subprotocol echo:** if the client sends
+`Sec-WebSocket-Protocol`, the relay echoes the first requested protocol back
+in the `101` response. The relay frames nothing protocol-specific — the echo
+only satisfies browser clients that require one. No header → no echo, which
+is valid per RFC 6455.
 
 ### Mesh membership endpoint
 

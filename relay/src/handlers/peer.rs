@@ -4,7 +4,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{ConnectInfo, State};
-use axum::response::Response;
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
+use axum::response::{IntoResponse, Response};
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
@@ -22,10 +23,55 @@ use crate::rooms::{RoomMeta, RoomMetaPatch};
 /// socket to `handle_peer`, which owns the connection for its lifetime.
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
+    headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
 ) -> Response {
-    ws.on_upgrade(move |socket| handle_peer(socket, addr, state))
+    // ── Origin allowlist (plano 69 W4) ─────────────────────────────────────
+    // Browsers attach an `Origin` header to the WS handshake; native clients
+    // (app, pi-extension, Cockpit) send none. With an allowlist configured,
+    // an unlisted origin is refused before the upgrade; with it empty (the
+    // default) every origin is accepted — historical behaviour preserved.
+    // A malformed (non-UTF-8) header value maps to "", which never matches a
+    // configured entry, so it is refused while the allowlist is active.
+    let origin = headers
+        .get(header::ORIGIN)
+        .map(|value| value.to_str().unwrap_or(""));
+    if !state.origin_policy.allows(origin) {
+        warn!(
+            addr = %addr,
+            origin = ?origin,
+            "ws upgrade refused: origin not on allowlist (RELAY_ALLOWED_ORIGINS)"
+        );
+        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
+    }
+
+    // ── Subprotocol echo (plano 69 W4) ─────────────────────────────────────
+    // The relay frames nothing protocol-specific, so the negotiated
+    // subprotocol is simply the first one the client requested; echoing it in
+    // the 101 keeps browser clients that require an echo happy. Absent
+    // header → no echo, which is valid per RFC 6455.
+    let protocol = select_subprotocol(headers.get(header::SEC_WEBSOCKET_PROTOCOL));
+    let response = ws.on_upgrade(move |socket| handle_peer(socket, addr, state));
+    match protocol {
+        Some(protocol) => {
+            let (mut parts, body) = response.into_parts();
+            parts
+                .headers
+                .insert(header::SEC_WEBSOCKET_PROTOCOL, protocol);
+            Response::from_parts(parts, body)
+        }
+        None => response,
+    }
+}
+
+/// Echoes the first token of the client's `Sec-WebSocket-Protocol` header (a
+/// comma-separated list per RFC 6455). Returns `None` when the client
+/// requested no protocol — the 101 then carries no subprotocol.
+fn select_subprotocol(value: Option<&HeaderValue>) -> Option<HeaderValue> {
+    let raw = value?.to_str().ok()?;
+    let first = raw.split(',').map(str::trim).find(|token| !token.is_empty())?;
+    HeaderValue::from_str(first).ok()
 }
 
 /// Owns one peer's WebSocket connection: hello/challenge/auth → register →
@@ -395,4 +441,31 @@ async fn handle_peer(socket: WebSocket, peer_addr: SocketAddr, state: AppState) 
     registry.unregister(&peer_id, &room_id, conn_id).await;
     rooms.unsubscribe_all(&peer_id).await;
     info!(peer = %peer_short, room = %room_id, addr = %peer_addr, "disconnected");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn echoes_first_requested_subprotocol() {
+        let value = HeaderValue::from_static("remotepi, chat");
+        let echoed = select_subprotocol(Some(&value)).expect("first token must be echoed");
+        assert_eq!(echoed.to_str().unwrap(), "remotepi");
+    }
+
+    #[test]
+    fn echoes_single_subprotocol_trimmed() {
+        let value = HeaderValue::from_static("  remotepi  ");
+        let echoed = select_subprotocol(Some(&value)).expect("single token must be echoed");
+        assert_eq!(echoed.to_str().unwrap(), "remotepi");
+    }
+
+    #[test]
+    fn no_subprotocol_header_means_no_echo() {
+        assert!(select_subprotocol(None).is_none());
+        // Only empty tokens → still no echo (RFC 6455 allows an empty list).
+        let value = HeaderValue::from_static(" , ");
+        assert!(select_subprotocol(Some(&value)).is_none());
+    }
 }

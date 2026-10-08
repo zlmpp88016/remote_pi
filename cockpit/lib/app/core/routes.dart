@@ -4,6 +4,9 @@
 abstract final class RoutePaths {
   static const String shell = '/';
   static const String settings = '/settings';
+
+  /// Plano 69 W3 — superfície Remote Pi (pareamento host, workspaces/fs/chat).
+  static const String remotePiHost = '/remote-pi';
 }
 
 /// Aba inicial da tela de Configurações, passada como `arguments` do

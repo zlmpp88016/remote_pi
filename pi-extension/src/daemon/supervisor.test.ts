@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { createConnection } from "node:net";
 import { join } from "node:path";
 import { Supervisor, decideFireAction, getSupervisorSockPath } from "./supervisor.js";
+import * as storage from "../pairing/storage.js";
 import { addDaemon } from "./registry.js";
 import { readCronLog } from "./cron_log.js";
 import {
@@ -357,5 +358,65 @@ describe("Supervisor — workspace_start on an unregistered cwd (plan/68)", () =
     expect(daemons.ok && daemons.data!.daemons).toHaveLength(0);
 
     rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("Supervisor — pairing ops (plan/69)", () => {
+  // Hermetic identity: an in-memory keyring backend, so pair_show's
+  // getOrCreateEd25519Keypair() never touches the machine's real keyring or
+  // ~/.pi/remote/identity.json (a real paired-peers file would otherwise
+  // make a CI host fail with PairedIdentityMissingError).
+  beforeEach(() => {
+    storage._setKeyStoreBackendForTest({
+      read: async () => undefined,
+      write: async () => undefined,
+      delete: async () => false,
+    } as never);
+  });
+  afterEach(() => {
+    storage._setKeyStoreBackendForTest(null);
+  });
+
+  test("pair_show issues a persistent code; pair_rotate invalidates it", async () => {
+    const r1 = await ask({ op: "pair_show" }) as ControlReply<{
+      uri: string; token: string; expires_at: number | null; persistent: boolean; room_id: string;
+    }>;
+    expect(r1.ok).toBe(true);
+    const d1 = r1.data!;
+    expect(d1.persistent).toBe(true);
+    expect(d1.expires_at).toBeNull();
+    expect(d1.room_id).toBe("host");
+    expect(d1.uri.startsWith("remotepi://pair?")).toBe(true);
+
+    const params = new URLSearchParams(d1.uri.slice("remotepi://pair?".length));
+    expect(params.get("t")).toBe(d1.token);
+    expect(params.get("rm")).toBe("host");
+    expect(params.get("epk")).toBeTruthy();
+    expect(params.get("n")).toBe(hostname());
+    expect(params.get("r")).toBeTruthy();
+
+    // Persistent codes are stable across calls — this is the "predefined on
+    // the host" contract (the code survives supervisor restarts).
+    const r2 = await ask({ op: "pair_show" }) as ControlReply<{ token: string }>;
+    expect(r2.data!.token).toBe(d1.token);
+
+    // --rotate mints a new token; the old one is gone from the store.
+    const r3 = await ask({ op: "pair_rotate" }) as ControlReply<{ token: string }>;
+    expect(r3.data!.token).not.toBe(d1.token);
+    const r4 = await ask({ op: "pair_show" }) as ControlReply<{ token: string }>;
+    expect(r4.data!.token).toBe(r3.data!.token);
+  });
+
+  test("pair_show --ephemeral issues a fresh short-TTL token each call", async () => {
+    const r = await ask({ op: "pair_show", ephemeral: true }) as ControlReply<{
+      token: string; persistent: boolean; expires_at: number | null; uri: string;
+    }>;
+    expect(r.data!.persistent).toBe(false);
+    expect(typeof r.data!.expires_at).toBe("number");
+    expect(r.data!.expires_at!).toBeGreaterThan(Date.now());
+    expect(r.data!.uri).toContain(`t=${encodeURIComponent(r.data!.token)}`);
+
+    const r2 = await ask({ op: "pair_show", ephemeral: true }) as ControlReply<{ token: string }>;
+    expect(r2.data!.token).not.toBe(r.data!.token);
   });
 });

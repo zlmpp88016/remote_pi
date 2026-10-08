@@ -1,4 +1,5 @@
 import type { ClientMessage, ServerMessage } from "../protocol/types.js";
+import { HOST_ROOM_ID } from "../protocol/types.js";
 import type { RelayClient } from "./relay_client.js";
 
 /** Sink for ServerMessage outbound to the remote app. */
@@ -21,6 +22,24 @@ interface OuterEnvelope {
   peer: string;
   room?: string;
   ct: string;
+}
+
+/**
+ * Plan/69 — host-first (daemon-child) addressing.
+ *
+ * When present, this channel speaks the supervisor-proxied path:
+ *   - OUTBOUND: every reply is addressed `{peer: <own epk>, room: "host"}`.
+ *     The relay delivers it on the supervisor's (pi_pk, host) connection,
+ *     which re-wraps it as `host_message` and fans it out to the apps.
+ *   - INBOUND: envelopes whose `peer` is our OWN Pi-key are host-proxied
+ *     traffic (the relay rewrote the supervisor's re-emit with the sender's
+ *     identity) and are accepted alongside the direct peer envelopes.
+ *
+ * `ownPubkey` is the raw 32-byte Ed25519 public key, base64 — the same
+ * identity the relay authenticates this connection under.
+ */
+export interface HostFirstAddressing {
+  ownPubkey: string;
 }
 
 /**
@@ -50,6 +69,9 @@ export class PlainPeerChannel implements PeerChannel {
     private readonly onMessage: (msg: ClientMessage) => void,
     /** Called when this specific peer connection is considered lost. */
     _onDisconnect?: () => void,
+    /** Plan/69 — daemon-child host-first mode (see HostFirstAddressing).
+     *  Omitted → the legacy direct path, byte-identical to before. */
+    private readonly hostFirst?: HostFirstAddressing,
   ) {
     const listener = (line: string) => this._onLine(line);
     relay.on("message", listener);
@@ -66,7 +88,14 @@ export class PlainPeerChannel implements PeerChannel {
     // (W1.C) accept the field. Multi-Pi multiplexing already works via
     // `room_id`/`room_meta` in the WS-level `hello` — outer routing stays by
     // `peer` alone. Re-add the field once downstream is ready.
-    const outer: OuterEnvelope = { peer: this.remotePeerId, ct };
+    //
+    // Plan/69 — host-first (daemon child): ALL outbound is addressed to the
+    // machine's own Pi-key on room `host`, so the supervisor's HostBridge
+    // proxies it to the apps (spike decision B). The direct path below is
+    // untouched for TUI/legacy paired clients.
+    const outer: OuterEnvelope = this.hostFirst
+      ? { peer: this.hostFirst.ownPubkey, room: HOST_ROOM_ID, ct }
+      : { peer: this.remotePeerId, ct };
     // Best-effort delivery. The relay WS can be mid-reconnect (idle/NAT drop, or
     // a session_new/session-replacement teardown) when we push a server→app frame
     // — notably the action_ok/action_error ack a handler emits right after
@@ -97,7 +126,12 @@ export class PlainPeerChannel implements PeerChannel {
       return; // malformed line
     }
 
-    if (outer.peer !== this.remotePeerId) return;
+    // Plan/69 — accept BOTH inbound paths on a daemon child: direct
+    // envelopes from the paired peer (legacy clients, unchanged) AND
+    // own-key envelopes the supervisor proxied (new host-first clients).
+    const hostProxied =
+      this.hostFirst !== undefined && outer.peer === this.hostFirst.ownPubkey;
+    if (!hostProxied && outer.peer !== this.remotePeerId) return;
     if (!outer.ct) return;
 
     let plaintext: string;

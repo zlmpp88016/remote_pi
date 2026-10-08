@@ -6,7 +6,9 @@ chat com streaming, approval cards para tool calls.
 ## Stack
 
 - Flutter 3.41+ / Dart 3.11+
-- Plataformas: iOS, Android
+- Plataformas: iOS, Android, Windows (desktop camera-less — ver
+  `lib/domain/value_objects/device_capabilities.dart`: sem câmera →
+  pareamento por colagem, STT opcional via probe de runtime)
 - State management: `ChangeNotifier` + `provider` (ViewModels reativos)
 - DI: `auto_injector` (registry em `lib/config/`)
 - Roteamento: `go_router`

@@ -206,8 +206,9 @@ void main() {
     expect(vm.state, isA<WorkspaceListReady>());
     expect(find.text('proj-a'), findsOneWidget);
     expect(find.text('proj-b'), findsOneWidget);
-    // O cwd aparece sempre; `running` só no que está live.
-    expect(find.text('running · /proj/a'), findsOneWidget);
+    // O cwd aparece sempre; o estado (`running`) agora é uma linha própria do
+    // card (plan/69), não mais um subtitle concatenado.
+    expect(find.text('running'), findsOneWidget);
     expect(find.text('/proj/b'), findsOneWidget);
   });
 
@@ -299,7 +300,7 @@ void main() {
     );
     final vm = await _pump(tester, ch);
 
-    expect(find.text('added · /proj/a'), findsOneWidget);
+    expect(find.text('added'), findsOneWidget);
     expect(find.byTooltip('Remove from list'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Remove from list'));

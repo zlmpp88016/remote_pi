@@ -15,6 +15,7 @@ import 'package:app/data/transport/channel.dart'; // IChannel
 import 'package:app/data/transport/connection_manager.dart';
 import 'package:app/data/transport/peer_channel.dart';
 import 'package:app/data/images/image_picker_service.dart';
+import 'package:app/data/device/device_capabilities_probe.dart';
 import 'package:app/data/transport/relay_config.dart';
 import 'package:app/data/transport/ws_transport.dart';
 import 'package:app/data/update/secure_dismissed_update_store.dart';
@@ -24,6 +25,7 @@ import 'package:app/data/voice/speech_service.dart';
 import 'package:app/domain/contracts/dismissed_update_store.dart';
 import 'package:app/domain/contracts/update_checker.dart';
 import 'package:app/domain/contracts/url_opener.dart';
+import 'package:app/domain/value_objects/device_capabilities.dart';
 import 'package:app/pairing/owner_identity_bridge.dart';
 import 'package:app/pairing/pair_request_flow.dart';
 import 'package:app/pairing/pair_payload.dart';
@@ -52,6 +54,14 @@ CustomInjector get injector => _injector;
 Future<void> setupDependencies() async {
   // Infrastructure singletons
   _injector.addInstance<PairingStorage>(PairingStorage());
+
+  // Plan/69 W3 — platform capability snapshot (windows target). Resolved
+  // once from `dart:io` and shared immutably: UI gates affordances on it
+  // (camera-less desktop → paste pairing / no camera capture), the image
+  // picker routes around the missing Windows compressor, and permission
+  // snackbars drop the settings deep-link the plugin can't serve there.
+  final capabilities = detectDeviceCapabilities();
+  _injector.addInstance<DeviceCapabilities>(capabilities);
 
   final prefs = Preferences();
   await prefs.load();
@@ -106,8 +116,11 @@ Future<void> setupDependencies() async {
   _injector.addService<SpeechService>(() => SpeechToTextService());
 
   // Plan 30 — image picker + on-device JPEG compression. Stateless, no
-  // dispose hook needed.
-  _injector.addOther<IImagePickerService>(() => ImagePickerService());
+  // dispose hook needed. Plan/69 W3 — the capability snapshot decides
+  // whether the native compressor is used or the raw bytes travel.
+  _injector.addOther<IImagePickerService>(
+    () => ImagePickerService(null, capabilities),
+  );
 
   // Plan 31 — SSOT writer + read-only repos. SyncService is the SINGLE
   // mutator of the message/index/runtime boxes; the read repos only watch.
@@ -270,14 +283,15 @@ Future<IChannel> _productionConnectionFactory(
 
 Future<PeerTransport> _productionPairingTransportFactory(
   PairPayload qr,
+  String relayUrl,
   SimpleKeyPair deviceEd25519,
 ) async {
-  // Plan 14: pairing connects via the GLOBAL relay URL (Preferences),
-  // not whatever was embedded in the QR. Mismatch between qr.relayUrl
-  // and the user's configured relay is handled upstream by
-  // `pair_request_flow.dart` (raises a `relay_mismatch` error that
-  // PairingViewModel surfaces as a "trocar relay?" modal).
-  final relayUrl = resolveRelayUrl(_injector.get<Preferences>());
+  // Plan/69 W1: the relay is the EFFECTIVE address the user confirmed in
+  // the pairing form (the address field, or the Preferences default when
+  // it is empty) — the ViewModel already adopted it into Preferences when
+  // storable. Mismatch between the code's `r=` and that address is
+  // rejected upstream with a typed `relay_mismatch` validation error
+  // (and, as defence in depth, by `pair_request_flow.dart`).
   return WsTransport.connect(
     relayUrl: relayUrl,
     peerPubkey: qr.epk,

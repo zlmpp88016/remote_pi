@@ -16,7 +16,8 @@ Numeração `00-` é proposital: este arquivo carrega antes dos planos numerados
 
 | Decisão | Razão / nota |
 |---|---|
-| **Sem daemon no MVP** | Só a extensão `/remote-pi` ativa enquanto Pi roda. Refutamos daemon residente: complexidade alta, ganho moderado. Quando Pi fecha → mobile vê offline |
+| ~~**Sem daemon no MVP**~~ | ~~Só a extensão `/remote-pi` ativa enquanto Pi roda. Refutamos daemon residente: complexidade alta, ganho moderado. Quando Pi fecha → mobile vê offline~~ — **reaberto 2026-10-08 (plano 69)**: exigência do usuário com evidência de dor real (pareamento exige Pi rodando; chat morre com o Pi). O supervisor residente passa a ser a **porta única** de conexão (room `host`); Pi é filho sob demanda, não pré-requisito |
+| **Conexão host-first (2026-10-08, plano 69)** | app, web e pc conectam no **daemon do host** (room `host`), nunca num processo Pi. Presença da máquina = host; Pi morto/crashado **não** derruba a conexão — host publica `workspace_state` e o cliente dá restart |
 | **Extensão > wrapper** | Pi tem extension API (TypeScript runtime extensions). Happy fez wrapper só porque Claude Code é closed-source — Pi não precisa repetir isso |
 | **Auto-start opcional** | Config `pi-remote.autostart=true` conecta no relay automaticamente quando Pi abre. Sem precisar digitar `/remote-pi` toda vez |
 | **Relay stateless** | Sem persistência. Encaminha ciphertext entre dois peers identificados por pubkey. ~200 linhas de Rust |
@@ -37,6 +38,7 @@ Numeração `00-` é proposital: este arquivo carrega antes dos planos numerados
 | **Persistente, não efêmero** | Peers salvos em `~/.pi/remote/peers.json` (Mac) + Keychain/Keystore (mobile). Refutamos efêmero por sessão e efêmero por pareamento — UX hostil. Pair-once, reconnect-forever |
 | **Sem conta no MVP** | QR só pareamento. Conta opcional fica pra v2 se aparecer demanda real (multi-device sync, recuperação) |
 | **QR efêmero (60s, rotaciona)** | Janela curta reduz risco de foto/screenshot vazar. Token single-use |
+| **Pareamento daemon-side (2026-10-08, plano 69)** | `remote-pi pair` funciona com **zero Pi** (fala com o supervisor pelo UDS). Código de pareamento **persistente por padrão** ("predefinido no host"); `--rotate` invalida; `--ephemeral` mantém o TTL de 60s. URI `remotepi://pair?…` segue congelada; `rm=host` quando emitido pelo daemon. URI emitida por Pi antigo continua parelando pelo caminho Pi |
 | **Safety number opcional** | 6 emojis bilateral (estilo Signal), pra confirmar visualmente que pareamento não foi MITM |
 | **Forward secrecy** | ECDH efêmero a cada reconexão. Chave de longo prazo (Curve25519) só pra autenticar identidade |
 | **Identidade = pubkey** | Sem username. Auth no relay via challenge-response (relay assina nonce, peer responde com assinatura da pubkey privada) |
@@ -76,6 +78,7 @@ Numeração `00-` é proposital: este arquivo carrega antes dos planos numerados
 | **Rename apenas do pareamento** | Local no Keychain/Keystore do mobile. Nome default = cwd onde o Pi rodou (ex: `remote_pi · feature/protocol`). Sem 3 níveis. |
 | **Trabalho paralelo** | Emerge da arquitetura: N Pi processes pareados = N sessões no app. App mostra todas com swipe entre elas |
 | **Switcher por gesto** | Recomendação UX: swipe da borda esquerda alterna entre últimos N pareamentos |
+| **Web + pc no escopo (2026-10-08, plano 69)** | Clientes web (relay com allowlist de `Origin` + Ed25519 com fallback wasm) e pc (Cockpit pelo protocolo do room `host`) entram no escopo — antes eram "próximos planos" do 68. Superfícies novas seguem o mesmo `PROTOCOL.md`, sem contrato paralelo |
 
 ## Approval / segurança operacional
 

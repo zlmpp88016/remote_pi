@@ -17,6 +17,7 @@ class WelcomeView extends StatelessWidget {
     required this.onConnectHost,
     required this.onConfigureHost,
     required this.hasHosts,
+    this.onConnectRemotePi,
   });
 
   /// Dispara o fluxo de criação local (escolher pasta → dialog → criar).
@@ -33,6 +34,10 @@ class WelcomeView extends StatelessWidget {
   /// Se já existe pelo menos um host cadastrado (muda a ação primária no mobile:
   /// sem host → configurar; com host → adicionar workspace).
   final bool hasHosts;
+
+  /// Abre a superfície Remote Pi (plano 69 W3): pareamento por colagem com uma
+  /// máquina host — workspaces/fs/chat no protocolo do room `host`. Só desktop.
+  final VoidCallback? onConnectRemotePi;
 
   @override
   Widget build(BuildContext context) {
@@ -102,23 +107,36 @@ class WelcomeView extends StatelessWidget {
         ),
       );
     }
-    // Desktop: pasta local + host (o host resolve pick-or-add internamente).
-    return Row(
+    // Desktop: pasta local + host SSH + host Remote Pi (plano 69 W3).
+    return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Builder(
-          builder: (btnContext) => PrimaryButton(
-            onPressed: () => onConnectHost(btnContext),
-            leading: const Icon(Icons.cloud_outlined, size: 16),
-            child: Text(tr.connectHost),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Builder(
+              builder: (btnContext) => PrimaryButton(
+                onPressed: () => onConnectHost(btnContext),
+                leading: const Icon(Icons.cloud_outlined, size: 16),
+                child: Text(tr.connectHost),
+              ),
+            ),
+            const SizedBox(width: 10),
+            SecondaryButton(
+              onPressed: () => onCreateWorkspace(),
+              leading: const Icon(Icons.folder_outlined, size: 16),
+              child: Text(tr.openLocalFolder),
+            ),
+          ],
+        ),
+        if (onConnectRemotePi != null) ...[
+          const SizedBox(height: 10),
+          OutlineButton(
+            onPressed: onConnectRemotePi,
+            leading: const Icon(Icons.hub_outlined, size: 16),
+            child: Text(tr.connectRemotePi),
           ),
-        ),
-        const SizedBox(width: 10),
-        SecondaryButton(
-          onPressed: () => onCreateWorkspace(),
-          leading: const Icon(Icons.folder_outlined, size: 16),
-          child: Text(tr.openLocalFolder),
-        ),
+        ],
       ],
     );
   }

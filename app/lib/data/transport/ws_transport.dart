@@ -11,11 +11,20 @@
 // `peer` is standard base64 of the destination's Ed25519 pubkey (matches
 // the relay registry, populated from the peer's hello). `ct` is base64 of
 // the inner-envelope bytes (plain JSON post-rollback, see plano 06).
+//
+// Plan/69 — host-first connection (spike decision B): the app anchors on
+// room `host` ONLY. `hello.room_id` is `host`; every OUTER envelope
+// addresses (machine, "host"); child-addressed traffic rides the
+// `host_forward`/`host_message` proxy (see `host_proxy.dart`). The
+// inbound demux accepts envelopes from the host room and unwraps
+// `host_message` by room — the drop-on-room-mismatch guard that forced
+// decision B now keys on the anchor room instead of the active Pi room.
 
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:app/data/transport/channel.dart';
+import 'package:app/data/transport/host_proxy.dart';
 import 'package:app/data/transport/relay_config.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:cryptography/cryptography.dart';
@@ -92,24 +101,37 @@ class WsTransport implements PeerTransport, IControlLink {
           if (frame.containsKey('peer') && frame.containsKey('ct')) {
             final bytes = _b64Decode(frame['ct'] as String);
             final senderRoom = frame['room'] as String?;
-            // Plan-18 follow-up — DEMUX inbound by sender room.
-            // SessionRepository is singleton; without this guard,
-            // AgentChunks for a chat the user just left bleed into
-            // the chat they're now viewing. When senderRoom doesn't
-            // match the currently-addressed Pi cwd, drop the payload.
-            // Legacy Pis without `room` route unconditionally.
-            if (senderRoom != null && senderRoom != transport._activeRoom) {
+            // Plan/69 — the app anchors on room `host` and the daemon
+            // answers there. An envelope from any other room is not
+            // ours; a missing `room` (legacy relay) still passes.
+            if (senderRoom != null && senderRoom != kHostRoomId) {
               debugPrint(
                 '[ws-in] bytes=${rawStr.length} kind=envelope '
-                'sender_room=$senderRoom DROPPED (room-mismatch)',
+                'sender_room=$senderRoom DROPPED (not the host room)',
+              );
+              return;
+            }
+            // Plan/69 — proxy demux (decision B): child traffic arrives
+            // wrapped in `host_message{room, ct}`. Unwrap and file by
+            // room; frames for a room we are not addressing are dropped
+            // (the old sender-room guard, now keyed on the child room
+            // inside the wrapper).
+            final inner = demuxInbound(
+              bytes,
+              activeRoom: transport._activeRoom,
+            );
+            if (inner == null) {
+              debugPrint(
+                '[ws-in] bytes=${rawStr.length} kind=host_message '
+                'DROPPED (room-mismatch or malformed)',
               );
               return;
             }
             debugPrint(
               '[ws-in] bytes=${rawStr.length} kind=envelope '
-              'ct.bytes=${bytes.length}',
+              'ct.bytes=${inner.length}',
             );
-            transport._queue.add(bytes);
+            transport._queue.add(inner);
             return;
           }
           // Control: top-level `type` only → presence stream.
@@ -147,14 +169,15 @@ class WsTransport implements PeerTransport, IControlLink {
 
     try {
       // 1. Hello (standard base64 — matches relay registry format).
-      // Plan 17: app is a client (no cwd) and always announces itself
-      // on the canonical 'main' room. Pi-side hellos include their own
-      // room_id (one per cwd) AND room_meta; that's not our concern here.
+      // Plan/69 — the app is a host-first client: it announces itself on
+      // the reserved `host` room, never on a Pi cwd room. Every outbound
+      // envelope addresses (machine, "host") and child-addressed traffic
+      // rides the host_forward proxy (see host_proxy.dart).
       final pub = await ed25519Key.extractPublicKey();
       ws.sink.add(jsonEncode({
         'type': 'hello',
         'pubkey': base64.encode(pub.bytes),
-        'room_id': 'main',
+        'room_id': kHostRoomId,
       }));
 
       // 2. Challenge
@@ -185,14 +208,17 @@ class WsTransport implements PeerTransport, IControlLink {
   String _peerPubkey = '';
   StreamSubscription? _sub;
 
-  /// Active target room on the Pi side. Plan 17: set via
-  /// `setActiveRoom`, defaults to 'main' when unset. The outer envelope
-  /// embeds this so the Pi can route the inner message to the right
-  /// per-cwd session.
+  /// Active CHILD workspace room (the one the user is on). Plan/69 — the
+  /// outer envelope always addresses room `host`; this value rides INSIDE
+  /// the `host_forward` wrapper (outbound) and selects which
+  /// `host_message` frames survive the demux (inbound). Defaults to
+  /// 'main' until the app learns the real room (pair_ok / room_announced /
+  /// workspace_start_ok).
   String _activeRoom = 'main';
 
-  /// Override the destination room (Pi side). The app remains on the
-  /// 'main' room itself (that's what we sent in `hello.room_id`).
+  /// Select the child workspace room. The app itself stays on the `host`
+  /// room (that is what `hello.room_id` carries); this only moves the room
+  /// INSIDE the proxy wrappers.
   void setActiveRoom(String room) {
     if (room == _activeRoom) {
       return;
@@ -200,12 +226,25 @@ class WsTransport implements PeerTransport, IControlLink {
     _activeRoom = room;
   }
 
+  /// Monotonic id for the `host_forward` wrappers this transport emits.
+  int _forwardCounter = 0;
+
   @override
   Future<void> send(Uint8List data) async {
+    // Plan/69 — wrap child-addressed traffic for the host proxy; host
+    // control-plane messages (host_hello, workspace_*, fs_list,
+    // pair_request, ping) pass through and are addressed to `host`
+    // directly. The outer envelope NEVER carries a workspace room — that
+    // is the whole point of decision B.
+    final payload = wrapOutbound(
+      data,
+      activeRoom: _activeRoom,
+      id: 'fwd_${++_forwardCounter}',
+    );
     _ws.sink.add(jsonEncode({
       'peer': _peerPubkey,
-      'room': _activeRoom,
-      'ct': base64.encode(data),
+      'room': kHostRoomId,
+      'ct': base64.encode(payload),
     }));
   }
 

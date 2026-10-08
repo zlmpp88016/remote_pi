@@ -34,7 +34,6 @@ class SessionCatalog {
     return _expect<WorkspaceListOk>(
       WorkspaceList(id: uuid7()),
       (id, msg) => msg is WorkspaceListOk && msg.inReplyTo == id,
-      room: kHostRoomId,
     );
   }
 
@@ -49,7 +48,23 @@ class SessionCatalog {
         }
         return msg is WorkspaceStartOk && msg.inReplyTo == id;
       },
-      room: kHostRoomId,
+    );
+  }
+
+  /// Plan/69 — restart a workspace by cwd. Idempotent host-side: a
+  /// workspace that is already `running` answers `workspace_restart_ok`
+  /// without respawning. Errors are typed (`spawn_failed`, `not_found`).
+  /// The lifecycle push (`workspace_state`) that follows is surfaced by
+  /// [ConnectionManager.workspaceStatesStream].
+  Future<WorkspaceRestartOk> restartWorkspace(String cwd) {
+    return _expect<WorkspaceRestartOk>(
+      WorkspaceRestart(id: uuid7(), cwd: cwd),
+      (id, msg) {
+        if (msg is WorkspaceRestartError && msg.inReplyTo == id) {
+          throw WorkspaceControlFailure(msg.code);
+        }
+        return msg is WorkspaceRestartOk && msg.inReplyTo == id;
+      },
     );
   }
 
@@ -65,7 +80,6 @@ class SessionCatalog {
         }
         return msg is FsListOk && msg.inReplyTo == id;
       },
-      room: kHostRoomId,
     );
   }
 
@@ -86,13 +100,19 @@ class SessionCatalog {
   }
 
   /// Expects the plain `action_ok` / `action_error` pair for [action].
+  ///
+  /// Plan/69 — no room override: the host control plane (`workspace_*`,
+  /// `fs_list`, `host_hello`, `workspace_restart`) is addressed to room
+  /// `host` by the transport itself (see `host_proxy.dart` — those types
+  /// are host-direct), so switching the connection's active room here
+  /// would only disturb the chat's child room for no benefit.
   Future<void> _expectAction(ClientMessage request, String action) {
     return _expect<ActionOk>(request, (id, msg) {
       if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == action) {
         throw WorkspaceControlFailure(msg.error);
       }
       return msg is ActionOk && msg.inReplyTo == id && msg.rawAction == action;
-    }, room: kHostRoomId);
+    });
   }
 
   // ── Plan/68 — Pi surface (skills + packages) ──────────────────────────────
@@ -185,19 +205,13 @@ class SessionCatalog {
 
   Future<T> _expect<T extends ServerMessage>(
     ClientMessage request,
-    bool Function(String id, ServerMessage msg) match, {
-    String? room,
-  }) async {
+    bool Function(String id, ServerMessage msg) match,
+  ) async {
     final ch = _conn.channel;
     if (ch == null) {
       throw const WorkspaceControlFailure('offline');
     }
     final id = (request.toJson()['id'] as String?) ?? '';
-    // A room override (the `host` room for workspace ops) mutates the
-    // connection's GLOBAL active room — the one every outbound envelope
-    // carries, including chat. Restore it when we're done, or the app
-    // would keep talking to `host` forever after one picker visit.
-    final prevRoom = room == null ? null : _conn.activeRoomId;
     final done = Completer<T>();
     late final StreamSubscription sub;
     sub = ch.serverMessages.listen((msg) {
@@ -209,17 +223,10 @@ class SessionCatalog {
       }
     });
     try {
-      if (room != null) _conn.switchRoom(room);
       await ch.send(request);
       return await done.future.timeout(_timeout);
     } finally {
       await sub.cancel();
-      // Guarded so a caller that deliberately moved the active room while
-      // this request was in flight keeps its choice (and so overlapping
-      // requests don't restore a stale value over each other).
-      if (prevRoom != null && _conn.activeRoomId == room) {
-        _conn.switchRoom(prevRoom);
-      }
     }
   }
 }

@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:app/data/device/device_capabilities_probe.dart';
+import 'package:app/domain/value_objects/device_capabilities.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
@@ -38,10 +41,17 @@ class ImagePermissionDeniedException implements Exception {
 }
 
 class ImagePickerService implements IImagePickerService {
-  ImagePickerService([ImagePickerBackend? backend])
-    : _backend = backend ?? PlatformImagePickerBackend();
+  ImagePickerService([
+    ImagePickerBackend? backend,
+    DeviceCapabilities? capabilities,
+  ]) : _backend = backend ?? PlatformImagePickerBackend(),
+       _capabilities = capabilities ?? detectDeviceCapabilities();
 
   final ImagePickerBackend _backend;
+
+  /// Plan/69 W3 — platform capabilities. When the native compressor is
+  /// missing (Windows), the picked file's raw bytes travel instead.
+  final DeviceCapabilities _capabilities;
 
   /// Longest side of the compressed image (decision #5).
   static const int _maxSide = 1568;
@@ -67,6 +77,14 @@ class ImagePickerService implements IImagePickerService {
   Future<PickedImage?> _pickAndCompress(ImageSourceKind source) async {
     final path = await _backend.pick(source);
     if (path == null) return null; // user cancelled
+
+    // Plan/69 W3 — no native compressor on this platform (Windows): the
+    // plugin has no implementation and would throw `UnsupportedError`.
+    // Send the picked file's raw bytes with the mime its extension claims.
+    if (!_capabilities.imageCompression) {
+      final raw = await _backend.readRaw(path);
+      return PickedImage(bytes: raw, mime: mimeForPath(path));
+    }
 
     var side = _maxSide;
     var quality = _quality;
@@ -104,13 +122,46 @@ abstract class ImagePickerBackend {
     required int maxSide,
     required int quality,
   });
+
+  /// Read [path]'s bytes as-is — the fallback on platforms without a native
+  /// compressor (plan/69 W3, Windows).
+  Future<Uint8List> readRaw(String path);
+}
+
+/// Mime type for a picked file path, by extension. Defaults to JPEG (the
+/// compressed path always produces JPEG); the raw path (Windows) preserves
+/// whatever the user picked so the inline `MessageImage` is labelled
+/// truthfully.
+String mimeForPath(String path) {
+  final ext = path.split('.').last.toLowerCase();
+  switch (ext) {
+    case 'png':
+      return 'image/png';
+    case 'gif':
+      return 'image/gif';
+    case 'webp':
+      return 'image/webp';
+    case 'bmp':
+      return 'image/bmp';
+    case 'tif':
+    case 'tiff':
+      return 'image/tiff';
+    default:
+      return 'image/jpeg';
+  }
 }
 
 class PlatformImagePickerBackend implements ImagePickerBackend {
-  PlatformImagePickerBackend([ImagePicker? picker])
-    : _picker = picker ?? ImagePicker();
+  PlatformImagePickerBackend([
+    ImagePicker? picker,
+    DeviceCapabilities? capabilities,
+  ]) : _picker = picker ?? ImagePicker(),
+       _capabilities = capabilities ?? detectDeviceCapabilities();
 
   final ImagePicker _picker;
+
+  /// Plan/69 W3 — gates the compressor call (no Windows implementation).
+  final DeviceCapabilities _capabilities;
 
   @override
   Future<String?> pick(ImageSourceKind source) async {
@@ -137,6 +188,13 @@ class PlatformImagePickerBackend implements ImagePickerBackend {
     required int maxSide,
     required int quality,
   }) async {
+    // Plan/69 W3 — `flutter_image_compress` has no Windows implementation;
+    // calling it there throws `UnsupportedError`. Capability-aware callers
+    // (ImagePickerService) route around this, but the backend stays honest
+    // if invoked directly.
+    if (!_capabilities.imageCompression) {
+      return readRaw(path);
+    }
     final out = await FlutterImageCompress.compressWithFile(
       path,
       minWidth: maxSide,
@@ -148,4 +206,7 @@ class PlatformImagePickerBackend implements ImagePickerBackend {
     // format), surface an empty result so the caller can no-op gracefully.
     return out ?? Uint8List(0);
   }
+
+  @override
+  Future<Uint8List> readRaw(String path) => File(path).readAsBytes();
 }

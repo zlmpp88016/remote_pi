@@ -47,7 +47,14 @@ export type ControlRequest =
   | { op: "cron_remove"; job_id: string }
   | { op: "cron_enable"; job_id: string; enabled: boolean }
   | { op: "cron_run"; job_id: string }
-  | { op: "cron_log"; job_id?: string; tail?: number };
+  | { op: "cron_log"; job_id?: string; tail?: number }
+  // ── pairing (plan/69) ──
+  // `pair_show` returns the active host pairing code (issuing a persistent
+  // one on first use); `pair_rotate` invalidates the previous code and
+  // issues a fresh one. `ephemeral` opts into a short-TTL single-use token
+  // instead of the default persistent code.
+  | { op: "pair_show"; ephemeral?: boolean }
+  | { op: "pair_rotate"; ephemeral?: boolean };
 
 /** Replies sent supervisor → CLI. Tagged by `ok` boolean. */
 export type ControlReply<T = unknown> =
@@ -77,6 +84,22 @@ export interface ControlReplyShapes {
   cron_enable: { job_id: string; enabled: boolean; updated: boolean };
   cron_run: { job_id: string; result: string };
   cron_log: { entries: CronLogEntry[] };
+  // ── pairing (plan/69) ──
+  pair_show: PairView;
+  pair_rotate: PairView;
+}
+
+/** Reply payload of `pair_show` / `pair_rotate` — everything the CLI needs
+ *  to print the pairing code without talking to the relay itself. */
+export interface PairView {
+  /** The frozen `remotepi://pair?…` payload (rm=host). */
+  uri: string;
+  token: string;
+  /** `null` → persistent code (valid until rotated); epoch ms → ephemeral expiry. */
+  expires_at: number | null;
+  persistent: boolean;
+  /** Always `"host"` for daemon-side pairing. */
+  room_id: string;
 }
 
 /** A cron job plus its computed `next_run` (ISO), for `cron list`. */

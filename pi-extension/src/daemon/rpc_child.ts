@@ -50,6 +50,11 @@ export interface RpcChildExitEvent {
   signal: NodeJS.Signals | null;
   /** True when exit was not clean (non-zero or signal). */
   isCrash: boolean;
+  /** Plan/69 — the spawn error message when `spawn()` itself failed (e.g.
+   *  `pi` binary not found). Surfaced verbatim in the host-room
+   *  `workspace_state.last_error` so the app shows the real reason instead
+   *  of a bare exit code. */
+  error?: string;
 }
 
 export const EXIT_DAEMON_FRESH_SESSION = 42;
@@ -303,7 +308,7 @@ export class RpcChild extends EventEmitter {
       process.stderr.write(
         `[remote-pi-supervisord] spawn failed for ${this.opts.cwd}: ${String(err)}\n`,
       );
-      this.emit("exit", { code: null, signal: null, isCrash: true });
+      this.emit("exit", { code: null, signal: null, isCrash: true, error: String(err) });
     });
 
     this.emit("spawn", { pid: child.pid });

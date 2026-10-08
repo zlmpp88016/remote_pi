@@ -14,8 +14,11 @@ import 'package:provider/provider.dart';
 // PairingPage — paste the pairing code, then pair_request
 //
 // Plan/68 — pairing is paste-only. The camera/QR-scan path was removed: the
-// user copies the `remotepi://pair?…` string from the Pi terminal and pastes
-// it here. The payload format is unchanged (see `lib/pairing/pair_payload.dart`).
+// user copies the `remotepi://pair?…` string from the computer and pastes
+// it here. Plan/69 W1 — the paste sheet grew a second field: the relay
+// ADDRESS (auto-filled from the code's `r=`, editable, empty = the default
+// relay from Preferences). The payload format is unchanged (see
+// `lib/pairing/pair_payload.dart`).
 // ---------------------------------------------------------------------------
 
 class PairingPage extends StatefulWidget {
@@ -31,12 +34,11 @@ class _PairingPageState extends State<PairingPage> {
   // open the sheet once per pairing.
   bool _postPairStarted = false;
 
-  void _submitRaw(String raw) {
-    context.read<PairingViewModel>().submitPairingCode(raw);
-  }
-
   Future<void> _openPasteSheet() async {
-    await showPastePairingSheet(context, onSubmit: _submitRaw);
+    await showPastePairingSheet(
+      context,
+      vm: context.read<PairingViewModel>(),
+    );
   }
 
   @override
@@ -111,14 +113,16 @@ class _PairingPageState extends State<PairingPage> {
             Text(
               isConnecting
                   ? 'Connecting to $sessionName…'
-                  : 'Paste the pairing code shown in your terminal',
+                  : 'Paste the pairing code from your computer',
               textAlign: TextAlign.center,
               style: TextStyle(color: colors.text, fontSize: 14),
             ),
             const SizedBox(height: 8),
             Text(
-              'Run /remote-pi pair on your computer and copy the '
-              'remotepi://pair?… address it prints.',
+              'Run /remote-pi pair on your computer and paste the '
+              'remotepi://pair?… code it prints. The relay address fills in '
+              'from the code — edit it only for a self-hosted relay, or '
+              'clear it to use your default.',
               textAlign: TextAlign.center,
               style: TextStyle(color: colors.muted2, fontSize: 12, height: 1.4),
             ),

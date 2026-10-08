@@ -1,3 +1,4 @@
+import 'package:app/domain/value_objects/device_capabilities.dart';
 import 'package:app/routing/adaptive.dart';
 import 'package:app/ui/chat/quick_actions/widgets/dismiss_on_session_change.dart';
 import 'package:app/ui/core/themes/themes.dart';
@@ -17,6 +18,12 @@ Future<AttachSource?> showAttachSheet(BuildContext context) {
   // sheet (same fix as the Quick Actions sheet — the modal lives on the
   // detail-pane navigator and would otherwise orphan over a different chat).
   final selection = context.read<SessionSelection>();
+  // Plan/69 W3 — the sheet builds below the Navigator, so read the
+  // capability here (caller context, above the modal route) and pass it
+  // down, exactly like [selection]. Camera-less devices (Windows desktop)
+  // drop the Camera option: image_picker's Windows implementation has no
+  // camera delegate and throws a StateError if invoked.
+  final hasCamera = context.read<DeviceCapabilities>().camera;
   return showModalBottomSheet<AttachSource>(
     context: context,
     backgroundColor: context.colors.bg,
@@ -28,13 +35,17 @@ Future<AttachSource?> showAttachSheet(BuildContext context) {
     ),
     builder: (ctx) => DismissOnSessionChange(
       selection: selection,
-      child: const _AttachSheetBody(),
+      child: _AttachSheetBody(hasCamera: hasCamera),
     ),
   );
 }
 
 class _AttachSheetBody extends StatelessWidget {
-  const _AttachSheetBody();
+  const _AttachSheetBody({required this.hasCamera});
+
+  /// Plan/69 W3 — false on camera-less devices (Windows desktop); pairing
+  /// there is paste-only (plan/68) and the sheet offers Photo Library only.
+  final bool hasCamera;
 
   @override
   Widget build(BuildContext context) {
@@ -54,12 +65,13 @@ class _AttachSheetBody extends StatelessWidget {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            _AttachOption(
-              key: const Key('attach-camera'),
-              icon: LucideIcons.camera,
-              label: 'Camera',
-              onTap: () => Navigator.of(context).pop(AttachSource.camera),
-            ),
+            if (hasCamera)
+              _AttachOption(
+                key: const Key('attach-camera'),
+                icon: LucideIcons.camera,
+                label: 'Camera',
+                onTap: () => Navigator.of(context).pop(AttachSource.camera),
+              ),
             _AttachOption(
               key: const Key('attach-gallery'),
               icon: LucideIcons.image,

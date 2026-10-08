@@ -36,6 +36,7 @@ import 'package:app/data/transport/epk_encoding.dart';
 import 'package:app/domain/contracts/service.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
+import 'package:app/protocol/uuid7.dart';
 
 // ---------------------------------------------------------------------------
 // Status model
@@ -120,6 +121,22 @@ class ConnectionManager extends Service {
   final _roomsController =
       StreamController<Map<String, List<RoomInfo>>>.broadcast();
   bool _roomsRestored = false;
+  // Plan/69 — host-first: the machine connection is anchored on room
+  // `host`. `_hostHelloByPeer` keeps the latest `host_hello_ok` per peer
+  // (daemon version/hostname + capabilities) and `_workspaceStates` the
+  // latest lifecycle push per cwd (`workspace_state` — running/starting/
+  // crashed/stopped + last_error + restarts). Both are machine-level: a
+  // dead Pi never clears them, because the connection they belong to is
+  // the host's, not the Pi's.
+  final Map<String, HostHelloOk> _hostHelloByPeer = <String, HostHelloOk>{};
+  final _hostHelloController = StreamController<HostHelloOk>.broadcast();
+  final Map<String, WorkspaceState> _workspaceStates =
+      <String, WorkspaceState>{};
+  final _workspaceStatesController =
+      StreamController<Map<String, WorkspaceState>>.broadcast();
+
+  /// Peer (remoteEpk) the current [_workspaceStates] belong to.
+  String? _workspaceStatePeer;
   ConnectionStatus _status = const StatusNoPeer();
   PeerRecord? _activePeer;
   // Plan 17 — active room on the destination Pi. 'main' is the implicit
@@ -421,6 +438,7 @@ class ConnectionManager extends Service {
     _watchChannel(peer, channel);
     _watchControl(channel);
     _replaySubscriptions();
+    _helloHost(peer, channel);
   }
 
   // Permanently disconnect and go to NoPeer.
@@ -467,6 +485,8 @@ class ConnectionManager extends Service {
     _controlSub = null;
     _statusController.close();
     _presenceController.close();
+    _hostHelloController.close();
+    _workspaceStatesController.close();
   }
 
   // ---------------------------------------------------------------------------
@@ -527,6 +547,7 @@ class ConnectionManager extends Service {
       _watchChannel(peer, ch);
       _watchControl(ch);
       _replaySubscriptions();
+      _helloHost(peer, ch);
     } catch (e) {
       if (!token.isCancelled) _scheduleRetry(peer);
     } finally {
@@ -1038,6 +1059,62 @@ class ConnectionManager extends Service {
     link.sendControl(roomsCheckFrame(_subscribedEpks));
   }
 
+  /// Plan/69 — host-first handshake. Sent on every connect AND reconnect
+  /// (and right after a pairing adopt): the machine connection is anchored
+  /// on room `host`, and `host_hello_ok` carries the daemon's real
+  /// version/hostname plus the capabilities it implements. Fire-and-forget
+  /// — a failure here surfaces through the normal channel-loss path.
+  void _helloHost(PeerRecord peer, IChannel ch) {
+    // Lifecycle state belongs to the machine it was pushed by. A SWITCH to
+    // a different peer must not leave the previous machine's rows visible
+    // under the new one; a reconnect to the SAME peer must NOT clear them
+    // (the host pushes on transitions only — it would not re-announce a
+    // `crashed` workspace after a WS blip).
+    if (_workspaceStatePeer != null &&
+        _workspaceStatePeer != peer.remoteEpk) {
+      _workspaceStates.clear();
+      if (!_workspaceStatesController.isClosed) {
+        _workspaceStatesController.add(Map.unmodifiable(_workspaceStates));
+      }
+    }
+    _workspaceStatePeer = peer.remoteEpk;
+    // ignore: unawaited_futures
+    Future(() async {
+      try {
+        await ch.send(HostHello(id: uuid7()));
+      } catch (_) {
+        // Channel already gone — the retry chain will reconnect and retry
+        // the handshake.
+      }
+    });
+  }
+
+  // ---- Host-first streams (plan 69) ----------------------------------------
+
+  /// Latest `host_hello_ok` per peer (standard-base64 key), emitted on
+  /// every refresh.
+  Stream<HostHelloOk> get hostHelloStream => _hostHelloController.stream;
+
+  /// Host handshake info for an epk (url-safe or standard), or `null` when
+  /// the host has not answered yet.
+  HostHelloOk? hostHelloFor(String epk) =>
+      _hostHelloByPeer[toStandardB64(epk)];
+
+  /// Full snapshot of the latest `workspace_state` push per cwd for the
+  /// machine the app is currently connected to.
+  Map<String, WorkspaceState> get workspaceStatesSnapshot =>
+      Map.unmodifiable(_workspaceStates);
+
+  /// Stream of workspace-lifecycle snapshots (cwd → state). Emitted on
+  /// every push; the map is the canonical view (same diffing contract as
+  /// [presenceStream] / [roomsStream]).
+  Stream<Map<String, WorkspaceState>> get workspaceStatesStream =>
+      _workspaceStatesController.stream;
+
+  /// Latest lifecycle state for a cwd, or `null` when the host has not
+  /// pushed anything for it yet.
+  WorkspaceState? workspaceStateFor(String cwd) => _workspaceStates[cwd];
+
   void _watchChannel(PeerRecord peer, IChannel ch) {
     _channelSub?.cancel();
     _channelSub = ch.serverMessages.listen(
@@ -1049,6 +1126,24 @@ class ConnectionManager extends Service {
         if (_retryAttempt != 0) {}
         _missedPings = 0;
         _retryAttempt = 0;
+        // Plan/69 — host control plane rides the same channel: the
+        // handshake reply and the lifecycle pushes. Neither is scoped to
+        // a workspace room, so neither is dropped by the proxy demux.
+        switch (msg) {
+          case HostHelloOk():
+            final key = toStandardB64(peer.remoteEpk);
+            _hostHelloByPeer[key] = msg;
+            if (!_hostHelloController.isClosed) {
+              _hostHelloController.add(msg);
+            }
+          case WorkspaceState(:final cwd):
+            _workspaceStates[cwd] = msg;
+            if (!_workspaceStatesController.isClosed) {
+              _workspaceStatesController.add(Map.unmodifiable(_workspaceStates));
+            }
+          default:
+            break;
+        }
       },
       onError: (_) => _onChannelLost(peer, ch),
       onDone: () => _onChannelLost(peer, ch),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:app/data/preferences/preferences.dart';
 import 'package:app/domain/session_state.dart';
 import 'package:app/domain/transcript_rows.dart';
+import 'package:app/domain/value_objects/device_capabilities.dart';
 import 'package:app/pairing/storage.dart';
 import 'package:app/protocol/protocol.dart';
 import 'package:app/ui/core/themes/themes.dart';
@@ -508,6 +509,10 @@ class ChatPage extends StatelessWidget {
     AttachmentViewModel vm,
   ) async {
     final messenger = ScaffoldMessenger.of(context);
+    // Plan/69 W3 — `app_settings` has no Windows implementation; only offer
+    // the settings deep-link action when the plugin can serve it.
+    final canOpenSettings =
+        context.read<DeviceCapabilities>().systemSettingsDeepLink;
     final source = await showAttachSheet(context);
     if (source == null) return;
     AttachHint? hint;
@@ -520,13 +525,16 @@ class ChatPage extends StatelessWidget {
     }
     await Future<void>.delayed(Duration.zero); // flush the hint microtask
     await sub.cancel();
-    if (hint != null) _handleAttachHint(messenger, hint!);
+    if (hint != null) {
+      _handleAttachHint(messenger, hint!, canOpenSettings: canOpenSettings);
+    }
   }
 
   static void _handleAttachHint(
     ScaffoldMessengerState messenger,
-    AttachHint hint,
-  ) {
+    AttachHint hint, {
+    required bool canOpenSettings,
+  }) {
     messenger.hideCurrentSnackBar();
     switch (hint) {
       case AttachHint.cameraPermissionDenied:
@@ -537,10 +545,12 @@ class ChatPage extends StatelessWidget {
             ),
             duration: const Duration(seconds: 5),
             behavior: SnackBarBehavior.floating,
-            action: SnackBarAction(
-              label: 'Settings',
-              onPressed: AppSettings.openAppSettings,
-            ),
+            action: canOpenSettings
+                ? SnackBarAction(
+                    label: 'Settings',
+                    onPressed: AppSettings.openAppSettings,
+                  )
+                : null,
           ),
         );
       case AttachHint.pickFailed:
@@ -559,6 +569,10 @@ class ChatPage extends StatelessWidget {
   /// so the settings deep-link is safe across the async permission round-trip.
   static void _handleVoiceHint(BuildContext context, VoiceHint hint) {
     final messenger = ScaffoldMessenger.of(context);
+    // Plan/69 W3 — `app_settings` has no Windows implementation; only offer
+    // the settings deep-link action when the plugin can serve it.
+    final canOpenSettings =
+        context.read<DeviceCapabilities>().systemSettingsDeepLink;
     messenger.hideCurrentSnackBar();
     switch (hint) {
       case VoiceHint.holdToTalk:
@@ -577,10 +591,12 @@ class ChatPage extends StatelessWidget {
             ),
             duration: const Duration(seconds: 5),
             behavior: SnackBarBehavior.floating,
-            action: SnackBarAction(
-              label: 'Settings',
-              onPressed: AppSettings.openAppSettings,
-            ),
+            action: canOpenSettings
+                ? SnackBarAction(
+                    label: 'Settings',
+                    onPressed: AppSettings.openAppSettings,
+                  )
+                : null,
           ),
         );
     }

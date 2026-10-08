@@ -2,6 +2,7 @@ import 'package:cockpit/app/cockpit/cockpit_module.dart';
 import 'package:cockpit/app/core/core_module.dart';
 import 'package:cockpit/app/core/data/terminal/terminal_profile_resolver_impl.dart';
 import 'package:cockpit/app/core/ui/window_activity_controller.dart';
+import 'package:cockpit/app/remote_pi/remote_pi_module.dart';
 import 'package:cockpit/app/settings/settings_module.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
@@ -27,10 +28,13 @@ Future<Module> buildAppModule({
   final core = buildCoreModule(terminalProfiles: terminalProfiles);
   final cockpit = await buildCockpitModule(windowActivity: windowActivity);
   final settings = buildSettingsModule();
+  // Plano 69 W3 — modo de conexão por pareamento host (paridade pc/web).
+  final remotePi = buildRemotePiHostModule();
   return createModule(
     register: (c) => c
       ..module(core)
       ..module(cockpit)
-      ..module(settings),
+      ..module(settings)
+      ..module(remotePi),
   );
 }

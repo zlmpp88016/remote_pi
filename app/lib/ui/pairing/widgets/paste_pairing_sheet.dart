@@ -1,20 +1,27 @@
 import 'package:app/ui/core/themes/themes.dart';
+import 'package:app/ui/pairing/states/pairing_state.dart';
+import 'package:app/ui/pairing/viewmodels/pairing_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-/// Show a bottom sheet that lets the user paste the pairing code payload as
-/// text — the single pairing path since plan/68 (the QR-scan flow was
-/// removed).
+/// Bottom sheet with the plan/69 W1 pairing form: TWO fields —
 ///
-/// Submits via [onSubmit], which receives the raw `remotepi://pair?…`
-/// string the user typed/pasted. The sheet closes automatically after
-/// submit; if [onSubmit] throws or rejects the value, the sheet is
-/// already gone — the caller surfaces the error through the same
-/// pairing-error path a rejected code would use.
+///   * **Address** (relay): auto-filled from the code's `r=` param when
+///     present, fully editable, and empty means "use the default relay
+///     from Preferences" (shown as the placeholder).
+///   * **Pairing code**: the full `remotepi://pair?…` URI pasted from the
+///     computer running `/remote-pi pair`.
+///
+/// No camera, no scan (plan/68). The sheet drives [PairingViewModel]'s
+/// form state directly, so validation errors are typed
+/// (`PairingValidationCode`) and shown inline under the offending field.
+/// The sheet closes itself as soon as the pairing attempt actually starts
+/// (state leaves the form); typed validation failures keep it open so the
+/// user can fix the field in place.
 Future<void> showPastePairingSheet(
   BuildContext context, {
-  required void Function(String raw) onSubmit,
+  required PairingViewModel vm,
 }) async {
   await showModalBottomSheet<void>(
     context: context,
@@ -25,90 +32,108 @@ Future<void> showPastePairingSheet(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(sheetCtx).viewInsets.bottom,
         ),
-        child: const _PasteQrSheetBody(),
-      ).withOnSubmit(onSubmit);
+        child: _PasteQrSheetBody(vm: vm),
+      );
     },
   );
 }
 
-/// Hook to wire the inner submit callback to the outer parameter. Kept
-/// here so the body widget itself is `const`-able for the common case
-/// of opening the sheet without nesting the closure inside the build.
-extension _PasteQrSheetHook on Widget {
-  Widget withOnSubmit(void Function(String raw) onSubmit) {
-    return _OnSubmitScope(onSubmit: onSubmit, child: this);
-  }
-}
-
-class _OnSubmitScope extends InheritedWidget {
-  final void Function(String raw) onSubmit;
-  const _OnSubmitScope({required this.onSubmit, required super.child});
-
-  static void Function(String raw) of(BuildContext context) {
-    final scope =
-        context.dependOnInheritedWidgetOfExactType<_OnSubmitScope>();
-    assert(
-      scope != null,
-      '_PasteQrSheetBody must be wrapped in a _OnSubmitScope (use showPastePairingSheet).',
-    );
-    return scope!.onSubmit;
-  }
-
-  @override
-  bool updateShouldNotify(_OnSubmitScope old) => old.onSubmit != onSubmit;
-}
-
 class _PasteQrSheetBody extends StatefulWidget {
-  const _PasteQrSheetBody();
+  final PairingViewModel vm;
+  const _PasteQrSheetBody({required this.vm});
 
   @override
   State<_PasteQrSheetBody> createState() => _PasteQrSheetBodyState();
 }
 
 class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
-  final _controller = TextEditingController();
-  bool _canSubmit = false;
+  late final TextEditingController _addressController;
+  late final TextEditingController _codeController;
+  bool _closing = false;
+
+  PairingViewModel get _vm => widget.vm;
 
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_onChanged);
-  }
-
-  void _onChanged() {
-    final next = _controller.text.trim().isNotEmpty;
-    if (next != _canSubmit) {
-      setState(() => _canSubmit = next);
-    }
+    // Seed the fields with whatever the ViewModel already holds (e.g. a
+    // previous attempt's values after "Try again").
+    _addressController = TextEditingController(text: _vm.address);
+    _codeController = TextEditingController(text: _vm.code);
+    _vm.addListener(_onVmChanged);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _vm.removeListener(_onVmChanged);
+    _addressController.dispose();
+    _codeController.dispose();
     super.dispose();
   }
 
-  Future<void> _pasteFromClipboard() async {
+  /// Keep the text fields in sync with the ViewModel (auto-fill of the
+  /// address from the code's `r=`) and close the sheet once the pairing
+  /// attempt leaves the form (connecting / paired / flow error — the page
+  /// renders those states).
+  void _onVmChanged() {
+    if (!mounted) return;
+    final state = _vm.state;
+    final leftForm = state is! PairingScanning && state is! PairingIdle;
+    if (leftForm) {
+      if (!_closing) {
+        _closing = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          Navigator.of(context).maybePop();
+        });
+      }
+      return;
+    }
+    if (_addressController.text != _vm.address) {
+      _addressController.text = _vm.address;
+      _addressController.selection = TextSelection.collapsed(
+        offset: _vm.address.length,
+      );
+    }
+    // Rebuild so canSubmit / validationError / the auto-filled address are
+    // reflected (the sheet is a pure view of the ViewModel form state).
+    setState(() {});
+  }
+
+  Future<void> _pasteInto(TextEditingController controller, bool isCode) async {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text;
+    final text = data?.text?.trim();
     if (text == null || text.isEmpty) return;
-    _controller.text = text.trim();
-    _controller.selection = TextSelection.collapsed(
-      offset: _controller.text.length,
-    );
+    controller.text = text;
+    controller.selection = TextSelection.collapsed(offset: text.length);
+    if (isCode) {
+      _vm.onCodeChanged(text);
+    } else {
+      _vm.onAddressChanged(text);
+    }
   }
 
   void _submit() {
-    final raw = _controller.text.trim();
-    if (raw.isEmpty) return;
-    final onSubmit = _OnSubmitScope.of(context);
-    Navigator.of(context).pop();
-    onSubmit(raw);
+    if (!_vm.canSubmit) return;
+    // Validation runs inside submitPairing; on a typed failure the state
+    // stays on the form and the sheet remains open showing the error.
+    _vm.submitPairing();
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final error = _vm.validationError;
+    final addressError = switch (error?.code) {
+      PairingValidationCode.invalidRelay ||
+      PairingValidationCode.relayMismatch => error?.message,
+      _ => null,
+    };
+    final codeError = switch (error?.code) {
+      PairingValidationCode.invalidPayload => error?.message,
+      _ => null,
+    };
+
     return SafeArea(
       top: false,
       child: Padding(
@@ -130,7 +155,7 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
               ),
             ),
             Text(
-              'Paste pairing code',
+              'Pair device',
               style: TextStyle(
                 fontFamily: kMonoFamily,
                 fontSize: 15,
@@ -140,8 +165,8 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
             ),
             const SizedBox(height: 6),
             Text(
-              "Paste the pairing code from your computer below. "
-              "It starts with remotepi://pair?…",
+              "Run /remote-pi pair on your computer and paste the code it "
+              "prints. The relay address fills in automatically.",
               style: TextStyle(
                 fontFamily: kMonoFamily,
                 fontSize: 11,
@@ -149,9 +174,45 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
                 height: 1.4,
               ),
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
+            _FieldLabel('Relay address'),
+            const SizedBox(height: 6),
             TextField(
-              controller: _controller,
+              key: const Key('pairing-sheet-address'),
+              controller: _addressController,
+              onChanged: _vm.onAddressChanged,
+              autocorrect: false,
+              enableSuggestions: false,
+              textCapitalization: TextCapitalization.none,
+              keyboardType: TextInputType.url,
+              style: TextStyle(
+                fontFamily: kMonoFamily,
+                fontSize: 12,
+                color: colors.text,
+              ),
+              decoration: _fieldDecoration(
+                colors,
+                hintText: _vm.defaultRelayUrl,
+                helperText: 'Leave empty to use the default relay',
+                errorText: addressError,
+                suffix: IconButton(
+                  icon: Icon(
+                    LucideIcons.clipboardPaste,
+                    size: 14,
+                    color: colors.muted,
+                  ),
+                  tooltip: 'Paste address',
+                  onPressed: () => _pasteInto(_addressController, false),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _FieldLabel('Pairing code'),
+            const SizedBox(height: 6),
+            TextField(
+              key: const Key('pairing-sheet-code'),
+              controller: _codeController,
+              onChanged: _vm.onCodeChanged,
               minLines: 3,
               maxLines: 6,
               autocorrect: false,
@@ -163,58 +224,40 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
                 fontSize: 12,
                 color: colors.text,
               ),
-              decoration: InputDecoration(
-                isDense: true,
+              decoration: _fieldDecoration(
+                colors,
                 hintText: 'remotepi://pair?t=…',
-                hintStyle:
-                    TextStyle(fontFamily: kMonoFamily, color: colors.muted),
-                filled: true,
-                fillColor: colors.surface,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
+                errorText: codeError,
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _pasteInto(_codeController, true),
+              icon: Icon(
+                LucideIcons.clipboardPaste,
+                size: 16,
+                color: colors.accent,
+              ),
+              label: Text(
+                'Paste code from clipboard',
+                style: TextStyle(
+                  fontFamily: kMonoFamily,
+                  fontSize: 12,
+                  color: colors.accent,
                 ),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: colors.border),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: colors.accent),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(color: colors.border),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(6)),
                 ),
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _pasteFromClipboard,
-                    icon: Icon(
-                      LucideIcons.clipboardPaste,
-                      size: 16,
-                      color: colors.accent,
-                    ),
-                    label: Text(
-                      'Paste from clipboard',
-                      style: TextStyle(
-                        fontFamily: kMonoFamily,
-                        fontSize: 12,
-                        color: colors.accent,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: colors.border),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(6)),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
             FilledButton(
-              onPressed: _canSubmit ? _submit : null,
+              key: const Key('pairing-sheet-submit'),
+              onPressed: _vm.canSubmit ? _submit : null,
               style: FilledButton.styleFrom(
                 backgroundColor: colors.accent,
                 foregroundColor: colors.onAccent,
@@ -235,6 +278,60 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  InputDecoration _fieldDecoration(
+    AppColors colors, {
+    required String hintText,
+    String? helperText,
+    String? errorText,
+    Widget? suffix,
+  }) {
+    return InputDecoration(
+      isDense: true,
+      hintText: hintText,
+      helperText: helperText,
+      helperStyle: TextStyle(fontFamily: kMonoFamily, color: colors.muted),
+      errorText: errorText,
+      errorStyle: TextStyle(
+        fontFamily: kMonoFamily,
+        color: colors.error,
+        fontSize: 11,
+      ),
+      errorMaxLines: 4,
+      hintStyle: TextStyle(fontFamily: kMonoFamily, color: colors.muted),
+      filled: true,
+      fillColor: colors.surface,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 12,
+      ),
+      suffixIcon: suffix,
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: colors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: colors.accent),
+      ),
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String text;
+  const _FieldLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontFamily: kMonoFamily,
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        color: context.colors.muted,
       ),
     );
   }

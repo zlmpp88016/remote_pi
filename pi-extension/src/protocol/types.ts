@@ -173,6 +173,10 @@ export type ExtensionUiResponseWire =
     };
 
 export type ClientMessage =
+  // Plan/69 — `pair_request` is valid on room `host` too: the supervisor's
+  // HostBridge answers it (daemon-side pairing, zero Pi processes running).
+  // The Pi-side handler in src/index.ts stays intact for URIs issued by an
+  // older Pi. Both paths answer with the same `pair_ok`/`pair_error` below.
   | { type: "pair_request"; id: string; token: string; device_name: string }
   // Plan/30: optional `images` carry inline base64 attachments (one today).
   // Omitted entirely on text-only messages — the no-image path is unchanged.
@@ -237,6 +241,17 @@ export type ClientMessage =
   | { type: "workspace_list"; id: string }
   | { type: "workspace_start"; id: string; cwd?: string; daemon_id?: string }
   | { type: "workspace_stop"; id: string; cwd?: string; daemon_id?: string }
+  // Plan/69 — host-first connection: the client anchors on room `host` only.
+  // `host_hello` is sent on boot/reconnect; the host answers with real
+  // version/hostname (never fabricated).
+  | { type: "host_hello"; id: string }
+  // Plan/69 — proxy (spike decision B): the client cannot hold room `host` +
+  // workspace rooms on one connection, so it forwards a child-addressed
+  // ClientMessage through the host. `ct` is base64 of the inner ClientMessage.
+  | { type: "host_forward"; id: string; room: string; ct: string }
+  // Plan/69 — restart a workspace by cwd. Idempotent: an already-running
+  // workspace answers `workspace_restart_ok` without respawning.
+  | { type: "workspace_restart"; id: string; cwd: string }
   // Plan/68 — host filesystem navigation + explicit workspace catalog. The host
   // resolves every path; the client never receives local-path access.
   | { type: "fs_list"; id: string; path: string; show_hidden?: boolean }
@@ -492,6 +507,35 @@ export type ServerMessage =
       cwd: string;
       daemon_id: string;
     }
+  // Plan/69 — host-first handshake reply. `daemon` fields are `null` when the
+  // host genuinely cannot determine them (never a guessed value).
+  | {
+      type: "host_hello_ok";
+      in_reply_to: string;
+      daemon: { version: string | null; hostname: string | null; platform: string | null };
+      capabilities: HostCapability[];
+    }
+  // Plan/69 — lifecycle push (NOT a reply): the host mirrors the supervisor's
+  // ChildSlot on every transition. No `in_reply_to` — it is unsolicited.
+  | {
+      type: "workspace_state";
+      cwd: string;
+      state: WorkspaceState;
+      last_error: string | null;
+      restarts: number;
+    }
+  | { type: "workspace_restart_ok"; in_reply_to: string; cwd: string; daemon_id: string }
+  | {
+      type: "workspace_restart_error";
+      in_reply_to: string;
+      code: WorkspaceRestartErrorCode;
+      message: string;
+    }
+  // Plan/69 — proxy (spike decision B): the host re-wraps a child ServerMessage
+  // that arrived addressed to the machine's own key. `ct` is base64 of the
+  // inner ServerMessage; `room` is the child room it came from, so the client
+  // files it per workspace.
+  | { type: "host_message"; room: string; ct: string }
   // Plan/57 — interactive extension prompt (ask_user via pi-ask). Mirrors
   // RpcExtensionUIRequest (select/confirm/input/editor/notify); the optional
   // `ask` envelope carries pi-ask's full question so the app renders richly.
@@ -543,6 +587,26 @@ export type SessionSwitchErrorCode = "locked" | "unknown" | "no_sdk";
 
 /** Plan/67 — reserved relay room_id for the machine-level supervisor. */
 export const HOST_ROOM_ID = "host";
+
+/**
+ * Plan/69 — lifecycle state of a workspace Pi, mirroring the supervisor's
+ * `ChildSlot` (`DaemonState` in daemon/control_protocol.ts — same closed
+ * union, declared here so the protocol layer owns its own vocabulary).
+ */
+export type WorkspaceState = "running" | "starting" | "crashed" | "stopped";
+
+/** Plan/69 — closed error codes for `workspace_restart_error`. */
+export type WorkspaceRestartErrorCode = "spawn_failed" | "not_found";
+
+/**
+ * Plan/69 — capabilities advertised by `host_hello_ok`. Closed union so the
+ * app can switch on them with exhaustiveness checking.
+ */
+export type HostCapability =
+  | "host_pairing"
+  | "workspace_state"
+  | "host_forward"
+  | "fs_nav";
 
 export interface WireWorkspaceInfo {
   cwd: string;

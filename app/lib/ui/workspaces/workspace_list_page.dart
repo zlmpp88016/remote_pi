@@ -14,6 +14,12 @@ import 'package:provider/provider.dart';
 /// was registered (`remote-pi create`) but isn't running never shows up
 /// there. This screen lists everything registered on the machine and can
 /// start one, which makes it appear as a normal session tile afterwards.
+///
+/// Plan/69 — each row also renders the workspace LIFECYCLE pushed by the
+/// host (`workspace_state`): a `crashed` workspace shows its `last_error`
+/// and a one-tap restart (`workspace_restart`, idempotent host-side). The
+/// machine connection lives on room `host`, so a dead Pi never takes this
+/// screen down with it.
 class WorkspaceListPage extends StatelessWidget {
   const WorkspaceListPage({
     super.key,
@@ -86,7 +92,13 @@ class WorkspaceListPage extends StatelessWidget {
             ),
           ),
         ),
-        WorkspaceListReady(:final workspaces, :final starting) =>
+        WorkspaceListReady(
+          :final workspaces,
+          :final starting,
+          :final statesByCwd,
+          :final restartingCwd,
+          :final restartError,
+        ) =>
           Column(
             children: [
               Expanded(
@@ -117,57 +129,26 @@ class WorkspaceListPage extends StatelessWidget {
                         ),
                       )
                     : ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                         itemCount: workspaces.length,
                         separatorBuilder: (_, _) =>
-                            Divider(height: 1, color: colors.border),
+                            const SizedBox(height: 10),
                         itemBuilder: (ctx, i) {
                           final w = workspaces[i];
-                          final isAdded = w.source == 'added';
-                          return ListTile(
-                            enabled: !starting,
-                            leading: Icon(
-                              w.live ? LucideIcons.folder : LucideIcons.folder,
-                              color: w.live ? colors.accent : colors.muted,
-                            ),
-                            title: Text(
-                              w.name.isNotEmpty ? w.name : w.cwd,
-                              style: TextStyle(color: colors.text),
-                            ),
-                            subtitle: Text(
-                              [
-                                if (w.live) 'running',
-                                if (isAdded) 'added',
-                                w.cwd,
-                              ].join(' · '),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: colors.muted, fontSize: 12),
-                            ),
-                            trailing: starting
-                                ? SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: colors.accent,
-                                    ),
-                                  )
-                                : (isAdded
-                                    ? IconButton(
-                                        tooltip: 'Remove from list',
-                                        onPressed: () => vm.remove(w.cwd),
-                                        icon: Icon(
-                                          LucideIcons.trash2,
-                                          color: colors.muted,
-                                          size: 18,
-                                        ),
-                                      )
-                                    : Icon(
-                                        LucideIcons.chevronRight,
-                                        color: colors.muted,
-                                        size: 18,
-                                      )),
-                            onTap: () => _open(ctx, vm, w),
+                          return _WorkspaceCard(
+                            workspace: w,
+                            lifecycle: statesByCwd[w.cwd],
+                            busy: starting,
+                            restarting: restartingCwd == w.cwd,
+                            restartError:
+                                restartError?.cwd == w.cwd
+                                    ? restartError!.message
+                                    : null,
+                            onOpen: () => _open(ctx, vm, w),
+                            onRemove: w.source == 'added'
+                                ? () => vm.remove(w.cwd)
+                                : null,
+                            onRestart: () => vm.restart(w.cwd),
                           );
                         },
                       ),
@@ -236,6 +217,217 @@ class WorkspaceListPage extends StatelessWidget {
         'device': device,
         'online': online,
       },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Plan/69 — one workspace card: catalog row + lifecycle state.
+// ---------------------------------------------------------------------------
+
+class _WorkspaceCard extends StatelessWidget {
+  const _WorkspaceCard({
+    required this.workspace,
+    required this.lifecycle,
+    required this.busy,
+    required this.restarting,
+    required this.restartError,
+    required this.onOpen,
+    required this.onRestart,
+    this.onRemove,
+  });
+
+  final WireWorkspaceInfo workspace;
+
+  /// Latest `workspace_state` push for this cwd, or `null` when the host
+  /// has not pushed one yet.
+  final WorkspaceState? lifecycle;
+  final bool busy;
+  final bool restarting;
+  final String? restartError;
+  final VoidCallback onOpen;
+  final VoidCallback onRestart;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    // Local alias: `lifecycle` is a final field, so it does not get null
+    // promotion inside the `if` below.
+    final WorkspaceState? lc = lifecycle;
+    final state = lc?.state;
+    final crashed = state == WorkspaceStateValue.crashed;
+    final name = workspace.name.isNotEmpty ? workspace.name : workspace.cwd;
+
+    final (Color stateColor, String stateLabel) = switch (state) {
+      WorkspaceStateValue.running => (colors.accent, 'running'),
+      WorkspaceStateValue.starting => (colors.accent, 'starting…'),
+      WorkspaceStateValue.crashed => (colors.error, 'crashed'),
+      WorkspaceStateValue.stopped => (colors.muted, 'stopped'),
+      null => (
+        workspace.live ? colors.accent : colors.muted,
+        workspace.live ? 'running' : 'stopped',
+      ),
+    };
+
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: crashed ? colors.error : colors.border,
+        ),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: busy ? null : onOpen,
+            borderRadius: BorderRadius.circular(6),
+            child: Row(
+              children: [
+                Icon(
+                  crashed ? LucideIcons.triangleAlert : LucideIcons.folder,
+                  color: stateColor,
+                  size: 18,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        workspace.cwd,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: colors.muted, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+                if (busy)
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: colors.accent,
+                    ),
+                  )
+                else if (onRemove != null)
+                  IconButton(
+                    tooltip: 'Remove from list',
+                    onPressed: onRemove,
+                    icon: Icon(LucideIcons.trash2, color: colors.muted, size: 18),
+                  )
+                else
+                  Icon(LucideIcons.chevronRight, color: colors.muted, size: 18),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Lifecycle line: state + restart count. `restarts` only shows
+          // once the supervisor actually respawned the workspace.
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: stateColor,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                stateLabel,
+                style: TextStyle(
+                  fontFamily: kMonoFamily,
+                  color: stateColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (lc != null && lc.restarts > 0) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '${lc.restarts} restart${lc.restarts == 1 ? '' : 's'}',
+                  style: TextStyle(color: colors.muted, fontSize: 11),
+                ),
+              ],
+              if (workspace.source == 'added') ...[
+                const SizedBox(width: 8),
+                Text(
+                  'added',
+                  style: TextStyle(color: colors.muted, fontSize: 11),
+                ),
+              ],
+            ],
+          ),
+          // Crashed: last_error + one-tap restart (plan/69).
+          if (crashed) ...[
+            const SizedBox(height: 8),
+            Text(
+              lc?.lastError?.isNotEmpty == true
+                  ? lc!.lastError!
+                  : 'The Pi process exited. No error detail was reported.',
+              style: TextStyle(color: colors.error, fontSize: 11, height: 1.35),
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.icon(
+                onPressed: restarting ? null : onRestart,
+                icon: restarting
+                    ? SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colors.onAccent,
+                        ),
+                      )
+                    : Icon(LucideIcons.rotateCw, size: 14, color: colors.onAccent),
+                label: Text(
+                  restarting ? 'Restarting…' : 'Restart',
+                  style: TextStyle(
+                    color: colors.onAccent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.accent,
+                  disabledBackgroundColor: colors.border,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(6)),
+                  ),
+                ),
+              ),
+            ),
+          ],
+          if (restartError != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              restartError!,
+              style: TextStyle(color: colors.error, fontSize: 11, height: 1.35),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

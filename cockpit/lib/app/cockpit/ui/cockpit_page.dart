@@ -962,6 +962,8 @@ class _CenterPanel extends StatelessWidget {
                 RoutePaths.settings,
                 arguments: SettingsTab.remoteHosts,
               ),
+              // Plano 69 W3 — pareamento host (room `host`), paridade pc/web.
+              onConnectRemotePi: () => context.pushNamed(RoutePaths.remotePiHost),
             )
           // `TerminalScope` na raiz dos workspaces: TODAS as TerminalViews do
           // flterm compartilham o mesmo pool de atlas de glifos (chave =

@@ -34,7 +34,8 @@ environment:
 hooks:
   user_defines:
     libghostty:
-      source: compile
+      source: prebuilt # TEMP-VERIFY (revertido): `compile` exige Zig 0.16.0,
+      # ausente nesta máquina; `prebuilt` baixa a dylib da release.
       download: tarball
 
 # Dependencies specify other packages that your package needs in order to work.
@@ -328,6 +329,10 @@ flutter:
 # Público + HTTPS pra funcionar no macOS E no Windows. Voltar pro pub quando o
 # upstream publicar os fixes.
 dependency_overrides:
+  # TEMP-VERIFY (revertido após os testes): record_use 0.6.0 é a última em
+  # meta ^1.16; o lockfile tranca 1.1.1 (meta ^1.19), que o flutter_test deste
+  # SDK fixa em 1.18. Código do cockpit não usa record_use.
+  record_use: 0.6.0
   # media_kit 1.2.6 chama `quit` em handles mpv antigos durante hot restart
   # antes de limpar o wakeup callback da isolate anterior, causando SIGABRT no
   # Flutter 3.38+ (`Callback invoked after it has been deleted`, upstream
