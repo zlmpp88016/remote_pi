@@ -1,0 +1,105 @@
+# Remote Pi — relay (plano 69 W4)
+#
+# O relay é o ÚNICO servidor do sistema: app/web e o daemon do pi-extension
+# são ambos clientes WebSocket que conectam SAÍDA até ele (modelo SSH — a
+# máquina do Pi não abre nenhuma porta de entrada).
+#
+# BUILD LOCAL por padrão: a imagem publicada no registry
+# (jacobmoura7/remote-pi-relay) é um snapshot congelado — NÃO contém as
+# mudanças locais do relay (ex.: a Origin allowlist do plano 69 W4, que é
+# trabalho não publicado). Com `build: ./relay`, o `docker compose build`
+# compila o código que está no seu disco. Veja o bloco comentado no fim do
+# service para voltar à imagem de registry quando publicar uma nova.
+#
+# Este compose assume o relay atrás de um Cloudflare Tunnel: o cloudflared
+# corre na mesma VPS, fala com o relay em loopback e é quem termina o TLS
+# público. Por isso o relay só escuta em 127.0.0.1 — a imagem NÃO precisa de
+# certificado, nem de Caddy/nginx na frente.
+#
+# O daemon (pi-extension) NÃO entra neste compose: ele roda na máquina que
+# tem o Pi, com `REMOTE_PI_RELAY=https://<hostname-do-tunnel>` apontando pra
+# cá. Esse mesmo valor é o que ele publica no URI de pareamento (`r=`).
+#
+# Uso (na VPS, com o repo — ou ao menos relay/ + este compose — no disco):
+#   cp .env.relay.example .env   # edite RELAY_ALLOWED_ORIGINS
+#   docker compose -f docker-compose.relay.yml up -d --build
+#   # depois de CADA mudança no relay/:
+#   docker compose -f docker-compose.relay.yml build relay
+#   docker compose -f docker-compose.relay.yml up -d
+#   curl -s http://127.0.0.1:3001/health          # local
+#   curl -s https://<hostname>/health             # pelo túnel
+
+services:
+  relay:
+    # Compila do código local (relay/Dockerfile, multi-stage). A tag `:local`
+    # é honesta sobre a proveniência — não confundir com a do registry.
+    build:
+      context: ./relay
+      dockerfile: Dockerfile
+    image: remote-pi-relay:local
+    container_name: remote-pi-relay
+    restart: unless-stopped
+    ports:
+      # Só loopback: o único cliente "local" é o cloudflared. Troque por
+      # "${REMOTEPI_RELAY_PORT:-3001}:${REMOTEPI_RELAY_PORT:-3001}" apenas se
+      # quiser acessar sem túnel (ws:// sem TLS).
+      - "127.0.0.1:${REMOTEPI_RELAY_PORT:-3001}:${REMOTEPI_RELAY_PORT:-3001}"
+    environment:
+      # Porta TCP única: WS upgrade + /health + /mesh/* no mesmo socket.
+      # Tem que casar com o ingress do túnel (service: http://127.0.0.1:3001).
+      - REMOTEPI_RELAY_PORT=${REMOTEPI_RELAY_PORT:-3001}
+      # Allowlist de Origin para clientes de NAVEGADOR (plano 69 W4).
+      # Valor: a Origin da página web (scheme+host+porta NÃO-padrão), NÃO a
+      # URL do WebSocket. Vazio/ausente = aceita qualquer origin (só seguro
+      # enquanto o hostname não é público). Múltiplas: separadas por vírgula.
+      # Ex.: https://pi.exemplo.com,http://localhost:3001
+      - RELAY_ALLOWED_ORIGINS=${RELAY_ALLOWED_ORIGINS:-}
+      # SQLite com as versões de membership assinadas do mesh. O Dockerfile
+      # já pré-configura /data/mesh.db e declara /data como VOLUME — o mount
+      # abaixo é o que faz esse estado sobreviver a recriação do container.
+      - REMOTEPI_MESH_DB_PATH=/data/mesh.db
+      # Teto do envelope {peer,room,ct} em MiB. Default 4. Não suba acima de
+      # ~100: o Cloudflare (plano free) corta upload maior que 100 MB.
+      - RELAY_MAX_CT_MIB=${RELAY_MAX_CT_MIB:-4}
+      - RUST_LOG=${RUST_LOG:-info}
+    volumes:
+      # Estado persistente do relay. Sem este mount o mesh.db nasce vazio a
+      # cada recriação (clientes republicam no próximo mutation, mas o
+      # histórico de versões assinadas se perde).
+      - relay-data:/data
+    logging:
+      # Relé de longa duração: rotação pra não encher o disco da VPS.
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ─── OPCIONAL 1: cloudflared gerenciado por arquivo de config ─────────────
+  # Só use este bloco se o seu túnel NÃO for o "dashboard-managed" (que não
+  # precisa de nada aqui além do conector já rodando). Para o modelo por
+  # token, troque o command por:
+  #   command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
+  # e delete o volume de config. O ingress do túnel deve apontar para
+  # http://127.0.0.1:3001 (a porta do relay acima).
+  #
+  # cloudflared:
+  #   image: cloudflare/cloudflared:latest
+  #   container_name: remote-pi-cloudflared
+  #   restart: unless-stopped
+  #   command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+  #   volumes:
+  #     - ./cloudflared:/etc/cloudflared:ro
+
+# ─── OPCIONAL 2: voltar pra imagem de registry ──────────────────────────────
+# Quando uma nova versão do relay for publicada (a allowlist do W4 ainda NÃO
+# está em jacobmoura7/remote-pi-relay:latest — confirme antes), troque o
+# bloco build/image acima por:
+#
+#   relay:
+#     image: jacobmoura7/remote-pi-relay:latest
+#     # ...resto igual (ports/environment/volumes/logging)
+#
+# A partir daí `docker compose pull && up -d` atualiza sem compilar.
+
+volumes:
+  relay-data:
