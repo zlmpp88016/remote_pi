@@ -21,7 +21,8 @@ Numeração `00-` é proposital: este arquivo carrega antes dos planos numerados
 | **Extensão > wrapper** | Pi tem extension API (TypeScript runtime extensions). Happy fez wrapper só porque Claude Code é closed-source — Pi não precisa repetir isso |
 | **Auto-start opcional** | Config `pi-remote.autostart=true` conecta no relay automaticamente quando Pi abre. Sem precisar digitar `/remote-pi` toda vez |
 | **Relay stateless** | Sem persistência. Encaminha ciphertext entre dois peers identificados por pubkey. ~200 linhas de Rust |
-| **Relay open-source + self-hostável** | Compromisso de credibilidade. Usuário paranoico roda o próprio. Não vira ponto único de comprometimento |
+| **Relay open-source + self-hostável** | Compromisso de credibilidade. Usuário paranoico roda o próprio. Não vira ponto de comprometimento |
+| **Estrutura do monorepo (2026-10-16 — rename em ondas)** | Clientes agrupados sob `clients/` (`mobile/`, `desktop/`, `web/`); o serviço de host chama-se `server/` (era `remote-pi/`). Os **pacotes Dart acompanham o diretório** (`app`→`mobile`, `cockpit`→`desktop`, `cockpit_*`→`desktop_*`). **Identidades publicadas permanecem congeladas:** nome do pacote npm `remote-pi`, comando Pi `/remote-pi`, bins `remote-pi`/`pi-supervisord`, `applicationId` das lojas (Android/iOS), tags de release `app-v*`/`cockpit-v*`/`cockpit-server-v*`, nomes de artefato publicados e os nomes de arquivo dos workflows do GitHub Actions — todos espelham a identidade externa do produto e renomear quebraria instalações e releases já publicadas. Reescrita feita por `scripts/rename-monorepo.mjs` (4 fases, `--dry-run` por padrão); o histórico (`plan/`, `.workflow/`, `review/`, `CHANGELOG.md`) **não** é reescrito: registra o que era verdade quando foi escrito |
 
 ## Cockpit — motor de agente (fechado 2026-08-12 — plano 58)
 

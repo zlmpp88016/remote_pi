@@ -1,5 +1,5 @@
 ---
-name: scout-site
+name: scout-web
 description: Fotografa o estado atual de clients/web/ (NextJS). Use quando precisar de contexto antes de planejar feature ou refatoração na landing page. Read-only — não edita arquivos.
 tools: Bash, Read, Grep, Glob
 model: haiku

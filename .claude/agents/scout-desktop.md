@@ -1,5 +1,5 @@
 ---
-name: scout-cockpit
+name: scout-desktop
 description: Fotografa o estado atual de clients/desktop/ (Flutter Desktop, macOS). Use quando precisar de contexto antes de planejar feature ou refatoração no app desktop. Read-only — não edita arquivos.
 tools: Bash, Read, Grep, Glob
 model: haiku

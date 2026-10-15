@@ -48,11 +48,11 @@ Para fotografar o estado de qualquer subprojeto antes de planejar, invoque os
 subagents Scout em paralelo via `Task` — eles são read-only e reportam em
 formato fixo:
 
-- `scout-app` — Flutter (`clients/mobile/`)
-- `scout-remote-pi` — Node/TS (`server/`)
+- `scout-mobile` — Flutter (`clients/mobile/`)
+- `scout-server` — Node/TS (`server/`)
 - `scout-relay` — Rust (`relay/`)
-- `scout-site` — NextJS (`clients/web/`)
-- `scout-cockpit` — Flutter Desktop (`clients/desktop/`)
+- `scout-web` — NextJS (`clients/web/`)
+- `scout-desktop` — Flutter Desktop (`clients/desktop/`)
 
 Dispare múltiplos numa única mensagem para rodar em paralelo. Cada reporte
 volta com Stack & versões, Dependências, Estrutura, Saúde (lint/build/testes)

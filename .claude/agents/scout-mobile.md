@@ -1,5 +1,5 @@
 ---
-name: scout-app
+name: scout-mobile
 description: Fotografa o estado atual de clients/mobile/ (Flutter). Use quando precisar de contexto antes de planejar feature ou refatoração no app mobile. Read-only — não edita arquivos.
 tools: Bash, Read, Grep, Glob
 model: haiku

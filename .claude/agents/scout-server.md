@@ -1,5 +1,5 @@
 ---
-name: scout-remote-pi
+name: scout-server
 description: Fotografa o estado atual de server/ (Node + TypeScript). Use quando precisar de contexto antes de planejar feature ou refatoração na extensão Pi. Read-only — não edita arquivos.
 tools: Bash, Read, Grep, Glob
 model: haiku
