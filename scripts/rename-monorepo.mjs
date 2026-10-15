@@ -523,9 +523,20 @@ function phaseServer() {
     let n = 0;
     for (const f of inside) {
       const rel = relOf(f);
-      const before = readFileSync(join(ROOT, rel), "utf8");
-      if (before.includes(`${OLD}/`)) {
-        writeFileSync(join(ROOT, rel), before.replaceAll(`${OLD}/`, `${NEW}/`));
+      const abs = join(ROOT, rel);
+      const before = readFileSync(abs, "utf8");
+      if (!before.includes(`${OLD}/`)) continue;
+      // NÃO usar `replaceAll` cego aqui: ele também casa o caminho do PACOTE
+      // INSTALADO (`~/.pi/agent/npm/node_modules/remote-pi/dist/…`). Essa
+      // identidade é CONGELADA — o npm install -g continua instalando como
+      // `remote-pi` — e o replaceAll a reescreveu para `node_modules/server/`,
+      // apontando o instalador para um caminho que nunca existirá. Bug real,
+      // descoberto na verificação final (o `install.sh` divergia do baseline).
+      // Aqui só reescrevemos referências ANCORADAS ao diretório do repo.
+      const anchored = new RegExp(`${ANCHOR}${escapeRe(OLD)}/(?!/)`, "g");
+      const after = before.replace(anchored, (m) => `${m.slice(0, -`${OLD}/`.length)}${NEW}/`);
+      if (after !== before) {
+        writeFileSync(abs, after);
         n += 1;
         console.log(`  ~ ${rel}`);
       }

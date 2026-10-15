@@ -277,9 +277,9 @@ ensure_pi() {
 # We check both, current-behavior first, and use whichever exists. Sets the
 # global PLUGIN_DIST. Returns 1 if neither is found.
 plugin_dist_candidates() {
-  printf '%s\n' "$HOME/.pi/agent/npm/node_modules/server/dist/index.js"
+  printf '%s\n' "$HOME/.pi/agent/npm/node_modules/remote-pi/dist/index.js"
   local root; root="$(npm_global_root)"
-  [ -n "$root" ] && printf '%s\n' "$root/server/dist/index.js"
+  [ -n "$root" ] && printf '%s\n' "$root/remote-pi/dist/index.js"
 }
 
 resolve_plugin_dist() {
@@ -306,10 +306,10 @@ ensure_plugin() {
   # Pi may install into ~/.pi/agent/npm (>= 0.78) or `npm root -g` (0.73).
   # resolve_plugin_dist() checks both — never a single hardcoded path.
   if ! resolve_plugin_dist; then
-    die "plugin install ran but server/dist/index.js was not found.
+    die "plugin install ran but remote-pi/dist/index.js was not found.
     Looked in:
-      $HOME/.pi/agent/npm/node_modules/server/dist/index.js
-      $(npm_global_root)/server/dist/index.js
+      $HOME/.pi/agent/npm/node_modules/remote-pi/dist/index.js
+      $(npm_global_root)/remote-pi/dist/index.js
     Check the 'pi install $PLUGIN_SPEC' output above."
   fi
   local pkg_json; pkg_json="$(dirname "$(dirname "$PLUGIN_DIST")")/package.json"
