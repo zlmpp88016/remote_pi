@@ -149,7 +149,7 @@ Há um JSON Schema em [`docs/tasks.schema.json`](./tasks.schema.json). Pra ganha
 autocomplete/validação no editor, referencie-o no topo do arquivo:
 
 ```jsonc
-{ "$schema": "../cockpit/docs/tasks.schema.json", "tasks": [ ... ] }
+{ "$schema": "./tasks.schema.json", "tasks": [ ... ] }
 ```
 
 (O cockpit ignora `$schema` ao executar — é só pro editor.)

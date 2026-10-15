@@ -771,7 +771,7 @@ jobs:
           # CRU (com as linhas em branco) vai pro RUNNER_TEMP — é o que o passo
           # do appcast converte pra HTML. O `notes` do latest.json segue como
           # está (o site renderiza esse campo como texto).
-          awk '/^## /{n++} n==1' ../cockpit/CHANGELOG.md | tail -n +2 \
+          awk '/^## /{n++} n==1' ../clients/desktop/CHANGELOG.md | tail -n +2 \
             > "$RUNNER_TEMP/notes.md"
           NOTES=$(sed '/^$/d' "$RUNNER_TEMP/notes.md" | head -20)
           if [ -z "$NOTES" ]; then
@@ -816,8 +816,8 @@ jobs:
           # Jogar o markdown do CHANGELOG lá dentro fazia o usuário ver os `###`
           # e `**` na tela e, pior, TUDO numa linha só (HTML colapsa quebras de
           # linha) — ilegível. Converte pra HTML de verdade antes.
-          python3 ../cockpit/packaging/release_notes_html.py --selftest
-          python3 ../cockpit/packaging/release_notes_html.py \
+          python3 ../clients/desktop/packaging/release_notes_html.py --selftest
+          python3 ../clients/desktop/packaging/release_notes_html.py \
             < "$RUNNER_TEMP/notes.md" > "$RUNNER_TEMP/notes.html"
           # macOS: sparkle:version = CFBundleVersion (build +n); shortVersion = marketing.
           cat > appcast-macos.xml <<XML

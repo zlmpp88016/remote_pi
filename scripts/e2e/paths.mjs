@@ -11,8 +11,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-export const PI_EXT = join(ROOT, "remote-pi");
-export const APP = join(ROOT, "app");
+export const PI_EXT = join(ROOT, "server");
+export const APP = join(ROOT, "clients", "mobile");
 
 /**
  * `require` ancorado no remote-pi. O `ws` que o relay stub usa mora no
