@@ -219,6 +219,19 @@ export function IconChevronLeft() {
   return <Ic d="M15 5 8 12l7 7" />;
 }
 
+/* Web client — browser window with a connection dot. */
+export function IconBrowser() {
+  return (
+    <Ic>
+      <rect x="2.5" y="4" width="19" height="16" rx="2.6" />
+      <path d="M2.5 8.5h19" />
+      <circle cx="5.6" cy="6.2" r=".8" />
+      <circle cx="8.1" cy="6.2" r=".8" />
+      <path d="M12 12v3.2M10.4 13.6h3.2" />
+    </Ic>
+  );
+}
+
 export function IconTerminal() {
   return (
     <Ic>

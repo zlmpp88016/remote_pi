@@ -11,7 +11,7 @@ import { randomBytes, createPublicKey, verify } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { requireFromPiExtension } from "./paths.mjs";
 
-// `ws` só resolve de dentro do pi-extension (o harness vive na raiz).
+// `ws` só resolve de dentro do remote-pi (o harness vive na raiz).
 const { WebSocketServer } = requireFromPiExtension("ws");
 
 /** Reconstroi a chave pública Ed25519 crua (32B) a partir do base64 do hello. */

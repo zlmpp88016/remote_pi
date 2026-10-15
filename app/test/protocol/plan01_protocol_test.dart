@@ -1,7 +1,7 @@
 // Plan 01 — protocol surface for transcript pagination, runtime status and the
 // session tree / branching actions.
 //
-// Mirrors the contract in `pi-extension/src/protocol/types.ts`:
+// Mirrors the contract in `remote-pi/src/protocol/types.ts`:
 //   ClientMessage:  session_sync.before, tree_get, tree_navigate,
 //                   session_fork, session_clone
 //   ServerMessage:  session_history.older_cursor/has_older, runtime_status,

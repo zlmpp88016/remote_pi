@@ -1,8 +1,33 @@
 # Remote Pi — Relay
 
-一个轻量的 WebSocket 中继服务器，把 **Remote Pi** 移动 App 连接到运行在你本机操作系统上的 `pi-extension` 进程。它负责 peer 路由、在线状态、经授权的 Pi 到 Pi 转发，以及带签名的成员关系元数据。
+一个轻量的 WebSocket 中继服务器，把 **Remote Pi** 的各端客户端（手机、浏览器、桌面端）连接到运行在你本机操作系统上的**主机守护进程**。它负责 peer 路由、在线状态、经授权的 Pi 到 Pi 转发，以及带签名的成员关系元数据。
 
 项目的完整概览，见[根 README](../README.md)。
+
+---
+
+## 启动
+
+```bash
+# 方案 A —— 公共中继，零部署
+# https://relay.880160.xyz
+
+# 方案 B —— Docker 自建（单 3000 端口：WS + /health + /mesh/*）
+docker run -d \
+  --name remote-pi-relay \
+  -p 3000:3000 \
+  -v remote-pi-data:/data \
+  --restart unless-stopped \
+  jacobmoura7/remote-pi-relay
+
+# 方案 C —— 源码构建启动
+cargo build --release
+./target/release/relay
+# 换端口：REMOTEPI_RELAY_PORT=8080 ./target/release/relay
+```
+
+健康检查：`GET /health` 返回 `200 OK`。详细配置与环境变量见
+[自建中继](#自建中继推荐出于隐私考虑)。
 
 ---
 
@@ -29,7 +54,7 @@
 有一个共享中继可用：
 
 ```
-https://relay-rp1.jacobmoura.work
+https://relay.880160.xyz
 ```
 
 你可以零配置直接用它上手。但请注意下面的安全权衡。
@@ -70,7 +95,7 @@ docker run -d \
 - `GET /health` —— 健康检查（返回 `200 OK`）
 - `GET / POST /mesh/<owner_pk_hash>` —— 带签名的成员关系版本
 
-把你的 app 和 `pi-extension` 指向 `ws://<your-server-ip>:3000`（如果放在 Caddy、nginx 这类终止 TLS 的反向代理后面，就用 `wss://`）。
+把你的 app 和 `remote-pi` 指向 `ws://<your-server-ip>:3000`（如果放在 Caddy、nginx 这类终止 TLS 的反向代理后面，就用 `wss://`）。
 
 **`/data` volume**：中继把它的 SQLite 数据库（带签名的成员关系版本）存在容器内的 `/data/mesh.db`。挂一个具名 volume（如上面的例子）或宿主机目录（`-v /srv/remote-pi:/data`），以便状态在 `docker rm` 删除和镜像升级后仍保留。不挂载的话，每次容器启动数据库都会重建为空库，客户端会在下一次变更时重新发布其状态。
 
@@ -117,7 +142,7 @@ relay.yourdomain.com {
 }
 ```
 
-然后把 app 和 `pi-extension` 的中继 URL 设为 `wss://relay.yourdomain.com`。
+然后把 app 和 `remote-pi` 的中继 URL 设为 `wss://relay.yourdomain.com`。
 
 ---
 

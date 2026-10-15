@@ -1,4 +1,4 @@
-// Carregador dos módulos COMPILADOS do pi-extension (`dist/`).
+// Carregador dos módulos COMPILADOS do remote-pi (`dist/`).
 //
 // Por que `dist/` e não `src/` via tsx: o e2e precisa do artefato que realmente
 // roda na máquina do usuário (a extensão instalada é `dist/`), e o loader do
@@ -13,7 +13,7 @@ import { PI_EXT } from "./paths.mjs";
 
 const DIST = join(PI_EXT, "dist");
 
-/** true quando `dist/` existe (isto é, o pi-extension foi compilado). */
+/** true quando `dist/` existe (isto é, o remote-pi foi compilado). */
 export function distBuilt() {
   return existsSync(join(DIST, "index.js"));
 }
@@ -24,7 +24,7 @@ export async function importDist(relativePath) {
 }
 
 /**
- * Importa um módulo do SDK do Pi a partir do `node_modules` do pi-extension.
+ * Importa um módulo do SDK do Pi a partir do `node_modules` do remote-pi.
  * O SDK é ESM puro, então `createRequire` não serve — daí o `file://` explícito.
  */
 export async function importSdk(relativePath) {

@@ -29,7 +29,7 @@ pub async fn ws_handler(
 ) -> Response {
     // ── Origin allowlist (plano 69 W4) ─────────────────────────────────────
     // Browsers attach an `Origin` header to the WS handshake; native clients
-    // (app, pi-extension, Cockpit) send none. With an allowlist configured,
+    // (app, remote-pi, Cockpit) send none. With an allowlist configured,
     // an unlisted origin is refused before the upgrade; with it empty (the
     // default) every origin is accepted — historical behaviour preserved.
     // A malformed (non-UTF-8) header value maps to "", which never matches a

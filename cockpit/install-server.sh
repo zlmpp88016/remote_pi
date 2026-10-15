@@ -9,7 +9,7 @@
 #
 # Canonical file: cockpit/install-server.sh in the repo; the site URL above
 # redirects to the GitHub raw of this file:
-#   https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/cockpit/install-server.sh
+#   https://raw.githubusercontent.com/zlmpp88016/remote_pi/main/cockpit/install-server.sh
 #
 # What it does (user-space, NO sudo, idempotent):
 #   1. Detects the architecture (x86_64 or arm64; Linux only).
@@ -29,7 +29,7 @@
 # Trust: plain readable script, no privileges. Read it before piping to bash.
 set -euo pipefail
 
-REPO="${COCKPIT_REPO:-jacobaraujo7/remote_pi}"
+REPO="${COCKPIT_REPO:-zlmpp88016/remote_pi}"
 GH_API="https://api.github.com/repos/$REPO"
 GH_DL="https://github.com/$REPO/releases/download"
 INSTALL_ARGS=()

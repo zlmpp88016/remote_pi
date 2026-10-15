@@ -413,7 +413,7 @@ sealed class ClientMessage {
 }
 
 /// Plan/30 — one image carried inline on a `user_message` (base64 + mime).
-/// Mirrors `WireImage` in `pi-extension/src/protocol/types.ts` and the SDK's
+/// Mirrors `WireImage` in `remote-pi/src/protocol/types.ts` and the SDK's
 /// `ImageContent`. The relay forwards it opaquely inside the existing `ct`.
 class WireImage {
   final String data; // base64, no data-URI prefix
@@ -892,8 +892,8 @@ class SessionSync extends ClientMessage {
 
 /// Plan/28 — Curated catalogue of actions the app can dispatch on the
 /// Pi-side session. Each value matches an `action_ok`/`action_error`
-/// reply emitted by the pi-extension handlers in
-/// `pi-extension/src/actions/handlers.ts`.
+/// reply emitted by the remote-pi handlers in
+/// `remote-pi/src/actions/handlers.ts`.
 enum ActionName {
   sessionNew('session_new'),
   sessionCompact('session_compact'),
@@ -957,7 +957,7 @@ enum ThinkingLevel {
 
 /// Plan/28 — Wire shape for one entry in the model picker. Subset of
 /// the SDK's `Model` interface; matches the `WireModel` declared in
-/// `pi-extension/src/protocol/types.ts`.
+/// `remote-pi/src/protocol/types.ts`.
 class WireModel {
   /// Stable id inside the provider's catalog (e.g. `claude-opus-4-7`).
   final String id;
@@ -1591,7 +1591,7 @@ class Pong extends ServerMessage {
 /// Plan/27 Wave A — identifies the agent harness the paired PC is
 /// running. Surfaced as a subtitle on the PiCard ("via Pi coding
 /// agent"). Pi-extension is expected to publish this in `pair_ok`
-/// (contract for the next pi-extension dispatch); the app falls back
+/// (contract for the next remote-pi dispatch); the app falls back
 /// to a sensible default when the field is absent so legacy Pis keep
 /// working.
 class PiHarness {
@@ -1600,7 +1600,7 @@ class PiHarness {
   const PiHarness({required this.name, required this.version});
 
   /// Default used when `pair_ok` omits `harness` (current
-  /// pi-extension behaviour) and when migrating legacy PeerRecords.
+  /// remote-pi behaviour) and when migrating legacy PeerRecords.
   static const PiHarness piCodingAgentUnknown = PiHarness(
     name: 'Pi coding agent',
     version: '—',
@@ -1638,13 +1638,13 @@ class PairOk extends ServerMessage {
   final String roomId;
 
   /// Plan/27 Wave A — agent harness identification. `null` when the
-  /// pi-extension hasn't been upgraded to publish it; consumers fall
+  /// remote-pi hasn't been upgraded to publish it; consumers fall
   /// back to [PiHarness.piCodingAgentUnknown] so the UI never renders
   /// an empty subtitle.
   final PiHarness? harness;
 
   /// Plan/27 Wave A — hostname hint for the post-pair nickname modal.
-  /// The pi-extension reports its OS hostname so the modal can
+  /// The remote-pi reports its OS hostname so the modal can
   /// pre-fill a sensible placeholder ("Mac do Jacob") instead of a
   /// generic "Pi". `null` on legacy Pis.
   final String? hostname;
@@ -2534,7 +2534,7 @@ class HostHelloOk extends ServerMessage {
 
 /// Plan/69 — lifecycle state of a workspace Pi, mirroring the supervisor's
 /// ChildSlot. Same closed union as `WorkspaceState` in
-/// `pi-extension/src/protocol/types.ts`.
+/// `remote-pi/src/protocol/types.ts`.
 enum WorkspaceStateValue {
   running('running'),
   starting('starting'),

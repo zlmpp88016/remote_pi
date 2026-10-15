@@ -14,11 +14,20 @@ documentação do MVP. **Apenas apresentação — não tem lógica de produto.*
 
 ## Comandos
 
-- `pnpm install` — instala deps
-- `pnpm dev` — dev server em :3000
-- `pnpm build` — build de produção
-- `pnpm start` — serve build
-- `pnpm lint` — ESLint
+- `pnpm install` — instala deps (npm também funciona: `npm install`)
+- `pnpm dev` — dev server em :3000 (`npm run dev`)
+- `pnpm build` — build de produção (`npm run build`)
+- `pnpm start` — serve build (`npm start`)
+- `pnpm lint` — ESLint (`npm run lint`)
+
+Com npm o subcomando `run` é obrigatório: `npm build` e `npm dev` **não** existem.
+
+O cliente web em `/remote-pi/connect` é um cliente de primeira classe (ao lado do
+app mobile e do Cockpit) e tem entrada na navegação e na seção de download. Fica
+**ligado por padrão**: não precisa de variável de ambiente para rodar nem para o
+build de produção. `NEXT_PUBLIC_REMOTE_PI_WEB_CLIENT=0` é o kill switch
+explícito (a rota responde 404 e a entrada de navegação/card de download somem);
+qualquer outro valor, inclusive ausente, mantém ligado.
 
 ## Convenções
 

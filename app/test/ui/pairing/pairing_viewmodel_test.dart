@@ -432,7 +432,7 @@ void main() {
         });
         // Preferences on the app's default; the code names the self-hosted
         // relay.
-        final prefs = _PrefsForTest(relay: 'https://relay-rp1.jacobmoura.work');
+        final prefs = _PrefsForTest(relay: 'https://relay.880160.xyz');
         final vm = PairingViewModel(
           storage,
           factory.call,
@@ -474,7 +474,7 @@ void main() {
         vm.onCodeChanged(_qrUri);
         expect(vm.address, 'ws://localhost',
             reason: 'r= auto-fills the address field');
-        expect(vm.defaultRelayUrl, 'https://relay-rp1.jacobmoura.work');
+        expect(vm.defaultRelayUrl, 'https://relay.880160.xyz');
         vm.dispose();
       });
 
@@ -618,7 +618,7 @@ void main() {
             storage,
             factory.call,
             _SpyConn(),
-            _PrefsForTest(relay: 'https://relay-rp1.jacobmoura.work'),
+            _PrefsForTest(relay: 'https://relay.880160.xyz'),
             bridge,
           );
 
@@ -815,7 +815,7 @@ void main() {
     testWidgets('pasting a code auto-fills the address from r=', (tester) async {
       final (:vm, :conn) = await pumpSheet(
         tester,
-        relay: 'https://relay-rp1.jacobmoura.work',
+        relay: 'https://relay.880160.xyz',
       );
 
       await tester.enterText(
@@ -859,7 +859,7 @@ void main() {
     testWidgets('relay mismatch shows the typed error inline', (tester) async {
       final (:vm, :conn) = await pumpSheet(
         tester,
-        relay: 'https://relay-rp1.jacobmoura.work',
+        relay: 'https://relay.880160.xyz',
       );
 
       await tester.enterText(

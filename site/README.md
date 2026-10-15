@@ -12,6 +12,34 @@ This package ships three static routes:
 
 Target domain: <https://remote-pi.jacobmoura.work>.
 
+## Start
+
+The web client route `/remote-pi/connect` is a first-class client (next to the
+mobile app and Cockpit) and is reachable from the site navigation and the
+download section. It is **ON by default**: no environment variable is needed
+to run it locally or to build for production.
+
+`NEXT_PUBLIC_REMOTE_PI_WEB_CLIENT=0` is the explicit kill switch — set it before
+the dev server or the build to hide the client (route 404s, nav entry and the
+download card disappear). Any other value, including unset, keeps it enabled.
+
+```bash
+npm install     # or: pnpm install
+
+npm run dev     # dev server at http://localhost:3000
+npm run build   # production build
+npm start       # serve the production build
+```
+
+With npm the script subcommand is required (`npm build` / `npm dev` are NOT
+commands). pnpm drops `run`: `pnpm dev`, `pnpm build`, `pnpm start`, `pnpm lint`.
+
+Open <http://localhost:3000/remote-pi/connect> — or click **Open web client** in
+the `/remote-pi` nav — then paste the relay address + `remotepi://pair?...` code
+printed by `remote-pi pair` on the host machine. The dev server and the relay
+both default to port 3000 — run one of them on another port when they share a
+machine (`npx next dev -p 3167`).
+
 ## Stack
 
 - Next.js 16 (App Router) + React 19
@@ -25,12 +53,14 @@ Dark-only theme; visual identity lives in `../branding/`.
 ## Commands
 
 ```bash
-pnpm install   # install deps
-pnpm dev       # dev server at http://localhost:3000
-pnpm build     # production build (SSG)
-pnpm start     # serve the production build
-pnpm lint      # ESLint
+npm install     # install deps (or: pnpm install)
+npm run dev     # dev server at http://localhost:3000
+npm run build   # production build (SSG)
+npm start       # serve the production build
+npm run lint    # ESLint
 ```
+
+pnpm equivalents drop `run`: `pnpm dev`, `pnpm build`, `pnpm start`, `pnpm lint`.
 
 ## Layout
 

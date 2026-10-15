@@ -118,7 +118,7 @@ class SessionCatalog {
   // ── Plan/68 — Pi surface (skills + packages) ──────────────────────────────
   //
   // Unlike the workspace ops above, these are handled by the paired Pi itself
-  // (`pi-extension/src/index.ts`), so they go on the ACTIVE room (the workspace
+  // (`remote-pi/src/index.ts`), so they go on the ACTIVE room (the workspace
   // session the app is talking to) — no room override.
 
   /// Ask the machine for its runtime + installed skills and packages.

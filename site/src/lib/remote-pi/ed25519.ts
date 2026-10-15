@@ -85,8 +85,8 @@ function subtle(): SubtleCrypto {
   const c = (globalThis as { crypto?: Crypto }).crypto;
   if (!c || !c.subtle) {
     throw new Ed25519UnavailableError(
-      "SubtleCrypto indisponível (contexto não-seguro?) — " +
-        "o cliente web precisa de HTTPS ou localhost.",
+      "SubtleCrypto unavailable (insecure context?) — " +
+        "the web client needs HTTPS or localhost.",
     );
   }
   return c.subtle;
@@ -132,7 +132,7 @@ async function createWebCryptoSigner(): Promise<Ed25519Signer> {
     keyPair = await api.generateKey("Ed25519", false, ["sign"]);
   } catch (err) {
     throw new Ed25519UnavailableError(
-      `WebCrypto Ed25519 indisponível: ${String(err)}`,
+      `WebCrypto Ed25519 unavailable: ${String(err)}`,
     );
   }
   const publicKeyRaw = new Uint8Array(await api.exportKey("raw", keyPair.publicKey));
@@ -229,7 +229,7 @@ function decodePoint(bytes: Uint8Array): Point | null {
   // x² = (y² - 1) / (d·y² + 1)
   const u = mod(y2 - 1n);
   const v = mod(D * y2 + 1n);
-  let x = mod(u * invert(v));
+  const x = mod(u * invert(v));
   let candidate = modPow(x, (P + 3n) / 8n);
   if (mod(candidate * candidate) !== x) {
     candidate = mod(candidate * SQRT_M1);
@@ -301,7 +301,7 @@ function randomBytes(length: number): Uint8Array {
     return out;
   }
   throw new Ed25519UnavailableError(
-    "crypto.getRandomValues indisponível — não é possível gerar App-key.",
+    "crypto.getRandomValues unavailable — cannot generate the App-key.",
   );
 }
 

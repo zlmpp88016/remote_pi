@@ -5,7 +5,7 @@ databases and tasks side by side, on macOS, Windows and Linux, with iPad and
 Android clients for remote hosts.
 
 - Site and docs: https://remote-pi.jacobmoura.work/cockpit
-- Downloads (dmg, exe, deb, rpm, apk): https://github.com/jacobaraujo7/remote_pi/releases?q=cockpit-v
+- Downloads (dmg, exe, deb, rpm, apk): https://github.com/zlmpp88016/remote_pi/releases?q=cockpit-v
 - Packaging and release runbook: [packaging/README.md](packaging/README.md)
 
 ## cockpit-server on a Linux host (VPS)
@@ -21,7 +21,7 @@ x86_64 and arm64 only, user space, no sudo.
 ```bash
 curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash
 # same script straight from GitHub (the site URL redirects here):
-curl -fsSL https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/cockpit/install-server.sh | bash
+curl -fsSL https://raw.githubusercontent.com/zlmpp88016/remote_pi/main/cockpit/install-server.sh | bash
 ```
 
 The script lives at [install-server.sh](install-server.sh). What it does, in order:
@@ -47,7 +47,7 @@ Re-running the script updates the install; the same version is a no-op.
 Manual download, for a host without internet access or if you prefer to read
 the files first:
 
-- Releases: https://github.com/jacobaraujo7/remote_pi/releases?q=cockpit-server-v
+- Releases: https://github.com/zlmpp88016/remote_pi/releases?q=cockpit-server-v
 - Then `unzip cockpit-server-<version>-linux-<arch>.zip && ./cockpit-server/install.sh`
 
 Service commands, once installed:

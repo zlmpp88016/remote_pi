@@ -1,11 +1,37 @@
 # Remote Pi — Relay
 
-A lightweight WebSocket relay server that connects the **Remote Pi** mobile app to
-`pi-extension` processes running on your operating system. It handles peer routing,
-presence, authorized Pi-to-Pi forwarding, and signed membership metadata.
+A lightweight WebSocket relay server that connects the **Remote Pi** clients
+(mobile, browser, desktop) to the **host daemon** running on your operating
+system. It handles peer routing, presence, authorized Pi-to-Pi forwarding, and
+signed membership metadata.
 
 For a full overview of the project, see the
 [root README](../README.md).
+
+---
+
+## Start
+
+```bash
+# Option A — public relay, no setup
+# https://relay.880160.xyz
+
+# Option B — self-host with Docker (single port 3000: WS + /health + /mesh/*)
+docker run -d \
+  --name remote-pi-relay \
+  -p 3000:3000 \
+  -v remote-pi-data:/data \
+  --restart unless-stopped \
+  jacobmoura7/remote-pi-relay
+
+# Option C — build from source
+cargo build --release
+./target/release/relay
+# Custom port: REMOTEPI_RELAY_PORT=8080 ./target/release/relay
+```
+
+Health check: `GET /health` returns `200 OK`. Details and env vars live in
+[Self-hosted relay](#self-hosted-relay-recommended-for-privacy).
 
 ---
 
@@ -44,7 +70,7 @@ Every device authenticates with an Ed25519 keypair during the WebSocket handshak
 A shared relay is available at:
 
 ```
-https://relay-rp1.jacobmoura.work
+https://relay.880160.xyz
 ```
 
 You can use it to get started without any setup. However, be aware of the security
@@ -99,7 +125,7 @@ surfaces at once:
 - `GET /health` — health check (returns `200 OK`)
 - `GET / POST /mesh/<owner_pk_hash>` — signed membership versions
 
-Point your app and `pi-extension` to `ws://<your-server-ip>:3000` (or `wss://`
+Point your app and `remote-pi` to `ws://<your-server-ip>:3000` (or `wss://`
 if you put it behind a TLS-terminating reverse proxy such as Caddy or nginx).
 
 **`/data` volume**: the relay stores its SQLite database (signed membership
@@ -158,7 +184,7 @@ RELAY_ALLOWED_ORIGINS="https://app.example.com" RUST_LOG=info ./target/release/r
   `403 Forbidden` before the upgrade completes. Entries are matched
   **exactly** (case-sensitive; scheme + host + port; no wildcards and no
   paths). Browsers lowercase scheme and host, so write entries in lowercase.
-- **No `Origin` header (app, `pi-extension`, Cockpit): always accepted**, so
+- **No `Origin` header (app, `remote-pi`, Cockpit): always accepted**, so
   an active allowlist never breaks native clients.
 
 This is a browser-context restriction, **not** an authentication mechanism —
@@ -222,7 +248,7 @@ relay.yourdomain.com {
 }
 ```
 
-Then set your app and `pi-extension` relay URL to `wss://relay.yourdomain.com`.
+Then set your app and `remote-pi` relay URL to `wss://relay.yourdomain.com`.
 
 ---
 

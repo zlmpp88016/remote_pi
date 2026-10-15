@@ -140,7 +140,7 @@ Future<PairingResult> performPairing({
       relayUrl: qr.relayUrl ?? currentRelayUrl,
       pairedAt: DateTime.now().toUtc().toIso8601String(),
       roomId: piRoomId,
-      // Plan/27 Wave A — null when pi-extension hasn't been upgraded
+      // Plan/27 Wave A — null when remote-pi hasn't been upgraded
       // yet to publish `harness` in pair_ok.
       harness: pairOk.harness,
     );

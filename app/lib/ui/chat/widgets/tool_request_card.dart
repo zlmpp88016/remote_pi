@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 //
 // Historically this widget rendered Allow/Deny buttons + a 60s countdown
 // assuming the Pi paused execution until the user decided. With the current
-// Claude SDK integration the pi-extension emits `tool_request` AFTER the
+// Claude SDK integration the remote-pi emits `tool_request` AFTER the
 // SDK has already accepted the tool (`tool_execution_start` fires post
 // auto-approval), so the buttons could only blink for a few hundred
 // milliseconds before `tool_result` arrived — confusing UX with no real

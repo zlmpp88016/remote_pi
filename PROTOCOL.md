@@ -8,7 +8,7 @@ Atualizada em 2026-07-18.
 ## Visão de 30 segundos
 
 - **Mesh de agentes coding** rodando em múltiplos PCs do mesmo usuário
-- **Cada PC** roda o `pi-extension` (Node.js daemon) com **uma Pi-key** Ed25519 no Keychain do sistema (macOS/Linux/Windows)
+- **Cada PC** roda o `remote-pi` (Node.js daemon) com **uma Pi-key** Ed25519 no Keychain do sistema (macOS/Linux/Windows)
 - **Celular** é o **autenticador inicial** (plan/68: pareamento por código colável, sem QR) — depois do pareamento, PCs operam autonomamente entre si
 - **Owner-key** Ed25519 vive no Keychain do celular (iOS Keychain / Android Block Store), sincroniza entre devices do mesmo Apple ID / Google Account
 - **Relay** WebSocket roteia e armazena/verifica `mesh_versions` assinadas pelo Owner; autoriza co-membership direta
@@ -20,13 +20,15 @@ Atualizada em 2026-07-18.
 
 | Chave | Algoritmo | Onde mora | Quem cria | Quem usa |
 |---|---|---|---|---|
-| **Owner-key** | Ed25519 | iOS Keychain (sync iCloud) / Android Block Store (sync Google) | App mobile no 1º boot | Assina `mesh_versions`, prova autoridade pra parear/revogar PCs |
-| **Pi-key** | Ed25519 | `@napi-rs/keyring` no PC (Keychain macOS / libsecret Linux / Credential Manager Windows). Fallback `~/.pi/remote/identity.json` (`0600`) com warning em sistemas headless | pi-extension no 1º boot | Autentica a conexão WS no relay e fornece a identidade técnica canônica usada no `from_pc` autenticado e no roteamento por `to_pc`; não assina envelopes cross-PC individuais |
-| **App-key** | Ed25519 efêmera | RAM do app mobile | App por sessão de pareamento | Establishment de canal autenticado durante pair |
+| **Owner-key** | Ed25519 | iOS Keychain (sync iCloud) / Android Block Store (sync Google) | App mobile no 1º boot | Assina `mesh_versions` (membership e revogação na mesh); **não** assina `pair_request` nem é verificada no pareamento |
+| **Pi-key** | Ed25519 | `@napi-rs/keyring` no PC (Keychain macOS / libsecret Linux / Credential Manager Windows). Fallback `~/.pi/remote/identity.json` (`0600`) com warning em sistemas headless | remote-pi no 1º boot | Autentica a conexão WS no relay e fornece a identidade técnica canônica usada no `from_pc` autenticado e no roteamento por `to_pc`; não assina envelopes cross-PC individuais |
+| **App-key** | Ed25519 efêmera | RAM do app mobile | App por sessão de pareamento | Autentica a conexão no relay (challenge/auth sobre nonce cru) durante o pair; **não** assina o `pair_request` — a autorização do pareamento é o token |
 
 **Identidade técnica** de cada Pi/PC é a chave pública Ed25519 bruta de 32 bytes. Nas fronteiras do protocolo, Pi-key e Owner-key usam Base64 RFC 4648 padrão **com padding** como representação canônica; entradas URL-safe ou sem padding podem ser aceitas apenas para normalização. Nicknames e aliases locais efetivos nunca substituem essa identidade técnica.
 
 **Constraint fixada**: "1 Pi-key por PC; troca de hardware = re-pareamento". Não há migração de Pi-key entre máquinas. Owner-key compensa (Owner sincroniza cross-device via Keychain do sistema).
+
+**Autoridade de pareamento = token, não Owner-key.** O `pair_request` é autorizado por um bearer token emitido pelo host **mais** a Pi-key/App-key do cliente já autenticada no relay. O PC **não** valida assinatura de Owner no pareamento e **não** registra a qual Owner o device pertence: quem detém o token pareia a própria chave. A Owner-key só assina membership (`mesh_versions`), que é um mecanismo **separado** do pareamento.
 
 ---
 
@@ -221,7 +223,7 @@ Detalhes em `plan/24-mesh-membership.md`.
 
 Vocabulário curado de ações tipadas que o app mobile invoca sobre a sessão do Pi pareado. **Não é** um picker genérico de slash commands — cada ação tem payload estruturado e mapeia pra uma API pública do SDK. Pi-extension lida; app não parseia nada.
 
-| Action | ClientMessage | SDK call no pi-extension |
+| Action | ClientMessage | SDK call no remote-pi |
 |---|---|---|
 | Compact context | `session_compact` | `ctx.compact()` |
 | New session | `session_new` | `ctx.newSession()` |
@@ -344,6 +346,8 @@ Emitido em exit de child, restart (backoff), start e stop. `crashed` carrega `la
 ```
 
 Fluxo: app envia `host_forward` no room `host` → host re-emite `{peer: <machine epk>, room: <childRoom>, ct}` na mesma conexão (o relay entrega no conn do filho, reescrito com peer+room do remetente — `relay/src/handlers/peer.rs`) → o filho em modo daemon responde endereçando a **própria** Pi-key no room `host` → o host detecta `outer.peer == própria pubkey && outer.room != "host"`, reembrulha como `host_message` e faz fan-out para todos os peers allow-listados. O cliente arquiva por `host_message.room`. Filho TUI (não-daemon) mantém o caminho direto intacto.
+
+**Subprotocolo WebSocket e o edge do Cloudflare.** O relay ecoa `Sec-WebSocket-Protocol` quando o cliente pede (`remote-pi.1`, `relay/src/handlers/peer.rs`), e conexões diretas podem negociar. **Clientes de navegador NÃO devem pedir**: com o relay atrás de um Cloudflare Tunnel, o edge engole o header da resposta 101 — e o browser, por spec (RFC 6455), fecha a conexão quando pediu subprotocolo e não recebeu echo. O cliente web conecta sem pedir; o handshake passa e o protocolo de mensagens (JSON dentro do WS) não muda. Clientes nativos (remote-pi, app, Cockpit) nunca usaram o subprotocolo.
 
 ### Filesystem navigation (plan 68)
 
@@ -525,22 +529,26 @@ remotepi://pair?t=<token>&epk=<base64url>&n=<nome>[&rm=<roomId>][&r=<relayUrl>]
 
 | Param | Conteúdo |
 |---|---|
-| `t` | Token de uso único. **Persistente por padrão** quando emitido pelo daemon (`remote-pi pair` — código "predefinido no host", invalida só com `--rotate`); efêmero de 60s quando emitido por um Pi interativo ou com `--ephemeral` |
+| `t` | Bearer token do host. **Persistente por padrão** quando emitido pelo daemon (`remote-pi pair` — código "predefinido no host"): **reutilizável** por vários pareamentos, invalidado só com `--rotate`. Efêmero e **single-use** com TTL padrão de 60s quando emitido por um Pi interativo ou com `--ephemeral` — 60s é o default, não um TTL fixo para toda emissão: o TTL vem da emissão (clamp 10s–600s). É uma credencial: quem o vê pode parear |
 | `epk` | Pi-key Ed25519 do host (base64url) — identidade do peer |
 | `n` | Nome da sessão/workspace, para preview antes do `pair_ok` |
 | `rm` | Room id do workspace default (opcional) |
 | `r` | Relay em que o Pi está de fato conectado (opcional, mas essencial para relay self-hosted) |
 
 1. Usuário cola o endereço no app; o app adota `r` como relay efetivo quando presente
-2. App conecta no relay como peer efêmero
-3. App envia `pair_request` assinado com **Owner-sk** (prova autoridade)
-4. Pi-extension valida assinatura, adiciona App-key na sua `peers.json` local
-5. App adiciona Pi-pubkey no seu `mesh_versions` local + publica versão nova no relay
-6. Pi-extension passa a aceitar mensagens daquele Owner
+2. App conecta no relay e autentica sua chave de cliente (challenge/auth Ed25519 sobre nonce cru — auth **de relay**, não de pareamento)
+3. App envia o `pair_request` canônico `{ "type": "pair_request", id, token, device_name }` — **sem** `sig`/`owner_pk`/`signature`; a autorização é o token, não uma assinatura
+4. Host consome/valida o token e, em sucesso, persiste `remote_epk = outer.peer` (o peer **já autenticado pelo relay**) na `peers.json` local, adiciona o peer à allow-list do room e responde `pair_ok`/`pair_error` com `in_reply_to = id`
+5. App (mobile) adiciona Pi-pubkey no seu `mesh_versions` local + publica versão nova no relay (membership assinada pelo Owner). Essa membership é um mecanismo **independente e separado** do pareamento: **não** é pré-requisito do pair, o **Web client não publica mesh** e o `pair_ok` **não** prova pertencimento a um Owner
+6. Host passa a aceitar mensagens daquele peer autenticado
 
-Múltiplos Owners podem parear o mesmo PC (concomitância — `peers.json` aceita N entries).
+**Escopo da autorização do token**: qualquer cliente que (a) detenha token válido e (b) complete a autenticação de Pi-key no relay pode registrar **a própria** chave. A janela de um token vazado (log, screenshot, clipboard) depende da emissão: efêmero vale até expirar/consumir/rotacionar; persistente do daemon vale até `--rotate`. Na camada de pairing não há quota por token — nem limite de tentativas nem de peers **por token** — sem com isso afirmar que o relay não tenha limite algum. `--rotate` invalida o token mas **não** remove peers já registrados em `peers.json`. Consumo do token e registro do peer **não são transacionais**: no caminho efêmero o token é marcado como consumido **antes** do registro; se o registro falhar, o token já foi queimado e o erro volta como `pair_error` (`internal_error`), sem rollback. No Pi interativo o consumo é **em memória** (não persiste); no daemon o consumo do efêmero é **persistido** e o persistente segue reutilizável até `--rotate`.
 
-Quando o código é emitido pelo **daemon** (plano 69), os passos são os mesmos, mas: o `pair_request` trafega no room `host` e é validado pelo `HostBridge` (carve-out de allow-list **somente** para `pair_request` de peer desconhecido); o token é persistente até `--rotate`; `rm=host` e `r=` vêm do daemon. Caminho Pi (URI emitida por Pi interativo) continua intacto para compat.
+Múltiplos devices pareiam o mesmo PC (concomitância — `peers.json` aceita N entries). Como o handshake não prova Owner, o host não distingue de qual Owner é cada peer.
+
+Quando o código é emitido pelo **daemon** (plano 69), os passos são os mesmos, mas: o `pair_request` trafega no room `host` e é validado pelo `HostBridge` (carve-out de allow-list **somente** para `pair_request` de peer desconhecido); o token é persistente **por padrão** até `--rotate`; `rm=host` e `r=` vêm do daemon. Caminho Pi (URI emitida por Pi interativo) continua intacto para compat.
+
+**Allow-list do room `host` não é fail-closed por si só**: a recusa de peer desconhecido depende de `allowedPeers.size > 0` — com a allow-list local **vazia**, mensagens que não sejam `pair_request` vindas de peer desconhecido também passam. Só a partir da primeira entrada o carve-out de `pair_request` é a única exceção.
 
 Detalhes em `plan/04-pairing.md` e `plan/69-host-first-connection.md`.
 
@@ -550,7 +558,7 @@ Detalhes em `plan/04-pairing.md` e `plan/69-host-first-connection.md`.
 
 ### O que está protegido
 
-- **Pareamento autenticado**: pair_request assinado pela Owner-sk; spoofing requer Owner-sk
+- **Pareamento autorizado por token**: o host só registra um peer que apresente token válido **e** chave de cliente autenticada no relay (challenge/auth Ed25519 sobre nonce cru). **Não há assinatura de Owner no pareamento** nem prova criptográfica de que o device pertence a um Owner — quem detém o token pareia a própria chave
 - **WS pro relay sobre TLS**: ninguém na rota (ISP, NAT, MITM clássico) vê o tráfego em claro
 - **Cross-PC checagem assinada**: o Relay só encaminha quando encontra um blob corretamente assinado que liste diretamente ambas as Pi-keys, sem transitividade. Isso não prova pareamento ou controle pelo Owner
 - **Anti-spoof entre Pis**: broker aceita somente `from_pc` canônico autenticado que exista entre irmãos diretos e renderiza seu alias local
@@ -561,7 +569,11 @@ Detalhes em `plan/04-pairing.md` e `plan/69-host-first-connection.md`.
 ### O que NÃO está protegido (declarado honestamente)
 
 - **Relay vê plaintext do conteúdo atual**. TLS protege o trânsito, mas App↔Pi usa `ct` como Base64 de JSON em claro (pode ser encaminhado sem parse, não é ciphertext), e conteúdo Pi↔Pi, controle/routing/erros e membership assinada são parseados em memória pelo relay conforme necessário. Operador vê quem manda para quem e o conteúdo. Mitigação: **self-hosting** do relay (open source)
-- **Não há E2E** entre app e pi-extension nem entre Pis cross-PC. **Não afirmamos E2E em copy nenhuma do produto**
+- **Não há E2E** entre app e remote-pi nem entre Pis cross-PC. **Não afirmamos E2E em copy nenhuma do produto**. `ct` é `base64(JSON.stringify(inner))`, não ciphertext
+- **Token de pareamento é bearer**: vazamento do endereço `remotepi://pair?…` autoriza um novo device a se parear com a própria chave. A janela de validade depende da emissão: efêmero até expirar/consumir/rotacionar; persistente do daemon até `--rotate`. Não há quota por token na camada de pairing (sem limite de tentativas nem de peers por token), sem afirmar que o relay não tenha limite algum. Rotacionar fecha a janela do token, **não** revoga peers já registrados
+- **TLS não protege contra o relay**: WSS cobre a rota, mas o operador do relay lê o plaintext de `ct` e pode mentir sobre identidade/rota do remetente. Mitigação: **self-hosting**
+- **`Origin` não é autenticação**: o relay apenas cruza a origem do browser com a allow-list configurada; allowlist **vazia é permissiva** e clientes nativos **sem** header `Origin` são sempre liberados (`relay/src/origin.rs`)
+- **Allow-list do room `host` não é fail-closed com lista vazia**: a recusa de peer desconhecido só vale quando `allowedPeers.size > 0`; a exceção permanente é o carve-out de `pair_request`
 - **Headless Linux** (Docker, VPS sem D-Bus session): Pi-key cai pra arquivo `0600` em disco com warning loud. Atacante com acesso ao user pode ler. Recomenda-se GNOME Keyring / KWallet pra hardening real
 - **Backup encriptado completo** (Time Machine, iCloud Drive criptografado etc) pode carregar a Keychain. Atacante precisa do user passphrase do backup
 - **Clone detection ainda não implementado**: 2 PCs com mesma Pi-key (via cópia de arquivo headless ou comprometimento) podem coexistir no relay sem alerta. Em roadmap (plan/27 Wave E3)
@@ -571,12 +583,15 @@ Detalhes em `plan/04-pairing.md` e `plan/69-host-first-connection.md`.
 | Adversário | Capacidade | Protegido? |
 |---|---|---|
 | Network passive | Sniff TLS | ✅ Sim (cipher TLS) |
-| Network active (MITM) | Sniff + inject | ✅ Sim (TLS + Ed25519 pairing) |
+| Network active (MITM) | Sniff + inject | ✅ Sim (TLS + auth Ed25519 no relay) |
 | Operador do relay público | Lê tudo que passa, persiste | ⚠️ Parcial (mitigação: self-host) |
 | Outro user no PC do alvo | Lê filesystem do alvo | ✅ Sim (Keychain user-bound) |
 | Atacante com root no PC do alvo | Memory dump, processo injection | ❌ Não (modelo de threat aceitável: root = jogo perdido) |
 | Atacante com backup do disco | Restaura disco em outro Mac | ✅ Sim em macOS com FileVault on (recomendado) |
-| Atacante que rouba só `peers.json` | Vê metadata pública (Owner-pubkeys + nicks) | Privacy issue, não impersonation |
+| Atacante que rouba só `peers.json` | Vê metadata (chaves de cliente + nicks) | Privacy issue, não impersonation |
+| Atacante com token de pareamento válido | Registra a própria chave no host | ❌ Não distinguível de um pareamento legítimo; janela até expirar/consumir/rotacionar (efêmero) ou até `--rotate` (persistente do daemon) |
+| Relay malicioso/comprometido | Lê plaintext do `ct`, pode mentir sobre o remetente | ❌ Não (TLS não cobre o operador; mitigação: self-host) |
+| Página web de origem não permitida | Abre WSS a partir do browser | ✅ Sim quando a allow-list de `Origin` não está vazia (cliente nativo sem `Origin` é liberado por design) |
 
 ---
 
@@ -584,7 +599,7 @@ Detalhes em `plan/04-pairing.md` e `plan/69-host-first-connection.md`.
 
 | Falha | Comportamento |
 |---|---|
-| Relay desconecta | pi-extension reconnect com backoff; agentes locais continuam falando entre si via UDS broker |
+| Relay desconecta | remote-pi reconnect com backoff; agentes locais continuam falando entre si via UDS broker |
 | Pi-B offline durante envio cross-PC | Sender recebe `timeout` com `transport_error: offline` imediatamente. Sem queue offline no relay |
 | Nenhum blob corretamente assinado lista Pi-A e Pi-B diretamente | Sender recebe `denied` com `transport_error: not_authorized`; a checagem ocorre antes de presença |
 | Owner revoga Pi-A da mesh | Pi-A detecta na próxima poll de mesh_versions, faz self-revoke, sai gracefully |
@@ -612,7 +627,7 @@ Longo prazo:
 ## Implementações de referência
 
 - **Relay** (Rust, axum): [`relay/src/`](relay/src/)
-- **Pi-extension** (Node/TS): [`pi-extension/src/`](pi-extension/src/)
+- **Pi-extension** (Node/TS): [`remote-pi/src/`](remote-pi/src/)
 - **App mobile** (Flutter): [`app/lib/`](app/lib/)
 - **Planos arquiteturais**: [`plan/`](plan/) (especialmente `plan/03-protocol.md`, `plan/23-owner-key-sync.md`, `plan/24-mesh-membership.md`, `plan/25-pc-mesh-bootstrap.md`)
 

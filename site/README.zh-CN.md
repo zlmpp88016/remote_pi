@@ -10,6 +10,31 @@
 
 目标域名：<https://remote-pi.jacobmoura.work>。
 
+## 启动
+
+Web 客户端路由 `/remote-pi/connect` 是一等客户端（与手机 app、Cockpit 桌面端并列），
+在站点导航和下载区都有入口。它**默认开启**：本地跑、生产构建都不需要任何环境变量。
+
+`NEXT_PUBLIC_REMOTE_PI_WEB_CLIENT=0` 是显式关闭开关 —— 在启动 dev 服务器或 build
+前设上它才会隐藏客户端（路由 404、导航入口与下载卡片一起消失）。其他值（包括不设）
+都保持开启。
+
+```bash
+npm install     # 或：pnpm install
+
+npm run dev     # 开发服务器，http://localhost:3000
+npm run build   # 生产构建
+npm start       # 跑生产构建
+```
+
+用 npm 时**必须带 `run`**（`npm build`、`npm dev` 都不是有效命令）。pnpm 去掉
+`run`：`pnpm dev`、`pnpm build`、`pnpm start`、`pnpm lint`。
+
+打开 <http://localhost:3000/remote-pi/connect> —— 或点 `/remote-pi` 导航里的
+**Open web client** —— 然后粘贴被控机器上 `remote-pi pair` 打印的 relay 地址
++ `remotepi://pair?...` 配对码。开发服务器和 relay 默认都是 3000 端口，同机运行时
+请错开其中一个（`npx next dev -p 3167`）。
+
 ## 技术栈
 
 - Next.js 16（App Router）+ React 19
@@ -23,12 +48,14 @@
 ## 命令
 
 ```bash
-pnpm install   # 装依赖
-pnpm dev       # 开发服务器，http://localhost:3000
-pnpm build     # 生产构建（SSG）
-pnpm start     # 跑生产构建
-pnpm lint      # ESLint
+npm install     # 装依赖（或：pnpm install）
+npm run dev     # 开发服务器，http://localhost:3000
+npm run build   # 生产构建（SSG）
+npm start       # 跑生产构建
+npm run lint    # ESLint
 ```
+
+pnpm 等价写法去掉 `run`：`pnpm dev`、`pnpm build`、`pnpm start`、`pnpm lint`。
 
 ## 目录结构
 

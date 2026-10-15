@@ -60,7 +60,7 @@ function checkPrerequisites() {
   if (missing.length > 0) {
     console.error("Pré-requisitos ausentes:");
     for (const m of missing) console.error(`  - ${m}`);
-    console.error("Rode `npx -y pnpm@10 install` em pi-extension/ primeiro.");
+    console.error("Rode `npx -y pnpm@10 install` em remote-pi/ primeiro.");
     process.exit(2);
   }
 }
@@ -68,9 +68,9 @@ function checkPrerequisites() {
 // ── unit ─────────────────────────────────────────────────────────────────────
 
 async function unit() {
-  banner("unit — pi-extension (typecheck + vitest)");
-  await step("pi-extension: tsc --noEmit", PNPM[0], [...PNPM.slice(1), "exec", "tsc", "--noEmit"], { cwd: PI_EXT });
-  await step("pi-extension: vitest run", PNPM[0], [...PNPM.slice(1), "exec", "vitest", "run"], { cwd: PI_EXT });
+  banner("unit — remote-pi (typecheck + vitest)");
+  await step("remote-pi: tsc --noEmit", PNPM[0], [...PNPM.slice(1), "exec", "tsc", "--noEmit"], { cwd: PI_EXT });
+  await step("remote-pi: vitest run", PNPM[0], [...PNPM.slice(1), "exec", "vitest", "run"], { cwd: PI_EXT });
 
   banner("unit — app (analyze + flutter test)");
   const flutter = await requireFlutter();
@@ -85,7 +85,7 @@ async function e2e() {
   // O harness carrega `dist/` (o artefato que roda na máquina do usuário), então
   // o e2e exige um build limpo antes — igual ao supervisor.
   const built = await step(
-    "e2e: build do pi-extension (dist/)",
+    "e2e: build do remote-pi (dist/)",
     PNPM[0],
     [...PNPM.slice(1), "exec", "tsc"],
     { cwd: PI_EXT },

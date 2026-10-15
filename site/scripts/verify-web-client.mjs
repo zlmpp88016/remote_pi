@@ -28,9 +28,12 @@ function check(label, condition, detail = "") {
   console.log(`  [${status}] ${label}${detail ? ` — ${detail}` : ""}`);
 }
 
+let lastProtocols = null;
 function wsFactoryFor(origin) {
-  return (url, protocols) =>
-    new WebSocket(url, { protocols, headers: { Origin: origin } });
+  return (url, protocols) => {
+    lastProtocols = protocols;
+    return new WebSocket(url, { protocols, headers: { Origin: origin } });
+  };
 }
 
 /** Collects server messages until `predicate` matches or the deadline hits. */
@@ -80,7 +83,35 @@ async function main() {
   });
   await client.connect();
   check("handshake hello→challenge→auth (Ed25519)", client.peerId.length === 44, `peer=${client.peerId.slice(0, 8)}…`);
-  check("subprotocolo negociado ecoado pelo relay", WEB_CLIENT_SUBPROTOCOL === "remote-pi.1");
+  // REGRESSÃO (Cloudflare): o edge do túnel engole o header
+  // `Sec-WebSocket-Protocol` da resposta 101. Browser que pediu subprotocolo
+  // e não recebeu echo FECHA a conexão por spec — então o cliente web não
+  // pode pedir. O relay segue ecoando para conexões diretas (coberto pelos
+  // 126 testes cargo do relay).
+  check(
+    "cliente não pede Sec-WebSocket-Protocol (edge do Cloudflare engole o echo)",
+    Array.isArray(lastProtocols) && lastProtocols.length === 0,
+    `${WEB_CLIENT_SUBPROTOCOL} vale só em conexão direta ao relay`
+  );
+
+  // 2-pre. REGRESSÃO: o daemon publica `r=` em http(s):// (forma canônica) e
+  // o URI de pareamento carrega isso. `new WebSocket` rejeita scheme http —
+  // sem a coerção ws(s):// no construtor, colar o URI (ou digitar o que se
+  // vê na barra) morria com "falha ao conectar no relay https://…".
+  const httpFormClient = new RemotePiWebClient({
+    relayUrl: stub.relayUrl.replace(/^ws:\/\//, "http://"),
+    webSocketFactory: wsFactoryFor(ALLOWED_ORIGIN),
+    deviceName: "verify-web-client",
+  });
+  let httpFormConnected = false;
+  try {
+    await httpFormClient.connect();
+    httpFormConnected = httpFormClient.peerId.length === 44;
+  } catch {
+    /* scheme não coerido → falha esperada sem o fix */
+  }
+  await httpFormClient.close();
+  check("relayUrl http:// é coerido pra ws:// (regressão do URI de pareamento)", httpFormConnected);
 
   // 2a. wrong token first — the carve-out answers pair_error, never silence.
   let pairErrorSeen = false;
@@ -174,20 +205,43 @@ async function main() {
   }
   check(`connect com Origin ${EVIL_ORIGIN} rejeitado (HTTP 403 no upgrade)`, evilRejected);
   check("stub registrou a origin rejeitada", stub.rejections().includes(EVIL_ORIGIN), JSON.stringify(stub.rejections()));
+  evil.close();
 
-  // ── 4. missing Origin is rejected when the allowlist is non-empty ─────────
-  console.log("\n== 4. origin ausente ==");
+  // ── 4. absent Origin is ALLOWED even with the allowlist enabled ───────────
+  // Mirrors `relay/src/origin.rs:79-86`: `None` (native app/remote-pi/Cockpit
+  // clients never send Origin) passes, so enabling the allowlist can never
+  // lock out non-browser clients. Only a PRESENT, unlisted value is refused.
+  console.log("\n== 4. origin ausente (cliente nativo) ==");
   const noOrigin = new RemotePiWebClient({
     relayUrl: stub.relayUrl,
     webSocketFactory: (url, protocols) => new WebSocket(url, { protocols }),
   });
-  let noOriginRejected = false;
+  let noOriginAccepted = false;
   try {
     await noOrigin.connect();
+    noOriginAccepted = noOrigin.peerId.length === 44;
   } catch {
-    noOriginRejected = true;
+    noOriginAccepted = false;
   }
-  check("connect sem header Origin rejeitado", noOriginRejected);
+  await noOrigin.close();
+  check("connect sem header Origin ACEITO (comportamento do relay em origin.rs)", noOriginAccepted);
+  check("stub não registrou rejeição sem Origin", !stub.rejections().includes(null), JSON.stringify(stub.rejections()));
+
+  // ── 4b. Origin PRESENT but empty is rejected (Some("") never matches) ─────
+  console.log("\n== 4b. origin presente e vazia ==");
+  const emptyOrigin = new RemotePiWebClient({
+    relayUrl: stub.relayUrl,
+    webSocketFactory: (url, protocols) => new WebSocket(url, { protocols, headers: { Origin: "" } }),
+  });
+  let emptyOriginRejected = false;
+  try {
+    await emptyOrigin.connect();
+  } catch {
+    emptyOriginRejected = true;
+  }
+  check("connect com Origin vazia rejeitado (alguma entrada nunca é \"\")", emptyOriginRejected);
+  check("stub registrou a origin vazia", stub.rejections().includes(""), JSON.stringify(stub.rejections()));
+  emptyOrigin.close();
 
   // ── 5. pure-ts fallback backend survives the real handshake ───────────────
   console.log("\n== 5. fallback pure-ts no handshake real ==");
@@ -206,7 +260,6 @@ async function main() {
   fallbackClient.close();
   await stub.close();
   rmSync(root, { recursive: true, force: true });
-
   console.log(
     failures === 0
       ? "\nverify-web-client: ALL PASS\n"

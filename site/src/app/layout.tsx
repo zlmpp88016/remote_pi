@@ -26,35 +26,33 @@ const mono = JetBrains_Mono({
 });
 
 const siteTagline =
-  "Cockpit: a terminal that grew an IDE around your agents";
+  "Remote Pi: drive your Pi coding agents from the browser";
 const siteDescription =
-  "Run Claude Code, Codex, Pi or anything else in real terminals, local or on any machine over SSH, with the viewer, diagnostics, git, worktrees and databases they need to work.";
+  "Pair this browser with a Remote Pi host over a relay: browse the host filesystem, start a Pi workspace in any directory, and talk to the agent — no install required.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://remote-pi.jacobmoura.work"),
+  /* No production domain is fixed for this fork; relative metadataBase keeps
+     OpenGraph/Twitter URLs resolvable from whatever host serves the site. */
+  metadataBase: new URL("http://localhost:3000"),
   title: {
     default: siteTagline,
-    template: "%s · Cockpit",
+    template: "%s · Remote Pi",
   },
   description: siteDescription,
-  applicationName: "Remote Pi Cockpit",
-  authors: [{ name: "Flutterando", url: "https://flutterando.com.br" }],
+  applicationName: "Remote Pi",
   keywords: [
-    "Cockpit",
-    "Remote Pi Cockpit",
+    "Remote Pi",
+    "Pi coding agent",
+    "web client",
+    "remote development",
     "coding agents",
-    "multiplexed terminal",
-    "Claude Code",
-    "Codex CLI",
-    "remote development over SSH",
-    "agent IDE",
+    "relay pairing",
   ],
   openGraph: {
     type: "website",
-    url: "https://remote-pi.jacobmoura.work",
     title: siteTagline,
     description: siteDescription,
-    siteName: "Remote Pi Cockpit",
+    siteName: "Remote Pi",
   },
   twitter: {
     card: "summary_large_image",

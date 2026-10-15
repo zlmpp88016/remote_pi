@@ -1,6 +1,6 @@
 // E2E do plan/69 — cadeia host-first com ZERO Pi pré-existente.
 //
-// Cadeia provada (tudo com o código REAL do pi-extension em `dist/`):
+// Cadeia provada (tudo com o código REAL do remote-pi em `dist/`):
 //   1. supervisor vivo + room `host` online com ZERO processos Pi
 //   2. pareamento pelo room `host` com o token persistente do daemon
 //      → pair_ok + peer persistido em peers.json   (nada de Pi rodando!)
@@ -25,7 +25,7 @@ import { pathToFileURL } from "node:url";
 import { isolateHome } from "./paths.mjs";
 import { importDist, distBuilt } from "./dist_api.mjs";
 
-const EXT_ENTRY = join(process.cwd(), "pi-extension", "dist", "index.js");
+const EXT_ENTRY = join(process.cwd(), "remote-pi", "dist", "index.js");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64");
@@ -40,7 +40,7 @@ export async function runE2E({ log } = {}) {
   };
 
   if (!distBuilt()) {
-    record("dist/ do pi-extension existe", false, "rode `pnpm build` antes do e2e");
+    record("dist/ do remote-pi existe", false, "rode `pnpm build` antes do e2e");
     return results;
   }
 

@@ -3,28 +3,24 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogoMark, IconDownload } from "@/components/landing/icons";
 
-/* The site carries two products. Cockpit owns the root, Remote Pi lives under
-   /remote-pi, and the nav swaps wholesale so a visitor always sees the links of
-   the product they are reading about, plus a way back to the other one. */
+import { LogoMark, IconGithub } from "@/components/landing/icons";
+import { isRemotePiWebClientEnabled } from "@/lib/flags";
+
+/* The site now ships ONE product: the Remote Pi web client. The root route is
+   the pairing screen, and the only other page is the reference under
+   /remote-pi/docs. The nav is therefore intentionally tiny — client, docs,
+   GitHub — and it disappears entirely when a deployment opts out with
+   NEXT_PUBLIC_REMOTE_PI_WEB_CLIENT=0 (same switch the routes use, so nav and
+   routes can never disagree). */
 type NavLink = { href: string; label: string };
 
-const COCKPIT_LINKS: NavLink[] = [
-  { href: "/docs", label: "Docs" },
-  { href: "/tutorials", label: "Tutorials" },
-  { href: "/download", label: "Download" },
-  { href: "/remote-pi", label: "Remote Pi" },
-];
+const GITHUB_URL = "https://github.com/zlmpp88016/remote_pi";
 
-const REMOTE_PI_LINKS: NavLink[] = [
+const LINKS: NavLink[] = [
+  { href: "/", label: "Connect" },
   { href: "/remote-pi/docs", label: "Docs" },
-  { href: "/remote-pi/tutorials", label: "Tutorials" },
-  { href: "/remote-pi/download", label: "Download" },
-  { href: "/remote-pi/why", label: "Why Pi" },
 ];
-
-const GITHUB_URL = "https://github.com/jacobaraujo7/remote_pi";
 
 function HamburgerIcon({ open }: { open: boolean }) {
   return (
@@ -77,40 +73,29 @@ function HamburgerIcon({ open }: { open: boolean }) {
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname() ?? "/";
-  const onRemotePi = pathname === "/remote-pi" || pathname.startsWith("/remote-pi/");
+  const enabled = isRemotePiWebClientEnabled();
 
-  const links = onRemotePi ? REMOTE_PI_LINKS : COCKPIT_LINKS;
-  const home = onRemotePi ? "/remote-pi" : "/";
-  const brand = onRemotePi ? "Remote Pi" : "Cockpit";
-  const cta = onRemotePi
-    ? { href: "/remote-pi#install", label: "Install" }
-    : { href: "/download", label: "Download" };
+  const links = enabled ? LINKS : [{ href: "/remote-pi/docs", label: "Docs" }];
 
   return (
     <header className="nav">
-      {onRemotePi ? (
-        <div className="sibling-bar">
-          <div className="wrap sibling-bar-inner">
-            <span>
-              You are reading about <strong>Remote Pi</strong>, the sibling
-              project: agents on your phone, 24/7 daemons and the mesh.
-            </span>
-            <Link href="/">Back to Cockpit</Link>
-          </div>
-        </div>
-      ) : null}
       <div className="wrap nav-inner">
-        <Link className="brand" href={home} aria-label={`${brand} home`}>
+        <Link className="brand" href="/" aria-label="Remote Pi home">
           <span className="mark">
             <LogoMark />
           </span>
-          {brand}
+          Remote Pi
         </Link>
 
         {/* Desktop links */}
         <nav className="nav-links" aria-label="Primary">
           {links.map((l) => (
-            <Link className="lnk" href={l.href} key={l.href}>
+            <Link
+              className="lnk"
+              href={l.href}
+              key={l.href}
+              aria-current={pathname === l.href ? "page" : undefined}
+            >
               {l.label}
             </Link>
           ))}
@@ -120,11 +105,8 @@ export function SiteHeader() {
             target="_blank"
             rel="noopener noreferrer"
           >
-            GitHub
+            <IconGithub /> GitHub
           </a>
-          <Link className="nav-cta" href={cta.href}>
-            <IconDownload /> {cta.label}
-          </Link>
         </nav>
 
         {/* Mobile menu toggle */}
@@ -133,7 +115,7 @@ export function SiteHeader() {
           onClick={() => setMenuOpen((s) => !s)}
           aria-expanded={menuOpen}
           aria-controls="mobile-menu"
-          aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
+          aria-label={menuOpen ? "Close menu" : "Open menu"}
           type="button"
         >
           <HamburgerIcon open={menuOpen} />
@@ -142,11 +124,7 @@ export function SiteHeader() {
 
       {/* Mobile drawer */}
       {menuOpen && (
-        <div
-          id="mobile-menu"
-          className="mobile-nav open"
-          aria-hidden={false}
-        >
+        <div id="mobile-menu" className="mobile-nav open" aria-hidden={false}>
           <div className="wrap mobile-nav-inner">
             {links.map((l) => (
               <Link
@@ -165,15 +143,8 @@ export function SiteHeader() {
               rel="noopener noreferrer"
               onClick={() => setMenuOpen(false)}
             >
-              GitHub
+              <IconGithub /> GitHub
             </a>
-            <Link
-              className="nav-cta m-cta"
-              href={cta.href}
-              onClick={() => setMenuOpen(false)}
-            >
-              <IconDownload /> {cta.label}
-            </Link>
           </div>
         </div>
       )}

@@ -1,6 +1,6 @@
 // E2E do plan/68 — cadeia completa, offline, contra o relay stub local.
 //
-// Cadeia provada (tudo com o código REAL do pi-extension em `dist/`):
+// Cadeia provada (tudo com o código REAL do remote-pi em `dist/`):
 //   1. `pair_request` com token → `pair_ok` (pareamento só por colagem)
 //   2. `fs_list` navegando o filesystem do host (erros tipados)
 //   3. `workspace_add` + `workspace_start` num cwd fora de daemons.json,
@@ -22,7 +22,7 @@ import { isolateHome } from "./paths.mjs";
 import { importDist, importSdk, distBuilt } from "./dist_api.mjs";
 import { createFleet } from "./fleet.mjs";
 
-const EXT_ENTRY = join(process.cwd(), "pi-extension", "dist", "index.js");
+const EXT_ENTRY = join(process.cwd(), "remote-pi", "dist", "index.js");
 
 export async function runE2E({ log } = {}) {
   const results = [];
@@ -36,7 +36,7 @@ export async function runE2E({ log } = {}) {
   };
 
   if (!distBuilt()) {
-    record("dist/ do pi-extension existe", false, "rode `pnpm build` antes do e2e");
+    record("dist/ do remote-pi existe", false, "rode `pnpm build` antes do e2e");
     return results;
   }
 

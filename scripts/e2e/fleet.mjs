@@ -11,7 +11,7 @@ import { existsSync } from "node:fs";
 
 /**
  * @param {object} deps
- * @param {string} deps.extensionPath  caminho do `dist/index.js` do pi-extension
+ * @param {string} deps.extensionPath  caminho do `dist/index.js` do remote-pi
  * @param {new (opts: object) => any} deps.RpcChild  classe real do RpcChild
  * @param {object} deps.workspaces  módulo real `dist/daemon/workspaces.js`
  * @param {object} deps.registry  módulo real `dist/daemon/registry.js`

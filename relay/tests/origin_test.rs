@@ -4,7 +4,7 @@
 //! The allowlist gates only browser-style handshakes (those carrying an
 //! `Origin` header). With the allowlist empty — the default — every origin is
 //! accepted, preserving the relay's historical behaviour. Handshakes without
-//! an `Origin` header (app, pi-extension, Cockpit) are accepted even when the
+//! an `Origin` header (app, remote-pi, Cockpit) are accepted even when the
 //! allowlist is active.
 
 mod common;
@@ -56,7 +56,7 @@ async fn unlisted_origin_is_rejected_with_403() {
 
 #[tokio::test]
 async fn missing_origin_header_still_accepted_when_allowlist_active() {
-    // Native clients (app, pi-extension, Cockpit) send no Origin header; an
+    // Native clients (app, remote-pi, Cockpit) send no Origin header; an
     // active allowlist must not break them.
     let port = start_relay_with_origin_policy(OriginPolicy::from_allowlist(ALLOWED_ORIGIN)).await;
     let (ws, _echoed, _peer) = connect_and_auth_with_headers(port, &[])

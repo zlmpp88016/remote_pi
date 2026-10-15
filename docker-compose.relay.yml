@@ -1,0 +1,28 @@
+# Remote Pi — relay. Build local do código em relay/ (contém as mudanças
+# W4: Origin allowlist + echo de subprotocolo). O Cloudflared na mesma VPS
+# fala com o relay em 127.0.0.1:3001 e termina o TLS público.
+services:
+  remote-pi-relay:
+    build:
+      context: ./relay
+      dockerfile: Dockerfile
+    container_name: remote-pi-relay
+    restart: unless-stopped
+    ports:
+      - "3001:3000"          # host 3001 → container 3000 (default da imagem)
+    environment:
+      # Allowlist de Origin para clientes de navegador. Valor = Origin da
+      # página web (NÃO a URL do WS). Vazio = aceita qualquer origin.
+      - RELAY_ALLOWED_ORIGINS=${RELAY_ALLOWED_ORIGINS:-}
+      - RUST_LOG=${RUST_LOG:-info}
+    volumes:
+      # Persistência do mesh.db (versões de membership assinadas).
+      - relay-data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  relay-data:

@@ -9,10 +9,16 @@
  *     (relay/src/handlers/peer.rs)
  *   • Origin allowlist enforcement (plan 69 W4 relay prerequisite — the piece
  *     the Rust relay still lacks): exact match against a comma-separated
- *     allowlist. Empty allowlist = allow all, which documents the relay's
- *     CURRENT behavior (browsers unusable). A missing Origin header is
- *     rejected when the allowlist is non-empty (browsers always send Origin
- *     on WS upgrades).
+ *     allowlist. It mirrors `relay/src/origin.rs:79-86` exactly, so the web
+ *     client is verified against the intended relay contract and not against
+ *     a stricter stub:
+ *       – allowlist empty/blank → allow every request (historical behaviour);
+ *       – header ABSENT (`None`, native app/remote-pi/Cockpit clients) → allow
+ *         even when the allowlist is enabled — the allowlist only constrains
+ *         browsers, and a native client never sends Origin;
+ *       – header PRESENT but empty (`Some("")`, a non-UTF-8 value mapped by
+ *         the Rust relay) → reject, since no configured entry can equal "";
+ *       – header present and unlisted → reject.
  *   • Subprotocol echo: the negotiated Sec-WebSocket-Protocol is echoed in
  *     the 101 response (plan 69 W4 relay prerequisite).
  *
@@ -40,7 +46,7 @@ import {
   verify as cryptoVerify,
 } from "node:crypto";
 import { createServer } from "node:http";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { basename, isAbsolute, resolve as resolvePath } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -158,17 +164,19 @@ class RelayStub {
     return [...this.#rejections];
   }
 
+  /** Mirrors `OriginPolicy::allows` in `relay/src/origin.rs:79-86`:
+   *  disabled allowlist → everything passes; absent header → passes even when
+   *  enabled (native clients); header present (including "") → exact match. */
   originAllowed(origin) {
-    if (this.#originAllowlist.length === 0) return true; // current relay behavior
-    if (!origin) return false; // browsers always send Origin on WS upgrades
-    return this.#originAllowlist.includes(origin);
+    if (this.#originAllowlist.length === 0) return true; // allowlist disabled
+    if (origin === undefined || origin === null) return true; // native client
+    return this.#originAllowlist.includes(origin); // Some("") never matches
   }
 
   handleUpgrade(req, socket) {
     const origin = req.headers.origin;
     if (!this.originAllowed(origin)) {
-      this.#rejections.push(origin ?? null);
-      socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+      this.#rejections.push(origin ?? null);      socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
       return;
     }
     const key = req.headers["sec-websocket-key"];
@@ -366,11 +374,49 @@ class HostStub {
   /** Peers seen on the host room — the host_message fan-out audience
    *  ("todos os peers allow-listados", PROTOCOL.md decision B). */
   #clientPeers = new Set();
+  /** OPTIONAL test-fixture seam (plan 69 Wave 3 browser acceptance). Absent
+   *  (`undefined`) → the stub behaves EXACTLY as before: no extra action, no
+   *  failure injection, no `workspace_state` push. Provided by
+   *  `scripts/workspace-ui-fixture.mjs`, never by production code. */
+  #fixture;
+  /** Host-room conn — used to push `workspace_state` to paired peers. */
+  #hostConn = null;
 
-  constructor({ relayUrl, token, origin }) {
+  constructor({ relayUrl, token, origin, fixture }) {
     this.#relayUrl = relayUrl;
     this.#token = token;
     this.#origin = origin;
+    this.#fixture = fixture ?? null;
+  }
+
+  /** Per-action failure flag from the fixture (always false when absent). */
+  #failing(action) {
+    return this.#fixture?.flags?.[action] === true;
+  }
+
+  /** Synthetic counter for `/stats` — never carries a token or a credential. */
+  #count(type) {
+    if (!this.#fixture) return;
+    this.#fixture.counts ??= {};
+    this.#fixture.counts[type] = (this.#fixture.counts[type] ?? 0) + 1;
+  }
+
+  /** Raw host text used ONLY by failure injection: a synthetic canary the
+   *  client must never render (asserted by the acceptance run). */
+  #canary() {
+    return this.#fixture?.canary ?? "SYNTHETIC-RAW-CANARY";
+  }
+
+  /** Host-room lifecycle PUSH (plan 69): NO `id`, NO `in_reply_to`, delivered
+   *  on room "host" to every paired peer — never through a child room. Mirrors
+   *  `pushWorkspaceState` in the real daemon. Only reachable when a fixture is
+   *  attached, so the default stub emits no unsolicited frame. */
+  pushWorkspaceState({ cwd, state, last_error = null, restarts = 0 }) {
+    if (!this.#fixture || !this.#hostConn) return { pushed: null, peers: 0 };
+    const pushed = { type: "workspace_state", cwd, state, last_error, restarts };
+    for (const peer of this.#clientPeers) this.#hostConn.replyTo(peer, HOST_ROOM, pushed);
+    this.#count("workspace_state");
+    return { pushed, peers: this.#clientPeers.size };
   }
 
   async start() {
@@ -386,6 +432,7 @@ class HostStub {
       origin: this.#origin,
     });
     this.#conns.push(hostConn);
+    this.#hostConn = hostConn;
     hostConn.onMessage = ({ fromPeer, fromRoom, outer, inner }) => {
       // Child reply arriving through the host (plan 69 decision B): the relay
       // rewrites the child's envelope as {peer: <machine Pi-key>, room:
@@ -431,6 +478,18 @@ class HostStub {
           });
           return;
         case "workspace_list":
+          this.#count("workspace_list");
+          if (this.#failing("list")) {
+            // Raw host text in `error`: the client must collapse it to the
+            // fixed `unknown` code and never surface the canary.
+            reply({
+              type: "action_error",
+              in_reply_to: inner.id,
+              action: "workspace_list",
+              error: this.#canary(),
+            });
+            return;
+          }
           reply({
             type: "workspace_list_ok",
             in_reply_to: inner.id,
@@ -438,10 +497,40 @@ class HostStub {
           });
           return;
         case "fs_list":
+          this.#count("fs_list");
+          if (this.#failing("fs")) {
+            // Simulated `permission_denied`: a real EACCES is not reproducible
+            // on every platform from a test process (see fixture header).
+            reply({
+              type: "action_error",
+              in_reply_to: inner.id,
+              action: "fs_list",
+              error: "permission_denied",
+            });
+            return;
+          }
           void this.#handleFsList(inner, reply);
           return;
         case "workspace_start":
+          this.#count("workspace_start");
+          if (this.#failing("start")) {
+            reply({
+              type: "action_error",
+              in_reply_to: inner.id,
+              action: "workspace_start",
+              error: "spawn_failed",
+            });
+            return;
+          }
           void this.#handleWorkspaceStart(inner, reply);
+          return;
+        case "workspace_add":
+          this.#count("workspace_add");
+          this.#handleWorkspaceAdd(inner, reply);
+          return;
+        case "workspace_restart":
+          this.#count("workspace_restart");
+          void this.#handleWorkspaceRestart(inner, reply);
           return;
         case "host_forward":
           // Proxy re-emit: same machine key, child room — the relay delivers
@@ -513,6 +602,11 @@ class HostStub {
     const cwd = resolvePathInput(String(inner.cwd ?? ""));
     const existing = this.#workspaces.find((ws) => ws.cwd === cwd);
     if (existing) {
+      // A row can be known (`workspace_add`) without a Pi conn ever having
+      // been opened for it; `workspace_start` must actually bring the room up
+      // or the proxied chat that follows has no destination.
+      if (!this.#piRooms.has(existing.room_id)) await this.#startPiRoom(existing.room_id);
+      existing.live = true;
       reply({
         type: "workspace_start_ok",
         in_reply_to: inner.id,
@@ -544,6 +638,107 @@ class HostStub {
       room_id: roomId,
       daemon_id: daemonId,
     });
+    // Lifecycle push AFTER the reply, on the HOST room — the started child
+    // room is independent of it (plan 69).
+    if (this.#fixture) {
+      this.pushWorkspaceState({ cwd, state: "running", last_error: null, restarts: 0 });
+    }
+  }
+
+  /** workspace_add (plan 68) — persists the path and answers the standard
+   *  `action_ok` / `action_error` pair. The canonical cwd is NEVER echoed: the
+   *  caller must relist the catalog (canonical rows) to learn it. */
+  #handleWorkspaceAdd(inner, reply) {
+    const path = resolvePathInput(String(inner.path ?? ""));
+    if (this.#failing("add")) {
+      reply({
+        type: "action_error",
+        in_reply_to: inner.id,
+        action: "workspace_add",
+        error: this.#canary(),
+      });
+      return;
+    }
+    let isDir = false;
+    try {
+      isDir = statSync(path).isDirectory();
+    } catch {
+      isDir = false;
+    }
+    if (!existsSync(path)) {
+      reply({ type: "action_error", in_reply_to: inner.id, action: "workspace_add", error: "not_found" });
+      return;
+    }
+    if (!isDir) {
+      reply({
+        type: "action_error",
+        in_reply_to: inner.id,
+        action: "workspace_add",
+        error: "not_a_directory",
+      });
+      return;
+    }
+    if (!this.#workspaces.some((ws) => ws.cwd === path)) {
+      this.#workspaces.push({
+        cwd: path,
+        daemon_id: randomBytes(4).toString("hex"),
+        room_id: createHash("sha256").update(path).digest("base64url").slice(0, 12),
+        name: basename(path),
+        live: false,
+        daemon: false,
+        source: "added",
+      });
+    }
+    reply({ type: "action_ok", in_reply_to: inner.id, action: "workspace_add" });
+  }
+
+  /** workspace_restart (plan 69) — revive by cwd; idempotent while running.
+   *  Success is `workspace_restart_ok{cwd, daemon_id}` with NO `room_id`;
+   *  failure is `workspace_restart_error` with a CLOSED code and RAW message
+   *  (which the client must never render). */
+  #handleWorkspaceRestart(inner, reply) {
+    const cwd = resolvePathInput(String(inner.cwd ?? ""));
+    return this.#restartWorkspace(inner, reply, cwd);
+  }
+
+  async #restartWorkspace(inner, reply, cwd) {
+    if (this.#failing("restartRaw")) {
+      reply({
+        type: "workspace_restart_error",
+        in_reply_to: inner.id,
+        code: this.#canary(),
+        message: this.#canary(),
+      });
+      return;
+    }
+    if (this.#failing("restart")) {
+      reply({
+        type: "workspace_restart_error",
+        in_reply_to: inner.id,
+        code: "spawn_failed",
+        message: `spawn failed for ${cwd} (${this.#canary()})`,
+      });
+      return;
+    }
+    const existing = this.#workspaces.find((ws) => ws.cwd === cwd);
+    if (!existing) {
+      reply({
+        type: "workspace_restart_error",
+        in_reply_to: inner.id,
+        code: "not_found",
+        message: `no workspace registered at ${cwd}`,
+      });
+      return;
+    }
+    existing.live = true;
+    existing.restarts = (existing.restarts ?? 0) + 1;
+    // Same rule as `workspace_start`: a restart must leave the child room
+    // reachable, otherwise the proxied chat has no destination.
+    if (!this.#piRooms.has(existing.room_id)) await this.#startPiRoom(existing.room_id);
+    reply({ type: "workspace_restart_ok", in_reply_to: inner.id, cwd, daemon_id: existing.daemon_id });
+    if (this.#fixture) {
+      this.pushWorkspaceState({ cwd, state: "running", last_error: null, restarts: existing.restarts });
+    }
   }
 
   /** A workspace room connection (the Pi process) — echo + agent stream,
@@ -606,6 +801,12 @@ export async function startRelayStub({
   originAllowlist = [],
   token = "stub-pairing-token",
   hostOrigin = "https://web.remote-pi.example",
+  // ── OPTIONAL test-fixture extension (plan 69 Wave 3 browser acceptance) ──
+  // Omitted (`undefined`) → byte-for-byte the previous behaviour. When a
+  // fixture object is provided, the stub additionally: honours per-action
+  // failure flags, counts handled actions in `fixture.counts`, and exposes
+  // `fixture.push(frame)` for host-room `workspace_state` pushes.
+  fixture = undefined,
 } = {}) {
   const relay = new RelayStub({ originAllowlist });
   const server = createServer((req, res) => {
@@ -622,8 +823,12 @@ export async function startRelayStub({
   const actualPort = server.address().port;
   const relayUrl = `ws://127.0.0.1:${actualPort}`;
 
-  const host = new HostStub({ relayUrl, token, origin: hostOrigin });
+  const host = new HostStub({ relayUrl, token, origin: hostOrigin, fixture });
   const hostEpk = await host.start();
+  if (fixture) {
+    fixture.counts ??= {};
+    fixture.push = (frame) => host.pushWorkspaceState(frame);
+  }
 
   return {
     port: actualPort,

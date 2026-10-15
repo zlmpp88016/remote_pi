@@ -12,9 +12,9 @@
 //   - app-like  → app/lib/data/transport/ws_transport.dart
 //                 (hello room_id='main'; demux de entrada por sender room;
 //                  setActiveRoom troca o room de saída SEM reconectar)
-//   - host      → pi-extension/src/daemon/host_bridge.ts
+//   - host      → remote-pi/src/daemon/host_bridge.ts
 //                 (conecta no room 'host'; _reply carimba room: HOST_ROOM_ID)
-//   - pi        → pi-extension/src/transport/peer_channel.ts
+//   - pi        → remote-pi/src/transport/peer_channel.ts
 //                 (responde {peer, ct} SEM room — produção atual)
 //
 // Uso: node scripts/spike-room-multiplex.mjs

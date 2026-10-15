@@ -1,7 +1,7 @@
 //! Configurable `Origin` allowlist for browser WebSocket upgrades (plano 69 W4).
 //!
 //! Browsers attach an `Origin` header to every WS handshake; native clients
-//! (app, pi-extension, Cockpit) send none. The policy therefore only gates
+//! (app, remote-pi, Cockpit) send none. The policy therefore only gates
 //! handshakes that *do* present an `Origin`:
 //!
 //! - **Unset / empty allowlist → permissive.** Every origin is accepted,
@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn missing_origin_header_is_always_allowed() {
-        // Native clients (app, pi-extension, Cockpit) send no Origin header;
+        // Native clients (app, remote-pi, Cockpit) send no Origin header;
         // enabling the allowlist must never break them.
         let policy = OriginPolicy::from_allowlist("https://app.example.com");
         assert!(policy.allows(None));

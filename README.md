@@ -5,8 +5,9 @@
 <h1 align="center">Remote Pi</h1>
 
 <p align="center">
-  Control your <a href="https://github.com/earendil-works/pi">Pi coding agent</a> from your phone.
-  Pair with a one-time QR code and chat with your local agent — even when you're away from your computer.
+  Operate and manage your <a href="https://github.com/earendil-works/pi">Pi coding agents</a> from anywhere.<br/>
+  A resident daemon on the target machine is the front door: pair once, then browse folders,
+  start Pi in any directory, drive its sessions, and watch its work — from your phone, browser, or desktop.
 </p>
 
 ---
@@ -24,36 +25,51 @@
 | Google Play (Android) | [Get it on Google Play](https://play.google.com/store/apps/details?id=work.jacobmoura.remotepi) |
 | App Store (iOS) | [Download on the App Store](https://apps.apple.com/app/remote-pi-coding-agent/id6773499691) |
 | APK (sideload, Android) | [GitHub Releases](https://github.com/jacobaraujo7/remote_pi/releases) |
+| Desktop (Cockpit) | [GitHub Releases](https://github.com/jacobaraujo7/remote_pi/releases?q=cockpit-v) |
 
 ## What's in this repo
 
+Remote Pi is not a single plug-in — it is the whole system that runs and manages Pi on a machine,
+plus the clients that reach it.
+
 | Package | Stack | Role |
 |---|---|---|
-| [`app/`](./app) | Flutter (iOS / Android) | Mobile client |
-| [`pi-extension/`](./pi-extension) | Node + TypeScript | Pi extension exposing `/remote-pi` |
+| [`remote-pi/`](./remote-pi) | Node + TypeScript | **Daemon and control plane** — the `pi-supervisord` host daemon, the `remote-pi` CLI, the `/remote-pi` Pi command, and the local agent mesh |
+| [`app/`](./app) | Flutter (iOS / Android) | Mobile client (operator console) |
+| [`cockpit/`](./cockpit) | Flutter Desktop | Desktop client (macOS / Windows / Linux, + iPad / Android) |
+| [`site/`](./site) | NextJS | Landing page, docs, and the browser client |
 | [`relay/`](./relay) | Rust + Tokio | WebSocket routing + signed mesh membership storage |
-| [`site/`](./site) | NextJS | Landing page + legal pages |
 
 ## Architecture
 
 ```
-Flutter app ──wss──► Relay (Rust) ◄──wss── Pi extension (Node)
-                                                  │
-                                           Local Pi process
-                                                  │
-                                           UDS broker (local mesh)
-                                                  │
-                                           Other agents on the same machine
+Phone / browser / desktop client
+        │  wss  (pair once — address + code)
+        ▼
+   Relay (Rust)
+        ▲  wss
+        │
+Host daemon  `pi-supervisord`   ──  room "host" · always on · survives Pi
+        │  spawns on demand
+        ├──►  Pi child  (`pi --mode rpc`)   ──  workspace · sessions · chat
+        │
+        └──►  UDS broker   ──  local agent mesh (`list_peers` / `agent_send`)
 ```
 
-- **Pairing** via short-lived QR code; peers persisted in Keychain (mobile) and `~/.pi/remote/` (desktop)
-- **Ed25519 authentication** — the Relay handshake proves possession of the connection key; App↔Pi pairing is enforced by the endpoints. For Pi↔Pi routing, the current Relay permits a route when a correctly signed Owner blob lists both Pi keys; that check does not prove the Owner paired with or controls either Pi
+The **host is the connection**. Clients attach to the machine's daemon (room `host`), never to a
+particular Pi process. A Pi that is stopped, crashed, or never started does not drop the connection —
+the daemon keeps the machine online, publishes workspace state, and can start or restart a Pi on any
+directory the operator picks.
+
+- **Pair once, without Pi running** — the daemon accepts pairing itself (address + code); a Pi process is not a prerequisite
+- **Workspace lifecycle** — browse the host filesystem, register a directory, start / stop / restart its Pi, and switch sessions
+- **Ed25519 authentication** — the Relay handshake proves possession of the connection key; App↔host pairing is enforced by the endpoints. For Pi↔Pi routing, the current Relay permits a route when a correctly signed Owner blob lists both Pi keys; that check does not prove the Owner paired with or controls either Pi
 - **TLS protects traffic in transit**, but current payloads are not E2E; see [`relay/README.md`](./relay/README.md) for the exact trust boundary
 
 ## Local agent mesh
 
 When multiple Pi agents run on the same machine, they discover each other through
-a **Unix Domain Socket broker** managed by the extension. One agent wins the
+a **Unix Domain Socket broker** managed by the daemon. One agent wins the
 leader election and binds the socket; the others connect as clients. For targets
 on that same machine, agents use the opaque addresses returned by `list_peers` —
 no relay, no network, no extra config.
@@ -66,14 +82,14 @@ Three LLM-facing tools are exposed in the Pi chat:
 
 This lets you set up local multi-agent workflows (e.g. a `backend` agent asks a
 `frontend` agent for help) entirely on your machine, in parallel with the remote
-mobile pairing.
+operator clients.
 
 ## Relay
 
 A free community relay is available at:
 
 ```
-wss://relay-rp1.jacobmoura.work
+wss://relay.880160.xyz
 ```
 
 It's enough to get started, but the relay operator can see the content of your
@@ -86,20 +102,49 @@ Full security trade-offs and the self-hosting guide live in
 
 ## Getting started
 
-Install the Pi extension in any project where Pi runs:
+### 1. Run the host daemon
+
+Install the package globally so the `remote-pi` CLI and the `pi-supervisord`
+daemon are on your PATH:
 
 ```bash
-pi install npm:remote-pi
+npm install -g remote-pi
 ```
 
-Then in the Pi chat, run:
+Install the daemon as a user-level system service (Linux `systemd --user`, macOS
+launchd, Windows Task Scheduler). It auto-starts at login and survives reboots:
 
+```bash
+remote-pi install
 ```
+
+The daemon comes up, connects to the relay, and holds the machine online — with
+**no Pi running**.
+
+### 2. Pair a client
+
+Pair from the daemon itself (no Pi needed):
+
+```bash
+remote-pi pair        # prints the address + one-time/persistent code
+```
+
+Enter that address and code in the mobile app, the browser client, or Cockpit.
+Once paired, the client can browse the host filesystem, register a directory, and
+start a Pi there.
+
+### 3. Or run Pi locally as usual
+
+The `/remote-pi` Pi command still works for the everyday local case. Inside any
+Pi session:
+
+```text
 /remote-pi
 ```
 
-The setup wizard walks you through agent name, session name, and relay choice,
-then prints a QR code. Scan it with the Remote Pi mobile app and you're paired.
+The wizard asks for an agent name, session name, and relay choice, then prints a
+QR code. Scan it with the mobile app — useful when you want the current Pi
+session itself reachable without a resident daemon.
 
 ### Recommended companion: `@eko24ive/pi-ask`
 
@@ -119,5 +164,5 @@ The MVP is functional. Planning notes and roadmap live in [`plan/`](./plan).
 
 ## License
 
-License is per-package — see each subproject's `LICENSE` file (the `pi-extension`
+License is per-package — see each subproject's `LICENSE` file (the `remote-pi`
 is MIT). A repository-wide license decision is pending.
