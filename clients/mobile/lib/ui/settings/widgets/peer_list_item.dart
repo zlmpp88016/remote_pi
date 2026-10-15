@@ -1,5 +1,5 @@
-import 'package:app/pairing/storage.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cockpit/app/core/utils/user_home.dart';
+import 'package:desktop/app/core/utils/user_home.dart';
 import 'package:file_picker/file_picker.dart';
 
 /// Pasta onde as chaves SSH do usuário moram nesta máquina, ou a home quando

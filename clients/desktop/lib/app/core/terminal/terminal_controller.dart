@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
-import 'package:cockpit/app/core/terminal/ghostty_sgr_weight_normalizer.dart';
-import 'package:cockpit/app/core/terminal/xterm/xterm.dart' as xterm;
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/terminal/ghostty_sgr_weight_normalizer.dart';
+import 'package:desktop/app/core/terminal/xterm/xterm.dart' as xterm;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flterm/flterm.dart' as ghost;

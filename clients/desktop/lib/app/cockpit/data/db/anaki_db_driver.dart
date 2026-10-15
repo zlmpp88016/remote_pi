@@ -6,10 +6,10 @@ import 'package:anaki_mysql/anaki_mysql.dart';
 import 'package:anaki_orm/anaki_orm.dart';
 import 'package:anaki_postgres/anaki_postgres.dart';
 import 'package:anaki_sqlite/anaki_sqlite.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/db_driver.dart';
-import 'package:cockpit/app/cockpit/domain/db_schema_sql.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_result.dart';
+import 'package:desktop/app/cockpit/domain/contracts/db_driver.dart';
+import 'package:desktop/app/cockpit/domain/db_schema_sql.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_result.dart';
 
 /// Driver único sobre o **anakiORM** (conectores Rust via FFI) — SQLite,
 /// Postgres e MySQL atrás do mesmo contrato [DbDriver].

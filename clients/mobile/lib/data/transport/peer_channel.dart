@@ -10,11 +10,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:app/data/transport/channel.dart';
-import 'package:app/pairing/pair_request_flow.dart';
-import 'package:app/protocol/codec.dart';
+import 'package:mobile/data/transport/channel.dart';
+import 'package:mobile/pairing/pair_request_flow.dart';
+import 'package:mobile/protocol/codec.dart';
 // ControlInbound + IControlLink come from these.
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 
 class PeerChannelError implements Exception {
   final String message;

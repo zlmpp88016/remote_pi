@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/chat/viewmodels/chat_viewmodel.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';

@@ -1,5 +1,5 @@
-import 'package:app/domain/session_state.dart';
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/protocol/protocol.dart';
 
 // Sealed state for ChatViewModel.
 // Switch exhaustively in ChatPage.build().

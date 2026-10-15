@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';

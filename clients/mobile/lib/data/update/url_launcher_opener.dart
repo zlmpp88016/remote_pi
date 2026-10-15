@@ -1,4 +1,4 @@
-import 'package:app/domain/contracts/url_opener.dart';
+import 'package:mobile/domain/contracts/url_opener.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Abre URLs externas via `url_launcher` em modo navegador/app externo —

@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/entities/file_view.dart';
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/ui/session/file_viewer_session.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/confirm_dialog.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/layout_preview_view.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/ui/widgets/app_menu.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_view.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/ui/session/file_viewer_session.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/widgets/confirm_dialog.dart';
+import 'package:desktop/app/cockpit/ui/widgets/layout_preview_view.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/ui/widgets/app_menu.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

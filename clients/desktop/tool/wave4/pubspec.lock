@@ -41,17 +41,17 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.1.4"
-  cockpit_core:
+  desktop_core:
     dependency: "direct main"
     description:
-      path: "../../packages/cockpit_core"
+      path: "../../packages/desktop_core"
       relative: true
     source: path
     version: "0.1.0"
-  cockpit_engine:
+  desktop_engine:
     dependency: "direct main"
     description:
-      path: "../../packages/cockpit_engine"
+      path: "../../packages/desktop_engine"
       relative: true
     source: path
     version: "0.1.0"

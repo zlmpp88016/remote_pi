@@ -2,7 +2,7 @@
 // `RoomInfo.thinking` field across `room_announced`, `room_meta_updated`
 // and `rooms` snapshots.
 
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

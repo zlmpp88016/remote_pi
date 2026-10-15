@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:app/ui/core/themes/app_colors.dart';
-import 'package:app/ui/core/themes/app_typography.dart';
+import 'package:mobile/ui/core/themes/app_colors.dart';
+import 'package:mobile/ui/core/themes/app_typography.dart';
 
 /// Ergonomic access to the app's themed tokens from any widget.
 ///

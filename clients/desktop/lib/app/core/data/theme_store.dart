@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/core/data/setup/storage_location.dart';
+import 'package:desktop/app/core/data/setup/storage_location.dart';
 import 'package:flutter/foundation.dart' show FlutterError;
 import 'package:flutter/services.dart' show MissingPluginException;
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/ui/themes/theme_codec.dart';
-import 'package:cockpit/app/core/ui/themes/theme_registry.dart';
-import 'package:cockpit/app/core/ui/themes/theme_spec.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/ui/themes/theme_codec.dart';
+import 'package:desktop/app/core/ui/themes/theme_registry.dart';
+import 'package:desktop/app/core/ui/themes/theme_spec.dart';
 import 'package:path/path.dart' as p;
 
 /// O que pode dar errado ao importar/exportar um tema. Tipo, não frase — a

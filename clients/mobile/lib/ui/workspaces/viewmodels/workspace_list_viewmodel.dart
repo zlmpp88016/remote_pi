@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import 'package:app/data/sessions/session_catalog.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
-import 'package:app/ui/workspaces/states/workspace_list_state.dart';
-import 'package:app/ui/workspaces/viewmodels/workspace_browser_viewmodel.dart';
+import 'package:mobile/data/sessions/session_catalog.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/ui/workspaces/states/workspace_list_state.dart';
+import 'package:mobile/ui/workspaces/viewmodels/workspace_browser_viewmodel.dart';
 
 /// Plan/67 — lists the workdirs registered on a machine and starts one.
 ///

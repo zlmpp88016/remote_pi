@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/data/filesystem/git_binary.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/git_head_baseline_reader.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_head_baseline.dart';
+import 'package:desktop/app/cockpit/data/filesystem/git_binary.dart';
+import 'package:desktop/app/cockpit/domain/contracts/git_head_baseline_reader.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_head_baseline.dart';
 
 /// Lê blobs de `HEAD` via `git rev-parse` / `git cat-file` — sem working tree.
 class GitHeadBaselineReaderImpl implements GitHeadBaselineReader {

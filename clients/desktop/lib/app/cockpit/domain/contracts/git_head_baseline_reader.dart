@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/git_head_baseline.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_head_baseline.dart';
 
 /// Obtém o baseline textual de um path no snapshot `HEAD`.
 ///

@@ -1,4 +1,4 @@
-import 'package:app/domain/entities/update_info.dart';
+import 'package:mobile/domain/entities/update_info.dart';
 
 /// Busca o manifest de release (`latest.json`). Contrato no domínio; impl
 /// (HTTP) em `data/update/`. **Best-effort**: qualquer falha (sem rede, 404,

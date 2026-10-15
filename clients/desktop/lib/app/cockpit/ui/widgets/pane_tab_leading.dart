@@ -1,6 +1,6 @@
-import 'package:cockpit/app/core/domain/entities/harness.dart';
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
-import 'package:cockpit/app/cockpit/ui/session/terminal_session.dart';
+import 'package:desktop/app/core/domain/entities/harness.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/ui/session/terminal_session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 

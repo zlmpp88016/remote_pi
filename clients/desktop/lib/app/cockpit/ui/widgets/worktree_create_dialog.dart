@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:cockpit/app/cockpit/domain/contracts/worktree_manager.dart';
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/domain/validators/worktree_name_validator.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/contracts/worktree_manager.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/domain/validators/worktree_name_validator.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

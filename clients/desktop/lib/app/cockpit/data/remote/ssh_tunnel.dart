@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/remote/host_shell/host_shell.dart';
+import 'package:desktop/app/cockpit/data/remote/host_shell/host_shell.dart';
 
 /// Túnel SSH para o socket do `cockpit-server` de um host remoto (plano 58,
 /// Wave 2, decisão G): usa o binário `ssh` DO SISTEMA — nada de biblioteca

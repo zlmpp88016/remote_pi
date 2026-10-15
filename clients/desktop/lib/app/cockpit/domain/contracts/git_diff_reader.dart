@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/file_diff.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_diff.dart';
 
 /// Lê o diff de um arquivo contra o HEAD do repo. Só leitura — alimenta o
 /// `DiffViewer`. A impl (roda `git diff HEAD`) mora em `data/`.

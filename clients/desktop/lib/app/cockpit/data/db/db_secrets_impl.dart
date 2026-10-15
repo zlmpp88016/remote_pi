@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/contracts/db_connection_store.dart';
-import 'package:cockpit_core/cockpit_core.dart';
+import 'package:desktop/app/cockpit/domain/contracts/db_connection_store.dart';
+import 'package:desktop_core/cockpit_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 

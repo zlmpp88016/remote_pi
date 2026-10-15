@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/contracts/dismissed_update_store.dart';
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/cockpit/domain/contracts/dismissed_update_store.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
 
 /// Persiste a versão de atualização dispensada numa chave própria do store de
 /// settings (reusa o store — só uma String).

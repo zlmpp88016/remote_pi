@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:app/data/transport/epk_encoding.dart';
-import 'package:app/pairing/owner_identity_bridge.dart';
-import 'package:app/pairing/storage.dart';
+import 'package:mobile/data/transport/epk_encoding.dart';
+import 'package:mobile/pairing/owner_identity_bridge.dart';
+import 'package:mobile/pairing/storage.dart';
 import 'package:flutter/foundation.dart';
 
 import 'mesh_blob.dart';

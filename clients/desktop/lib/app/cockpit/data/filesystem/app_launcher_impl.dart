@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:cockpit/app/core/utils/executable_resolver.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/app_launcher.dart';
-import 'package:cockpit/app/cockpit/domain/entities/launchable_app.dart';
+import 'package:desktop/app/core/utils/executable_resolver.dart';
+import 'package:desktop/app/cockpit/domain/contracts/app_launcher.dart';
+import 'package:desktop/app/cockpit/domain/entities/launchable_app.dart';
 
 class _Candidate {
   const _Candidate(this.id, this.name, this.bundle);

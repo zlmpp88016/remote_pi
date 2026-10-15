@@ -1,21 +1,21 @@
 import 'dart:math' as math;
 
-import 'package:cockpit/app/cockpit/domain/entities/git_info.dart';
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/domain/entities/realm.dart';
-import 'package:cockpit/app/core/ui/widgets/app_menu.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/update_card.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/workspace_avatar.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/context_menu_gesture.dart';
-import 'package:cockpit/app/core/utils/platform_kind.dart';
-import 'package:cockpit/i18n/strings.g.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/app/core/ui/keep_awake_controller.dart';
-import 'package:cockpit_keepawake/cockpit_keepawake.dart' show PowerSource;
+import 'package:desktop/app/cockpit/domain/entities/git_info.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/domain/entities/realm.dart';
+import 'package:desktop/app/core/ui/widgets/app_menu.dart';
+import 'package:desktop/app/cockpit/ui/widgets/update_card.dart';
+import 'package:desktop/app/cockpit/ui/widgets/workspace_avatar.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/context_menu_gesture.dart';
+import 'package:desktop/app/core/utils/platform_kind.dart';
+import 'package:desktop/i18n/strings.g.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/app/core/ui/keep_awake_controller.dart';
+import 'package:desktop_keepawake/cockpit_keepawake.dart' show PowerSource;
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Root git de um workspace, pra rail (kebab + popup do badge multi-root):

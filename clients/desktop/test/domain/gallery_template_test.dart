@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/gallery_template.dart';
+import 'package:desktop/app/cockpit/domain/entities/gallery_template.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -1,15 +1,15 @@
-import 'package:app/config/dependencies.dart';
-import 'package:app/data/local/boxes.dart';
-import 'package:app/data/mesh/mesh_sync_service.dart';
-import 'package:app/data/preferences/preferences.dart';
-import 'package:app/data/sync/sync_service.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/domain/value_objects/device_capabilities.dart';
-import 'package:app/pairing/owner_identity_bridge.dart';
-import 'package:app/pairing/storage.dart';
-import 'package:app/routing/adaptive.dart';
-import 'package:app/routing/app_router.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/config/dependencies.dart';
+import 'package:mobile/data/local/boxes.dart';
+import 'package:mobile/data/mesh/mesh_sync_service.dart';
+import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/data/sync/sync_service.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/domain/value_objects/device_capabilities.dart';
+import 'package:mobile/pairing/owner_identity_bridge.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/routing/app_router.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 

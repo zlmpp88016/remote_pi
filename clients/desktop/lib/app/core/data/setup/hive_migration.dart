@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/core/data/diagnostics/diagnostics_log.dart';
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
-import 'package:cockpit/app/core/data/setup/storage_location.dart';
+import 'package:desktop/app/core/data/diagnostics/diagnostics_log.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/core/data/setup/storage_location.dart';
 import 'package:hive/hive.dart';
 import 'package:path/path.dart' as p;
 

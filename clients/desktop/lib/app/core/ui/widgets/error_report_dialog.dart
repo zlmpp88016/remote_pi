@@ -1,7 +1,7 @@
-import 'package:cockpit/app/core/data/diagnostics/diagnostics_log.dart';
-import 'package:cockpit/app/core/data/diagnostics/issue_report.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/core/data/diagnostics/diagnostics_log.dart';
+import 'package:desktop/app/core/data/diagnostics/issue_report.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';

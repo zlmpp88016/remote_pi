@@ -1,17 +1,17 @@
-import 'package:cockpit_core/cockpit_core.dart';
+import 'package:desktop_core/cockpit_core.dart';
 import 'dart:async';
 
-import 'package:cockpit/app/cockpit/data/remote/mobile_ssh_key_store.dart';
-import 'package:cockpit/app/cockpit/data/remote/remote_host_connector.dart';
-import 'package:cockpit/app/core/utils/remote_path.dart';
-import 'package:cockpit/app/cockpit/data/remote/remote_host_password_store.dart';
-import 'package:cockpit/app/cockpit/data/remote/remote_host_terminal_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/remote_hosts_store.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/entities/remote_host.dart';
-import 'package:cockpit/app/cockpit/domain/entities/remote_workspace_pin.dart';
-import 'package:cockpit/app/cockpit/data/terminal/sidecar/sidecar_terminal_connector.dart';
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop/app/cockpit/data/remote/mobile_ssh_key_store.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_host_connector.dart';
+import 'package:desktop/app/core/utils/remote_path.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_host_password_store.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_host_terminal_gateway.dart';
+import 'package:desktop/app/cockpit/domain/contracts/remote_hosts_store.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_gateway.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_host.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_workspace_pin.dart';
+import 'package:desktop/app/cockpit/data/terminal/sidecar/sidecar_terminal_connector.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 import 'package:flutter/foundation.dart';
 
 /// Estado app-scoped dos hosts remotos (plano 58, Wave 2/fecho): dono do

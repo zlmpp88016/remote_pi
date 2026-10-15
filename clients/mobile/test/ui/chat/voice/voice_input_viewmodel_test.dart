@@ -3,9 +3,9 @@
 
 import 'dart:async';
 
-import 'package:app/data/voice/speech_service.dart';
-import 'package:app/ui/chat/voice/states/voice_input_state.dart';
-import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
+import 'package:mobile/data/voice/speech_service.dart';
+import 'package:mobile/ui/chat/voice/states/voice_input_state.dart';
+import 'package:mobile/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 

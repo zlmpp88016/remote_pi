@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
 
 /// Contexto completo de uma abertura, independente da superfície que vai
 /// hospedar o editor (pane hoje, janela no futuro).

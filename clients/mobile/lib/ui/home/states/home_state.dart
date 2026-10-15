@@ -1,5 +1,5 @@
-import 'package:app/pairing/storage.dart';
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter/foundation.dart' show listEquals, mapEquals;
 
 sealed class HomeState {

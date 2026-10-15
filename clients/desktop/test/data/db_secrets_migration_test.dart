@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/db/db_secrets_impl.dart';
-import 'package:cockpit/app/cockpit/domain/services/db_query_service.dart';
-import 'package:cockpit_core/cockpit_core.dart';
+import 'package:desktop/app/cockpit/data/db/db_secrets_impl.dart';
+import 'package:desktop/app/cockpit/domain/services/db_query_service.dart';
+import 'package:desktop_core/cockpit_core.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 

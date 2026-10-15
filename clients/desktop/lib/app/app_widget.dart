@@ -1,18 +1,18 @@
 import 'dart:io' show Platform;
 
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
-import 'package:cockpit/app/core/ui/menu/app_menu_bar.dart';
-import 'package:cockpit/app/core/ui/menu/editor_menu_bridge.dart';
-import 'package:cockpit/app/core/ui/menu/menu_model.dart';
-import 'package:cockpit/app/core/ui/menu/workspace_menu_bridge.dart';
-import 'package:cockpit/app/core/ui/app_zoom.dart';
-import 'package:cockpit/app/core/ui/clamping_scroll_behavior.dart';
-import 'package:cockpit/app/core/ui/widgets/devtools_inspector.dart';
-import 'package:cockpit/app/core/ui/overlay/app_popover_handler.dart';
-import 'package:cockpit/app/core/ui/settings_controller.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/utils/platform_kind.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/ui/menu/app_menu_bar.dart';
+import 'package:desktop/app/core/ui/menu/editor_menu_bridge.dart';
+import 'package:desktop/app/core/ui/menu/menu_model.dart';
+import 'package:desktop/app/core/ui/menu/workspace_menu_bridge.dart';
+import 'package:desktop/app/core/ui/app_zoom.dart';
+import 'package:desktop/app/core/ui/clamping_scroll_behavior.dart';
+import 'package:desktop/app/core/ui/widgets/devtools_inspector.dart';
+import 'package:desktop/app/core/ui/overlay/app_popover_handler.dart';
+import 'package:desktop/app/core/ui/settings_controller.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/utils/platform_kind.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

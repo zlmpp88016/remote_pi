@@ -1,8 +1,8 @@
-import 'package:app/protocol/protocol.dart';
-import 'package:app/routing/adaptive.dart';
-import 'package:app/ui/core/themes/themes.dart';
-import 'package:app/ui/pi_surface/states/pi_surface_state.dart';
-import 'package:app/ui/pi_surface/viewmodels/pi_surface_viewmodel.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
+import 'package:mobile/ui/pi_surface/states/pi_surface_state.dart';
+import 'package:mobile/ui/pi_surface/viewmodels/pi_surface_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';

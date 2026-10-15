@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:app/protocol/protocol.dart' show PiHarness;
+import 'package:mobile/protocol/protocol.dart' show PiHarness;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 

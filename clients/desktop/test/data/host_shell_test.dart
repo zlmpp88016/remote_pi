@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/remote/host_shell/host_shell.dart';
-import 'package:cockpit/app/cockpit/data/remote/host_shell/posix_host_shell.dart';
-import 'package:cockpit/app/cockpit/data/remote/host_shell/windows_host_shell.dart';
+import 'package:desktop/app/cockpit/data/remote/host_shell/host_shell.dart';
+import 'package:desktop/app/cockpit/data/remote/host_shell/posix_host_shell.dart';
+import 'package:desktop/app/cockpit/data/remote/host_shell/windows_host_shell.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Executor de SSH falso: grava os comandos e devolve respostas roteirizadas.

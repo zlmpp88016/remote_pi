@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/kanban_document.dart';
+import 'package:desktop/app/cockpit/domain/entities/kanban_document.dart';
 
 /// Mutações de um `.kanban`. Cada operação devolve o **conteúdo novo** do
 /// arquivo; quem chamou grava e reparseia.

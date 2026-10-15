@@ -1,12 +1,12 @@
-import 'package:cockpit/app/cockpit/ui/session/file_viewer_session.dart';
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
-import 'package:cockpit/app/cockpit/ui/session/neovim_session.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/confirm_dialog.dart';
+import 'package:desktop/app/cockpit/ui/session/file_viewer_session.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/ui/session/neovim_session.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/widgets/confirm_dialog.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_modular/flutter_modular.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/i18n/strings.g.dart';
 
 /// Fecha [item] pedindo confirmação quando há edição não salva.
 ///

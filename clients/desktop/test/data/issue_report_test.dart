@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/data/diagnostics/issue_report.dart';
+import 'package:desktop/app/core/data/diagnostics/issue_report.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

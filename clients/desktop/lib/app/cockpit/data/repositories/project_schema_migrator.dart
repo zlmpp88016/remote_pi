@@ -1,7 +1,7 @@
-import 'package:cockpit/app/cockpit/data/repositories/json_project_repository.dart';
-import 'package:cockpit/app/cockpit/domain/entities/realm.dart';
-import 'package:cockpit/app/cockpit/domain/value_objects/uid.dart';
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/cockpit/data/repositories/json_project_repository.dart';
+import 'package:desktop/app/cockpit/domain/entities/realm.dart';
+import 'package:desktop/app/cockpit/domain/value_objects/uid.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
 
 /// Migração one-shot do schema pré-realm (id == path) pro schema atual
 /// (id = UUID + campo `realm`). Roda no bootstrap do módulo, antes de qualquer

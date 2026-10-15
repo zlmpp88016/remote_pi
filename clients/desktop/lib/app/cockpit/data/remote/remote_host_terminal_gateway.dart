@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/data/remote/pty_ack_batcher.dart';
-import 'package:cockpit/app/cockpit/data/remote/remote_host_connector.dart';
-import 'package:cockpit/app/core/data/diagnostics/diagnostics_log.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_gateway.dart';
-import 'package:cockpit/app/core/domain/entities/terminal_profile.dart';
-import 'package:cockpit/app/core/utils/spawn_directory.dart'
+import 'package:desktop/app/cockpit/data/remote/pty_ack_batcher.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_host_connector.dart';
+import 'package:desktop/app/core/data/diagnostics/diagnostics_log.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_gateway.dart';
+import 'package:desktop/app/core/domain/entities/terminal_profile.dart';
+import 'package:desktop/app/core/utils/spawn_directory.dart'
     show SpawnDirectory;
-import 'package:cockpit_core/cockpit_core.dart';
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop_core/cockpit_core.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 
 /// [TerminalGateway] de um workspace REMOTO: o PTY roda no `cockpit-server`
 /// do host (via túnel SSH) e o emulador continua no cliente (plano 58,

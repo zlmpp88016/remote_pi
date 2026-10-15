@@ -7,11 +7,11 @@ environment:
   sdk: ^3.9.0
 
 dependencies:
-  cockpit_core:
-    path: ../../packages/cockpit_core
-  cockpit_engine:
-    path: ../../packages/cockpit_engine
-  cockpit_protocol:
-    path: ../../packages/cockpit_protocol
-  cockpit_remote:
-    path: ../../packages/cockpit_remote
+  desktop_core:
+    path: ../../packages/desktop_core
+  desktop_engine:
+    path: ../../packages/desktop_engine
+  desktop_protocol:
+    path: ../../packages/desktop_protocol
+  desktop_remote:
+    path: ../../packages/desktop_remote

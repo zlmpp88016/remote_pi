@@ -1,4 +1,4 @@
-import 'package:app/data/images/image_picker_service.dart';
+import 'package:mobile/data/images/image_picker_service.dart';
 
 /// Plan/30 — composer attachment state.
 ///

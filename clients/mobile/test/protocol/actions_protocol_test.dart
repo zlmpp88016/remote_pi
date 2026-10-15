@@ -5,7 +5,7 @@
 //                   thinking_set, list_models
 //   ServerMessage:  action_ok, action_error, models_list
 
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

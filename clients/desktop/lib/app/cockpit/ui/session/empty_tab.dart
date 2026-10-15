@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
 
 /// Aba **vazia**: o placeholder que ocupa uma pane sem nada aberto e mostra o
 /// seletor do "+" (terminal, arquivo, etc.). Nunca tem processo nem estado;

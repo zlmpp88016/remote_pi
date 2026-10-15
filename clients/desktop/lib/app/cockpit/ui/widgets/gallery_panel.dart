@@ -1,7 +1,7 @@
-import 'package:cockpit/app/cockpit/domain/entities/gallery_template.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/entities/gallery_template.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

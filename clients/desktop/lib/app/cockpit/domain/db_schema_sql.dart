@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_result.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_result.dart';
 
 /// SQL de introspecção de schema por engine (tabelas quando [table] é null;
 /// colunas de [table] caso contrário). Compartilhado pelo driver local

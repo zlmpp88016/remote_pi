@@ -1,6 +1,6 @@
-import 'package:cockpit/app/core/data/automation/cli_automation_gateway.dart';
-import 'package:cockpit/app/core/domain/entities/automation.dart';
-import 'package:cockpit/app/core/domain/services/commit_message_prompt.dart';
+import 'package:desktop/app/core/data/automation/cli_automation_gateway.dart';
+import 'package:desktop/app/core/domain/entities/automation.dart';
+import 'package:desktop/app/core/domain/services/commit_message_prompt.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

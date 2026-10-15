@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
 
 /// Aba do **collection browser Mongo** (plano 53): documentos de uma
 /// collection com filter bar + CRUD. Sem arquivo (decisão A — o estado é

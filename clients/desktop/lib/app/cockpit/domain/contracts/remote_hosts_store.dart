@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/entities/remote_host.dart';
-import 'package:cockpit/app/cockpit/domain/entities/remote_workspace_pin.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_host.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_workspace_pin.dart';
 
 /// Registro de hosts remotos do cliente (plano 58, decisão C): a ÚNICA coisa
 /// que o cliente persiste sobre remoto — id, nome, endpoint SSH, + os pins de

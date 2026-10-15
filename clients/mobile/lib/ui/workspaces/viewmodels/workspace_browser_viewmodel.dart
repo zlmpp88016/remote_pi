@@ -1,7 +1,7 @@
-import 'package:app/data/sessions/session_catalog.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
-import 'package:app/ui/workspaces/states/workspace_browser_state.dart';
+import 'package:mobile/data/sessions/session_catalog.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/ui/workspaces/states/workspace_browser_state.dart';
 
 /// Plan/68 — navigator over the **host** filesystem to pick a workspace.
 ///

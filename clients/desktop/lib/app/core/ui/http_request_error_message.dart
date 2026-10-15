@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/exceptions/http_request_error.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/exceptions/http_request_error.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/widgets.dart';
 
 /// Traduz um [HttpRequestError] para a frase mostrada ao usuário.

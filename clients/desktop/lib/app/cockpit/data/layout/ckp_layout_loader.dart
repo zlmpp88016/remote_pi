@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/layout_loader.dart';
-import 'package:cockpit/app/cockpit/domain/entities/layout_spec.dart';
-import 'package:cockpit/app/cockpit/domain/services/ckp_layout_parser.dart';
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/cockpit/domain/contracts/layout_loader.dart';
+import 'package:desktop/app/cockpit/domain/entities/layout_spec.dart';
+import 'package:desktop/app/cockpit/domain/services/ckp_layout_parser.dart';
+import 'package:desktop/app/core/domain/result.dart';
 
 /// Lê um `.ckp` do disco e devolve o [LayoutSpec]. A validação inteira mora
 /// no [CkpLayoutParser] (domínio, sem IO) — aqui é só o arquivo: o mesmo

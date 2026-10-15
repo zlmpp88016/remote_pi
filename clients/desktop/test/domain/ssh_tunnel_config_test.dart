@@ -1,5 +1,5 @@
-import 'package:cockpit_core/cockpit_core.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop_core/cockpit_core.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

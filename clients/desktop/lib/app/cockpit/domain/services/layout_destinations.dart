@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
 
 /// Onde um `.ckp` aberto **de fora** (Files pane, Finder, Explorer) pode ser
 /// aplicado (card do viewer de layout).

@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/core/data/jsonc.dart';
-import 'package:cockpit/app/cockpit/data/tasks/project_paths.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/core/data/jsonc.dart';
+import 'package:desktop/app/cockpit/data/tasks/project_paths.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
 
 /// Lê o `.cockpit/tasks.json` (manual, versionável) de um workspace e o traduz
 /// em [TaskDefinition]s genéricas. É o espelho 1:1 das entities — não conhece

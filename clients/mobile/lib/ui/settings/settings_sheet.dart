@@ -1,8 +1,8 @@
-import 'package:app/config/dependencies.dart';
-import 'package:app/routing/adaptive.dart';
-import 'package:app/ui/core/themes/themes.dart';
-import 'package:app/ui/settings/settings_page.dart';
-import 'package:app/ui/settings/viewmodels/settings_viewmodel.dart';
+import 'package:mobile/config/dependencies.dart';
+import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
+import 'package:mobile/ui/settings/settings_page.dart';
+import 'package:mobile/ui/settings/viewmodels/settings_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 

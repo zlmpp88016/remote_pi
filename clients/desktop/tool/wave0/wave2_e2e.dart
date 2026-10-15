@@ -15,8 +15,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cockpit_core/cockpit_core.dart';
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop_core/cockpit_core.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 
 Future<void> main(List<String> args) async {
   if (args.isEmpty) {

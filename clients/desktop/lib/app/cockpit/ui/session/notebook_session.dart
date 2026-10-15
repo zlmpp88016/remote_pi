@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/entities/notebook_document.dart';
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/domain/entities/notebook_document.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
 
 /// Aba de um **caderno** `nome.notebook/` (plano 62, passo 4). O alvo é uma
 /// pasta, não um arquivo — por isso não é uma `FileViewerSession`. O estado

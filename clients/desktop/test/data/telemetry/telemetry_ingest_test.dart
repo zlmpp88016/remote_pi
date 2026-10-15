@@ -1,11 +1,11 @@
-import 'package:cockpit/app/cockpit/data/telemetry/line_parser/telemetry_line_parser_impl.dart';
-import 'package:cockpit/app/cockpit/data/telemetry/sqlite_telemetry_store.dart';
-import 'package:cockpit/app/cockpit/data/telemetry/telemetry_ingest_impl.dart';
-import 'package:cockpit/app/cockpit/data/telemetry/telemetry_store_registry.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/telemetry_ingest.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/telemetry_store.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_event.dart';
+import 'package:desktop/app/cockpit/data/telemetry/line_parser/telemetry_line_parser_impl.dart';
+import 'package:desktop/app/cockpit/data/telemetry/sqlite_telemetry_store.dart';
+import 'package:desktop/app/cockpit/data/telemetry/telemetry_ingest_impl.dart';
+import 'package:desktop/app/cockpit/data/telemetry/telemetry_store_registry.dart';
+import 'package:desktop/app/cockpit/domain/contracts/telemetry_ingest.dart';
+import 'package:desktop/app/cockpit/domain/contracts/telemetry_store.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -92,7 +92,7 @@ void main() {
           'rted"}\r\nflutter: RangeError (index): Index out of range: index 3, length 2\r\n',
         )
         ..add(
-          'flutter: #0      CartService.add (package:app/cart/cart_service.dart:87:22)\r\n',
+          'flutter: #0      CartService.add (package:mobile/cart/cart_service.dart:87:22)\r\n',
         )
         ..add('tail sem newline');
       await session.close(exitCode: 0);

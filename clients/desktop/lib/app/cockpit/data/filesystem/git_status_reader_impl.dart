@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/filesystem/git_binary.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/git_status_reader.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_file_status.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_info.dart';
+import 'package:desktop/app/cockpit/data/filesystem/git_binary.dart';
+import 'package:desktop/app/cockpit/domain/contracts/git_status_reader.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_file_status.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_info.dart';
 
 /// Lê o estado git rodando o binário `git`. O caminho do `git` vem do
 /// [GitBinary] compartilhado (o app macOS **não herda o PATH do shell**).

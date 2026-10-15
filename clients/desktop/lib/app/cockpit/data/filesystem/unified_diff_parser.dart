@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/file_diff.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_diff.dart';
 
 final RegExp _hunkHeader = RegExp(r'^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@');
 

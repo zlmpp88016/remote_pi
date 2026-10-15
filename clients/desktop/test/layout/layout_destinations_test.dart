@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/domain/services/layout_destinations.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/domain/services/layout_destinations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Project _p(String id, String path, {String realmId = 'r1'}) => Project(

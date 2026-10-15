@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/terminal/xterm/src/core/buffer/cell_offset.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/core/buffer/range.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/buffer/cell_offset.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/buffer/range.dart';
 
 /// A BufferSegment represents a range within a line.
 class BufferSegment {

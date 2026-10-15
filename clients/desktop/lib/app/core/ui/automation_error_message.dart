@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/domain/exceptions/automation_error.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/core/domain/exceptions/automation_error.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/widgets.dart';
 
 /// Traduz um [AutomationError] para a frase mostrada ao usuário.

@@ -1,6 +1,6 @@
 // Plan/69 W3 — the platform → capability table (pure domain value object).
 
-import 'package:app/domain/value_objects/device_capabilities.dart';
+import 'package:mobile/domain/value_objects/device_capabilities.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

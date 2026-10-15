@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/filesystem/git_binary.dart';
-import 'package:cockpit/app/cockpit/data/filesystem/git_head_baseline_reader_impl.dart';
+import 'package:desktop/app/cockpit/data/filesystem/git_binary.dart';
+import 'package:desktop/app/cockpit/data/filesystem/git_head_baseline_reader_impl.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

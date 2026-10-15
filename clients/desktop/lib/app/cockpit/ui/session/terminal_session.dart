@@ -1,24 +1,24 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_scrollback_store.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_status_server.dart';
-import 'package:cockpit/app/core/domain/entities/harness.dart';
-import 'package:cockpit/app/core/terminal/secret_redactor.dart';
-import 'package:cockpit/app/cockpit/domain/services/terminal_harness_monitor.dart';
-import 'package:cockpit/app/core/domain/entities/terminal_profile.dart';
-import 'package:cockpit/i18n/strings.g.dart';
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
-import 'package:cockpit/app/core/terminal/terminal_controller.dart';
-import 'package:cockpit/app/core/terminal/pty_output_scheduler.dart';
-import 'package:cockpit/app/core/utils/quiet_period_debouncer.dart';
-import 'package:cockpit/app/core/utils/bounded_text_buffer.dart';
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
-import 'package:cockpit/app/cockpit/ui/session/terminal_input.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_gateway.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_scrollback_store.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_status_server.dart';
+import 'package:desktop/app/core/domain/entities/harness.dart';
+import 'package:desktop/app/core/terminal/secret_redactor.dart';
+import 'package:desktop/app/cockpit/domain/services/terminal_harness_monitor.dart';
+import 'package:desktop/app/core/domain/entities/terminal_profile.dart';
+import 'package:desktop/i18n/strings.g.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/terminal/terminal_controller.dart';
+import 'package:desktop/app/core/terminal/pty_output_scheduler.dart';
+import 'package:desktop/app/core/utils/quiet_period_debouncer.dart';
+import 'package:desktop/app/core/utils/bounded_text_buffer.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/ui/session/terminal_input.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pasteboard/pasteboard.dart';
-import 'package:cockpit/app/core/terminal/xterm/xterm.dart';
+import 'package:desktop/app/core/terminal/xterm/xterm.dart';
 
 /// Status de um `claude` (ou outro harness) rodando dentro de uma aba de
 /// terminal, reportado pelo `cockpit-hook` via socket (ver

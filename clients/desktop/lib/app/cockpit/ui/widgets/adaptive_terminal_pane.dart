@@ -1,10 +1,10 @@
-import 'package:cockpit/app/core/terminal/ghostty_font_family.dart';
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
-import 'package:cockpit/app/core/terminal/terminal_controller.dart';
-import 'package:cockpit/app/core/terminal/terminal_font_weight.dart';
-import 'package:cockpit/app/core/terminal/terminal_zoom.dart';
-import 'package:cockpit/app/core/terminal/xterm/xterm.dart' as xterm;
-import 'package:cockpit/app/core/ui/settings_controller.dart';
+import 'package:desktop/app/core/terminal/ghostty_font_family.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/terminal/terminal_controller.dart';
+import 'package:desktop/app/core/terminal/terminal_font_weight.dart';
+import 'package:desktop/app/core/terminal/terminal_zoom.dart';
+import 'package:desktop/app/core/terminal/xterm/xterm.dart' as xterm;
+import 'package:desktop/app/core/ui/settings_controller.dart';
 import 'package:flterm/flterm.dart' as ghost;
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';

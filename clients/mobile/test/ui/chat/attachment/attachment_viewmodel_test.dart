@@ -5,11 +5,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:app/data/actions/actions_repository.dart';
-import 'package:app/data/images/image_picker_service.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/chat/attachment/states/attachment_state.dart';
-import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
+import 'package:mobile/data/actions/actions_repository.dart';
+import 'package:mobile/data/images/image_picker_service.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/chat/attachment/states/attachment_state.dart';
+import 'package:mobile/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakePicker implements IImagePickerService {

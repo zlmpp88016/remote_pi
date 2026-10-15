@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
-import 'package:cockpit/app/settings/domain/editor_appearance_policy.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/settings/domain/editor_appearance_policy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

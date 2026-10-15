@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/cockpit/domain/entities/file_view.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_view.dart';
 
 /// Lê e classifica um arquivo para o viewer (markdown / texto / imagem /
 /// não-suportado). Contrato no domínio; impl (dart:io) em `data/filesystem/`.

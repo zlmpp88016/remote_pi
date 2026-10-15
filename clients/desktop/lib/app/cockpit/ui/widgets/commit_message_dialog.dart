@@ -1,10 +1,10 @@
-import 'package:cockpit/app/core/domain/entities/automation.dart';
-import 'package:cockpit/app/core/domain/exceptions/automation_error.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/ui/automation_error_message.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/core/domain/entities/automation.dart';
+import 'package:desktop/app/core/domain/exceptions/automation_error.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/ui/automation_error_message.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Dialog de mensagem de commit (Source Control → "Commit"/"Stage and Commit").

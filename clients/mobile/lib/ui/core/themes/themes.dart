@@ -1,7 +1,7 @@
 /// Barrel for the app theme system. Import this from widgets:
 ///
 /// ```dart
-/// import 'package:app/ui/core/themes/themes.dart';
+/// import 'package:mobile/ui/core/themes/themes.dart';
 /// ```
 ///
 /// Gives you `context.colors.*`, `context.typo.*`, the font-family constants,

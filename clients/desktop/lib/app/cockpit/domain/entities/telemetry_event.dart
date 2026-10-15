@@ -57,7 +57,7 @@ class TelemetryFrame {
   final String raw;
 
   /// Caminho como aparece no stack (`lib/cart/cart_service.dart`,
-  /// `/abs/src/db.ts`, `package:app/cart/cart_service.dart`).
+  /// `/abs/src/db.ts`, `package:mobile/cart/cart_service.dart`).
   final String? file;
   final int? line;
   final int? column;

@@ -1,9 +1,9 @@
 // Plan/32a — the thinking cursor: an empty StreamingMessage renders just the
 // blinking cursor (no text), so the cursor shows during the pre-chunk gap.
 
-import 'package:app/domain/session_state.dart';
-import 'package:app/ui/chat/widgets/agent_markdown.dart';
-import 'package:app/ui/chat/widgets/streaming_bubble.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/ui/chat/widgets/agent_markdown.dart';
+import 'package:mobile/ui/chat/widgets/streaming_bubble.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/launchable_app.dart';
+import 'package:desktop/app/cockpit/domain/entities/launchable_app.dart';
 
 /// Detecta IDEs instaladas e abre caminhos nelas.
 abstract class AppLauncherGateway {

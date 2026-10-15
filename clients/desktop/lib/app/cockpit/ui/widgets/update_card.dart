@@ -1,9 +1,9 @@
-import 'package:cockpit/app/cockpit/ui/viewmodels/update_viewmodel.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/i18n/strings.g.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/update_viewmodel.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/i18n/strings.g.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
 import 'package:flutter_modular/flutter_modular.dart';
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Mini update card at the bottom of the rail — above the machine name. Only

@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/ui/viewmodels/git_controller.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/git_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

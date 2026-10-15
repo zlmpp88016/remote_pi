@@ -1,4 +1,4 @@
-import 'package:app/pairing/storage.dart';
+import 'package:mobile/pairing/storage.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 
 sealed class SettingsState {

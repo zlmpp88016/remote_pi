@@ -23,10 +23,10 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:app/data/transport/channel.dart';
-import 'package:app/data/transport/host_proxy.dart';
-import 'package:app/data/transport/relay_config.dart';
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/data/transport/channel.dart';
+import 'package:mobile/data/transport/host_proxy.dart';
+import 'package:mobile/data/transport/relay_config.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/io.dart';

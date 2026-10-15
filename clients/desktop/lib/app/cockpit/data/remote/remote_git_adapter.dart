@@ -1,7 +1,7 @@
-import 'package:cockpit/app/cockpit/domain/entities/git_file_status.dart'
+import 'package:desktop/app/cockpit/domain/entities/git_file_status.dart'
     as app;
-import 'package:cockpit/app/cockpit/domain/entities/git_info.dart';
-import 'package:cockpit_core/cockpit_core.dart' as core;
+import 'package:desktop/app/cockpit/domain/entities/git_info.dart';
+import 'package:desktop_core/cockpit_core.dart' as core;
 
 /// Converte o `GitStatus` do protocolo (porcelain XY) no `GitInfo` do app
 /// (branch + mapas de status por caminho relativo), pra o painel de Source

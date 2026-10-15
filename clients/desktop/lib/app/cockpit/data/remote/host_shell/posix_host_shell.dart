@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/remote/host_shell/host_shell.dart';
+import 'package:desktop/app/cockpit/data/remote/host_shell/host_shell.dart';
 
 /// Dialeto POSIX (macOS/Linux) — o bootstrap que existia antes do plano 61,
 /// extraído do `RemoteHostConnector` sem mudança de comportamento.

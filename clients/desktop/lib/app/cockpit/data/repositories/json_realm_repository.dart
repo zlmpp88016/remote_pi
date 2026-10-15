@@ -1,6 +1,6 @@
-import 'package:cockpit/app/cockpit/domain/contracts/realm_repository.dart';
-import 'package:cockpit/app/cockpit/domain/entities/realm.dart';
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/cockpit/domain/contracts/realm_repository.dart';
+import 'package:desktop/app/cockpit/domain/entities/realm.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
 
 /// Persiste realms num [JsonStateStore], um `Map` por id (mesmo estilo
 /// schemaless do `JsonProjectRepository`). O realm Default é garantido em

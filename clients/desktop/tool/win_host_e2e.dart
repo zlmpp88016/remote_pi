@@ -16,13 +16,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/data/remote/host_shell/host_shell.dart';
-import 'package:cockpit/app/cockpit/data/remote/host_shell/windows_host_shell.dart';
-import 'package:cockpit/app/cockpit/data/remote/dartssh_host_connection.dart';
-import 'package:cockpit/app/cockpit/data/remote/ssh_worker_connection.dart';
-import 'package:cockpit/app/cockpit/data/remote/ssh_tunnel.dart';
-import 'package:cockpit_core/cockpit_core.dart' hide SshTunnel;
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop/app/cockpit/data/remote/host_shell/host_shell.dart';
+import 'package:desktop/app/cockpit/data/remote/host_shell/windows_host_shell.dart';
+import 'package:desktop/app/cockpit/data/remote/dartssh_host_connection.dart';
+import 'package:desktop/app/cockpit/data/remote/ssh_worker_connection.dart';
+import 'package:desktop/app/cockpit/data/remote/ssh_tunnel.dart';
+import 'package:desktop_core/cockpit_core.dart' hide SshTunnel;
+import 'package:desktop_remote/cockpit_remote.dart';
 
 var _failures = 0;
 List<String> _mobileArgs = const [];

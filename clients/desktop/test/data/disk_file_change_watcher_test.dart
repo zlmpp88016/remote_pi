@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/filesystem/disk_file_change_watcher.dart';
+import 'package:desktop/app/cockpit/data/filesystem/disk_file_change_watcher.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Contra o disco real: o que se testa é justamente o comportamento do

@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:app/domain/entities/update_info.dart';
+import 'package:mobile/domain/entities/update_info.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

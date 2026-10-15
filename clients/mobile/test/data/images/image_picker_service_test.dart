@@ -5,8 +5,8 @@
 
 import 'dart:typed_data';
 
-import 'package:app/data/images/image_picker_service.dart';
-import 'package:app/domain/value_objects/device_capabilities.dart';
+import 'package:mobile/data/images/image_picker_service.dart';
+import 'package:mobile/domain/value_objects/device_capabilities.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeBackend implements ImagePickerBackend {

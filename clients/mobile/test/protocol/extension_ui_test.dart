@@ -3,7 +3,7 @@
 //   ServerMessage: extension_ui_request (select/confirm/input/editor/notify + ask)
 //   ClientMessage: extension_ui_response (value/confirmed/cancelled + ask)
 
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

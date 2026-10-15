@@ -1,6 +1,6 @@
-import 'package:app/pairing/storage.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 
 /// A row in the Home list.

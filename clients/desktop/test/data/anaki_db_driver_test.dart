@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/db/anaki_db_driver.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_result.dart';
+import 'package:desktop/app/cockpit/data/db/anaki_db_driver.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_result.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Exercita o [AnakiDbDriver] contra um sqlite REAL em arquivo temporário —

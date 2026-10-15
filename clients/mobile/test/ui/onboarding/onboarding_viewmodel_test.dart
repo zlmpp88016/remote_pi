@@ -1,6 +1,6 @@
-import 'package:app/data/preferences/preferences.dart';
-import 'package:app/ui/onboarding/states/onboarding_state.dart';
-import 'package:app/ui/onboarding/viewmodels/onboarding_viewmodel.dart';
+import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/ui/onboarding/states/onboarding_state.dart';
+import 'package:mobile/ui/onboarding/viewmodels/onboarding_viewmodel.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 

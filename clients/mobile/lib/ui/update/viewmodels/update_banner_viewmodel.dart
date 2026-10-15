@@ -1,9 +1,9 @@
-import 'package:app/domain/contracts/dismissed_update_store.dart';
-import 'package:app/domain/contracts/update_checker.dart';
-import 'package:app/domain/contracts/url_opener.dart';
-import 'package:app/domain/value_objects/semver.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
-import 'package:app/ui/update/states/update_banner_state.dart';
+import 'package:mobile/domain/contracts/dismissed_update_store.dart';
+import 'package:mobile/domain/contracts/update_checker.dart';
+import 'package:mobile/domain/contracts/url_opener.dart';
+import 'package:mobile/domain/value_objects/semver.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/ui/update/states/update_banner_state.dart';
 
 /// Aviso de atualização in-app, **Android-only** (plano 44, passo 3 — espelho
 /// do passo 7 do plano 43 do Cockpit). No [check] (disparado no mount da Home,

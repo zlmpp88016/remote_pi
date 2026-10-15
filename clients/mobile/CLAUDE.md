@@ -17,7 +17,7 @@ chat com streaming, approval cards para tool calls.
 - WebSocket: `web_socket_channel` ou similar
 
 > Decisões ainda abertas (state mgmt definitivo, pacote libsodium) vivem em
-> `../plan/00-decisions.md`. A stack acima é a direção atual baseada na
+> `../../plan/00-decisions.md`. A stack acima é a direção atual baseada na
 > arquitetura herdada; mudanças estruturais exigem plano novo.
 
 ## Comandos
@@ -69,7 +69,7 @@ ui ──► domain ◄── data
 ## Convenções
 
 - **Naming**: arquivos `snake_case.dart`, classes `PascalCase`, widgets `PascalCase`
-- **Imports**: relativos dentro do mesmo feature; absolutos via `package:app/...`
+- **Imports**: relativos dentro do mesmo feature; absolutos via `package:mobile/...`
   quando cruzando features ou camadas
 - **Barrel files**: cada feature/módulo pode expor um `<nome>.dart` agregando
   os símbolos públicos; consumidores externos importam só o barrel
@@ -117,6 +117,6 @@ await viewModel.doSomething().onSuccess((_) {
 ## Modo orquestrado
 
 Se receber um prompt começando com `[ORCH:<task-id>]`, leia
-`../.orchestration/INSTRUCTIONS.md` antes de qualquer outra ação. Esse marker
+`../../.orchestration/INSTRUCTIONS.md` antes de qualquer outra ação. Esse marker
 indica que outro agente está coordenando o trabalho e tem regras específicas
 (onde escrever resultado, não comitar, etc).

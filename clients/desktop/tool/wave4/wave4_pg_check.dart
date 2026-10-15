@@ -4,8 +4,8 @@
 // ou "No available native assets", o native NÃO foi empacotado.
 import 'dart:io';
 
-import 'package:cockpit_core/cockpit_core.dart';
-import 'package:cockpit_engine/cockpit_engine.dart';
+import 'package:desktop_core/cockpit_core.dart';
+import 'package:desktop_engine/cockpit_engine.dart';
 
 Future<void> main() async {
   const db = NativeDbService();

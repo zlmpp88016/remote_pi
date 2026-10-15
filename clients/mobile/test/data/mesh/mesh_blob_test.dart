@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:app/data/mesh/mesh_blob.dart';
-import 'package:app/data/mesh/mesh_envelope.dart';
+import 'package:mobile/data/mesh/mesh_blob.dart';
+import 'package:mobile/data/mesh/mesh_envelope.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 

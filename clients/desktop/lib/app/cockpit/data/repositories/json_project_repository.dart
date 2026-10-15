@@ -1,8 +1,8 @@
-import 'package:cockpit/app/cockpit/domain/contracts/project_repository.dart';
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/domain/entities/realm.dart';
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
+import 'package:desktop/app/cockpit/domain/contracts/project_repository.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/domain/entities/realm.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
 
 /// Persiste projetos num [JsonStateStore], um `Map` por id — mesma semântica
 /// schemaless do antigo `HiveProjectRepository`.

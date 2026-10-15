@@ -1,9 +1,9 @@
-import 'package:cockpit/app/cockpit/cockpit_module.dart';
-import 'package:cockpit/app/core/core_module.dart';
-import 'package:cockpit/app/core/data/terminal/terminal_profile_resolver_impl.dart';
-import 'package:cockpit/app/core/ui/window_activity_controller.dart';
-import 'package:cockpit/app/remote_pi/remote_pi_module.dart';
-import 'package:cockpit/app/settings/settings_module.dart';
+import 'package:desktop/app/cockpit/cockpit_module.dart';
+import 'package:desktop/app/core/core_module.dart';
+import 'package:desktop/app/core/data/terminal/terminal_profile_resolver_impl.dart';
+import 'package:desktop/app/core/ui/window_activity_controller.dart';
+import 'package:desktop/app/remote_pi/remote_pi_module.dart';
+import 'package:desktop/app/settings/settings_module.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
 /// Módulo raiz — **só composição**. É o mapa de acoplamento do app: quais módulos

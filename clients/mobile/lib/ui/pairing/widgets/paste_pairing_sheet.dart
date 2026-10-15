@@ -1,6 +1,6 @@
-import 'package:app/ui/core/themes/themes.dart';
-import 'package:app/ui/pairing/states/pairing_state.dart';
-import 'package:app/ui/pairing/viewmodels/pairing_viewmodel.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
+import 'package:mobile/ui/pairing/states/pairing_state.dart';
+import 'package:mobile/ui/pairing/viewmodels/pairing_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';

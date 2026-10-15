@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/file_searcher.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
+import 'package:desktop/app/cockpit/domain/contracts/file_searcher.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
 
 /// Indexa os arquivos de uma pasta (walk recursivo, pulando pastas pesadas) e
 /// filtra por relevância. O índice por raiz é **cacheado** com TTL curto pra não

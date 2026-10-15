@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_run.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_run.dart';
 
 /// Executa tasks num PTY, reusando a mecânica de spawn/stream/kill do cockpit.
 /// Contrato no domínio; a impl (`data/`) usa `kyroon_pty`. A `ui/` só conhece

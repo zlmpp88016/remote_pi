@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
 
 /// Um adapter por stack. É a ÚNICA borda que conhece "flavor", "scripts",
 /// "features" etc — traduz convenções da stack em [TaskDefinition]s genéricas.

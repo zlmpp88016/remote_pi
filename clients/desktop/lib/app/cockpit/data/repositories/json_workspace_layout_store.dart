@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/cockpit/domain/contracts/workspace_layout_store.dart';
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/cockpit/domain/contracts/workspace_layout_store.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
 
 /// Persiste o documento de layout num [JsonStateStore], **uma String JSON por
 /// `projectId`** — mesmo formato que a Box antiga guardava, então a migração

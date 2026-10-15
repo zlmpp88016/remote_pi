@@ -2,8 +2,8 @@
 // other message keeps its own row; a lone tool event is NOT grouped (a
 // one-item group would add a tap for no benefit).
 
-import 'package:app/domain/session_state.dart';
-import 'package:app/domain/transcript_rows.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/domain/transcript_rows.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 ToolEvent _tool(String id) => ToolEvent(

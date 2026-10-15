@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/protocol/uuid7.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/protocol/uuid7.dart';
 
 /// Plan/67 — request/reply helper over the active [IChannel].
 class SessionCatalog {

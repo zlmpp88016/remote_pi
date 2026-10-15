@@ -1,14 +1,14 @@
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_run.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/tasks_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/panel_resize_handle.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/app_menu.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_run.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/tasks_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/widgets/panel_resize_handle.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/app_menu.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
 import 'package:flutter_modular/flutter_modular.dart';
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Subpane de Tasks na coluna direita (abaixo da árvore de arquivos). Lista as

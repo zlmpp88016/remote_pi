@@ -2,7 +2,7 @@
 // `session_history` event counterpart (contract: { summary, tokens_before,
 // ts optional }).
 
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

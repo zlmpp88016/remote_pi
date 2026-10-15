@@ -1,5 +1,5 @@
-import 'package:app/domain/contracts/contracts.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/domain/contracts/contracts.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
 import 'package:auto_injector/auto_injector.dart';
 
 /// Fachada sobre o [AutoInjector] que centraliza a configuração de serviços,

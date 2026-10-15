@@ -48,7 +48,7 @@ machine (`npx next dev -p 3167`).
 - ESLint 9
 - Package manager: **pnpm**
 
-Dark-only theme; visual identity lives in `../branding/`.
+Dark-only theme; visual identity lives in `../../branding/`.
 
 ## Commands
 

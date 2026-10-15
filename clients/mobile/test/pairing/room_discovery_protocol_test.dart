@@ -2,8 +2,8 @@
 
 import 'dart:convert';
 
-import 'package:app/pairing/storage.dart';
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

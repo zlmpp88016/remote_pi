@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/services/workspace_cycle.dart';
+import 'package:desktop/app/cockpit/domain/services/workspace_cycle.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

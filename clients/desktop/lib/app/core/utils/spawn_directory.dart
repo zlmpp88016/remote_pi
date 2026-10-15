@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cockpit/app/core/utils/user_home.dart';
+import 'package:desktop/app/core/utils/user_home.dart';
 
 /// Resultado de [resolveSpawnDirectory]: a pasta em que dá pra spawnar de fato,
 /// e se ela é a que foi pedida.

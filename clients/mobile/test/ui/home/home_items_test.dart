@@ -1,8 +1,8 @@
 // Plan 17 — HomeList.items() flattens peers × rooms into tile rows.
 
-import 'package:app/pairing/storage.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/home/states/home_state.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/home/states/home_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 PeerRecord _peer(String epk, {String name = 'Pi'}) => PeerRecord(

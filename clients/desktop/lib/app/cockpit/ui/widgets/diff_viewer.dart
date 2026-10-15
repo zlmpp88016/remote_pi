@@ -1,9 +1,9 @@
-import 'package:cockpit/app/cockpit/domain/entities/file_diff.dart';
-import 'package:cockpit/app/cockpit/ui/session/diff_viewer_session.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/file_path_breadcrumb.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/code_highlight.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_diff.dart';
+import 'package:desktop/app/cockpit/ui/session/diff_viewer_session.dart';
+import 'package:desktop/app/cockpit/ui/widgets/file_path_breadcrumb.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/code_highlight.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

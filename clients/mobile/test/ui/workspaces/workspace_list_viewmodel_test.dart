@@ -14,13 +14,13 @@
 
 import 'dart:async';
 
-import 'package:app/data/sessions/session_catalog.dart';
-import 'package:app/data/transport/channel.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/pairing/storage.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/workspaces/states/workspace_list_state.dart';
-import 'package:app/ui/workspaces/viewmodels/workspace_list_viewmodel.dart';
+import 'package:mobile/data/sessions/session_catalog.dart';
+import 'package:mobile/data/transport/channel.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/workspaces/states/workspace_list_state.dart';
+import 'package:mobile/ui/workspaces/viewmodels/workspace_list_viewmodel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _epk = 'Bz02uLi';

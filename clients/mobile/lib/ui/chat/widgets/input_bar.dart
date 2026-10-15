@@ -1,13 +1,13 @@
 import 'dart:async';
 
-import 'package:app/data/images/image_picker_service.dart';
-import 'package:app/domain/session_state.dart';
-import 'package:app/ui/chat/attachment/states/attachment_state.dart';
-import 'package:app/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
-import 'package:app/ui/chat/voice/states/voice_input_state.dart';
-import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
-import 'package:app/ui/chat/voice/widgets/recording_strip.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/data/images/image_picker_service.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/ui/chat/attachment/states/attachment_state.dart';
+import 'package:mobile/ui/chat/attachment/viewmodels/attachment_viewmodel.dart';
+import 'package:mobile/ui/chat/voice/states/voice_input_state.dart';
+import 'package:mobile/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
+import 'package:mobile/ui/chat/voice/widgets/recording_strip.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';

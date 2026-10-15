@@ -6,11 +6,11 @@
 
 import 'dart:async';
 
-import 'package:app/data/actions/actions_repository.dart';
-import 'package:app/data/transport/channel.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/pairing/storage.dart';
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/data/actions/actions_repository.dart';
+import 'package:mobile/data/transport/channel.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeChannel implements IChannel, IControlLink {

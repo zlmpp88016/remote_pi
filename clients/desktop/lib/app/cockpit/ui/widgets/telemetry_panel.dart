@@ -2,17 +2,17 @@
 // projeto → run → casos, chips de triagem, busca e ações rápidas. Espelha o
 // mockup aprovado (plan/mockups/66-telemetry.html).
 
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_case.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_event.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_run.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/telemetry_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/telemetry_case_view.dart'
+import 'package:desktop/app/cockpit/domain/entities/telemetry_case.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_event.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_run.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/telemetry_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/widgets/telemetry_case_view.dart'
     show telemetryCaseTabTitle, TelemetryTag, TagKind, telemetryRelative;
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

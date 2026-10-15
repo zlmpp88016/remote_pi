@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/telemetry/otlp_receiver.dart';
-import 'package:cockpit/app/cockpit/data/telemetry/telemetry_workspace_config.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_event.dart';
+import 'package:desktop/app/cockpit/data/telemetry/otlp_receiver.dart';
+import 'package:desktop/app/cockpit/data/telemetry/telemetry_workspace_config.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _Sink implements OtlpSink {

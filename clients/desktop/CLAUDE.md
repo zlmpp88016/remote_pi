@@ -4,8 +4,8 @@ Cliente **desktop** (macOS first) do Remote Pi. GUI multi-pane **terminal-first*
 workspaces à esquerda, panes de terminal/arquivos/bancos no centro, árvore de
 arquivos à direita. Os agentes (Claude Code, Codex, Pi) rodam **como processos
 dentro de terminais**, com status de turno via hooks. Plano de origem:
-[`../plan/37-desktop-cockpit.md`](../plan/37-desktop-cockpit.md); remoto:
-[`../plan/58-cockpit-remote.md`](../plan/58-cockpit-remote.md).
+[`../../plan/37-desktop-cockpit.md`](../../plan/37-desktop-cockpit.md); remoto:
+[`../../plan/58-cockpit-remote.md`](../../plan/58-cockpit-remote.md).
 
 ## Escopo atual
 
@@ -144,7 +144,7 @@ ui ──► domain ◄── data
 ## Convenções
 
 - **Naming**: arquivos `snake_case.dart`, classes `PascalCase`, widgets `PascalCase`
-- **Imports**: relativos dentro do mesmo feature; absolutos via `package:cockpit/...`
+- **Imports**: relativos dentro do mesmo feature; absolutos via `package:desktop/...`
   quando cruzando features ou camadas
 - **Barrel files**: cada feature/módulo pode expor um `<nome>.dart` agregando os
   símbolos públicos; consumidores externos importam só o barrel
@@ -327,6 +327,6 @@ await viewModel.spawnAgent().onSuccess((_) {
 ## Modo orquestrado
 
 Se receber um prompt começando com `[ORCH:<task-id>]`, leia
-[`../.orchestration/INSTRUCTIONS.md`](../.orchestration/INSTRUCTIONS.md) antes de
+[`../../.orchestration/INSTRUCTIONS.md`](../../.orchestration/INSTRUCTIONS.md) antes de
 qualquer outra ação. Esse marker indica que outro agente está coordenando o
 trabalho e tem regras específicas (onde escrever resultado, não comitar, etc).

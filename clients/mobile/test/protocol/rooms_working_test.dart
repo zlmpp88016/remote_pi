@@ -4,7 +4,7 @@
 // Pi-extension) to every room subscriber, so Home can light the blue dot on
 // any session — not just the connected one.
 
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

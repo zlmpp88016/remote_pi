@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
 
-import 'package:cockpit/app/cockpit/domain/contracts/content_searcher.dart';
-import 'package:cockpit/app/cockpit/domain/entities/content_search.dart';
+import 'package:desktop/app/cockpit/domain/contracts/content_searcher.dart';
+import 'package:desktop/app/cockpit/domain/entities/content_search.dart';
 
 /// Find-in-files em **Dart puro**, rodando o walk + grep num [Isolate] pra não
 /// travar a UI. Emite [FileMatches] incrementalmente (um por arquivo) e aborta o

@@ -1,8 +1,8 @@
-import 'package:cockpit/app/cockpit/domain/entities/remote_host.dart';
-import 'package:cockpit/app/cockpit/ui/remote/ssh_key_picker.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/utils/platform_kind.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_host.dart';
+import 'package:desktop/app/cockpit/ui/remote/ssh_key_picker.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/utils/platform_kind.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

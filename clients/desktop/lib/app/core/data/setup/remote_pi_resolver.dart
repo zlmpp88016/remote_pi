@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cockpit/app/core/utils/executable_resolver.dart';
+import 'package:desktop/app/core/utils/executable_resolver.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
 /// Helpers de ambiente do usuário: HOME, diretórios app-managed em `~/.cockpit`

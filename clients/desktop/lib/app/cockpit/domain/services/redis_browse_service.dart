@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/cockpit/domain/entities/db_result.dart';
-import 'package:cockpit/app/cockpit/domain/entities/redis_key.dart';
-import 'package:cockpit/app/cockpit/domain/services/db_query_service.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_result.dart';
+import 'package:desktop/app/cockpit/domain/entities/redis_key.dart';
+import 'package:desktop/app/cockpit/domain/services/db_query_service.dart';
 
 /// Operações da tabela Redis (plano 52) sobre o [DbQueryService.redisBatch] —
 /// os comandos são os mesmos que um agente mandaria via `cockpit redis`

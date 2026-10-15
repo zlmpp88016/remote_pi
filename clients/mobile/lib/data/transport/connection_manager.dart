@@ -31,12 +31,12 @@
 
 import 'dart:async';
 
-import 'package:app/data/transport/channel.dart';
-import 'package:app/data/transport/epk_encoding.dart';
-import 'package:app/domain/contracts/service.dart';
-import 'package:app/pairing/storage.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/protocol/uuid7.dart';
+import 'package:mobile/data/transport/channel.dart';
+import 'package:mobile/data/transport/epk_encoding.dart';
+import 'package:mobile/domain/contracts/service.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/protocol/uuid7.dart';
 
 // ---------------------------------------------------------------------------
 // Status model

@@ -1,4 +1,4 @@
-name: cockpit
+name: desktop
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -51,14 +51,14 @@ dependencies:
   # Plano 58 (Cockpit Remote): contratos compartilhados + proxies do
   # cockpit-server. O app NUNCA importa cockpit_engine (guardrail mobile:
   # código nativo só existe no servidor).
-  cockpit_core:
-    path: packages/cockpit_core
-  cockpit_remote:
-    path: packages/cockpit_remote
+  desktop_core:
+    path: packages/desktop_core
+  desktop_remote:
+    path: packages/desktop_remote
   # Segura o sleep por inatividade da máquina (botão "Keep awake" no rodapé
   # do rail). Dart puro, desktop-only, no-op em iPad/Android.
-  cockpit_keepawake:
-    path: packages/cockpit_keepawake
+  desktop_keepawake:
+    path: packages/desktop_keepawake
 
   # Parse dos layouts `.ckp` (orquestração de panes) — YAML puro-Dart.
   yaml: ^3.1.2
@@ -134,9 +134,9 @@ dependencies:
   # vendor: quiver (+ meta via SDK).
   quiver: ^3.0.0
   # PTY nativo (ConPTY/forkpty) — plugin interno absorvido do fork
-  # jacobaraujo7/kyroon_pty v1.0.6 (ver plugins/cockpit_pty/pubspec.yaml).
-  cockpit_pty:
-    path: plugins/cockpit_pty
+  # jacobaraujo7/kyroon_pty v1.0.6 (ver plugins/desktop_pty/pubspec.yaml).
+  desktop_pty:
+    path: plugins/desktop_pty
 
   # Motor VT alternativo baseado no Ghostty. `libghostty` fornece os bindings
   # nativos e `flterm` a view Flutter oficial do mesmo repositório. Pins exatos:

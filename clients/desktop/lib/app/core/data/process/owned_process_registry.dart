@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cockpit/app/core/utils/user_home.dart';
+import 'package:desktop/app/core/utils/user_home.dart';
 
 /// Persiste PIDs de processos filhos sem misturar instâncias do Cockpit.
 ///

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/cockpit/domain/entities/db_result.dart';
-import 'package:cockpit/app/cockpit/domain/services/db_query_service.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_result.dart';
+import 'package:desktop/app/cockpit/domain/services/db_query_service.dart';
 
 /// Operações do collection browser Mongo (plano 53) sobre o
 /// [DbQueryService.mongoCommand] — mesmos `runCommand` que um agente mandaria

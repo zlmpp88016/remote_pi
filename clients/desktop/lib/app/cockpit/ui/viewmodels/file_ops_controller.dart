@@ -1,9 +1,9 @@
 import 'dart:io' show FileSystemEntity, FileSystemEntityType;
 
-import 'package:cockpit/app/cockpit/domain/contracts/file_system_mutator.dart';
-import 'package:cockpit/app/core/domain/exceptions/file_operation_error.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
+import 'package:desktop/app/cockpit/domain/contracts/file_system_mutator.dart';
+import 'package:desktop/app/core/domain/exceptions/file_operation_error.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
 import 'package:flutter/foundation.dart';
 
 /// Mutação de arquivos pela árvore (criar, renomear, mover, deletar) e o

@@ -1,4 +1,4 @@
-import 'package:app/routing/adaptive.dart';
+import 'package:mobile/routing/adaptive.dart';
 import 'package:flutter/material.dart';
 
 /// Tablet split-view fix: the Quick Actions sheet is a modal route on the

@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/entities/layout_spec.dart';
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/cockpit/domain/entities/layout_spec.dart';
+import 'package:desktop/app/core/domain/result.dart';
 import 'package:yaml/yaml.dart';
 
 /// Parser **puro** do `.ckp` (o YAML de orquestração de panes): texto entra,

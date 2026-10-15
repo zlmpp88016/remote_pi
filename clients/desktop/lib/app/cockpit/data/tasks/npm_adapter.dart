@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/task_adapter.dart';
-import 'package:cockpit/app/cockpit/data/tasks/project_paths.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_adapter.dart';
+import 'package:desktop/app/cockpit/data/tasks/project_paths.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
 
 /// Detecta tasks de projetos Node: cada chave de `package.json > scripts` vira
 /// uma task `npm run <script>`. Genérico — não conhece Vite/Next/etc; a

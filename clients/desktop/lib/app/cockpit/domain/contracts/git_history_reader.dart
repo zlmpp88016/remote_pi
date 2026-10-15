@@ -1,7 +1,7 @@
-import 'package:cockpit/app/cockpit/domain/entities/git_history_commit.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_history_file_change.dart';
-import 'package:cockpit/app/cockpit/domain/exceptions/git_history_error.dart';
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_history_commit.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_history_file_change.dart';
+import 'package:desktop/app/cockpit/domain/exceptions/git_history_error.dart';
+import 'package:desktop/app/core/domain/result.dart';
 
 /// Le commits estruturados para a visualizacao History.
 abstract class GitHistoryReader {

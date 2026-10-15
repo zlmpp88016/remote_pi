@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/data/process/owned_process_registry.dart';
-import 'package:cockpit/app/core/utils/user_home.dart';
+import 'package:desktop/app/core/data/process/owned_process_registry.dart';
+import 'package:desktop/app/core/utils/user_home.dart';
 
 /// Registro persistente de PIDs dos language servers (LSP) ativos.
 ///

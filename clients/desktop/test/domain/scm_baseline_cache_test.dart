@@ -1,6 +1,6 @@
-import 'package:cockpit/app/cockpit/domain/contracts/git_head_baseline_reader.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_head_baseline.dart';
-import 'package:cockpit/app/cockpit/domain/services/scm_baseline_cache.dart';
+import 'package:desktop/app/cockpit/domain/contracts/git_head_baseline_reader.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_head_baseline.dart';
+import 'package:desktop/app/cockpit/domain/services/scm_baseline_cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeReader implements GitHeadBaselineReader {

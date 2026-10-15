@@ -1,8 +1,8 @@
 // Plan/32 follow-up — the Quick Actions sheet must close when the tablet's
 // selected session changes out from under it.
 
-import 'package:app/routing/adaptive.dart';
-import 'package:app/ui/chat/quick_actions/widgets/dismiss_on_session_change.dart';
+import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/chat/quick_actions/widgets/dismiss_on_session_change.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

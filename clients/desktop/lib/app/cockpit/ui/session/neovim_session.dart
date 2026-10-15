@@ -1,11 +1,11 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_gateway.dart';
-import 'package:cockpit/app/cockpit/ui/session/terminal_session.dart';
-import 'package:cockpit/app/core/domain/contracts/neovim_gateway.dart';
-import 'package:cockpit/app/core/domain/entities/terminal_profile.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/domain/exceptions/neovim_error.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_gateway.dart';
+import 'package:desktop/app/cockpit/ui/session/terminal_session.dart';
+import 'package:desktop/app/core/domain/contracts/neovim_gateway.dart';
+import 'package:desktop/app/core/domain/entities/terminal_profile.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/domain/exceptions/neovim_error.dart';
 
 /// TUI do Neovim hospedada no terminal do Cockpit, com servidor RPC próprio.
 class NeovimSession extends TerminalSession {

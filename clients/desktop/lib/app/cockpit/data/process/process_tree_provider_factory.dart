@@ -1,12 +1,12 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/process/linux_process_tree_provider.dart';
-import 'package:cockpit/app/cockpit/data/process/macos_process_tree_provider.dart';
-import 'package:cockpit/app/cockpit/data/process/windows_process_tree_provider.dart';
-import 'package:cockpit/app/cockpit/data/process/wsl_process_tree_provider.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/process_tree_provider.dart';
-import 'package:cockpit/app/cockpit/domain/services/terminal_harness_monitor.dart';
-import 'package:cockpit/app/core/ui/window_activity_controller.dart';
+import 'package:desktop/app/cockpit/data/process/linux_process_tree_provider.dart';
+import 'package:desktop/app/cockpit/data/process/macos_process_tree_provider.dart';
+import 'package:desktop/app/cockpit/data/process/windows_process_tree_provider.dart';
+import 'package:desktop/app/cockpit/data/process/wsl_process_tree_provider.dart';
+import 'package:desktop/app/cockpit/domain/contracts/process_tree_provider.dart';
+import 'package:desktop/app/cockpit/domain/services/terminal_harness_monitor.dart';
+import 'package:desktop/app/core/ui/window_activity_controller.dart';
 
 /// Host-native process inspector for the current platform.
 ProcessTreeProvider createHostProcessTreeProvider() {

@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/data/remote/dartssh_host_connection.dart';
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop/app/cockpit/data/remote/dartssh_host_connection.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 import 'package:dartssh2/dartssh2.dart';
 
 /// [DartSshHostConnection] rodando numa **isolate própria** (a fachada que o

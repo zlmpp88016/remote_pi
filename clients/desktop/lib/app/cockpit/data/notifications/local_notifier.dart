@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/notifier.dart';
-import 'package:cockpit/app/core/domain/entities/sound_event.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/contracts/notifier.dart';
+import 'package:desktop/app/core/domain/entities/sound_event.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:media_kit/media_kit.dart';
 

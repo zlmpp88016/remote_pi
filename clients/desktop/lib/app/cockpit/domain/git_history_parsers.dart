@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/entities/git_history_commit.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_history_file_change.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_history_commit.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_history_file_change.dart';
 
 /// Parsers puros do `git log`/`git show` — no dominio porque o caminho local
 /// (`GitHistoryReaderImpl`) e o remoto (host via `git.run`, plano 58) alimentam

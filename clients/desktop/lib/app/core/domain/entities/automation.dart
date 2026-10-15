@@ -1,8 +1,8 @@
-import 'package:cockpit/app/core/domain/entities/harness.dart';
+import 'package:desktop/app/core/domain/entities/harness.dart';
 
 // Quem fala de automação fala de [HarnessKind] — reexportado para não obrigar
 // dois imports em cada arquivo.
-export 'package:cockpit/app/core/domain/entities/harness.dart';
+export 'package:desktop/app/core/domain/entities/harness.dart';
 
 /// Id do modelo de roteamento automático. Quando o harness oferece esse modo,
 /// ele é o padrão: é o único id que nunca quebra por diferença de plano.

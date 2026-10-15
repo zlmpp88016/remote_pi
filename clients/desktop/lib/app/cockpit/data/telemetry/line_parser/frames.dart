@@ -7,9 +7,9 @@ import 'package:path/path.dart' as p;
 
 import '../../../domain/entities/telemetry_event.dart';
 
-// Dart/Flutter: `#1      CartService.add (package:app/cart/cart_service.dart:87:22)`
+// Dart/Flutter: `#1      CartService.add (package:mobile/cart/cart_service.dart:87:22)`
 final _dart = RegExp(r'^#\d+\s+(.+?)\s+\((.+?)(?::(\d+))?(?::(\d+))?\)\s*$');
-// Dart test runner: `package:app/cart/cart_service.dart 87:22  CartService.add`
+// Dart test runner: `package:mobile/cart/cart_service.dart 87:22  CartService.add`
 final _dartTest = RegExp(
   r'^\s*((?:package:|dart:|file:|/|[A-Za-z]:\\)?\S+\.dart)\s+(\d+)(?::(\d+))?\s+(.+)$',
 );
@@ -139,7 +139,7 @@ bool isProjectFile(
   return !rel.startsWith('..');
 }
 
-/// Caminho curto pra UI/fingerprint: `package:app/x.dart` → `lib/x.dart`,
+/// Caminho curto pra UI/fingerprint: `package:mobile/x.dart` → `lib/x.dart`,
 /// absoluto sob uma root → relativo à root, `./src/x` → `src/x`.
 String normalizeProjectPath(String file, List<String> projectRoots) {
   var f = file;

@@ -1,13 +1,13 @@
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/domain/entities/file_node.dart';
-import 'package:cockpit/app/cockpit/ui/session/file_viewer_session.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
-import 'package:cockpit/app/core/data/lsp/lsp_text_edit.dart';
-import 'package:cockpit/app/core/domain/entities/lsp_diagnostic.dart';
-import 'package:cockpit/app/core/domain/entities/lsp_semantic_tokens.dart';
-import 'package:cockpit/app/core/domain/exceptions/file_operation_error.dart';
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_node.dart';
+import 'package:desktop/app/cockpit/ui/session/file_viewer_session.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
+import 'package:desktop/app/core/data/lsp/lsp_text_edit.dart';
+import 'package:desktop/app/core/domain/entities/lsp_diagnostic.dart';
+import 'package:desktop/app/core/domain/entities/lsp_semantic_tokens.dart';
+import 'package:desktop/app/core/domain/exceptions/file_operation_error.dart';
+import 'package:desktop/app/core/domain/result.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 

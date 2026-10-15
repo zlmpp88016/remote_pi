@@ -1,9 +1,9 @@
-import 'package:cockpit/app/core/terminal/xterm/xterm.dart';
-import 'package:cockpit/app/core/ui/themes/app_colors.dart';
-import 'package:cockpit/app/core/ui/themes/syntax_colors.dart';
-import 'package:cockpit/app/core/ui/themes/terminal_theme.dart';
-import 'package:cockpit/app/core/ui/themes/theme_codec.dart';
-import 'package:cockpit/app/core/ui/themes/theme_spec.dart';
+import 'package:desktop/app/core/terminal/xterm/xterm.dart';
+import 'package:desktop/app/core/ui/themes/app_colors.dart';
+import 'package:desktop/app/core/ui/themes/syntax_colors.dart';
+import 'package:desktop/app/core/ui/themes/terminal_theme.dart';
+import 'package:desktop/app/core/ui/themes/theme_codec.dart';
+import 'package:desktop/app/core/ui/themes/theme_spec.dart';
 import 'package:flutter/widgets.dart';
 
 /// Id do tema que sempre existe. Persistir um id (e não um enum) é o que abre

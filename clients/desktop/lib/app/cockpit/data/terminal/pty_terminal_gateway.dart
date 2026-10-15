@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_gateway.dart';
-import 'package:cockpit/app/core/domain/entities/terminal_profile.dart';
-import 'package:cockpit/app/core/utils/spawn_directory.dart';
-import 'package:cockpit_pty/cockpit_pty.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_gateway.dart';
+import 'package:desktop/app/core/domain/entities/terminal_profile.dart';
+import 'package:desktop/app/core/utils/spawn_directory.dart';
+import 'package:desktop_pty/cockpit_pty.dart';
 
 /// PTY nativo via `kyroon_pty`. Roda o `{executable, args}` do
 /// [TerminalProfile] recebido num pseudo-terminal — **qual** shell abrir é

@@ -4,9 +4,9 @@
 // image_picker's Windows implementation throws a StateError on
 // ImageSource.camera. Pairing on those devices is paste-only (plan/68).
 
-import 'package:app/domain/value_objects/device_capabilities.dart';
-import 'package:app/routing/adaptive.dart';
-import 'package:app/ui/chat/widgets/attach_sheet.dart';
+import 'package:mobile/domain/value_objects/device_capabilities.dart';
+import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/chat/widgets/attach_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';

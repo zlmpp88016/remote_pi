@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cockpit/app/core/utils/remote_path.dart';
+import 'package:desktop/app/core/utils/remote_path.dart';
 
 /// Nome do arquivo de variáveis de ambiente por workspace.
 ///

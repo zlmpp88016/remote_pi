@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/data/remote/remote_worktree_gateway.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_worktree_gateway.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

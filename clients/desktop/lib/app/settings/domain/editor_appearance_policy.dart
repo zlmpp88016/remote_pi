@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
 
 /// Visibilidade das opções que controlam o editor integrado. O tamanho de
 /// código continua exposto quando ainda é a fonte do tamanho do terminal.

@@ -11,9 +11,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:app/pairing/pair_payload.dart';
-import 'package:app/pairing/pair_request_flow.dart';
-import 'package:app/pairing/storage.dart';
+import 'package:mobile/pairing/pair_payload.dart';
+import 'package:mobile/pairing/pair_request_flow.dart';
+import 'package:mobile/pairing/storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _Q {

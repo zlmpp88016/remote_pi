@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:app/data/actions/actions_repository.dart';
-import 'package:app/data/images/image_picker_service.dart';
-import 'package:app/domain/session_state.dart';
-import 'package:app/ui/chat/attachment/states/attachment_state.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/data/actions/actions_repository.dart';
+import 'package:mobile/data/images/image_picker_service.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/ui/chat/attachment/states/attachment_state.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
 
 /// Plan/30 — drives image attachment for the composer.
 ///

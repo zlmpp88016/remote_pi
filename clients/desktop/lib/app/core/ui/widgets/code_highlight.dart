@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/domain/entities/lsp_diagnostic.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/domain/entities/lsp_diagnostic.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
 import 'package:flutter/widgets.dart';
 import 'package:highlight/highlight.dart' as hl;
 

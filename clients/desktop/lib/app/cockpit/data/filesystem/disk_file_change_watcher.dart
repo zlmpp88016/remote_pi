@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/file_change_watcher.dart';
+import 'package:desktop/app/cockpit/domain/contracts/file_change_watcher.dart';
 
 /// [FileChangeWatcher] do disco local (`dart:io`). Três camadas, cada uma
 /// cobrindo o buraco da anterior:

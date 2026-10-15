@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/filesystem/git_binary.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/git_command_runner.dart';
-import 'package:cockpit/app/core/data/setup/remote_pi_resolver.dart';
+import 'package:desktop/app/cockpit/data/filesystem/git_binary.dart';
+import 'package:desktop/app/cockpit/domain/contracts/git_command_runner.dart';
+import 'package:desktop/app/core/data/setup/remote_pi_resolver.dart';
 
 /// Roda comandos `git` via `Process.start` pra **streaming ao vivo** (stdout e
 /// stderr mesclados por linha). O caminho do `git` vem do [GitBinary]

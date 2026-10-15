@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
 import 'package:flutter/services.dart';
 
 /// Seletor de **pasta** nativo, unificado por plataforma.

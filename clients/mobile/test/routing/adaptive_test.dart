@@ -6,7 +6,7 @@
 //   3. The StatefulShellRoute + navigatorContainerBuilder layout decision:
 //      wide → master + detail side by side; narrow → only the active branch.
 
-import 'package:app/routing/adaptive.dart';
+import 'package:mobile/routing/adaptive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';

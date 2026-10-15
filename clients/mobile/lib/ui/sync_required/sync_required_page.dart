@@ -1,8 +1,8 @@
 import 'dart:io' show Platform;
 
-import 'package:app/config/dependencies.dart';
-import 'package:app/pairing/owner_identity_bridge.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/config/dependencies.dart';
+import 'package:mobile/pairing/owner_identity_bridge.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';

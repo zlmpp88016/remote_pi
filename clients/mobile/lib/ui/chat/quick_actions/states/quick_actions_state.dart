@@ -1,4 +1,4 @@
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 
 /// Plan/28 Wave C — state for the Quick Actions bottom sheet ViewModel.
 ///

@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/domain/exceptions/file_operation_error.dart';
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/core/domain/exceptions/file_operation_error.dart';
+import 'package:desktop/app/core/domain/result.dart';
 
 /// Mutação da árvore de arquivos: criar, renomear/mover e mandar pra lixeira.
 /// Contraparte de escrita do [FileSystemReader] (leitura). Impl (dart:io +

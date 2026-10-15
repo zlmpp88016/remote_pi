@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cockpit/app/core/data/process/owned_process_registry.dart';
+import 'package:desktop/app/core/data/process/owned_process_registry.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

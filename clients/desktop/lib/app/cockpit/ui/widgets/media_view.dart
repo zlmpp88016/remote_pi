@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:cockpit/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Áudio ou vídeo — define se há superfície de vídeo.

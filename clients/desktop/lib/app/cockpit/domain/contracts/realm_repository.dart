@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/realm.dart';
+import 'package:desktop/app/cockpit/domain/entities/realm.dart';
 
 /// Persistência dos realms (conjuntos de workspaces). Contrato no domínio; a
 /// implementação concreta (Hive) mora em `data/`.

@@ -5,10 +5,10 @@
 
 import 'dart:async';
 
-import 'package:app/data/local/boxes.dart';
-import 'package:app/data/local/records/message_record.dart';
-import 'package:app/data/local/records/runtime_record.dart';
-import 'package:app/domain/contracts/repository.dart';
+import 'package:mobile/data/local/boxes.dart';
+import 'package:mobile/data/local/records/message_record.dart';
+import 'package:mobile/data/local/records/runtime_record.dart';
+import 'package:mobile/domain/contracts/repository.dart';
 
 class SessionReadRepository extends Repository {
   SessionReadRepository(this._boxes);

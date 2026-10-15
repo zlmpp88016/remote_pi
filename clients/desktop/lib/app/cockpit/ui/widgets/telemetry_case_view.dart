@@ -2,16 +2,16 @@
 // tipo, mensagem, id, status, blame), ações, stats e as seções Stack,
 // Log correlacionado, Ocorrências por run e Contexto cru. Espelha o mockup.
 
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_case.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_event.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_run.dart';
-import 'package:cockpit/app/cockpit/ui/session/telemetry_case_session.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/telemetry_viewmodel.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_case.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_event.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_run.dart';
+import 'package:desktop/app/cockpit/ui/session/telemetry_case_session.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/telemetry_viewmodel.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';

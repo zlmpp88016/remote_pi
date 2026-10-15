@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/data/remote/mobile_ssh_key_store.dart';
+import 'package:desktop/app/cockpit/data/remote/mobile_ssh_key_store.dart';
 import 'package:dartssh2/dartssh2.dart';
 import 'package:flutter_test/flutter_test.dart';
 

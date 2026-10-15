@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/db/db_connection_store_impl.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/data/db/db_connection_store_impl.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Salvar uma conexão fazia ela pular de lugar: a gravação anexava a editada no

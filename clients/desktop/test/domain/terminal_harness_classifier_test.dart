@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/domain/entities/harness.dart';
-import 'package:cockpit/app/cockpit/domain/services/terminal_harness_classifier.dart';
+import 'package:desktop/app/core/domain/entities/harness.dart';
+import 'package:desktop/app/cockpit/domain/services/terminal_harness_classifier.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

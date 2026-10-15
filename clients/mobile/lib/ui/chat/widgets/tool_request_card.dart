@@ -1,6 +1,6 @@
-import 'package:app/domain/session_state.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 
 // Inline tool execution card that appears in the chat flow.

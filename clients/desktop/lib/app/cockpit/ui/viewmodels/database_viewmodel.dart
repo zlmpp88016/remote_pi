@@ -1,14 +1,14 @@
-import 'package:cockpit_core/cockpit_core.dart';
+import 'package:desktop_core/cockpit_core.dart';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/services/db_query_service.dart';
-import 'package:cockpit/app/cockpit/domain/entities/redis_key.dart';
-import 'package:cockpit/app/cockpit/domain/services/mongo_browse_service.dart';
-import 'package:cockpit/app/cockpit/domain/services/redis_browse_service.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/db_connection_store.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/remote_db_writer.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_result.dart';
+import 'package:desktop/app/cockpit/domain/services/db_query_service.dart';
+import 'package:desktop/app/cockpit/domain/entities/redis_key.dart';
+import 'package:desktop/app/cockpit/domain/services/mongo_browse_service.dart';
+import 'package:desktop/app/cockpit/domain/services/redis_browse_service.dart';
+import 'package:desktop/app/cockpit/domain/contracts/db_connection_store.dart';
+import 'package:desktop/app/cockpit/domain/contracts/remote_db_writer.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_result.dart';
 import 'package:flutter/foundation.dart';
 
 /// Uma coluna de tabela na árvore de schema do painel.

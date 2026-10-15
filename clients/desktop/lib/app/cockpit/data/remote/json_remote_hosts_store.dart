@@ -1,7 +1,7 @@
-import 'package:cockpit/app/cockpit/domain/contracts/remote_hosts_store.dart';
-import 'package:cockpit/app/cockpit/domain/entities/remote_host.dart';
-import 'package:cockpit/app/cockpit/domain/entities/remote_workspace_pin.dart';
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/cockpit/domain/contracts/remote_hosts_store.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_host.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_workspace_pin.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
 
 /// Hosts remotos no store JSON de estado (mesmo mecanismo pós-Hive).
 class JsonRemoteHostsStore implements RemoteHostsStore {

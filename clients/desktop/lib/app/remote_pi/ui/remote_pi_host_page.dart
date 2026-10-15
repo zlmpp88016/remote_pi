@@ -1,11 +1,11 @@
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/app/core/ui/widgets/window_controls.dart';
-import 'package:cockpit/app/remote_pi/domain/entities/host_protocol.dart';
-import 'package:cockpit/app/remote_pi/ui/host_error_message.dart';
-import 'package:cockpit/app/remote_pi/ui/viewmodels/remote_pi_host_viewmodel.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/app/core/ui/widgets/window_controls.dart';
+import 'package:desktop/app/remote_pi/domain/entities/host_protocol.dart';
+import 'package:desktop/app/remote_pi/ui/host_error_message.dart';
+import 'package:desktop/app/remote_pi/ui/viewmodels/remote_pi_host_viewmodel.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

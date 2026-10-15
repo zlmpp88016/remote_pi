@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cockpit/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

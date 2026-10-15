@@ -4,7 +4,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:cockpit/app/core/data/diagnostics/linux_performance_diagnostics.dart';
+import 'package:desktop/app/core/data/diagnostics/linux_performance_diagnostics.dart';
 
 /// Orça o trabalho de todos os PTYs do app de forma global e justa.
 ///

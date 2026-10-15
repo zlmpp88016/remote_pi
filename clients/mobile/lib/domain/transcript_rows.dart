@@ -4,7 +4,7 @@
 // messages. Collapsing consecutive tool events into one row lets the UI show a
 // single summary line with the detail one tap away.
 
-import 'package:app/domain/session_state.dart';
+import 'package:mobile/domain/session_state.dart';
 
 /// One rendered row in the transcript.
 sealed class TranscriptRow {

@@ -14,7 +14,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/utils/coalescing_single_flight.dart';
+import 'package:desktop/app/cockpit/domain/utils/coalescing_single_flight.dart';
 
 const _burstTriggers = 1000;
 const _slowRefresh = Duration(milliseconds: 20);

@@ -7,7 +7,7 @@
 // árvore de arquivos com N roots + badge git por root, escolha de root no "+",
 // e os dois dialogs (detecção na criação e "Manage roots…").
 // Nada aqui tem lógica: dados fake, callbacks abrem só os dialogs mock.
-import 'package:cockpit/app/core/ui/themes/app_colors.dart';
+import 'package:desktop/app/core/ui/themes/app_colors.dart';
 import 'package:flutter/material.dart';
 
 const AppColors _c = AppColors.dark;

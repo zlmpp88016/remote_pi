@@ -2,9 +2,9 @@ import 'dart:io' show File;
 
 import 'dart:async';
 
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/i18n/strings.g.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/i18n/strings.g.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
 // `gpt_markdown` é um pacote Material: estiliza headings/links/code via
 // `Theme.of(context)` Material + uma `GptMarkdownThemeData` (ThemeExtension do
 // Material). Sob `ShadcnApp` não há Theme Material → ele cai no ThemeData()
@@ -13,8 +13,8 @@ import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
 import 'package:flutter/material.dart' as m;
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:gpt_markdown/gpt_markdown.dart';
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
-import 'package:cockpit/app/core/ui/widgets/markdown_frontmatter.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/app/core/ui/widgets/markdown_frontmatter.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Renderiza o Markdown (GFM + code) da resposta do agente, com a identidade

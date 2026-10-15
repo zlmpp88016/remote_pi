@@ -1,15 +1,15 @@
 import 'dart:async';
 
-import 'package:app/config/dependencies.dart';
-import 'package:app/data/actions/actions_repository.dart' show ActionFailure;
-import 'package:app/protocol/protocol.dart';
-import 'package:app/routing/adaptive.dart';
-import 'package:app/ui/core/themes/themes.dart';
-import 'package:app/ui/chat/quick_actions/states/quick_actions_state.dart';
-import 'package:app/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
-import 'package:app/ui/chat/quick_actions/widgets/dismiss_on_session_change.dart';
-import 'package:app/ui/chat/quick_actions/widgets/model_picker_sheet.dart';
-import 'package:app/ui/chat/viewmodels/chat_viewmodel.dart';
+import 'package:mobile/config/dependencies.dart';
+import 'package:mobile/data/actions/actions_repository.dart' show ActionFailure;
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
+import 'package:mobile/ui/chat/quick_actions/states/quick_actions_state.dart';
+import 'package:mobile/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
+import 'package:mobile/ui/chat/quick_actions/widgets/dismiss_on_session_change.dart';
+import 'package:mobile/ui/chat/quick_actions/widgets/model_picker_sheet.dart';
+import 'package:mobile/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';

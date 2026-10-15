@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/core/domain/result.dart';
 
 /// Instala (idempotente) os hooks de ciclo de vida do Cockpit na configuração
 /// de um harness de agente, e garante que a CLI `cockpit` (que absorveu o

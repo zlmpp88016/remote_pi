@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:app/data/mesh/mesh_client.dart';
-import 'package:app/data/mesh/mesh_envelope.dart';
+import 'package:mobile/data/mesh/mesh_client.dart';
+import 'package:mobile/data/mesh/mesh_envelope.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 

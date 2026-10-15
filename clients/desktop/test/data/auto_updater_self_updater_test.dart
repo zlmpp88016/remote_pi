@@ -1,7 +1,7 @@
 import 'package:auto_updater/auto_updater.dart';
-import 'package:cockpit/app/cockpit/data/update/auto_updater_self_updater.dart';
-import 'package:cockpit/app/cockpit/data/update/noop_self_updater.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/self_updater.dart';
+import 'package:desktop/app/cockpit/data/update/auto_updater_self_updater.dart';
+import 'package:desktop/app/cockpit/data/update/noop_self_updater.dart';
+import 'package:desktop/app/cockpit/domain/contracts/self_updater.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

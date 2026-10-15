@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:app/ui/core/themes/app_colors.dart';
-import 'package:app/ui/core/themes/app_typography.dart';
+import 'package:mobile/ui/core/themes/app_colors.dart';
+import 'package:mobile/ui/core/themes/app_typography.dart';
 
 /// Builds the [ThemeData] for a given [AppColors] / [AppTypography] pair.
 ///

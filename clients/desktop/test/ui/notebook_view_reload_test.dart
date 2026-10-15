@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/domain/entities/file_node.dart';
-import 'package:cockpit/app/cockpit/ui/session/document_host.dart';
-import 'package:cockpit/app/cockpit/ui/session/notebook_session.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/notebook_view.dart';
-import 'package:cockpit/app/core/domain/exceptions/file_operation_error.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/markdown_editing_controller.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_node.dart';
+import 'package:desktop/app/cockpit/ui/session/document_host.dart';
+import 'package:desktop/app/cockpit/ui/session/notebook_session.dart';
+import 'package:desktop/app/cockpit/ui/widgets/notebook_view.dart';
+import 'package:desktop/app/core/domain/exceptions/file_operation_error.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/markdown_editing_controller.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

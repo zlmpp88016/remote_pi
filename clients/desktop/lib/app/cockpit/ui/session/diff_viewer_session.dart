@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/entities/file_diff.dart';
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_diff.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
 
 /// Uma aba de **diff** read-only (split, estilo VSCode): mostra o arquivo em
 /// [path] comparado com o HEAD do git. Sem ações — só visual. O conteúdo

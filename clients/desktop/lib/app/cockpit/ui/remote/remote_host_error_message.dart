@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/data/remote/remote_host_connector.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_host_connector.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/widgets.dart';
 
 /// Traduz um [RemoteHostException] para a frase mostrada ao usuário (plano 58,

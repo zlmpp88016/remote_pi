@@ -1,8 +1,8 @@
 import 'dart:collection';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/process_tree_provider.dart';
-import 'package:cockpit/app/cockpit/domain/entities/process_snapshot.dart';
+import 'package:desktop/app/cockpit/domain/contracts/process_tree_provider.dart';
+import 'package:desktop/app/cockpit/domain/entities/process_snapshot.dart';
 
 class LinuxProcessTreeProvider implements ProcessTreeProvider {
   final Directory procDir;

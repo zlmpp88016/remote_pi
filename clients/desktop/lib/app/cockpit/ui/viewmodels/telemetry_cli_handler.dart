@@ -9,13 +9,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Process;
 
-import 'package:cockpit/app/cockpit/domain/contracts/telemetry_ingest.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/telemetry_store.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_status_server.dart';
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_case.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_event.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_run.dart';
+import 'package:desktop/app/cockpit/domain/contracts/telemetry_ingest.dart';
+import 'package:desktop/app/cockpit/domain/contracts/telemetry_store.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_status_server.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_case.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_event.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_run.dart';
 
 /// Teto de bytes de uma resposta (o agente nunca recebe 2000 linhas).
 const kTelemetryReplyCap = 16 * 1024;

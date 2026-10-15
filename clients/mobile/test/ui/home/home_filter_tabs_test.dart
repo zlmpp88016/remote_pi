@@ -2,8 +2,8 @@
 // the per-tab empty state. Pure view widgets; `context.colors` falls back to
 // the dark palette outside the themed tree, so a bare MaterialApp is enough.
 
-import 'package:app/ui/home/states/home_state.dart';
-import 'package:app/ui/home/widgets/home_filter_tabs.dart';
+import 'package:mobile/ui/home/states/home_state.dart';
+import 'package:mobile/ui/home/widgets/home_filter_tabs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

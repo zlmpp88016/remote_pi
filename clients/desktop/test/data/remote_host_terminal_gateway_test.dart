@@ -4,10 +4,10 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/remote/remote_host_connector.dart';
-import 'package:cockpit/app/cockpit/data/remote/remote_host_terminal_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/entities/remote_host.dart';
-import 'package:cockpit/app/core/domain/entities/terminal_profile.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_host_connector.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_host_terminal_gateway.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_host.dart';
+import 'package:desktop/app/core/domain/entities/terminal_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Integração da Wave 2 (plano 58): o gateway de terminal REMOTO, via túnel

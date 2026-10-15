@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/domain/entities/lsp_diagnostic.dart';
-import 'package:cockpit/app/core/ui/themes/theme_codec.dart';
+import 'package:desktop/app/core/domain/entities/lsp_diagnostic.dart';
+import 'package:desktop/app/core/ui/themes/theme_codec.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/widgets.dart';
 

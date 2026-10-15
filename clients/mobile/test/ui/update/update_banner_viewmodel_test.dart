@@ -1,9 +1,9 @@
-import 'package:app/domain/contracts/dismissed_update_store.dart';
-import 'package:app/domain/contracts/update_checker.dart';
-import 'package:app/domain/contracts/url_opener.dart';
-import 'package:app/domain/entities/update_info.dart';
-import 'package:app/ui/update/states/update_banner_state.dart';
-import 'package:app/ui/update/viewmodels/update_banner_viewmodel.dart';
+import 'package:mobile/domain/contracts/dismissed_update_store.dart';
+import 'package:mobile/domain/contracts/update_checker.dart';
+import 'package:mobile/domain/contracts/url_opener.dart';
+import 'package:mobile/domain/entities/update_info.dart';
+import 'package:mobile/ui/update/states/update_banner_state.dart';
+import 'package:mobile/ui/update/viewmodels/update_banner_viewmodel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // ── Hand-written fakes (no mocktail in this repo) ──────────────────────────

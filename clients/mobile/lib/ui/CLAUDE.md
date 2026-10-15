@@ -19,7 +19,7 @@ use cases para refletir o estado da aplicação por feature.
    fonte) vive em [`core/themes/`](core/themes/themes.dart). **Nunca** hardcode
    `Color(0x…)`, `Colors.*` ou `TextStyle(fontFamily: …)` num widget: leia via
    `context.colors.<token>` e `context.typo.<estilo>` (import do barrel
-   `package:app/ui/core/themes/themes.dart`). Cores semânticas novas entram em
+   `package:mobile/ui/core/themes/themes.dart`). Cores semânticas novas entram em
    `AppColors` (dark + light), estilos de texto em `AppTypography`, e a família
    da fonte é a constante `kMonoFamily`. Exceções permitidas: scrims/overlays
    independentes de tema (`Colors.black.withValues(...)` como `barrierColor`,

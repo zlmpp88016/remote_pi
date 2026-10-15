@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:app/data/voice/speech_service.dart';
-import 'package:app/ui/chat/voice/states/voice_input_state.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/data/voice/speech_service.dart';
+import 'package:mobile/ui/chat/voice/states/voice_input_state.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
 
 /// Plan 29 — drives the [SpeechService] for hold-to-talk voice input.
 ///

@@ -1,16 +1,16 @@
 import 'dart:io';
 
-import 'package:cockpit/app/bootstrapper.dart';
-import 'package:cockpit/app/cockpit/ui/document/document_window_app.dart';
-import 'package:cockpit/app/cockpit/ui/document/document_windows.dart';
-import 'package:cockpit/app/cockpit/ui/document/open_files_channel.dart';
-import 'package:cockpit/app/cockpit/ui/document/running_instance.dart';
-import 'package:cockpit/app/core/data/diagnostics/diagnostics_log.dart';
-import 'package:cockpit/app/core/data/diagnostics/error_handlers.dart';
-import 'package:cockpit/app/core/data/diagnostics/linux_performance_diagnostics.dart';
-import 'package:cockpit/app/core/ui/widgets/app_error_view.dart';
-import 'package:cockpit/app/core/ui/widgets/error_report_dialog.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/bootstrapper.dart';
+import 'package:desktop/app/cockpit/ui/document/document_window_app.dart';
+import 'package:desktop/app/cockpit/ui/document/document_windows.dart';
+import 'package:desktop/app/cockpit/ui/document/open_files_channel.dart';
+import 'package:desktop/app/cockpit/ui/document/running_instance.dart';
+import 'package:desktop/app/core/data/diagnostics/diagnostics_log.dart';
+import 'package:desktop/app/core/data/diagnostics/error_handlers.dart';
+import 'package:desktop/app/core/data/diagnostics/linux_performance_diagnostics.dart';
+import 'package:desktop/app/core/ui/widgets/app_error_view.dart';
+import 'package:desktop/app/core/ui/widgets/error_report_dialog.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:media_kit/media_kit.dart';

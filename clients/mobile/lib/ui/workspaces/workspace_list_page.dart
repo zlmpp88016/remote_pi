@@ -1,8 +1,8 @@
-import 'package:app/protocol/protocol.dart';
-import 'package:app/routing/adaptive.dart';
-import 'package:app/ui/core/themes/themes.dart';
-import 'package:app/ui/workspaces/states/workspace_list_state.dart';
-import 'package:app/ui/workspaces/viewmodels/workspace_list_viewmodel.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
+import 'package:mobile/ui/workspaces/states/workspace_list_state.dart';
+import 'package:mobile/ui/workspaces/viewmodels/workspace_list_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';

@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/entities/scm_line_decorations.dart';
-import 'package:cockpit/app/cockpit/domain/services/scm_line_decoration_calculator.dart';
+import 'package:desktop/app/cockpit/domain/entities/scm_line_decorations.dart';
+import 'package:desktop/app/cockpit/domain/services/scm_line_decoration_calculator.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 

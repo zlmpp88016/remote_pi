@@ -1,11 +1,11 @@
-import 'package:cockpit/app/cockpit/data/telemetry/line_parser/telemetry_line_parser_impl.dart';
-import 'package:cockpit/app/cockpit/data/telemetry/sqlite_telemetry_store.dart';
-import 'package:cockpit/app/cockpit/data/telemetry/telemetry_db.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/telemetry_line_parser.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/telemetry_store.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_case.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_event.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_run.dart';
+import 'package:desktop/app/cockpit/data/telemetry/line_parser/telemetry_line_parser_impl.dart';
+import 'package:desktop/app/cockpit/data/telemetry/sqlite_telemetry_store.dart';
+import 'package:desktop/app/cockpit/data/telemetry/telemetry_db.dart';
+import 'package:desktop/app/cockpit/domain/contracts/telemetry_line_parser.dart';
+import 'package:desktop/app/cockpit/domain/contracts/telemetry_store.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_case.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_event.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_run.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _flutterBlock = '''
@@ -13,7 +13,7 @@ const _flutterBlock = '''
 The following RangeError was thrown while handling a gesture:
 RangeError (index): Index out of range: index 3, length 2
 When the exception was thrown, this was the stack:
-#0      CartService.add (package:app/cart/cart_service.dart:87:22)
+#0      CartService.add (package:mobile/cart/cart_service.dart:87:22)
 ════════════════════════════════════════''';
 
 /// Alimenta um run com texto passando pelo parser real.
@@ -108,7 +108,7 @@ $_flutterBlock''');
       '''
 Unhandled exception:
 Null check operator used on a null value
-#0      _S.build (package:app/checkout/checkout_page.dart:120:41)''',
+#0      _S.build (package:mobile/checkout/checkout_page.dart:120:41)''',
       at: DateTime(2026, 9, 23, 12, 2),
     );
 

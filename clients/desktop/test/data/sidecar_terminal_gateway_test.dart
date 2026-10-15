@@ -4,9 +4,9 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/terminal/sidecar/sidecar_terminal_connector.dart';
-import 'package:cockpit/app/cockpit/data/terminal/sidecar/sidecar_terminal_gateway_factory.dart';
-import 'package:cockpit/app/core/domain/entities/terminal_profile.dart';
+import 'package:desktop/app/cockpit/data/terminal/sidecar/sidecar_terminal_connector.dart';
+import 'package:desktop/app/cockpit/data/terminal/sidecar/sidecar_terminal_gateway_factory.dart';
+import 'package:desktop/app/core/domain/entities/terminal_profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Integração da Wave 1 (plano 58): o gateway do app servido pelo sidecar

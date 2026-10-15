@@ -3,7 +3,7 @@
 
 import 'dart:io';
 
-import 'package:app/data/voice/speech_service.dart';
+import 'package:mobile/data/voice/speech_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeSttPlugin implements SttPlugin {

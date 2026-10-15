@@ -1,13 +1,13 @@
-import 'package:cockpit/app/cockpit/domain/entities/git_history_commit.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_history_file_change.dart';
-import 'package:cockpit/app/cockpit/domain/exceptions/git_history_error.dart';
-import 'package:cockpit/app/cockpit/domain/utils/coalescing_single_flight.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/ui/activity_periodic_timer.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/window_activity_controller.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_history_commit.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_history_file_change.dart';
+import 'package:desktop/app/cockpit/domain/exceptions/git_history_error.dart';
+import 'package:desktop/app/cockpit/domain/utils/coalescing_single_flight.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/ui/activity_periodic_timer.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/window_activity_controller.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/material.dart';
 
 /// Visualizacao read-only de commits estruturados de uma root git.

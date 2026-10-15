@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_status_server.dart';
-import 'package:cockpit/app/core/data/setup/remote_pi_resolver.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_status_server.dart';
+import 'package:desktop/app/core/data/setup/remote_pi_resolver.dart';
 import 'package:flutter/foundation.dart';
 
 /// [TerminalStatusServer] híbrido por plataforma:

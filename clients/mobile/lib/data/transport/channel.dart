@@ -1,4 +1,4 @@
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 
 /// Abstract channel — testable interface over [PlainPeerChannel].
 abstract class IChannel {

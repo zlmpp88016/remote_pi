@@ -1,14 +1,14 @@
-import 'package:cockpit/app/cockpit/domain/entities/file_view.dart';
-import 'package:cockpit/app/cockpit/domain/entities/kanban_document.dart';
-import 'package:cockpit/app/cockpit/domain/services/kanban_editor.dart';
-import 'package:cockpit/app/cockpit/ui/session/file_viewer_session.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/agent_markdown.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/app_menu.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
-import 'package:cockpit/app/core/utils/user_home.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_view.dart';
+import 'package:desktop/app/cockpit/domain/entities/kanban_document.dart';
+import 'package:desktop/app/cockpit/domain/services/kanban_editor.dart';
+import 'package:desktop/app/cockpit/ui/session/file_viewer_session.dart';
+import 'package:desktop/app/cockpit/ui/widgets/agent_markdown.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/app_menu.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
+import 'package:desktop/app/core/utils/user_home.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/gestures.dart'
     show
         DelayedMultiDragGestureRecognizer,

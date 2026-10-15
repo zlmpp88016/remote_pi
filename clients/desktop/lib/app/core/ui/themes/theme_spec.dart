@@ -1,8 +1,8 @@
-import 'package:cockpit/app/core/terminal/xterm/xterm.dart';
-import 'package:cockpit/app/core/ui/themes/app_colors.dart';
-import 'package:cockpit/app/core/ui/themes/syntax_colors.dart';
-import 'package:cockpit/app/core/ui/themes/terminal_theme.dart';
-import 'package:cockpit/app/core/ui/themes/theme_codec.dart';
+import 'package:desktop/app/core/terminal/xterm/xterm.dart';
+import 'package:desktop/app/core/ui/themes/app_colors.dart';
+import 'package:desktop/app/core/ui/themes/syntax_colors.dart';
+import 'package:desktop/app/core/ui/themes/terminal_theme.dart';
+import 'package:desktop/app/core/ui/themes/theme_codec.dart';
 import 'package:flutter/widgets.dart';
 
 /// As três paletas de **um** brilho: a UI do app, o syntax do viewer e o

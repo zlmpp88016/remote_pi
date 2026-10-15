@@ -1,4 +1,4 @@
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 
 /// Post-pair nickname modal (plan/27 Wave A).

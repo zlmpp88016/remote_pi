@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/remote_pi/domain/entities/pairing_code.dart';
+import 'package:desktop/app/remote_pi/domain/entities/pairing_code.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Parse do código colado — payload congelado (PROTOCOL.md "Pareamento").

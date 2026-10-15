@@ -1,4 +1,4 @@
-import 'package:app/domain/contracts/disposable.dart';
+import 'package:mobile/domain/contracts/disposable.dart';
 
 abstract class Repository implements Disposable {
   @override

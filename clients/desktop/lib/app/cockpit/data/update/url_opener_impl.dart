@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/contracts/url_opener.dart';
+import 'package:desktop/app/cockpit/domain/contracts/url_opener.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Abre URLs externas via `url_launcher` (navegador/handler do SO).

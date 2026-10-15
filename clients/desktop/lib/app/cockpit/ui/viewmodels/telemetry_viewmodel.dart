@@ -10,10 +10,10 @@ import 'dart:io' show Directory, File, Process;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:cockpit/app/cockpit/domain/contracts/telemetry_store.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_case.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_event.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_run.dart';
+import 'package:desktop/app/cockpit/domain/contracts/telemetry_store.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_case.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_event.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_run.dart';
 
 /// Chip de filtro do painel.
 enum TelemetryFilter { open, fresh, resolved, ignored }

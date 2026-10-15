@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:app/protocol/codec.dart';
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/codec.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('decode fixtures', () {
-    final fixtureDir = Directory('../.orchestration/contracts/fixtures');
+    final fixtureDir = Directory('../../.orchestration/contracts/fixtures');
 
     test('fixture directory exists', () {
       expect(
@@ -178,7 +178,7 @@ void main() {
 
   group('Pair messages', () {
     test('PairOk fixture parses', () {
-      final file = File('../.orchestration/contracts/fixtures/pair_ok.jsonl');
+      final file = File('../../.orchestration/contracts/fixtures/pair_ok.jsonl');
       final line = file.readAsLinesSync().firstWhere(
         (l) => l.trim().isNotEmpty,
       );
@@ -225,7 +225,7 @@ void main() {
 
     test('PairError fixture parses', () {
       final file = File(
-        '../.orchestration/contracts/fixtures/pair_error.jsonl',
+        '../../.orchestration/contracts/fixtures/pair_error.jsonl',
       );
       final line = file.readAsLinesSync().firstWhere(
         (l) => l.trim().isNotEmpty,
@@ -237,7 +237,7 @@ void main() {
 
     test('peer_online fixture parses (ControlInbound.tryFromJson)', () {
       final file = File(
-        '../.orchestration/contracts/fixtures/peer_online.jsonl',
+        '../../.orchestration/contracts/fixtures/peer_online.jsonl',
       );
       final line = file.readAsLinesSync().firstWhere(
         (l) => l.trim().isNotEmpty,
@@ -251,7 +251,7 @@ void main() {
 
     test('peer_offline fixture parses with sinceTs', () {
       final file = File(
-        '../.orchestration/contracts/fixtures/peer_offline.jsonl',
+        '../../.orchestration/contracts/fixtures/peer_offline.jsonl',
       );
       final line = file.readAsLinesSync().firstWhere(
         (l) => l.trim().isNotEmpty,
@@ -263,7 +263,7 @@ void main() {
     });
 
     test('presence snapshot fixture parses with mixed online/offline', () {
-      final file = File('../.orchestration/contracts/fixtures/presence.jsonl');
+      final file = File('../../.orchestration/contracts/fixtures/presence.jsonl');
       final line = file.readAsLinesSync().firstWhere(
         (l) => l.trim().isNotEmpty,
       );
@@ -283,7 +283,7 @@ void main() {
     });
 
     test('Bye fixture parses with peer_stop reason', () {
-      final file = File('../.orchestration/contracts/fixtures/bye.jsonl');
+      final file = File('../../.orchestration/contracts/fixtures/bye.jsonl');
       final line = file.readAsLinesSync().firstWhere(
         (l) => l.trim().isNotEmpty,
       );
@@ -301,7 +301,7 @@ void main() {
 
     test('UserInput fixture parses', () {
       final file = File(
-        '../.orchestration/contracts/fixtures/user_input.jsonl',
+        '../../.orchestration/contracts/fixtures/user_input.jsonl',
       );
       final line = file.readAsLinesSync().firstWhere(
         (l) => l.trim().isNotEmpty,

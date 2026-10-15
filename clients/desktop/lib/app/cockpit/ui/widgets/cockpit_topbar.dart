@@ -1,15 +1,15 @@
 import 'dart:io';
 
-import 'package:cockpit/app/core/ui/menu/app_menu_bar.dart';
-import 'package:cockpit/app/core/ui/menu/editor_menu_bridge.dart';
-import 'package:cockpit/app/core/ui/menu/workspace_menu_bridge.dart';
-import 'package:cockpit/app/core/ui/settings_controller.dart';
-import 'package:cockpit/app/core/ui/widgets/window_controls.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/i18n/strings.g.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/app/core/ui/menu/app_menu_bar.dart';
+import 'package:desktop/app/core/ui/menu/editor_menu_bridge.dart';
+import 'package:desktop/app/core/ui/menu/workspace_menu_bridge.dart';
+import 'package:desktop/app/core/ui/settings_controller.dart';
+import 'package:desktop/app/core/ui/widgets/window_controls.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/i18n/strings.g.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
 import 'package:flutter_modular/flutter_modular.dart';
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Top bar (~46px) customizada — substitui a barra nativa da janela. Semáforo

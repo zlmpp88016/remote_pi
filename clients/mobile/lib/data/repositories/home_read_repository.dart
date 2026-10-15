@@ -3,9 +3,9 @@
 
 import 'dart:async';
 
-import 'package:app/data/local/boxes.dart';
-import 'package:app/data/local/records/session_index_record.dart';
-import 'package:app/domain/contracts/repository.dart';
+import 'package:mobile/data/local/boxes.dart';
+import 'package:mobile/data/local/records/session_index_record.dart';
+import 'package:mobile/domain/contracts/repository.dart';
 
 class HomeReadRepository extends Repository {
   HomeReadRepository(this._boxes);

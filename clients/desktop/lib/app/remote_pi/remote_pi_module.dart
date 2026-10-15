@@ -1,11 +1,11 @@
-import 'package:cockpit/app/remote_pi/data/host_socket.dart';
-import 'package:cockpit/app/remote_pi/data/pinenacl_ed25519_signer.dart';
-import 'package:cockpit/app/remote_pi/data/relay_host_client_factory.dart';
-import 'package:cockpit/app/remote_pi/domain/contracts/ed25519_signer.dart';
-import 'package:cockpit/app/remote_pi/domain/contracts/host_client_factory.dart';
-import 'package:cockpit/app/remote_pi/domain/value_objects/host_client_config.dart';
-import 'package:cockpit/app/remote_pi/ui/remote_pi_host_page.dart';
-import 'package:cockpit/app/remote_pi/ui/viewmodels/remote_pi_host_viewmodel.dart';
+import 'package:desktop/app/remote_pi/data/host_socket.dart';
+import 'package:desktop/app/remote_pi/data/pinenacl_ed25519_signer.dart';
+import 'package:desktop/app/remote_pi/data/relay_host_client_factory.dart';
+import 'package:desktop/app/remote_pi/domain/contracts/ed25519_signer.dart';
+import 'package:desktop/app/remote_pi/domain/contracts/host_client_factory.dart';
+import 'package:desktop/app/remote_pi/domain/value_objects/host_client_config.dart';
+import 'package:desktop/app/remote_pi/ui/remote_pi_host_page.dart';
+import 'package:desktop/app/remote_pi/ui/viewmodels/remote_pi_host_viewmodel.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
 /// Feature **Remote Pi** (plano 69 W3) — modo de conexão por pareamento host.

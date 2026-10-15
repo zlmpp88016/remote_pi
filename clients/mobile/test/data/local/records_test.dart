@@ -2,11 +2,11 @@
 
 import 'dart:io';
 
-import 'package:app/data/local/boxes.dart';
-import 'package:app/data/local/records/message_record.dart';
-import 'package:app/data/local/records/runtime_record.dart';
-import 'package:app/data/local/records/session_index_record.dart';
-import 'package:app/domain/session_state.dart';
+import 'package:mobile/data/local/boxes.dart';
+import 'package:mobile/data/local/records/message_record.dart';
+import 'package:mobile/data/local/records/runtime_record.dart';
+import 'package:mobile/data/local/records/session_index_record.dart';
+import 'package:mobile/domain/session_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 

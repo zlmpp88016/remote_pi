@@ -9,7 +9,7 @@ environment:
 dependencies:
   anaki_orm: ^0.1.1
   anaki_sqlite: ^0.1.4
-  cockpit_core:
-    path: ../../packages/cockpit_core
-  cockpit_engine:
-    path: ../../packages/cockpit_engine
+  desktop_core:
+    path: ../../packages/desktop_core
+  desktop_engine:
+    path: ../../packages/desktop_engine

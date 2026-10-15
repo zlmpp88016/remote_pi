@@ -1,9 +1,9 @@
 // PeerSectionHeader — device label only. The "via <harness>" subtitle was
 // removed as redundant.
 
-import 'package:app/pairing/storage.dart';
-import 'package:app/protocol/protocol.dart' show PiHarness;
-import 'package:app/ui/home/widgets/peer_section_header.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/protocol/protocol.dart' show PiHarness;
+import 'package:mobile/ui/home/widgets/peer_section_header.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

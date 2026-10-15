@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/core/domain/result.dart';
 
 import '../entities/layout_spec.dart';
 

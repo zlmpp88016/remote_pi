@@ -1,11 +1,11 @@
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
-import 'package:cockpit/app/core/ui/themes/app_colors.dart';
-import 'package:cockpit/app/core/ui/themes/color_contrast.dart';
-import 'package:cockpit/app/core/ui/themes/app_typography.dart';
-import 'package:cockpit/app/core/terminal/xterm/xterm.dart';
-import 'package:cockpit/app/core/ui/themes/syntax_colors.dart';
-import 'package:cockpit/app/core/ui/themes/theme_registry.dart';
-import 'package:cockpit/app/core/ui/themes/theme_spec.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/ui/themes/app_colors.dart';
+import 'package:desktop/app/core/ui/themes/color_contrast.dart';
+import 'package:desktop/app/core/ui/themes/app_typography.dart';
+import 'package:desktop/app/core/terminal/xterm/xterm.dart';
+import 'package:desktop/app/core/ui/themes/syntax_colors.dart';
+import 'package:desktop/app/core/ui/themes/theme_registry.dart';
+import 'package:desktop/app/core/ui/themes/theme_spec.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Bundle dos tokens bespoke (cores/tipografia/syntax) calculado para uma

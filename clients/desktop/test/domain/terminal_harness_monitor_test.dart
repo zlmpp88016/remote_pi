@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:cockpit/app/cockpit/domain/contracts/process_tree_provider.dart';
-import 'package:cockpit/app/cockpit/domain/entities/process_snapshot.dart';
-import 'package:cockpit/app/core/domain/entities/harness.dart';
-import 'package:cockpit/app/cockpit/domain/services/terminal_harness_monitor.dart';
+import 'package:desktop/app/cockpit/domain/contracts/process_tree_provider.dart';
+import 'package:desktop/app/cockpit/domain/entities/process_snapshot.dart';
+import 'package:desktop/app/core/domain/entities/harness.dart';
+import 'package:desktop/app/cockpit/domain/services/terminal_harness_monitor.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeProcessTreeProvider implements ProcessTreeProvider {

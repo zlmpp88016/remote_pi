@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/data/tasks/tasks_json_loader.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/task_discovery.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/task_runner_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_run.dart';
-import 'package:cockpit_core/cockpit_core.dart';
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop/app/cockpit/data/tasks/tasks_json_loader.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_discovery.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_runner_gateway.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_run.dart';
+import 'package:desktop_core/cockpit_core.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 
 /// Descoberta de tasks num workspace REMOTO (plano 58): lê o
 /// `<root>/.cockpit/tasks.json` do host via `fs.read` e reusa o parser do

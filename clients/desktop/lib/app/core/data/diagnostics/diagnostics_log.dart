@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/core/utils/user_home.dart';
+import 'package:desktop/app/core/utils/user_home.dart';
 import 'package:flutter/foundation.dart';
 
 /// Log de diagnóstico em arquivo + detector de encerramento sujo.

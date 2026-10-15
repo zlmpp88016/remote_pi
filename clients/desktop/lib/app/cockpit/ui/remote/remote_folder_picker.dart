@@ -1,10 +1,10 @@
-import 'package:cockpit/app/cockpit/data/remote/remote_host_connector.dart';
-import 'package:cockpit/app/cockpit/ui/remote/remote_host_error_message.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/utils/remote_path.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/i18n/strings.g.dart';
-import 'package:cockpit_core/cockpit_core.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_host_connector.dart';
+import 'package:desktop/app/cockpit/ui/remote/remote_host_error_message.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/utils/remote_path.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/i18n/strings.g.dart';
+import 'package:desktop_core/cockpit_core.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Sessão de conexão resolvida pelo picker: o [FileService] do host já

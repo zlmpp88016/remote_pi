@@ -7,8 +7,8 @@
 
 import 'dart:io' show Platform;
 
-import 'package:app/data/device/device_capabilities_probe.dart';
-import 'package:app/domain/value_objects/device_capabilities.dart';
+import 'package:mobile/data/device/device_capabilities_probe.dart';
+import 'package:mobile/domain/value_objects/device_capabilities.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/tasks/project_paths.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/task_adapter.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/data/tasks/project_paths.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_adapter.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/i18n/strings.g.dart';
 
 /// Detecta tasks Flutter a partir do `pubspec.yaml`. É a ÚNICA borda que
 /// conhece `flutter run`, as teclas `r`/`R` e o reload-on-save — o core ignora

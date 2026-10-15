@@ -1,5 +1,5 @@
 import '../domain/entities/db_result.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/widgets.dart';
 
 /// Frase de um [DbQueryException] para a UI.

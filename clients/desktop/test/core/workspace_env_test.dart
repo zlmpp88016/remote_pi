@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cockpit/app/core/utils/workspace_env.dart';
+import 'package:desktop/app/core/utils/workspace_env.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

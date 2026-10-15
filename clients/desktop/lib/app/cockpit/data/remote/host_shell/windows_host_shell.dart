@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/cockpit/data/remote/host_shell/host_shell.dart';
-import 'package:cockpit/app/cockpit/data/remote/host_shell/posix_host_shell.dart'
+import 'package:desktop/app/cockpit/data/remote/host_shell/host_shell.dart';
+import 'package:desktop/app/cockpit/data/remote/host_shell/posix_host_shell.dart'
     show HostShellException;
 
 /// Dialeto Windows (plano 61).

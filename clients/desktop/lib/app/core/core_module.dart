@@ -1,13 +1,13 @@
-import 'package:cockpit/app/core/data/automation/cli_automation_gateway.dart';
-import 'package:cockpit/app/core/data/lsp/lsp_client_impl.dart';
-import 'package:cockpit/app/core/data/lsp/lsp_server_pool.dart';
-import 'package:cockpit/app/core/data/neovim/neovim_gateway_impl.dart';
-import 'package:cockpit/app/core/data/setup/system_permissions_impl.dart';
-import 'package:cockpit/app/core/domain/contracts/lsp_client.dart';
-import 'package:cockpit/app/core/domain/contracts/neovim_gateway.dart';
-import 'package:cockpit/app/core/domain/contracts/system_permissions.dart';
-import 'package:cockpit/app/core/domain/contracts/terminal_profile_resolver.dart';
-import 'package:cockpit/app/core/ui/automation_controller.dart';
+import 'package:desktop/app/core/data/automation/cli_automation_gateway.dart';
+import 'package:desktop/app/core/data/lsp/lsp_client_impl.dart';
+import 'package:desktop/app/core/data/lsp/lsp_server_pool.dart';
+import 'package:desktop/app/core/data/neovim/neovim_gateway_impl.dart';
+import 'package:desktop/app/core/data/setup/system_permissions_impl.dart';
+import 'package:desktop/app/core/domain/contracts/lsp_client.dart';
+import 'package:desktop/app/core/domain/contracts/neovim_gateway.dart';
+import 'package:desktop/app/core/domain/contracts/system_permissions.dart';
+import 'package:desktop/app/core/domain/contracts/terminal_profile_resolver.dart';
+import 'package:desktop/app/core/ui/automation_controller.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
 /// Kernel transversal — módulo **sem `path`** → binds root-owned (vivem o app

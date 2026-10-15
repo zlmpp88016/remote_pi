@@ -1,10 +1,10 @@
 import 'dart:async';
 
-import 'package:cockpit/app/cockpit/domain/contracts/process_tree_provider.dart';
-import 'package:cockpit/app/cockpit/domain/entities/process_snapshot.dart';
-import 'package:cockpit/app/core/domain/entities/harness.dart';
-import 'package:cockpit/app/cockpit/domain/services/process_tree_resolver.dart';
-import 'package:cockpit/app/core/data/diagnostics/linux_performance_diagnostics.dart';
+import 'package:desktop/app/cockpit/domain/contracts/process_tree_provider.dart';
+import 'package:desktop/app/cockpit/domain/entities/process_snapshot.dart';
+import 'package:desktop/app/core/domain/entities/harness.dart';
+import 'package:desktop/app/cockpit/domain/services/process_tree_resolver.dart';
+import 'package:desktop/app/core/data/diagnostics/linux_performance_diagnostics.dart';
 
 class SessionAnchor {
   final String sessionId;

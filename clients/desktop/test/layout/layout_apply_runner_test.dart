@@ -1,6 +1,6 @@
-import 'package:cockpit/app/cockpit/domain/entities/layout_spec.dart';
-import 'package:cockpit/app/cockpit/domain/services/layout_apply_runner.dart';
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/cockpit/domain/entities/layout_spec.dart';
+import 'package:desktop/app/cockpit/domain/services/layout_apply_runner.dart';
+import 'package:desktop/app/core/domain/result.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Workspace de mentira: só o que o runner toca (fechar tudo / criar panes).

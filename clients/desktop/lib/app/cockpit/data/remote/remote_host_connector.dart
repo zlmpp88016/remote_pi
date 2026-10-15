@@ -1,23 +1,23 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/remote/dartssh_host_connection.dart';
-import 'package:cockpit/app/cockpit/data/remote/mobile_ssh_key_store.dart';
-import 'package:cockpit/app/cockpit/data/remote/reconnect_scheduler.dart';
-import 'package:cockpit/app/cockpit/data/remote/ssh_worker_connection.dart';
-import 'package:cockpit/app/cockpit/data/remote/host_shell/host_shell.dart';
-import 'package:cockpit/app/cockpit/data/remote/host_shell/posix_host_shell.dart';
-import 'package:cockpit/app/cockpit/data/remote/host_shell/windows_host_shell.dart';
-import 'package:cockpit/app/cockpit/data/remote/ssh_known_hosts.dart';
-import 'package:cockpit/app/cockpit/data/remote/ssh_tunnel.dart';
-import 'package:cockpit/app/cockpit/domain/entities/remote_host.dart';
-import 'package:cockpit/app/core/utils/platform_kind.dart';
+import 'package:desktop/app/cockpit/data/remote/dartssh_host_connection.dart';
+import 'package:desktop/app/cockpit/data/remote/mobile_ssh_key_store.dart';
+import 'package:desktop/app/cockpit/data/remote/reconnect_scheduler.dart';
+import 'package:desktop/app/cockpit/data/remote/ssh_worker_connection.dart';
+import 'package:desktop/app/cockpit/data/remote/host_shell/host_shell.dart';
+import 'package:desktop/app/cockpit/data/remote/host_shell/posix_host_shell.dart';
+import 'package:desktop/app/cockpit/data/remote/host_shell/windows_host_shell.dart';
+import 'package:desktop/app/cockpit/data/remote/ssh_known_hosts.dart';
+import 'package:desktop/app/cockpit/data/remote/ssh_tunnel.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_host.dart';
+import 'package:desktop/app/core/utils/platform_kind.dart';
 // O motor de túnel de BANCO também exporta `SshTunnel`/`SshTunnelException`,
 // e este arquivo tem os seus próprios (o túnel do HOST remoto, outra coisa).
 // Esconde os do banco: aqui só interessam os tipos de host key.
-import 'package:cockpit_core/cockpit_core.dart'
+import 'package:desktop_core/cockpit_core.dart'
     hide SshTunnel, SshTunnelImpl, SshTunnelException;
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 
 /// Estado observável da conexão com um host (badge/telas da UI, plano 58).
 enum RemoteHostPhase {

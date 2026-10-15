@@ -1,6 +1,6 @@
-import 'package:cockpit/app/cockpit/data/remote/remote_git_adapter.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_file_status.dart';
-import 'package:cockpit_core/cockpit_core.dart' as core;
+import 'package:desktop/app/cockpit/data/remote/remote_git_adapter.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_file_status.dart';
+import 'package:desktop_core/cockpit_core.dart' as core;
 import 'package:flutter_test/flutter_test.dart';
 
 core.GitStatus status(String branch, List<(String, String, String)> files) =>

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/hooks/hook_installer_base.dart';
+import 'package:desktop/app/cockpit/data/hooks/hook_installer_base.dart';
 import 'package:flutter/foundation.dart';
 
 /// Instalador dos hooks no **Claude Code** (`~/.claude/settings.json`).

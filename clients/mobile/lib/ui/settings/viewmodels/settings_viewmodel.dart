@@ -1,10 +1,10 @@
-import 'package:app/data/mesh/mesh_sync_service.dart';
-import 'package:app/data/preferences/preferences.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/data/transport/relay_config.dart';
-import 'package:app/pairing/storage.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
-import 'package:app/ui/settings/states/settings_state.dart';
+import 'package:mobile/data/mesh/mesh_sync_service.dart';
+import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/data/transport/relay_config.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/ui/settings/states/settings_state.dart';
 
 /// Settings is config-only (nickname + revoke). The peer switcher moved
 /// to Home; the connection itself is shared and owned by

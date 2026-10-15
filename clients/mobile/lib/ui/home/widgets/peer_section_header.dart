@@ -1,5 +1,5 @@
-import 'package:app/pairing/storage.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 
 /// Per-pairing section header on the Home list (one per Pi). Shows the device

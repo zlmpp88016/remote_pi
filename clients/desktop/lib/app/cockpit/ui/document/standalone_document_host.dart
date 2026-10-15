@@ -1,16 +1,16 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/domain/contracts/file_change_watcher.dart';
-import 'package:cockpit/app/cockpit/domain/entities/file_node.dart';
-import 'package:cockpit/app/cockpit/ui/session/document_host.dart';
-import 'package:cockpit/app/cockpit/ui/session/file_viewer_session.dart';
-import 'package:cockpit/app/core/data/lsp/lsp_text_edit.dart';
-import 'package:cockpit/app/core/domain/entities/lsp_diagnostic.dart';
-import 'package:cockpit/app/core/domain/entities/lsp_semantic_tokens.dart';
-import 'package:cockpit/app/core/domain/exceptions/file_operation_error.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
+import 'package:desktop/app/cockpit/domain/contracts/file_change_watcher.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_node.dart';
+import 'package:desktop/app/cockpit/ui/session/document_host.dart';
+import 'package:desktop/app/cockpit/ui/session/file_viewer_session.dart';
+import 'package:desktop/app/core/data/lsp/lsp_text_edit.dart';
+import 'package:desktop/app/core/domain/entities/lsp_diagnostic.dart';
+import 'package:desktop/app/core/domain/entities/lsp_semantic_tokens.dart';
+import 'package:desktop/app/core/domain/exceptions/file_operation_error.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
 
 /// [DocumentHost] da **janela de documento**: um arquivo (ou `.notebook`)
 /// aberto solto, fora do shell do Cockpit. Filesystem direto por `dart:io`;

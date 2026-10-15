@@ -1,7 +1,7 @@
-import 'package:app/data/preferences/preferences.dart';
-import 'package:app/data/transport/relay_config.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
-import 'package:app/ui/onboarding/states/onboarding_state.dart';
+import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/data/transport/relay_config.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/ui/onboarding/states/onboarding_state.dart';
 
 /// Owns the 3-step onboarding flow. Pure state machine — the actual
 /// pairing happens via [PairingViewModel] surfaced inside `pair_step.dart`.

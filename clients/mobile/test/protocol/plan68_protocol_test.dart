@@ -6,7 +6,7 @@
 // The payload is the contract between app and extension, so these tests pin the
 // exact JSON keys — a rename on one side must fail here.
 
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

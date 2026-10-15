@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:app/data/mesh/mesh_blob.dart';
-import 'package:app/data/mesh/mesh_client.dart';
-import 'package:app/data/mesh/mesh_sync_service.dart';
-import 'package:app/pairing/owner_identity_bridge.dart';
-import 'package:app/pairing/storage.dart';
+import 'package:mobile/data/mesh/mesh_blob.dart';
+import 'package:mobile/data/mesh/mesh_client.dart';
+import 'package:mobile/data/mesh/mesh_sync_service.dart';
+import 'package:mobile/pairing/owner_identity_bridge.dart';
+import 'package:mobile/pairing/storage.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';

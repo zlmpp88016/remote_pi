@@ -1,8 +1,8 @@
-import 'package:cockpit/app/cockpit/ui/remote/remote_hosts_controller.dart';
-import 'package:cockpit/app/settings/ui/notifications_viewmodel.dart';
-import 'package:cockpit/app/settings/ui/neovim_settings_viewmodel.dart';
-import 'package:cockpit/app/settings/ui/settings_page.dart';
-import 'package:cockpit/app/core/routes.dart';
+import 'package:desktop/app/cockpit/ui/remote/remote_hosts_controller.dart';
+import 'package:desktop/app/settings/ui/notifications_viewmodel.dart';
+import 'package:desktop/app/settings/ui/neovim_settings_viewmodel.dart';
+import 'package:desktop/app/settings/ui/settings_page.dart';
+import 'package:desktop/app/core/routes.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 
 /// Feature **Configurações** — `path: '/settings'` (rota empilhada por cima do

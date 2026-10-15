@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
 
 /// Persistência dos projetos (pastas salvas). Contrato no domínio; a
 /// implementação concreta (Hive) mora em `data/`.

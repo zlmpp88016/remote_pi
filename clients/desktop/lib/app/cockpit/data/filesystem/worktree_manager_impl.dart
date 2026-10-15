@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/filesystem/git_binary.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/worktree_manager.dart';
-import 'package:cockpit/app/cockpit/domain/entities/worktree.dart';
-import 'package:cockpit/app/core/data/setup/remote_pi_resolver.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
+import 'package:desktop/app/cockpit/data/filesystem/git_binary.dart';
+import 'package:desktop/app/cockpit/domain/contracts/worktree_manager.dart';
+import 'package:desktop/app/cockpit/domain/entities/worktree.dart';
+import 'package:desktop/app/core/data/setup/remote_pi_resolver.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
 import 'package:path/path.dart' as p;
 
 /// Roda o binário `git` pra listar/criar/remover worktrees. O caminho do `git`

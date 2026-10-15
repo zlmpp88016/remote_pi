@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/file_system_mutator.dart';
-import 'package:cockpit/app/core/domain/exceptions/file_operation_error.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
+import 'package:desktop/app/cockpit/domain/contracts/file_system_mutator.dart';
+import 'package:desktop/app/core/domain/exceptions/file_operation_error.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
 
 /// Mutação via `dart:io`; a lixeira no macOS é delegada ao Finder por
 /// `osascript` (move pra Trash, reversível). Erros de IO viram

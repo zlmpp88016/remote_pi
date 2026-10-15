@@ -1,8 +1,8 @@
 // Plan/30 — ImageBubble renders a static thumbnail from base64 + optional
 // caption, with a broken-image fallback for bad data.
 
-import 'package:app/domain/session_state.dart';
-import 'package:app/ui/chat/widgets/image_bubble.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/ui/chat/widgets/image_bubble.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -3,7 +3,7 @@
 
 import 'dart:math' as math;
 
-import 'package:app/ui/chat/voice/widgets/recording_strip.dart';
+import 'package:mobile/ui/chat/voice/widgets/recording_strip.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

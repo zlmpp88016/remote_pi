@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
 
 /// Aba do pane central com o detalhe de UM caso da Telemetry (plano 66).
 /// Leve e descartável: não persiste no layout (a base é a fonte de verdade;

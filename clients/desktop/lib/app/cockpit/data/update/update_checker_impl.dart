@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/update_checker.dart';
-import 'package:cockpit/app/cockpit/domain/entities/update_info.dart';
+import 'package:desktop/app/cockpit/domain/contracts/update_checker.dart';
+import 'package:desktop/app/cockpit/domain/entities/update_info.dart';
 
 /// Busca o `latest.json` via HTTP (dart:io, sem dep extra). Timeout curto;
 /// qualquer falha → `null` (nunca lança), pra que o aviso seja totalmente

@@ -9,7 +9,7 @@
 //   DURABLE  sessions_index         key = <epk>:<roomId>   → SessionIndexRecord
 //   VOLATILE runtime  (wiped@boot)  key = <epk>:<roomId>   → RuntimeRecord
 
-import 'package:app/data/transport/epk_encoding.dart';
+import 'package:mobile/data/transport/epk_encoding.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 const String _kNamespace = 'rp_v2';

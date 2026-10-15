@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/core/data/diagnostics/linux_performance_diagnostics.dart';
+import 'package:desktop/app/core/data/diagnostics/linux_performance_diagnostics.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -1,10 +1,10 @@
-import 'package:cockpit/app/cockpit/domain/contracts/git_command_runner.dart';
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/git_process_dialog.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/widgets.dart';
-import 'package:cockpit/app/core/utils/native_folder_picker.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/contracts/git_command_runner.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/ui/widgets/git_process_dialog.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/widgets/widgets.dart';
+import 'package:desktop/app/core/utils/native_folder_picker.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

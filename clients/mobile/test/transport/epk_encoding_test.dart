@@ -1,6 +1,6 @@
 // Single-purpose unit tests for the epk wire-format helpers.
 
-import 'package:app/data/transport/epk_encoding.dart';
+import 'package:mobile/data/transport/epk_encoding.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

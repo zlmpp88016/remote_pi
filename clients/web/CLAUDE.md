@@ -71,6 +71,6 @@ verdes → `./push-docker.sh` → o host redeploya da `:latest`. Passe uma vers�
 ## Modo orquestrado
 
 Se receber um prompt começando com `[ORCH:<task-id>]`, leia
-`../.orchestration/INSTRUCTIONS.md` antes de qualquer outra ação. Esse marker
+`../../.orchestration/INSTRUCTIONS.md` antes de qualquer outra ação. Esse marker
 indica que outro agente está coordenando o trabalho e tem regras específicas
 (onde escrever resultado, não comitar, etc).

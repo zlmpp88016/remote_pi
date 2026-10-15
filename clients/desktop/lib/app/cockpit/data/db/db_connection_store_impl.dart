@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/db_connection_store.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/domain/contracts/db_connection_store.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
 
 /// Conexões do workspace em `.cockpit/databases.json` (versionado) +
 /// `.cockpit/databases.local.json` (gitignored, override por nome) + sqlites

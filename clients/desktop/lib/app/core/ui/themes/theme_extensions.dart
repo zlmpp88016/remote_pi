@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'app_colors.dart';
 import 'app_typography.dart';
 import 'cockpit_theme.dart';
-import 'package:cockpit/app/core/terminal/xterm/xterm.dart';
+import 'package:desktop/app/core/terminal/xterm/xterm.dart';
 
 import 'syntax_colors.dart';
 import 'terminal_theme.dart';

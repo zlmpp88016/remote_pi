@@ -5,11 +5,11 @@
 // are actually exercised. The ViewModel is built with a fake
 // `IActionsRepository` so we don't spin up the DI graph or a live channel.
 
-import 'package:app/data/actions/actions_repository.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/chat/quick_actions/states/quick_actions_state.dart';
-import 'package:app/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
-import 'package:app/ui/chat/quick_actions/widgets/quick_actions_sheet.dart';
+import 'package:mobile/data/actions/actions_repository.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/chat/quick_actions/states/quick_actions_state.dart';
+import 'package:mobile/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
+import 'package:mobile/ui/chat/quick_actions/widgets/quick_actions_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';

@@ -1,5 +1,5 @@
-import 'package:app/data/preferences/preferences.dart';
-import 'package:app/data/transport/relay_config.dart';
+import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/data/transport/relay_config.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 

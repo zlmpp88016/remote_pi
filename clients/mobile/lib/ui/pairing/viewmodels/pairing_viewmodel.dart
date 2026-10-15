@@ -1,15 +1,15 @@
 import 'dart:io' show Platform;
 
-import 'package:app/data/preferences/preferences.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/data/transport/peer_channel.dart';
-import 'package:app/data/transport/relay_config.dart';
-import 'package:app/pairing/owner_identity_bridge.dart';
-import 'package:app/pairing/pair_request_flow.dart' as pair_flow;
-import 'package:app/pairing/pair_payload.dart';
-import 'package:app/pairing/storage.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
-import 'package:app/ui/pairing/states/pairing_state.dart';
+import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/data/transport/peer_channel.dart';
+import 'package:mobile/data/transport/relay_config.dart';
+import 'package:mobile/pairing/owner_identity_bridge.dart';
+import 'package:mobile/pairing/pair_request_flow.dart' as pair_flow;
+import 'package:mobile/pairing/pair_payload.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/ui/pairing/states/pairing_state.dart';
 import 'package:cryptography/cryptography.dart';
 
 // Factory that produces a connected PeerTransport for the given pairing

@@ -92,7 +92,15 @@ const DEPTH_FIXES = [
   // como substring) e corromperia o caminho. `sync-install-sh.mjs` vive em
   // `site/scripts/`, então `../../` chega à raiz; em `clients/web/scripts/`
   // passa a ser preciso `../../../`.
-  ["clients/web/scripts/sync-install-sh.mjs", ["../../server/install.sh", "../../../server/install.sh"]],
+  //
+  // IDEMPOTÊNCIA: a checagem usa a forma EXATA (com barra final). Sem isso, uma
+  // segunda execução prepende mais um `../` a cada rodada — foi o que produziu
+  // `../../../../../../server/` (6 níveis) numa re-execução.
+  {
+    file: "clients/web/scripts/sync-install-sh.mjs",
+    from: '"../../server/install.sh"',
+    to: '"../../../server/install.sh"',
+  },
 ];
 
 // ── infra ────────────────────────────────────────────────────────────────
@@ -526,6 +534,69 @@ function phaseServer() {
   }
 }
 
+/**
+ * Itens que vivem na RAIZ do repo. Uma ref relativa que ESCAPAVA do diretório
+ * do cliente (`../plan/`) alcançava a raiz a partir de `app/`; agora que o
+ * cliente está um nível mais fundo (`clients/mobile/`), `../` chega em
+ * `clients/` e a referência quebra silenciosamente (só aparece em runtime — foi
+ * o que fez 9 testes de `protocol_test.dart` falharem com
+ * `PathNotFoundException: ../.orchestration/contracts/fixtures`).
+ */
+const ROOT_ITEMS = [
+  ".orchestration",
+  "plan",
+  "review",
+  "branding",
+  "scripts",
+  "docs",
+  "rp-s3",
+  "relay",
+  "server",
+  "CHANGELOG.md",
+  "PROTOCOL.md",
+  "docker-compose.relay.yml",
+];
+
+/** Profundidade de cada cliente dentro do repo (para as refs relativas). */
+const CLIENT_DEPTH = { "clients/mobile": 1, "clients/desktop": 1, "clients/web": 1 };
+
+/**
+ * Corrige refs relativas que subiam para a raiz: em `app/CLAUDE.md` valia
+ * `../plan/x.md`; em `clients/mobile/CLAUDE.md` passa a valer
+ * `../../plan/x.md`. Só toca refs cujo alvo existe na raiz (prova de que o
+ * `../` apontava para lá antes do move).
+ */
+function fixRootRelativeRefs() {
+  const files = liveFiles(
+    "\\.\\./(\\.orchestration|plan|review|branding|scripts|docs|rp-s3|relay|server|CHANGELOG|PROTOCOL|docker-compose)",
+    { regex: true },
+  // Só os CLIENTES mudaram de profundidade. `relay/` e `server/` continuam na
+  // raiz e suas refs `../` seguem corretas — incluir tudo reescreveria arquivos
+  // que não se moveram (pego no dry-run).
+  ).filter((r) => Object.keys(CLIENT_DEPTH).some((c) => r.startsWith(`${c}/`)));
+  let changed = 0;
+  for (const rel of files) {
+    const abs = join(ROOT, rel);
+    if (!existsSync(abs)) continue;
+    let text = readFileSync(abs, "utf8");
+    const before = text;
+    for (const item of ROOT_ITEMS) {
+      // Só quando o item EXISTE na raiz: prova que o `../` apontava para lá.
+      if (!existsSync(join(ROOT, item))) continue;
+      // `(^|[^./\w])` impede tocar `../../plan` (o char antes é `.`) e mantém
+      // a idempotência: rodar duas vezes não aprofunda de novo.
+      const re = new RegExp(`(^|[^./\\w])\\.\\./(${escapeRe(item)})`, "gm");
+      text = text.replace(re, (_full, head, name) => `${head}../../${name}`);
+    }
+    if (text !== before) {
+      if (!DRY) writeFileSync(abs, text);
+      changed += 1;
+      console.log(`  ~ ${rel} (profundidade de ref relativa)`);
+    }
+  }
+  console.log(`  · refs de raiz ajustadas em ${changed} arquivo(s)`);
+}
+
 function phaseClients() {
   for (const [from, to] of CLIENT_MOVES) {
     if (!existsSync(join(ROOT, from))) {
@@ -539,13 +610,16 @@ function phaseClients() {
   applyDirRename("cockpit", "clients/desktop");
   applyDirRename("site", "clients/web");
   // Correções de profundidade em refs relativas de arquivos que mudaram de nível.
-  for (const [rel, [before, afterText]] of DEPTH_FIXES) {
-    const abs = join(ROOT, rel);
+  fixRootRelativeRefs();
+  for (const { file, from, to } of DEPTH_FIXES) {
+    const abs = join(ROOT, file);
     if (!existsSync(abs)) continue;
     const text = readFileSync(abs, "utf8");
-    if (!text.includes(before)) continue;
-    if (!DRY) writeFileSync(abs, text.replaceAll(before, afterText));
-    console.log(`  ~ ${rel}: profundidade de ref relativa corrigida`);
+    // `includes("to")` primeiro: se o alvo correto JÁ está lá, não mexe (senão
+    // cada execução aprofunda mais um nível).
+    if (text.includes(to) || !text.includes(from)) continue;
+    if (!DRY) writeFileSync(abs, text.replaceAll(from, to));
+    console.log(`  ~ ${file}: profundidade de ref relativa corrigida`);
   }
 }
 
@@ -574,25 +648,59 @@ function phaseDartPackages() {
     if (from === "app" || from === "cockpit") continue;
     for (const base of ["clients/desktop/packages", "clients/desktop/plugins"]) {
       const dir = join(ROOT, base, from);
-      if (!existsSync(dir)) continue;
       const dest = join(ROOT, base, to);
-      if (!DRY) renameSync(dir, dest);
-      console.log(`  > ${base}/${from} → ${base}/${to}`);
-    }
-  }
-  for (const rel of liveFiles("path:\\s*(packages|plugins)/cockpit_")) {
-    let n = 0;
-    for (const [from, to] of DART_PACKAGES) {
-      if (from === "app" || from === "cockpit") continue;
-      const abs = join(ROOT, rel);
-      const text = readFileSync(abs, "utf8");
-      const next = text.replaceAll(`/${from}`, `/${to}`);
-      if (next !== text) {
-        if (!DRY) writeFileSync(abs, next);
-        n += 1;
+      if (existsSync(dir)) {
+        if (!DRY) renameSync(dir, dest);
+        console.log(`  > ${base}/${from} → ${base}/${to}`);
+      }
+      // O `name:` do PRÓPRIO pacote também muda: sem isso o pubspec declara
+      // `cockpit_core` enquanto os imports já dizem `package:desktop_core/` —
+      // pub rejeita/ignora e a resolução quebra.
+      const pub = join(ROOT, base, to, "pubspec.yaml");
+      if (existsSync(pub)) {
+        const before = readFileSync(pub, "utf8");
+        const next = before.replace(new RegExp(`^name:\\s*${escapeRe(from)}\\s*$`, "m"), `name: ${to}`);
+        if (next !== before) {
+          if (!DRY) writeFileSync(pub, next);
+          console.log(`  ~ ${base}/${to}/pubspec.yaml: name`);
+        }
       }
     }
-    if (n) console.log(`  ~ ${rel} (path deps)`);
+  }
+  // `path:` das dependências internas, nas DUAS formas reais:
+  //   raiz:      `path: packages/cockpit_core`
+  //   interno:   `path: ../cockpit_core`
+  // Só a forma de raiz era tratada — os pacotes internos escapavam e ficariam
+  // apontando para um diretório que acabou de ser renomeado.
+  //
+  // Sem regex aqui de propósito: uma fuga dupla (`\\s` virando `\\s` literal)
+  // fez o filtro nunca casar e os `path:` ficarem todos para trás. Listamos os
+  // pubspec por NOME de arquivo e filtramos com `includes`.
+  // Dependência nomeada no pubspec: a CHAVE sob `dependencies:` é o nome pelo
+  // qual o pacote é resolvido (`cockpit_pty:` → `desktop_pty:`), independente do
+  // `path:`. Ficou para trás e o Flutter falhou com
+  // "name field doesn't match expected name 'cockpit_pty'" — a mensagem aponta o
+  // pubspec do pacote, mas a causa estava AQUI, no consumidor.
+  const pubspecFiles = git(["grep", "-lF", "cockpit_", "--", "*pubspec.yaml", "*pubspec.lock"])
+    .split("\n").map((s) => s.trim()).filter(Boolean).filter((r) => !excluded(r));
+  for (const rel of pubspecFiles) {
+    const abs = join(ROOT, rel);
+    if (!existsSync(abs)) continue;
+    let text = readFileSync(abs, "utf8");
+    const before = text;
+    for (const [from, to] of DART_PACKAGES) {
+      if (from === "app" || from === "cockpit") continue;
+      text = text.replaceAll(`packages/${from}`, `packages/${to}`);
+      text = text.replaceAll(`plugins/${from}`, `plugins/${to}`);
+      text = text.replaceAll(`../${from}`, `../${to}`);
+      text = text.replaceAll(`"${from}"`, `"${to}"`);
+      // Chave de dependência / chave de topo do lock: `  cockpit_pty:`
+      text = text.replace(new RegExp(`^(\\s{2})${escapeRe(from)}:$`, "gm"), `$1${to}:`);
+    }
+    if (text !== before) {
+      if (!DRY) writeFileSync(abs, text);
+      console.log(`  ~ ${rel} (path deps)`);
+    }
   }
 }
 

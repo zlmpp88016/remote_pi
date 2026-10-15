@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// `Project.effectiveRoot` existe por causa de um bug real: a CLI lia

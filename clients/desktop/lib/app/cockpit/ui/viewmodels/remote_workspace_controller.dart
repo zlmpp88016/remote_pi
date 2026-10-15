@@ -1,19 +1,19 @@
 import 'dart:async';
 
-import 'package:cockpit/app/cockpit/data/remote/remote_git_adapter.dart';
-import 'package:cockpit/app/cockpit/data/remote/remote_root_finder.dart';
-import 'package:cockpit/app/cockpit/data/remote/remote_worktree_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/git_command_runner.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/worktree_manager.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_file_status.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_info.dart';
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/domain/entities/remote_host.dart';
-import 'package:cockpit/app/cockpit/ui/remote/remote_hosts_controller.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
-import 'package:cockpit_core/cockpit_core.dart' show GitRunResult;
-import 'package:cockpit_remote/cockpit_remote.dart' show RemoteGitService;
+import 'package:desktop/app/cockpit/data/remote/remote_git_adapter.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_root_finder.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_worktree_gateway.dart';
+import 'package:desktop/app/cockpit/domain/contracts/git_command_runner.dart';
+import 'package:desktop/app/cockpit/domain/contracts/worktree_manager.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_file_status.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_info.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_host.dart';
+import 'package:desktop/app/cockpit/ui/remote/remote_hosts_controller.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
+import 'package:desktop_core/cockpit_core.dart' show GitRunResult;
+import 'package:desktop_remote/cockpit_remote.dart' show RemoteGitService;
 import 'package:flutter/foundation.dart';
 
 /// Motor **remoto** do shell (plano 58), extraído do `CockpitViewModel`:

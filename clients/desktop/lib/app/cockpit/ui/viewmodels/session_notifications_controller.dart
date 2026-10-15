@@ -1,8 +1,8 @@
-import 'package:cockpit/app/cockpit/domain/contracts/notifier.dart';
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
-import 'package:cockpit/app/cockpit/ui/session/terminal_session.dart';
-import 'package:cockpit/app/core/domain/entities/sound_event.dart';
-import 'package:cockpit/app/core/utils/platform_kind.dart';
+import 'package:desktop/app/cockpit/domain/contracts/notifier.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/ui/session/terminal_session.dart';
+import 'package:desktop/app/core/domain/entities/sound_event.dart';
+import 'package:desktop/app/core/utils/platform_kind.dart';
 import 'package:flutter/foundation.dart';
 import 'package:window_manager/window_manager.dart';
 

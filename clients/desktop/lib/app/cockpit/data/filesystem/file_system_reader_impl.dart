@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/file_system_reader.dart';
-import 'package:cockpit/app/cockpit/domain/entities/file_node.dart';
-import 'package:cockpit/app/cockpit/domain/entities/notebook_document.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
+import 'package:desktop/app/cockpit/domain/contracts/file_system_reader.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_node.dart';
+import 'package:desktop/app/cockpit/domain/entities/notebook_document.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
 
 /// Lê a árvore via `dart:io`: pastas primeiro (ordenadas), depois arquivos.
 /// Inclui ocultos úteis (`.pi`, `.claude`, `.env`…), mas **esconde pastas de

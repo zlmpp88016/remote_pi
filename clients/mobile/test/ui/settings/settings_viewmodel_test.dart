@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:app/data/preferences/preferences.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/data/transport/peer_channel.dart';
-import 'package:app/data/transport/relay_config.dart';
-import 'package:app/pairing/pair_request_flow.dart';
-import 'package:app/pairing/storage.dart';
-import 'package:app/ui/settings/states/settings_state.dart';
-import 'package:app/ui/settings/viewmodels/settings_viewmodel.dart';
+import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/data/transport/peer_channel.dart';
+import 'package:mobile/data/transport/relay_config.dart';
+import 'package:mobile/pairing/pair_request_flow.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/ui/settings/states/settings_state.dart';
+import 'package:mobile/ui/settings/viewmodels/settings_viewmodel.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 

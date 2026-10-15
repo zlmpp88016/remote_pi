@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:app/data/device/device_capabilities_probe.dart';
-import 'package:app/domain/value_objects/device_capabilities.dart';
+import 'package:mobile/data/device/device_capabilities_probe.dart';
+import 'package:mobile/domain/value_objects/device_capabilities.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';

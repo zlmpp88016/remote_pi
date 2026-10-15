@@ -1,6 +1,6 @@
 // Tests for the new room-related control frames (plan 17).
 
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

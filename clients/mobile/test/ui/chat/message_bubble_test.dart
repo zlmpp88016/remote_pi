@@ -1,9 +1,9 @@
 // Agent output (AssistantBubble) must use the FULL content width, not the old
 // 340px cap (user-reported: markdown reply not filling the horizontal space).
 
-import 'package:app/domain/session_state.dart';
-import 'package:app/ui/chat/widgets/agent_markdown.dart';
-import 'package:app/ui/chat/widgets/message_bubble.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/ui/chat/widgets/agent_markdown.dart';
+import 'package:mobile/ui/chat/widgets/message_bubble.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

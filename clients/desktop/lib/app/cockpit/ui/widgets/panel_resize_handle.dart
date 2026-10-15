@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Alça horizontal compartilhada pelos subpainéis redimensionáveis do Cockpit.

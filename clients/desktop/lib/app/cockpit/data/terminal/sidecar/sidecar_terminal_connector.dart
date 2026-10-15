@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_status_server.dart';
-import 'package:cockpit/app/core/utils/child_process_lifetime.dart';
-import 'package:cockpit/app/core/utils/user_home.dart';
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_status_server.dart';
+import 'package:desktop/app/core/utils/child_process_lifetime.dart';
+import 'package:desktop/app/core/utils/user_home.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 import 'package:flutter/foundation.dart';
 
 /// Garante um `cockpit-server` sidecar de pé e devolve o serviço de terminais

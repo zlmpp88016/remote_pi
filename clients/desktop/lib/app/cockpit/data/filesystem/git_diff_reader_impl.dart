@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/filesystem/git_binary.dart';
-import 'package:cockpit/app/cockpit/data/filesystem/unified_diff_parser.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/git_diff_reader.dart';
-import 'package:cockpit/app/cockpit/domain/entities/file_diff.dart';
+import 'package:desktop/app/cockpit/data/filesystem/git_binary.dart';
+import 'package:desktop/app/cockpit/data/filesystem/unified_diff_parser.dart';
+import 'package:desktop/app/cockpit/domain/contracts/git_diff_reader.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_diff.dart';
 
 /// Lê o diff de um arquivo contra o HEAD rodando `git diff HEAD` e parseando o
 /// unified diff. Untracked (sem HEAD) é lido direto como "tudo adicionado".

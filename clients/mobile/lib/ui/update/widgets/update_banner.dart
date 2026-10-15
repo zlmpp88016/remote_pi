@@ -1,7 +1,7 @@
-import 'package:app/domain/entities/update_info.dart';
-import 'package:app/ui/core/themes/themes.dart';
-import 'package:app/ui/update/states/update_banner_state.dart';
-import 'package:app/ui/update/viewmodels/update_banner_viewmodel.dart';
+import 'package:mobile/domain/entities/update_info.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
+import 'package:mobile/ui/update/states/update_banner_state.dart';
+import 'package:mobile/ui/update/viewmodels/update_banner_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';

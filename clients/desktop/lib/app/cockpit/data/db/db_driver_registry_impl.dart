@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/contracts/db_driver.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/domain/contracts/db_driver.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
 
 import 'anaki_db_driver.dart';
 

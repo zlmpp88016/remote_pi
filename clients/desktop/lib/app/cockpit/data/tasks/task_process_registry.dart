@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/data/process/owned_process_registry.dart';
+import 'package:desktop/app/core/data/process/owned_process_registry.dart';
 
 /// Registro isolado dos processos raiz das tasks executadas em PTY.
 ///

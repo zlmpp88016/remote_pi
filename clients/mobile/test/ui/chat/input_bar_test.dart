@@ -1,8 +1,8 @@
 // Plan/28 Wave C — settings/quick-actions icon visibility in the
 // chat input bar.
 
-import 'package:app/domain/session_state.dart';
-import 'package:app/ui/chat/widgets/input_bar.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/ui/chat/widgets/input_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';

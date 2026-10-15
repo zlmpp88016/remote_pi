@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:app/data/actions/actions_repository.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/chat/quick_actions/states/quick_actions_state.dart';
-import 'package:app/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
+import 'package:mobile/data/actions/actions_repository.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/chat/quick_actions/states/quick_actions_state.dart';
+import 'package:mobile/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeActionsRepository implements IActionsRepository {

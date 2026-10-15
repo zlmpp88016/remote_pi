@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:cockpit_core/cockpit_core.dart' show FileEntry, FileService;
+import 'package:desktop_core/cockpit_core.dart' show FileEntry, FileService;
 
 /// Descobre as **roots git** de uma pasta no host remoto, com a mesma regra do
 /// `GitController.deriveRoots` local (multirepo por detecção implícita):

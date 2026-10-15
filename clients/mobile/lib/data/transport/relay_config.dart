@@ -18,7 +18,7 @@
 // is no longer consulted when opening a connection — the resolution is
 // global, not per-peer.
 
-import 'package:app/data/preferences/preferences.dart';
+import 'package:mobile/data/preferences/preferences.dart';
 
 /// Public community relay. Hardcoded; not configurable at build time
 /// to keep the onboarding flow deterministic.

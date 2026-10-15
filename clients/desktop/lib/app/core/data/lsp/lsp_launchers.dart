@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/domain/contracts/lsp_client.dart';
+import 'package:desktop/app/core/domain/contracts/lsp_client.dart';
 
 /// Definição de uma linguagem para o LSP: como detectá-la (extensões), onde
 /// está a raiz do projeto (markers, ver [ProjectRootFinder]) e o comando padrão

@@ -1,6 +1,6 @@
 // Plan/27 Wave A — post-pair nickname modal.
 
-import 'package:app/ui/pairing/widgets/nickname_sheet.dart';
+import 'package:mobile/ui/pairing/widgets/nickname_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

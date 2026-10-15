@@ -1,7 +1,7 @@
-import 'package:cockpit_core/cockpit_core.dart';
-import 'package:cockpit/app/cockpit/data/remote/remote_host_connector.dart';
-import 'package:cockpit/app/cockpit/data/remote/ssh_known_hosts.dart';
-import 'package:cockpit/app/cockpit/domain/entities/remote_host.dart';
+import 'package:desktop_core/cockpit_core.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_host_connector.dart';
+import 'package:desktop/app/cockpit/data/remote/ssh_known_hosts.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_host.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Host novo no desktop morria em `Host key verification failed`: o app roda o

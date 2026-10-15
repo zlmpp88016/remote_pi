@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/data/remote/remote_root_finder.dart';
-import 'package:cockpit_core/cockpit_core.dart' show FileEntry, FileService;
+import 'package:desktop/app/cockpit/data/remote/remote_root_finder.dart';
+import 'package:desktop_core/cockpit_core.dart' show FileEntry, FileService;
 import 'package:flutter_test/flutter_test.dart';
 
 /// Filesystem remoto de mentira: mapa de pasta → entradas, e de arquivo →

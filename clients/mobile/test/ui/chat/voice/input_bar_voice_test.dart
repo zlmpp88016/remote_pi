@@ -4,9 +4,9 @@
 
 import 'dart:async';
 
-import 'package:app/data/voice/speech_service.dart';
-import 'package:app/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
-import 'package:app/ui/chat/widgets/input_bar.dart';
+import 'package:mobile/data/voice/speech_service.dart';
+import 'package:mobile/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
+import 'package:mobile/ui/chat/widgets/input_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';

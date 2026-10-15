@@ -1,8 +1,8 @@
-import 'package:cockpit/app/cockpit/data/telemetry/fingerprint.dart';
-import 'package:cockpit/app/cockpit/data/telemetry/line_parser/telemetry_line_parser_impl.dart';
-import 'package:cockpit/app/cockpit/data/telemetry/redaction.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/telemetry_line_parser.dart';
-import 'package:cockpit/app/cockpit/domain/entities/telemetry_event.dart';
+import 'package:desktop/app/cockpit/data/telemetry/fingerprint.dart';
+import 'package:desktop/app/cockpit/data/telemetry/line_parser/telemetry_line_parser_impl.dart';
+import 'package:desktop/app/cockpit/data/telemetry/redaction.dart';
+import 'package:desktop/app/cockpit/domain/contracts/telemetry_line_parser.dart';
+import 'package:desktop/app/cockpit/domain/entities/telemetry_event.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 List<TelemetryEvent> parse(
@@ -99,8 +99,8 @@ flutter: RangeError (index): Index out of range: index 3, length 2
 flutter:
 flutter: When the exception was thrown, this was the stack:
 flutter: #0      List.[] (dart:core-patch/growable_array.dart:264:36)
-flutter: #1      CartService.add (package:app/cart/cart_service.dart:87:22)
-flutter: #2      CartBadge._onTap (package:app/cart/cart_badge.dart:41:9)
+flutter: #1      CartService.add (package:mobile/cart/cart_service.dart:87:22)
+flutter: #2      CartBadge._onTap (package:mobile/cart/cart_badge.dart:41:9)
 flutter: #3      _InkResponseState.handleTap (package:flutter/src/material/ink_well.dart:1176:21)
 flutter: ════════════════════════════════════════════════════════════════════════════════
 flutter: depois''');
@@ -122,7 +122,7 @@ flutter: depois''');
 The following RangeError was thrown while handling a gesture:
 RangeError (index): Index out of range: index 3, length 2
 When the exception was thrown, this was the stack:
-#0      CartService.add (package:app/cart/cart_service.dart:87:22)
+#0      CartService.add (package:mobile/cart/cart_service.dart:87:22)
 ════════════════════════════════════════
 Another exception was thrown: RangeError (index): Index out of range: index 3, length 2''',
       );
@@ -135,7 +135,7 @@ Another exception was thrown: RangeError (index): Index out of range: index 3, l
       final ev = parse('''
 Unhandled exception:
 Null check operator used on a null value
-#0      _CheckoutPageState.build (package:app/checkout/checkout_page.dart:120:41)
+#0      _CheckoutPageState.build (package:mobile/checkout/checkout_page.dart:120:41)
 #1      StatefulElement.build (package:flutter/src/widgets/framework.dart:5592:27)
 <asynchronous suspension>
 next line''');
@@ -220,7 +220,7 @@ exit status 2''', config: const TelemetryParserConfig(projectRoots: ['/app']));
       final ev = parse('''
 00:08 +11 -1: CartServiceTest adds item beyond capacity [E]
   RangeError (index): Index out of range: index 3, length 2
-  package:app/cart/cart_service.dart 87:22  CartService.add
+  package:mobile/cart/cart_service.dart 87:22  CartService.add
   test/cart/cart_service_test.dart 33:5     main.<fn>.<fn>
 
 00:08 +11 -1: Some tests failed.''');

@@ -1,14 +1,14 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
-import 'package:cockpit/app/cockpit/domain/entities/scm_line_decorations.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/editor_indent.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/editor_overview_ruler.dart';
-import 'package:cockpit/app/core/domain/entities/lsp_diagnostic.dart';
-import 'package:cockpit/app/core/ui/clamping_scroll_behavior.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
-import 'package:cockpit/app/core/ui/widgets/code_editing_controller.dart';
+import 'package:desktop/app/cockpit/domain/entities/scm_line_decorations.dart';
+import 'package:desktop/app/cockpit/ui/widgets/editor_indent.dart';
+import 'package:desktop/app/cockpit/ui/widgets/editor_overview_ruler.dart';
+import 'package:desktop/app/core/domain/entities/lsp_diagnostic.dart';
+import 'package:desktop/app/core/ui/clamping_scroll_behavior.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/app/core/ui/widgets/code_editing_controller.dart';
 import 'package:flutter/gestures.dart' show PointerHoverEvent;
 import 'package:flutter/material.dart'
     show

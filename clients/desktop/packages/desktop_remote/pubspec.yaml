@@ -1,0 +1,16 @@
+name: desktop_remote
+description: Proxies remotos dos contratos do Cockpit (plano 58) — o cliente fala com o cockpit-server pelo protocolo.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  desktop_core:
+    path: ../desktop_core
+  desktop_protocol:
+    path: ../desktop_protocol
+
+dev_dependencies:
+  test: ^1.25.0

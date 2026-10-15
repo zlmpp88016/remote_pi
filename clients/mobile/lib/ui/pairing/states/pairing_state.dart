@@ -1,4 +1,4 @@
-import 'package:app/pairing/storage.dart';
+import 'package:mobile/pairing/storage.dart';
 
 sealed class PairingState {
   const PairingState();

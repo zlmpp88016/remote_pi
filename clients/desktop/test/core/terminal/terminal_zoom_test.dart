@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/terminal/terminal_zoom.dart';
+import 'package:desktop/app/core/terminal/terminal_zoom.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,15 +1,15 @@
 import 'dart:math' show max, min;
 
-import 'package:cockpit/app/core/terminal/xterm/src/core/buffer/cell_offset.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/core/buffer/line.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/core/buffer/range_line.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/core/buffer/range.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/core/charset.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/core/cursor.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/core/reflow.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/core/state.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/utils/circular_buffer.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/utils/unicode_v11.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/buffer/cell_offset.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/buffer/line.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/buffer/range_line.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/buffer/range.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/charset.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/cursor.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/reflow.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/state.dart';
+import 'package:desktop/app/core/terminal/xterm/src/utils/circular_buffer.dart';
+import 'package:desktop/app/core/terminal/xterm/src/utils/unicode_v11.dart';
 
 class Buffer {
   final TerminalState terminal;

@@ -1,6 +1,6 @@
-import 'package:app/domain/session_state.dart';
-import 'package:app/ui/chat/widgets/tool_request_card.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/ui/chat/widgets/tool_request_card.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

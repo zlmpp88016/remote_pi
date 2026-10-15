@@ -2,21 +2,21 @@ import 'dart:async';
 import 'dart:io' show File, Platform;
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/domain/entities/notebook_document.dart';
-import 'package:cockpit/app/cockpit/ui/session/notebook_session.dart';
-import 'package:cockpit/app/cockpit/ui/session/document_host.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/confirm_dialog.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/kanban_board_view.dart'
+import 'package:desktop/app/cockpit/domain/entities/notebook_document.dart';
+import 'package:desktop/app/cockpit/ui/session/notebook_session.dart';
+import 'package:desktop/app/cockpit/ui/session/document_host.dart';
+import 'package:desktop/app/cockpit/ui/widgets/confirm_dialog.dart';
+import 'package:desktop/app/cockpit/ui/widgets/kanban_board_view.dart'
     show kanbanDisplayPath;
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/ui/file_operation_error_message.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/app_menu.dart';
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
-import 'package:cockpit/app/core/ui/widgets/markdown_editing_controller.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/ui/file_operation_error_message.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/app_menu.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/app/core/ui/widgets/markdown_editing_controller.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:pasteboard/pasteboard.dart';

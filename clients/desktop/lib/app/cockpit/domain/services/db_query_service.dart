@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:cockpit_core/cockpit_core.dart';
+import 'package:desktop_core/cockpit_core.dart';
 
-import 'package:cockpit/app/cockpit/domain/contracts/db_connection_store.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/db_driver.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/mongo_database_store.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/nosql_runner.dart';
-import 'package:cockpit/app/cockpit/domain/db_schema_sql.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_result.dart';
+import 'package:desktop/app/cockpit/domain/contracts/db_connection_store.dart';
+import 'package:desktop/app/cockpit/domain/contracts/db_driver.dart';
+import 'package:desktop/app/cockpit/domain/contracts/mongo_database_store.dart';
+import 'package:desktop/app/cockpit/domain/contracts/nosql_runner.dart';
+import 'package:desktop/app/cockpit/domain/db_schema_sql.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_result.dart';
 
 /// Executa uma query SQL num host remoto (plano 58, Wave 4). Implementado
 /// pelo app (fala com o `cockpit-server` via `RemoteDbService`); o

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/core/terminal/terminal_controller.dart';
-import 'package:cockpit/app/core/terminal/xterm/xterm.dart' as xterm;
+import 'package:desktop/app/core/terminal/terminal_controller.dart';
+import 'package:desktop/app/core/terminal/xterm/xterm.dart' as xterm;
 
 /// Extrai uma janela de linhas do buffer ativo de um [Terminal] pra CLI
 /// `cockpit read-pane`/`read-task` (cobre o alt-screen de TUIs — lê o que está

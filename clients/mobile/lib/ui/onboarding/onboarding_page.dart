@@ -1,8 +1,8 @@
-import 'package:app/routing/adaptive.dart';
-import 'package:app/ui/core/themes/themes.dart';
-import 'package:app/ui/onboarding/states/onboarding_state.dart';
-import 'package:app/ui/onboarding/viewmodels/onboarding_viewmodel.dart';
-import 'package:app/ui/onboarding/widgets/widgets.dart';
+import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
+import 'package:mobile/ui/onboarding/states/onboarding_state.dart';
+import 'package:mobile/ui/onboarding/viewmodels/onboarding_viewmodel.dart';
+import 'package:mobile/ui/onboarding/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';

@@ -9,12 +9,12 @@ import 'dart:io'
         FileSystemEvent,
         Platform;
 
-import 'package:cockpit/app/cockpit/domain/contracts/git_command_runner.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/git_status_reader.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_file_status.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_info.dart';
-import 'package:cockpit/app/core/ui/window_activity_controller.dart';
-import 'package:cockpit/app/core/data/diagnostics/linux_performance_diagnostics.dart';
+import 'package:desktop/app/cockpit/domain/contracts/git_command_runner.dart';
+import 'package:desktop/app/cockpit/domain/contracts/git_status_reader.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_file_status.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_info.dart';
+import 'package:desktop/app/core/ui/window_activity_controller.dart';
+import 'package:desktop/app/core/data/diagnostics/linux_performance_diagnostics.dart';
 import 'package:flutter/foundation.dart';
 
 typedef DirectoryWatch = Stream<FileSystemEvent> Function(String path);

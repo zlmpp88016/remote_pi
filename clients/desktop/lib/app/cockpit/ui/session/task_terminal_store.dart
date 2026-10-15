@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:cockpit/app/cockpit/domain/contracts/task_runner_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_scrollback_store.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_run.dart';
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
-import 'package:cockpit/app/core/terminal/json_log_highlighter.dart';
-import 'package:cockpit/app/core/terminal/terminal_controller.dart';
-import 'package:cockpit/app/core/utils/quiet_period_debouncer.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_runner_gateway.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_scrollback_store.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_run.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/terminal/json_log_highlighter.dart';
+import 'package:desktop/app/core/terminal/terminal_controller.dart';
+import 'package:desktop/app/core/utils/quiet_period_debouncer.dart';
 
 /// Mantém **um emulador [Terminal] por task**, alimentado continuamente pelo
 /// output do runner — independente de haver ou não uma aba aberta. É isso que

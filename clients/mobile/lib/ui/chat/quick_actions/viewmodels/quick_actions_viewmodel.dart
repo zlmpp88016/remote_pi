@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:app/data/actions/actions_repository.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/chat/quick_actions/states/quick_actions_state.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/data/actions/actions_repository.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/chat/quick_actions/states/quick_actions_state.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
 
 /// Plan/28 Wave C — drives the Quick Actions bottom sheet and its
 /// Model sub-picker. Holds the last-resolved "current" pair (model /

@@ -7,8 +7,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:app/pairing/owner_identity_bridge.dart';
-import 'package:app/pairing/storage.dart';
+import 'package:mobile/pairing/owner_identity_bridge.dart';
+import 'package:mobile/pairing/storage.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';

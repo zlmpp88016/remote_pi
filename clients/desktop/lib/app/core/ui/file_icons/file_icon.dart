@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/ui/file_icons/file_icon_map.g.dart';
-import 'package:cockpit/app/core/utils/workspace_env.dart';
+import 'package:desktop/app/core/ui/file_icons/file_icon_map.g.dart';
+import 'package:desktop/app/core/utils/workspace_env.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 

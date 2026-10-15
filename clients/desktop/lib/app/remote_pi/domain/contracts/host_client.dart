@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/core/domain/result.dart';
 
 import '../entities/host_protocol.dart';
 import '../entities/pairing_code.dart';

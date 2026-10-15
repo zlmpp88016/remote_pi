@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/domain/entities/sound_event.dart';
+import 'package:desktop/app/core/domain/entities/sound_event.dart';
 
 /// Notificações nativas do SO + sons in-app. Contrato no domínio; a impl
 /// (plugin) mora em `data/notifications/`.

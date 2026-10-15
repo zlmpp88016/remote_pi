@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:cockpit/app/cockpit/domain/contracts/task_runner_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_scrollback_store.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_run.dart';
-import 'package:cockpit/app/cockpit/ui/session/task_terminal_store.dart';
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
-import 'package:cockpit/app/core/terminal/terminal_controller.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_runner_gateway.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_scrollback_store.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_run.dart';
+import 'package:desktop/app/cockpit/ui/session/task_terminal_store.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/terminal/terminal_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Runner que imita a mecânica do `PtyTaskRunner`: `runs()` é broadcast

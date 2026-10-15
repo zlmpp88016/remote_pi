@@ -5,13 +5,13 @@ library;
 
 import 'dart:async';
 
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/remote_pi/domain/contracts/host_client.dart';
-import 'package:cockpit/app/remote_pi/domain/contracts/host_client_factory.dart';
-import 'package:cockpit/app/remote_pi/domain/entities/host_protocol.dart';
-import 'package:cockpit/app/remote_pi/domain/entities/pairing_code.dart';
-import 'package:cockpit/app/remote_pi/domain/errors/host_error.dart';
-import 'package:cockpit/app/remote_pi/ui/viewmodels/remote_pi_host_viewmodel.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/remote_pi/domain/contracts/host_client.dart';
+import 'package:desktop/app/remote_pi/domain/contracts/host_client_factory.dart';
+import 'package:desktop/app/remote_pi/domain/entities/host_protocol.dart';
+import 'package:desktop/app/remote_pi/domain/entities/pairing_code.dart';
+import 'package:desktop/app/remote_pi/domain/errors/host_error.dart';
+import 'package:desktop/app/remote_pi/ui/viewmodels/remote_pi_host_viewmodel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _kPairUri =

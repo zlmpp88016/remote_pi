@@ -1,16 +1,16 @@
 import 'dart:io' show Platform;
 
-import 'package:cockpit/app/core/utils/platform_kind.dart';
+import 'package:desktop/app/core/utils/platform_kind.dart';
 
-import 'package:cockpit/app/core/app_intents.dart';
-import 'package:cockpit/app/core/ui/menu/editor_menu_bridge.dart';
-import 'package:cockpit/app/core/ui/menu/menu_model.dart';
-import 'package:cockpit/app/core/ui/menu/workspace_menu_bridge.dart';
-import 'package:cockpit/app/core/ui/settings_controller.dart';
-import 'package:cockpit/app/core/ui/widgets/app_menu.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/i18n/strings.g.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/app_intents.dart';
+import 'package:desktop/app/core/ui/menu/editor_menu_bridge.dart';
+import 'package:desktop/app/core/ui/menu/menu_model.dart';
+import 'package:desktop/app/core/ui/menu/workspace_menu_bridge.dart';
+import 'package:desktop/app/core/ui/settings_controller.dart';
+import 'package:desktop/app/core/ui/widgets/app_menu.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/i18n/strings.g.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:window_manager/window_manager.dart';

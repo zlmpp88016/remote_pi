@@ -1,7 +1,7 @@
-import 'package:cockpit/app/cockpit/domain/entities/file_view.dart';
-import 'package:cockpit/app/cockpit/domain/entities/scm_line_decorations.dart';
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
-import 'package:cockpit/app/cockpit/ui/session/scm_line_decoration_coordinator.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_view.dart';
+import 'package:desktop/app/cockpit/domain/entities/scm_line_decorations.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/ui/session/scm_line_decoration_coordinator.dart';
 
 /// Uma aba de viewer read-only de arquivo (texto/markdown/imagem). O conteúdo
 /// ([view]) já vem classificado/lido pela VM (binário/vídeo nem chega aqui).

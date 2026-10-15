@@ -3,8 +3,8 @@
 // ask_user modal (the protocol surface is covered by
 // test/protocol/extension_ui_test.dart).
 
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/chat/widgets/extension_ui_sheet.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/chat/widgets/extension_ui_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

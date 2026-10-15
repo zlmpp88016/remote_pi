@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:app/pairing/storage.dart';
+import 'package:mobile/pairing/storage.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart' show ChangeNotifier;
 import 'package:remote_pi_identity/remote_pi_identity.dart';

@@ -1,7 +1,7 @@
-import 'package:cockpit/app/remote_pi/domain/entities/host_protocol.dart' show WorkspaceState;
-import 'package:cockpit/app/remote_pi/domain/entities/pairing_code.dart';
-import 'package:cockpit/app/remote_pi/domain/errors/host_error.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/remote_pi/domain/entities/host_protocol.dart' show WorkspaceState;
+import 'package:desktop/app/remote_pi/domain/entities/pairing_code.dart';
+import 'package:desktop/app/remote_pi/domain/errors/host_error.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/widgets.dart';
 
 /// Traduz um [HostError] pra frase mostrada ao usuário — padrão do repo

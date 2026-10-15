@@ -1,8 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/data/filesystem/content_searcher_impl.dart';
-import 'package:cockpit/app/cockpit/domain/entities/content_search.dart';
+import 'package:desktop/app/cockpit/data/filesystem/content_searcher_impl.dart';
+import 'package:desktop/app/cockpit/domain/entities/content_search.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

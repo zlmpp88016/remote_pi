@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:app/ui/core/themes/app_colors.dart';
+import 'package:mobile/ui/core/themes/app_colors.dart';
 
 /// Monospace font family — used for code, terminal-style chrome, and most of
 /// the app's UI text (the product's "coding agent" identity).

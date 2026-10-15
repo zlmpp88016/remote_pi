@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/domain/entities/automation.dart';
+import 'package:desktop/app/core/domain/entities/automation.dart';
 
 /// Curadoria do catálogo devolvido pelos CLIs.
 ///

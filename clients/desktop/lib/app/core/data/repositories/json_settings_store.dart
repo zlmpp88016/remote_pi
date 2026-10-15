@@ -1,6 +1,6 @@
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
-import 'package:cockpit/app/core/domain/contracts/settings_store.dart';
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/core/domain/contracts/settings_store.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
 
 /// Persiste as [AppSettings] num [JsonStateStore] (um único registro JSON sob
 /// a chave [_key]). Substitui o antigo `HiveSettingsStore` — mesma semântica.

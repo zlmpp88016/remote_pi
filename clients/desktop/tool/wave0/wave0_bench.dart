@@ -14,9 +14,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cockpit_core/cockpit_core.dart';
-import 'package:cockpit_engine/cockpit_engine.dart';
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop_core/cockpit_core.dart';
+import 'package:desktop_engine/cockpit_engine.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 
 const _iterations = 300;
 const _dumpBytes = 32 * 1024 * 1024;

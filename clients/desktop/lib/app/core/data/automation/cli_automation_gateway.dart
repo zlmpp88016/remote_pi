@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/core/data/setup/remote_pi_resolver.dart';
-import 'package:cockpit/app/core/domain/contracts/automation_gateway.dart';
-import 'package:cockpit/app/core/domain/entities/automation.dart';
-import 'package:cockpit/app/core/domain/exceptions/automation_error.dart';
-import 'package:cockpit/app/core/domain/services/automation_model_catalog.dart';
-import 'package:cockpit/app/core/domain/services/commit_message_prompt.dart';
-import 'package:cockpit/app/core/utils/executable_resolver.dart';
+import 'package:desktop/app/core/data/setup/remote_pi_resolver.dart';
+import 'package:desktop/app/core/domain/contracts/automation_gateway.dart';
+import 'package:desktop/app/core/domain/entities/automation.dart';
+import 'package:desktop/app/core/domain/exceptions/automation_error.dart';
+import 'package:desktop/app/core/domain/services/automation_model_catalog.dart';
+import 'package:desktop/app/core/domain/services/commit_message_prompt.dart';
+import 'package:desktop/app/core/utils/executable_resolver.dart';
 
 class CliAutomationGateway implements AutomationGateway {
   CliAutomationGateway({this.timeout = const Duration(seconds: 60)});

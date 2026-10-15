@@ -1,6 +1,6 @@
 import 'dart:io' show Platform;
 
-import 'package:app/domain/value_objects/device_capabilities.dart';
+import 'package:mobile/domain/value_objects/device_capabilities.dart';
 
 // Plan/69 W3 — the `dart:io` probe behind the capability table.
 //

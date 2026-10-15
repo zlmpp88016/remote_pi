@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
 
 /// Completa o scheme de URLs digitadas/recebidas: alvo local ganha http, o
 /// resto https. `0.0.0.0` (bind-address de dev server) vira `localhost`.

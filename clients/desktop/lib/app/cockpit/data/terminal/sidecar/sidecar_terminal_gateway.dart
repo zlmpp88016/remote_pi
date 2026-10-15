@@ -2,13 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/data/terminal/pty_terminal_gateway.dart';
-import 'package:cockpit/app/cockpit/data/terminal/sidecar/sidecar_terminal_connector.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_gateway.dart';
-import 'package:cockpit/app/core/domain/entities/terminal_profile.dart';
-import 'package:cockpit/app/core/utils/spawn_directory.dart';
-import 'package:cockpit_core/cockpit_core.dart';
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop/app/cockpit/data/terminal/pty_terminal_gateway.dart';
+import 'package:desktop/app/cockpit/data/terminal/sidecar/sidecar_terminal_connector.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_gateway.dart';
+import 'package:desktop/app/core/domain/entities/terminal_profile.dart';
+import 'package:desktop/app/core/utils/spawn_directory.dart';
+import 'package:desktop_core/cockpit_core.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 
 /// [TerminalGateway] servido pelo `cockpit-server` sidecar via loopback
 /// (plano 58, Wave 1). A UI não sabe a diferença: mesmo contrato, mesmos

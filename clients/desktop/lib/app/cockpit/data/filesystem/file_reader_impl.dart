@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/file_reader.dart';
-import 'package:cockpit/app/cockpit/domain/entities/file_view.dart';
+import 'package:desktop/app/cockpit/domain/contracts/file_reader.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_view.dart';
 
 /// Classifica o arquivo por extensão + conteúdo:
 /// - vídeo → [FileViewVideo] (só o caminho);

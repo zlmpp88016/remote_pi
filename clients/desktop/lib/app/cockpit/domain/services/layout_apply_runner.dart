@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/cockpit/domain/entities/layout_spec.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/cockpit/domain/entities/layout_spec.dart';
 
 /// Sequência de "abrir um layout `.ckp`" (plano 2.0, card k21), isolada do
 /// `CockpitViewModel` pra ser testável sem montar o VM:

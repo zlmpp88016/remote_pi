@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
-import 'package:cockpit/app/core/terminal/terminal_controller.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/core/terminal/terminal_controller.dart';
 
 /// Aba **read-only** que visualiza o output de uma task. É leve e descartável:
 /// o [terminal] não é dela — vive no `TaskTerminalStore` —, então abrir/fechar

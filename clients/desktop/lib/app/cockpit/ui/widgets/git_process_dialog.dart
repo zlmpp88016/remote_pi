@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:cockpit/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Mostra um comando git rodando ao vivo num dialog: as linhas de stdout/stderr

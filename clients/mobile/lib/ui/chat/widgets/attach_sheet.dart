@@ -1,7 +1,7 @@
-import 'package:app/domain/value_objects/device_capabilities.dart';
-import 'package:app/routing/adaptive.dart';
-import 'package:app/ui/chat/quick_actions/widgets/dismiss_on_session_change.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/domain/value_objects/device_capabilities.dart';
+import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/chat/quick_actions/widgets/dismiss_on_session_change.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';

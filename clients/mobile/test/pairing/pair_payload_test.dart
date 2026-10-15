@@ -1,4 +1,4 @@
-import 'package:app/pairing/pair_payload.dart';
+import 'package:mobile/pairing/pair_payload.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

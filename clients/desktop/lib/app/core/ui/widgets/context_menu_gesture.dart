@@ -1,4 +1,4 @@
-import 'package:cockpit/app/core/utils/platform_kind.dart';
+import 'package:desktop/app/core/utils/platform_kind.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:flutter/widgets.dart';
 

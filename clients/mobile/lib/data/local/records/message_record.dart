@@ -1,4 +1,4 @@
-import 'package:app/domain/session_state.dart';
+import 'package:mobile/domain/session_state.dart';
 
 /// Plan/31 — one persisted chat message (row-granular SSOT). Stored in the
 /// per-session `msgs:<epk>:<roomId>` box, keyed by [seq]. Maps to the domain

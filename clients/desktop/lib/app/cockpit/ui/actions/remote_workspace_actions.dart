@@ -1,16 +1,16 @@
 import 'dart:async' show StreamController;
 
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/domain/entities/remote_host.dart';
-import 'package:cockpit/app/cockpit/ui/actions/workspace_actions.dart';
-import 'package:cockpit/app/cockpit/ui/remote/add_remote_host_dialog.dart';
-import 'package:cockpit/app/cockpit/ui/remote/remote_folder_picker.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/git_process_dialog.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/widgets.dart';
-import 'package:cockpit/app/core/ui/widgets/app_menu.dart';
-import 'package:cockpit/app/core/utils/platform_kind.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_host.dart';
+import 'package:desktop/app/cockpit/ui/actions/workspace_actions.dart';
+import 'package:desktop/app/cockpit/ui/remote/add_remote_host_dialog.dart';
+import 'package:desktop/app/cockpit/ui/remote/remote_folder_picker.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/widgets/git_process_dialog.dart';
+import 'package:desktop/app/cockpit/ui/widgets/widgets.dart';
+import 'package:desktop/app/core/ui/widgets/app_menu.dart';
+import 'package:desktop/app/core/utils/platform_kind.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter_modular/flutter_modular.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

@@ -1,4 +1,4 @@
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 
 /// Plan/67 — state of the workspace (cwd) picker. The app reaches this
 /// screen from Home; it queries the machine's `host` room for the

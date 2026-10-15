@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:cockpit/app/cockpit/domain/contracts/worktree_manager.dart';
-import 'package:cockpit/app/cockpit/domain/entities/worktree.dart';
-import 'package:cockpit/app/cockpit/domain/services/worktree_reconciler.dart';
+import 'package:desktop/app/cockpit/domain/contracts/worktree_manager.dart';
+import 'package:desktop/app/cockpit/domain/entities/worktree.dart';
+import 'package:desktop/app/cockpit/domain/services/worktree_reconciler.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

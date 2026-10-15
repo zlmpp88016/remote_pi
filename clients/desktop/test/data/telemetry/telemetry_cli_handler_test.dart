@@ -1,13 +1,13 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/cockpit/data/telemetry/line_parser/telemetry_line_parser_impl.dart';
-import 'package:cockpit/app/cockpit/data/telemetry/sqlite_telemetry_store.dart';
-import 'package:cockpit/app/cockpit/data/telemetry/telemetry_ingest_impl.dart';
-import 'package:cockpit/app/cockpit/data/telemetry/telemetry_store_registry.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/telemetry_ingest.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_status_server.dart';
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/telemetry_cli_handler.dart';
+import 'package:desktop/app/cockpit/data/telemetry/line_parser/telemetry_line_parser_impl.dart';
+import 'package:desktop/app/cockpit/data/telemetry/sqlite_telemetry_store.dart';
+import 'package:desktop/app/cockpit/data/telemetry/telemetry_ingest_impl.dart';
+import 'package:desktop/app/cockpit/data/telemetry/telemetry_store_registry.dart';
+import 'package:desktop/app/cockpit/domain/contracts/telemetry_ingest.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_status_server.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/telemetry_cli_handler.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -95,7 +95,7 @@ void main() {
       'lines': [
         '00:08 +11 -1: CartServiceTest adds item [E]',
         '  RangeError (index): Index out of range: index 3, length 2',
-        '  package:app/cart/cart_service.dart 87:22  CartService.add',
+        '  package:mobile/cart/cart_service.dart 87:22  CartService.add',
         '',
         'DeprecationWarning: old api',
       ],
@@ -132,7 +132,7 @@ void main() {
     final run = await wrapperRun([
       '{"level":"debug","msg":"cart add","itemId":"sku-88","items":2}',
       'RangeError (index): Index out of range: index 3, length 2',
-      '#0      CartService.add (package:app/cart/cart_service.dart:87:22)',
+      '#0      CartService.add (package:mobile/cart/cart_service.dart:87:22)',
       'after',
     ]);
     final errors = await call('telemetry-errors');

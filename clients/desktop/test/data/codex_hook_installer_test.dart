@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/hooks/codex_hook_installer_impl.dart';
+import 'package:desktop/app/cockpit/data/hooks/codex_hook_installer_impl.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Instalador com o passo de materialização da CLI curto-circuitado: os testes

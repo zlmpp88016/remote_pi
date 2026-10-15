@@ -3,9 +3,9 @@ import 'dart:isolate';
 
 import 'package:anaki_mongodb/anaki_mongodb.dart';
 import 'package:anaki_redis/anaki_redis.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/nosql_runner.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_result.dart';
+import 'package:desktop/app/cockpit/domain/contracts/nosql_runner.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_result.dart';
 import 'package:flutter/foundation.dart';
 
 /// Executor **CLI-only** de comandos NoSQL/cache via anakiORM (Redis, Mongo).

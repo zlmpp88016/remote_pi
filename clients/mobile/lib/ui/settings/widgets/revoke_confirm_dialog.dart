@@ -1,5 +1,5 @@
-import 'package:app/pairing/storage.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 
 /// Confirmation dialog shown before a peer is revoked. Returns true if the

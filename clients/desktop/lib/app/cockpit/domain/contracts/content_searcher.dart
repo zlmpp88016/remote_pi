@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/content_search.dart';
+import 'package:desktop/app/cockpit/domain/entities/content_search.dart';
 
 /// Busca por **conteúdo** (find-in-files): varre os arquivos da pasta e emite,
 /// **incrementalmente**, os resultados por arquivo conforme acha. A impl

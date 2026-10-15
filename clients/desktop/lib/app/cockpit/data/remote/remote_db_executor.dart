@@ -1,13 +1,13 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/cockpit/data/db/db_connection_store_impl.dart';
-import 'package:cockpit/app/cockpit/data/db/nosql_command_runner.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/nosql_runner.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_result.dart';
-import 'package:cockpit/app/cockpit/domain/services/db_query_service.dart';
-import 'package:cockpit_core/cockpit_core.dart';
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop/app/cockpit/data/db/db_connection_store_impl.dart';
+import 'package:desktop/app/cockpit/data/db/nosql_command_runner.dart';
+import 'package:desktop/app/cockpit/domain/contracts/nosql_runner.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_result.dart';
+import 'package:desktop/app/cockpit/domain/services/db_query_service.dart';
+import 'package:desktop_core/cockpit_core.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 
 /// Lê as conexões de DB de um workspace REMOTO: o `.cockpit/databases.json`
 /// (+ `.local.json`) vive no host, lido via `fs.read` (plano 58, Wave 4).

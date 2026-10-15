@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/repositories/json_project_repository.dart';
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/cockpit/data/repositories/json_project_repository.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Reordenar o rail salvava um workspace por vez, e cada `save` só resolve

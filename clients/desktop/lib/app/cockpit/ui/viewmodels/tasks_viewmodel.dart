@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/task_discovery.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/task_runner_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/entities/gallery_template.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_run.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_discovery.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_runner_gateway.dart';
+import 'package:desktop/app/cockpit/domain/entities/gallery_template.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_run.dart';
 import 'package:flutter/foundation.dart';
 
 /// ViewModel page-scoped do subpane de Tasks. Descobre as tasks do projeto

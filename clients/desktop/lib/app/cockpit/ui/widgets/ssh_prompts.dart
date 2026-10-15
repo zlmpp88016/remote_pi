@@ -1,6 +1,6 @@
-import 'package:cockpit_core/cockpit_core.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop_core/cockpit_core.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 
 /// Confirmação TOFU de host key nova (plano 54, decisão G).

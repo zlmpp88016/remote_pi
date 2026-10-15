@@ -1,10 +1,10 @@
-import 'package:app/data/preferences/preferences.dart';
-import 'package:app/data/transport/relay_config.dart';
-import 'package:app/pairing/storage.dart';
-import 'package:app/ui/core/themes/themes.dart';
-import 'package:app/ui/settings/states/settings_state.dart';
-import 'package:app/ui/settings/viewmodels/settings_viewmodel.dart';
-import 'package:app/ui/settings/widgets/widgets.dart';
+import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/data/transport/relay_config.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
+import 'package:mobile/ui/settings/states/settings_state.dart';
+import 'package:mobile/ui/settings/viewmodels/settings_viewmodel.dart';
+import 'package:mobile/ui/settings/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';

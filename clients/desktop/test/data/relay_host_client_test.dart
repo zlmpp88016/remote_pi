@@ -14,16 +14,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/remote_pi/data/host_socket.dart';
-import 'package:cockpit/app/remote_pi/data/pinenacl_ed25519_signer.dart';
-import 'package:cockpit/app/remote_pi/data/relay_host_client.dart';
-import 'package:cockpit/app/remote_pi/domain/contracts/ed25519_signer.dart';
-import 'package:cockpit/app/remote_pi/domain/contracts/host_client.dart';
-import 'package:cockpit/app/remote_pi/domain/entities/host_protocol.dart';
-import 'package:cockpit/app/remote_pi/domain/entities/pairing_code.dart';
-import 'package:cockpit/app/remote_pi/domain/errors/host_error.dart';
-import 'package:cockpit/app/remote_pi/domain/value_objects/host_client_config.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/remote_pi/data/host_socket.dart';
+import 'package:desktop/app/remote_pi/data/pinenacl_ed25519_signer.dart';
+import 'package:desktop/app/remote_pi/data/relay_host_client.dart';
+import 'package:desktop/app/remote_pi/domain/contracts/ed25519_signer.dart';
+import 'package:desktop/app/remote_pi/domain/contracts/host_client.dart';
+import 'package:desktop/app/remote_pi/domain/entities/host_protocol.dart';
+import 'package:desktop/app/remote_pi/domain/entities/pairing_code.dart';
+import 'package:desktop/app/remote_pi/domain/errors/host_error.dart';
+import 'package:desktop/app/remote_pi/domain/value_objects/host_client_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pinenacl/ed25519.dart' show Signature, VerifyKey;
 

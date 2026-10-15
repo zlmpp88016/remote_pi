@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/file_node.dart';
+import 'package:desktop/app/cockpit/domain/entities/file_node.dart';
 
 /// Leitura read-only da árvore de arquivos (o cockpit observa, não edita).
 /// Contrato no domínio; impl (dart:io) em `data/filesystem/`.

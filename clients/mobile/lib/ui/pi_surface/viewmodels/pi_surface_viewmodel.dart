@@ -1,8 +1,8 @@
-import 'package:app/data/sessions/session_catalog.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
-import 'package:app/ui/pi_surface/states/pi_surface_state.dart';
-import 'package:app/ui/workspaces/viewmodels/workspace_browser_viewmodel.dart';
+import 'package:mobile/data/sessions/session_catalog.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/ui/pi_surface/states/pi_surface_state.dart';
+import 'package:mobile/ui/workspaces/viewmodels/workspace_browser_viewmodel.dart';
 
 /// Plan/68 — drives the "Pi" page of a workspace: what the machine's Pi has
 /// installed, plus the closed-vocabulary management actions.

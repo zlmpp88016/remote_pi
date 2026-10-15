@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/hooks/claude_hook_installer_impl.dart';
+import 'package:desktop/app/cockpit/data/hooks/claude_hook_installer_impl.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// O alias curto `ck` é o MESMO binário da CLI, criado ao lado dela: symlink

@@ -9,11 +9,11 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart' show HardwareKeyboard;
 import 'package:flutter/widgets.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/core/mouse/button.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/core/mouse/button_state.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/core/mouse/mode.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/ui/controller.dart';
-import 'package:cockpit/app/core/terminal/xterm/src/ui/gesture/gesture_detector.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/mouse/button.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/mouse/button_state.dart';
+import 'package:desktop/app/core/terminal/xterm/src/core/mouse/mode.dart';
+import 'package:desktop/app/core/terminal/xterm/src/ui/controller.dart';
+import 'package:desktop/app/core/terminal/xterm/src/ui/gesture/gesture_detector.dart';
 
 import 'cockpit_terminal.dart';
 import 'cockpit_terminal_render.dart';

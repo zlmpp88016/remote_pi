@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/core/domain/result.dart';
 
 import '../domain/contracts/ed25519_signer.dart';
 import '../domain/contracts/host_client.dart';

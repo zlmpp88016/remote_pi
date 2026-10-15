@@ -11,9 +11,9 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:app/data/transport/relay_config.dart';
-import 'package:app/protocol/protocol.dart' show PairOk;
-import 'package:app/protocol/uuid7.dart';
+import 'package:mobile/data/transport/relay_config.dart';
+import 'package:mobile/protocol/protocol.dart' show PairOk;
+import 'package:mobile/protocol/uuid7.dart';
 
 import 'pair_payload.dart';
 import 'storage.dart';

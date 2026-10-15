@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/ui/document/document_windows.dart';
+import 'package:desktop/app/cockpit/ui/document/document_windows.dart';
 import 'package:flutter/services.dart';
 
 /// Arquivos abertos **pelo sistema** (Finder: duplo clique, "Abrir com").

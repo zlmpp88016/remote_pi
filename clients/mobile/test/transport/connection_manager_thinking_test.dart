@@ -5,10 +5,10 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:app/data/transport/channel.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/pairing/storage.dart';
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/data/transport/channel.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 PeerRecord _fakePeer() => const PeerRecord(

@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/services/terminal_path_resolver.dart';
+import 'package:desktop/app/cockpit/domain/services/terminal_path_resolver.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

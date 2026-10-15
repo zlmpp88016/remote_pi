@@ -3,15 +3,15 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/data/tasks/task_process_registry.dart';
-import 'package:cockpit/app/core/data/setup/remote_pi_resolver.dart';
-import 'package:cockpit/app/core/terminal/pty_output_scheduler.dart';
-import 'package:cockpit/app/core/utils/login_shell.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/task_runner_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/telemetry_ingest.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_run.dart';
-import 'package:cockpit_pty/cockpit_pty.dart';
+import 'package:desktop/app/cockpit/data/tasks/task_process_registry.dart';
+import 'package:desktop/app/core/data/setup/remote_pi_resolver.dart';
+import 'package:desktop/app/core/terminal/pty_output_scheduler.dart';
+import 'package:desktop/app/core/utils/login_shell.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_runner_gateway.dart';
+import 'package:desktop/app/cockpit/domain/contracts/telemetry_ingest.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_run.dart';
+import 'package:desktop_pty/cockpit_pty.dart';
 
 /// Executor de tasks num PTY nativo (`kyroon_pty`). Roda cada task via **login
 /// shell** (o shell de login do usuário + `-ilc "<cmd>"`, ver [resolveLoginShell])

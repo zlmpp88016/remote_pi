@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/ui/keep_awake_controller.dart';
-import 'package:cockpit_keepawake/cockpit_keepawake.dart';
+import 'package:desktop/app/core/ui/keep_awake_controller.dart';
+import 'package:desktop_keepawake/cockpit_keepawake.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _FakeKeepAwake implements KeepAwake {

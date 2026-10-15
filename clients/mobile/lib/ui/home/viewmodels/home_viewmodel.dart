@@ -1,12 +1,12 @@
 import 'dart:async';
 
-import 'package:app/data/preferences/preferences.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/data/transport/epk_encoding.dart';
-import 'package:app/pairing/storage.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/core/viewmodel/viewmodel.dart';
-import 'package:app/ui/home/states/home_state.dart';
+import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/data/transport/epk_encoding.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
+import 'package:mobile/ui/home/states/home_state.dart';
 
 /// HomeViewModel — passive list of paired peers + live presence dots
 /// + rooms discovered on each peer (plan 17). A single tile per

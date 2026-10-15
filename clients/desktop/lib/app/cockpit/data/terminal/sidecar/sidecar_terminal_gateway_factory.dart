@@ -1,7 +1,7 @@
-import 'package:cockpit/app/cockpit/data/terminal/sidecar/sidecar_terminal_connector.dart';
-import 'package:cockpit/app/cockpit/data/terminal/sidecar/sidecar_terminal_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_gateway_factory.dart';
+import 'package:desktop/app/cockpit/data/terminal/sidecar/sidecar_terminal_connector.dart';
+import 'package:desktop/app/cockpit/data/terminal/sidecar/sidecar_terminal_gateway.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_gateway.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_gateway_factory.dart';
 
 /// Cria um [SidecarTerminalGateway] por terminal, todos compartilhando o
 /// mesmo conector (uma conexão loopback pro sidecar por app).

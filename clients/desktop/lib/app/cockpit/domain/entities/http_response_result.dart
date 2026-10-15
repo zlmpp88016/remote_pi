@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/domain/entities/http_document.dart';
+import 'package:desktop/app/cockpit/domain/entities/http_document.dart';
 
 /// Resposta normalizada de um request — o contrato que a aba e a CLI conhecem.
 class HttpResponseResult {

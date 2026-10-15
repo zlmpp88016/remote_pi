@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:app/domain/session_state.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 
 /// Plan/30 — static image thumbnail + optional caption inside the user

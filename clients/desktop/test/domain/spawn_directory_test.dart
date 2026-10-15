@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:cockpit/app/core/utils/spawn_directory.dart';
-import 'package:cockpit/app/core/utils/user_home.dart';
+import 'package:desktop/app/core/utils/spawn_directory.dart';
+import 'package:desktop/app/core/utils/user_home.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 

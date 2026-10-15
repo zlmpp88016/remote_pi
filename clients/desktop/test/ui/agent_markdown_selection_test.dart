@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/ui/widgets/agent_markdown.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/cockpit/ui/widgets/agent_markdown.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
 import 'package:flutter/material.dart' show SelectionArea;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gpt_markdown/custom_widgets/selectable_adapter.dart';

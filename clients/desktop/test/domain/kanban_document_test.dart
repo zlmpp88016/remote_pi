@@ -1,7 +1,7 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/entities/kanban_document.dart';
-import 'package:cockpit/app/cockpit/domain/services/kanban_editor.dart';
+import 'package:desktop/app/cockpit/domain/entities/kanban_document.dart';
+import 'package:desktop/app/cockpit/domain/services/kanban_editor.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _board = '''

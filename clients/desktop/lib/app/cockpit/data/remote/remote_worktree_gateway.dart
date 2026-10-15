@@ -1,8 +1,8 @@
 import 'dart:convert';
 
-import 'package:cockpit/app/cockpit/domain/contracts/worktree_manager.dart';
-import 'package:cockpit_core/cockpit_core.dart';
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop/app/cockpit/domain/contracts/worktree_manager.dart';
+import 'package:desktop_core/cockpit_core.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 
 /// Uma worktree remota crua (path no host + branch), lida do `git worktree
 /// list --porcelain` do host.

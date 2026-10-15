@@ -1,16 +1,16 @@
 import 'dart:io';
 
-import 'package:cockpit/app/core/data/setup/launch_at_startup_service.dart';
-import 'package:cockpit/app/core/data/setup/sound_library.dart';
-import 'package:cockpit/app/core/data/theme_store.dart';
-import 'package:cockpit/app/core/domain/contracts/settings_store.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
-import 'package:cockpit/app/core/domain/entities/automation.dart';
-import 'package:cockpit/app/core/domain/entities/sound_event.dart';
-import 'package:cockpit/app/core/ui/themes/theme_registry.dart';
-import 'package:cockpit/app/core/ui/themes/theme_spec.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/core/data/setup/launch_at_startup_service.dart';
+import 'package:desktop/app/core/data/setup/sound_library.dart';
+import 'package:desktop/app/core/data/theme_store.dart';
+import 'package:desktop/app/core/domain/contracts/settings_store.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/domain/entities/automation.dart';
+import 'package:desktop/app/core/domain/entities/sound_event.dart';
+import 'package:desktop/app/core/ui/themes/theme_registry.dart';
+import 'package:desktop/app/core/ui/themes/theme_spec.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flutter/foundation.dart';
 
 /// Estado global das preferências do app. Vive **acima do `ShadcnApp`** pra

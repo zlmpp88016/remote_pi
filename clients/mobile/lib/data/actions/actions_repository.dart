@@ -27,11 +27,11 @@
 
 import 'dart:async';
 
-import 'package:app/data/transport/channel.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/domain/contracts/repository.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/protocol/uuid7.dart';
+import 'package:mobile/data/transport/channel.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/domain/contracts/repository.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/protocol/uuid7.dart';
 
 /// Reply for [ActionsRepository.listModels]. Captures both the catalogue
 /// and the model the Pi reports as active right now.

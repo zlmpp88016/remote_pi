@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:cockpit/app/cockpit/data/db/db_connection_store_impl.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/remote_db_writer.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
-import 'package:cockpit_remote/cockpit_remote.dart';
+import 'package:desktop/app/cockpit/data/db/db_connection_store_impl.dart';
+import 'package:desktop/app/cockpit/domain/contracts/remote_db_writer.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop_remote/cockpit_remote.dart';
 
 /// [RemoteDbWriter] sobre o `cockpit-server` do host (plano 62): definição de
 /// conexão por `fs.write`, senha por `db.secretSet`.

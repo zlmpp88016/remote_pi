@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/ui/session/pane_item.dart';
+import 'package:desktop/app/cockpit/ui/session/pane_item.dart';
 
 /// Aba da **tabela Redis** (plano 52): browse/edição das chaves de uma conexão
 /// registrada. Sem arquivo — o "documento" é a conexão (decisão A); o estado

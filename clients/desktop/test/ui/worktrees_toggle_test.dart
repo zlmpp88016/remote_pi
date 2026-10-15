@@ -1,9 +1,9 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/repositories/json_workspace_layout_store.dart';
-import 'package:cockpit/app/cockpit/ui/states/pane_node.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/projects_rail.dart';
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/cockpit/data/repositories/json_workspace_layout_store.dart';
+import 'package:desktop/app/cockpit/ui/states/pane_node.dart';
+import 'package:desktop/app/cockpit/ui/widgets/projects_rail.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

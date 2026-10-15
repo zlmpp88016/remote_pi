@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/entities/worktree.dart';
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/cockpit/domain/entities/worktree.dart';
+import 'package:desktop/app/core/domain/result.dart';
 
 /// Falha de uma operação de worktree, carregando a saída do git pra mostrar
 /// inline no dialog (plan/42, decisão 21).

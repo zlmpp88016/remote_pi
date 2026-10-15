@@ -1,46 +1,46 @@
-import 'package:cockpit_core/cockpit_core.dart';
+import 'package:desktop_core/cockpit_core.dart';
 
 import 'dart:async' show StreamSubscription, unawaited;
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/ui/actions/remote_workspace_actions.dart';
-import 'package:cockpit/app/cockpit/ui/actions/tab_actions.dart';
-import 'package:cockpit/app/cockpit/ui/actions/workspace_actions.dart';
-import 'package:cockpit/app/cockpit/ui/actions/worktree_actions.dart';
-import 'package:cockpit/app/core/app_intents.dart';
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/ui/document/document_windows.dart';
-import 'package:cockpit/app/cockpit/domain/entities/remote_host.dart';
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
-import 'package:cockpit/app/core/domain/entities/automation.dart';
-import 'package:cockpit/app/core/domain/exceptions/neovim_error.dart';
-import 'package:cockpit/app/core/routes.dart';
-import 'package:cockpit/app/core/ui/menu/workspace_menu_bridge.dart';
-import 'package:cockpit/app/cockpit/ui/states/pane_node.dart';
-import 'package:cockpit/app/cockpit/ui/states/panel_drag_sizer.dart';
-import 'package:cockpit/app/cockpit/data/remote/remote_db_executor.dart';
-import 'package:cockpit/app/cockpit/data/remote/remote_task_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/task_discovery.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/task_runner_gateway.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/telemetry_ingest.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/tasks_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/telemetry_panel.dart';
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
-import 'package:cockpit/app/cockpit/domain/entities/gallery_template.dart';
-import 'package:cockpit/app/core/ui/file_operation_error_message.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/update_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/layout_preview_tab.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/remote_disconnected_banner.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/terminal_key_bar.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/widgets.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/settings_controller.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/app/core/utils/platform_kind.dart';
-import 'package:cockpit/app/cockpit/data/remote/remote_db_writer_impl.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/remote_db_writer.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/ui/actions/remote_workspace_actions.dart';
+import 'package:desktop/app/cockpit/ui/actions/tab_actions.dart';
+import 'package:desktop/app/cockpit/ui/actions/workspace_actions.dart';
+import 'package:desktop/app/cockpit/ui/actions/worktree_actions.dart';
+import 'package:desktop/app/core/app_intents.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/ui/document/document_windows.dart';
+import 'package:desktop/app/cockpit/domain/entities/remote_host.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/core/domain/entities/automation.dart';
+import 'package:desktop/app/core/domain/exceptions/neovim_error.dart';
+import 'package:desktop/app/core/routes.dart';
+import 'package:desktop/app/core/ui/menu/workspace_menu_bridge.dart';
+import 'package:desktop/app/cockpit/ui/states/pane_node.dart';
+import 'package:desktop/app/cockpit/ui/states/panel_drag_sizer.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_db_executor.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_task_gateway.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_discovery.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_runner_gateway.dart';
+import 'package:desktop/app/cockpit/domain/contracts/telemetry_ingest.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/tasks_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/widgets/telemetry_panel.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/domain/entities/gallery_template.dart';
+import 'package:desktop/app/core/ui/file_operation_error_message.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/cockpit_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/update_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/widgets/layout_preview_tab.dart';
+import 'package:desktop/app/cockpit/ui/widgets/remote_disconnected_banner.dart';
+import 'package:desktop/app/cockpit/ui/widgets/terminal_key_bar.dart';
+import 'package:desktop/app/cockpit/ui/widgets/widgets.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/settings_controller.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/app/core/utils/platform_kind.dart';
+import 'package:desktop/app/cockpit/data/remote/remote_db_writer_impl.dart';
+import 'package:desktop/app/cockpit/domain/contracts/remote_db_writer.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:flterm/flterm.dart' show TerminalScope;
 import 'package:flutter/gestures.dart' show PointerDownEvent, kBackMouseButton;
 import 'package:flutter/services.dart'
@@ -51,13 +51,13 @@ import 'package:flutter/services.dart'
         KeyRepeatEvent,
         LogicalKeyboardKey,
         PhysicalKeyboardKey;
-import 'package:cockpit/app/core/ui/widgets/app_tooltip.dart';
+import 'package:desktop/app/core/ui/widgets/app_tooltip.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 import 'package:flutter_modular/flutter_modular.dart';
-import 'package:cockpit/app/core/domain/result.dart';
-import 'package:cockpit/app/cockpit/domain/services/db_query_service.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/database_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/ssh_prompts.dart';
+import 'package:desktop/app/core/domain/result.dart';
+import 'package:desktop/app/cockpit/domain/services/db_query_service.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/database_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/widgets/ssh_prompts.dart';
 
 /// Os únicos valores do `CockpitViewModel` de que o shell (top bar + arranjo
 /// das panes) depende. Isolados num record pra o `select` comparar por valor.

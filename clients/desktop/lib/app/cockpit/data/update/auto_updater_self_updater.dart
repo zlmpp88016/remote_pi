@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:auto_updater/auto_updater.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/self_updater.dart';
+import 'package:desktop/app/cockpit/domain/contracts/self_updater.dart';
 import 'package:flutter/foundation.dart';
 
 /// Self-update nativo via [autoUpdater] (Sparkle no macOS, WinSparkle no

@@ -3,9 +3,9 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
-import 'package:cockpit/app/cockpit/domain/contracts/hook_installer.dart';
-import 'package:cockpit/app/core/data/setup/remote_pi_resolver.dart';
-import 'package:cockpit/app/core/domain/result.dart';
+import 'package:desktop/app/cockpit/domain/contracts/hook_installer.dart';
+import 'package:desktop/app/core/data/setup/remote_pi_resolver.dart';
+import 'package:desktop/app/core/domain/result.dart';
 
 /// Parte comum dos instaladores de hook: materializar a CLI `cockpit` num
 /// caminho estável e resolver o comando que vai parar no arquivo de config do

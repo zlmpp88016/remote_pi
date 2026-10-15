@@ -1,4 +1,4 @@
-import 'package:app/domain/contracts/dismissed_update_store.dart';
+import 'package:mobile/domain/contracts/dismissed_update_store.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Persiste a versão de atualização dispensada numa chave própria do

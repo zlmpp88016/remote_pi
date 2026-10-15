@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/git_file_status.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_file_status.dart';
 
 /// Estado git de um projeto (workspace): branch atual, posição relativa ao
 /// upstream (ahead/behind) e o status por arquivo sujo.

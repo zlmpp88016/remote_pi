@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/core/data/diagnostics/diagnostics_log.dart';
+import 'package:desktop/app/core/data/diagnostics/diagnostics_log.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

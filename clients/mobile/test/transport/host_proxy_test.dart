@@ -12,7 +12,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:app/data/transport/host_proxy.dart';
+import 'package:mobile/data/transport/host_proxy.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Uint8List _bytes(Map<String, dynamic> j) =>

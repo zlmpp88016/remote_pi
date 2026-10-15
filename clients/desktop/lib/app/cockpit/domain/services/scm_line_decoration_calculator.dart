@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/scm_line_decorations.dart';
+import 'package:desktop/app/cockpit/domain/entities/scm_line_decorations.dart';
 
 /// Calcula [ScmLineDecorations] comparando o texto do baseline `HEAD` com o
 /// buffer atual, em memória — sem I/O nem processo Git.

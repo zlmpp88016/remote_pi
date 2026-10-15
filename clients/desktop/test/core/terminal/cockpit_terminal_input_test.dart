@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/terminal/cockpit_terminal.dart';
-import 'package:cockpit/app/core/terminal/xterm/xterm.dart';
+import 'package:desktop/app/core/terminal/cockpit_terminal.dart';
+import 'package:desktop/app/core/terminal/xterm/xterm.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

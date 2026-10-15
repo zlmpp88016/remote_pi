@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/ui/states/pane_node.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/cockpit/ui/states/pane_node.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
 import 'package:flutter/widgets.dart';
 
 /// Handle de redimensionamento de pane. Preenche **toda** a área que recebe (o

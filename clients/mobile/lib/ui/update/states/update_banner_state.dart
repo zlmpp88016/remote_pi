@@ -1,4 +1,4 @@
-import 'package:app/domain/entities/update_info.dart';
+import 'package:mobile/domain/entities/update_info.dart';
 
 /// Estado do aviso de atualização in-app (plano 44). Só dois casos: escondido
 /// (nada a mostrar — iOS, sem update, dispensado, manifest indisponível) ou

@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:app/protocol/protocol.dart';
-import 'package:app/ui/core/themes/themes.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 
 /// Plan/57 — full-screen modal rendering an interactive `extension_ui_request`

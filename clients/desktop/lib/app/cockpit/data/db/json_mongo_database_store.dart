@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/contracts/mongo_database_store.dart';
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/cockpit/domain/contracts/mongo_database_store.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
 
 /// [MongoDatabaseStore] numa chave própria do store de settings — mesmo padrão
 /// do `JsonSshHostKeyStore`: um mapa simples.

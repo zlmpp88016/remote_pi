@@ -1,4 +1,4 @@
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 
 sealed class SessionListState {
   const SessionListState();

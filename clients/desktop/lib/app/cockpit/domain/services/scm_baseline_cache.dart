@@ -1,5 +1,5 @@
-import 'package:cockpit/app/cockpit/domain/contracts/git_head_baseline_reader.dart';
-import 'package:cockpit/app/cockpit/domain/entities/git_head_baseline.dart';
+import 'package:desktop/app/cockpit/domain/contracts/git_head_baseline_reader.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_head_baseline.dart';
 
 /// Cache de baseline por `(gitRoot, path, headIdentity)`.
 ///

@@ -11,7 +11,7 @@
 // Every new field is optional on the wire: an older Pi must keep working, so
 // the "absent" cases are asserted explicitly rather than assumed.
 
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -1,6 +1,6 @@
-import 'package:cockpit/app/cockpit/domain/contracts/http_request_runner.dart';
-import 'package:cockpit/app/cockpit/domain/entities/http_response_result.dart';
-import 'package:cockpit/app/cockpit/domain/exceptions/http_request_error.dart';
+import 'package:desktop/app/cockpit/domain/contracts/http_request_runner.dart';
+import 'package:desktop/app/cockpit/domain/entities/http_response_result.dart';
+import 'package:desktop/app/cockpit/domain/exceptions/http_request_error.dart';
 import 'package:flutter/foundation.dart';
 
 /// Aba de baixo da view `.http`.

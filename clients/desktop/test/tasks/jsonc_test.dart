@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/tasks/tasks_json_loader.dart';
-import 'package:cockpit/app/core/data/jsonc.dart';
+import 'package:desktop/app/cockpit/data/tasks/tasks_json_loader.dart';
+import 'package:desktop/app/core/data/jsonc.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

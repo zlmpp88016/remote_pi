@@ -4,16 +4,16 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:app/data/local/boxes.dart';
-import 'package:app/data/local/records/message_record.dart';
-import 'package:app/data/local/records/session_index_record.dart';
-import 'package:app/data/repositories/session_read_repository.dart';
-import 'package:app/data/sync/sync_service.dart';
-import 'package:app/data/transport/channel.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/domain/session_state.dart';
-import 'package:app/pairing/storage.dart';
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/data/local/boxes.dart';
+import 'package:mobile/data/local/records/message_record.dart';
+import 'package:mobile/data/local/records/session_index_record.dart';
+import 'package:mobile/data/repositories/session_read_repository.dart';
+import 'package:mobile/data/sync/sync_service.dart';
+import 'package:mobile/data/transport/channel.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/protocol/protocol.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 

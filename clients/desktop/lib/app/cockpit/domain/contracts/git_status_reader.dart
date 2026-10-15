@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/git_info.dart';
+import 'package:desktop/app/cockpit/domain/entities/git_info.dart';
 
 /// Lê o estado git de uma pasta. Contrato no domínio; a impl (roda `git`) mora
 /// em `data/`.

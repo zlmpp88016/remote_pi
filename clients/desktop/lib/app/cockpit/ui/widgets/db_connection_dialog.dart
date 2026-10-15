@@ -1,14 +1,14 @@
-import 'package:cockpit_core/cockpit_core.dart';
+import 'package:desktop_core/cockpit_core.dart';
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/entities/db_connection.dart';
-import 'package:cockpit/app/cockpit/ui/viewmodels/database_viewmodel.dart';
-import 'package:cockpit/app/cockpit/ui/widgets/db_engine_icon.dart';
-import 'package:cockpit/app/core/ui/themes/themes.dart';
-import 'package:cockpit/app/core/ui/widgets/hover_tap.dart';
-import 'package:cockpit/app/core/utils/path_utils.dart';
-import 'package:cockpit/i18n/strings.g.dart';
+import 'package:desktop/app/cockpit/domain/entities/db_connection.dart';
+import 'package:desktop/app/cockpit/ui/viewmodels/database_viewmodel.dart';
+import 'package:desktop/app/cockpit/ui/widgets/db_engine_icon.dart';
+import 'package:desktop/app/core/ui/themes/themes.dart';
+import 'package:desktop/app/core/ui/widgets/hover_tap.dart';
+import 'package:desktop/app/core/utils/path_utils.dart';
+import 'package:desktop/i18n/strings.g.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shadcn_flutter/shadcn_flutter.dart';
 

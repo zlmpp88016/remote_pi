@@ -1,4 +1,4 @@
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
 
 /// Agrega os [TaskAdapter]s e devolve as tasks de um projeto. Também é o ponto
 /// onde o `.cockpit/tasks.json` (manual) é mesclado sobre as detectadas.

@@ -1,8 +1,8 @@
 // Plan/32 — the compaction system bubble renders the label, the recap summary
 // and the reclaimed token count (distinct from user/assistant bubbles).
 
-import 'package:app/domain/session_state.dart';
-import 'package:app/ui/chat/widgets/message_bubble.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/ui/chat/widgets/message_bubble.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

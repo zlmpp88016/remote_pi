@@ -12,16 +12,16 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:app/data/local/boxes.dart';
-import 'package:app/data/local/records/message_record.dart';
-import 'package:app/data/local/records/runtime_record.dart';
-import 'package:app/data/local/records/session_index_record.dart';
-import 'package:app/data/sync/sync_events.dart';
-import 'package:app/data/transport/connection_manager.dart';
-import 'package:app/domain/contracts/service.dart';
-import 'package:app/domain/session_state.dart';
-import 'package:app/protocol/protocol.dart';
-import 'package:app/protocol/uuid7.dart';
+import 'package:mobile/data/local/boxes.dart';
+import 'package:mobile/data/local/records/message_record.dart';
+import 'package:mobile/data/local/records/runtime_record.dart';
+import 'package:mobile/data/local/records/session_index_record.dart';
+import 'package:mobile/data/sync/sync_events.dart';
+import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/domain/contracts/service.dart';
+import 'package:mobile/domain/session_state.dart';
+import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/protocol/uuid7.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 

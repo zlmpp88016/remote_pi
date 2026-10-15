@@ -1,5 +1,5 @@
-import 'package:cockpit/app/core/domain/entities/automation.dart';
-import 'package:cockpit/app/core/domain/entities/sound_event.dart';
+import 'package:desktop/app/core/domain/entities/automation.dart';
+import 'package:desktop/app/core/domain/entities/sound_event.dart';
 
 /// Modo de tema escolhido pelo usuário (mapeado pro `ThemeMode` do Flutter na
 /// camada de UI; o domínio não importa Flutter).

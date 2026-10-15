@@ -1,14 +1,14 @@
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/data/repositories/json_dismissed_update_store.dart';
-import 'package:cockpit/app/cockpit/data/repositories/json_project_repository.dart';
-import 'package:cockpit/app/cockpit/data/repositories/json_realm_repository.dart';
-import 'package:cockpit/app/cockpit/data/repositories/json_workspace_layout_store.dart';
-import 'package:cockpit/app/cockpit/domain/entities/project.dart';
-import 'package:cockpit/app/cockpit/domain/entities/realm.dart';
-import 'package:cockpit/app/core/data/repositories/json_settings_store.dart';
-import 'package:cockpit/app/core/data/setup/json_state_store.dart';
-import 'package:cockpit/app/core/domain/entities/app_settings.dart';
+import 'package:desktop/app/cockpit/data/repositories/json_dismissed_update_store.dart';
+import 'package:desktop/app/cockpit/data/repositories/json_project_repository.dart';
+import 'package:desktop/app/cockpit/data/repositories/json_realm_repository.dart';
+import 'package:desktop/app/cockpit/data/repositories/json_workspace_layout_store.dart';
+import 'package:desktop/app/cockpit/domain/entities/project.dart';
+import 'package:desktop/app/cockpit/domain/entities/realm.dart';
+import 'package:desktop/app/core/data/repositories/json_settings_store.dart';
+import 'package:desktop/app/core/data/setup/json_state_store.dart';
+import 'package:desktop/app/core/domain/entities/app_settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Impls JSON contra os contratos de domain — mesma semântica das antigas

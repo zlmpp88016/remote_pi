@@ -1,4 +1,4 @@
-import 'package:app/protocol/protocol.dart';
+import 'package:mobile/protocol/protocol.dart';
 
 /// Plan/68 — state of the workspace's Pi surface (skills + packages).
 ///

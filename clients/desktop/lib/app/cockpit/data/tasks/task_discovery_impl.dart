@@ -1,7 +1,7 @@
-import 'package:cockpit/app/cockpit/data/tasks/tasks_json_loader.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/task_adapter.dart';
-import 'package:cockpit/app/cockpit/domain/contracts/task_discovery.dart';
-import 'package:cockpit/app/cockpit/domain/entities/task_definition.dart';
+import 'package:desktop/app/cockpit/data/tasks/tasks_json_loader.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_adapter.dart';
+import 'package:desktop/app/cockpit/domain/contracts/task_discovery.dart';
+import 'package:desktop/app/cockpit/domain/entities/task_definition.dart';
 
 /// Junta as duas fontes de tasks de um projeto:
 ///

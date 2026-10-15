@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:app/domain/contracts/update_checker.dart';
-import 'package:app/domain/entities/update_info.dart';
+import 'package:mobile/domain/contracts/update_checker.dart';
+import 'package:mobile/domain/entities/update_info.dart';
 import 'package:dio/dio.dart';
 
 /// Busca o `latest.json` do app via HTTP (Dio — mesmo client já usado pelo

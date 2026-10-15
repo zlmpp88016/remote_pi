@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:cockpit/app/cockpit/domain/contracts/terminal_scrollback_store.dart';
-import 'package:cockpit/app/core/data/setup/storage_location.dart';
+import 'package:desktop/app/cockpit/domain/contracts/terminal_scrollback_store.dart';
+import 'package:desktop/app/core/data/setup/storage_location.dart';
 
 /// [TerminalScrollbackStore] em arquivo, sob o applicationSupport do app
 /// (`.../terminal_scrollback/<projectId>/<sessionId>.log`, UTF-8). Localização
