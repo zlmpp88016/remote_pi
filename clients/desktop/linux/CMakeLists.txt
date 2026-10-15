@@ -239,19 +239,19 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/${APPLICATION_ID}.metainfo.xml"
 #
 # `dart build cli` NÃO cross-compila, mas aqui não é problema: o CI compila cada
 # arquitetura no seu próprio runner nativo (x64 e arm64).
-set(COCKPIT_SERVER_PKG "${CMAKE_SOURCE_DIR}/../packages/cockpit_server")
+set(COCKPIT_SERVER_PKG "${CMAKE_SOURCE_DIR}/../packages/desktop_server")
 set(COCKPIT_SERVER_DIR "${CMAKE_BINARY_DIR}/server-bundle")
 set(COCKPIT_SERVER_EXE "${COCKPIT_SERVER_DIR}/bin/cockpit-server")
 # O servidor NÃO é só o pacote dele: depende dos irmãos por `path:`
-# (cockpit_core, cockpit_engine, cockpit_protocol). Com o glob olhando só
-# `cockpit_server/`, editar o engine não invalidava nada e o CMake dava o
+# (desktop_core, desktop_engine, desktop_protocol). Com o glob olhando só
+# `desktop_server/`, editar o engine não invalidava nada e o CMake dava o
 # bundle por atualizado — o build saía com um `cockpit-server` VELHO, em
 # silêncio. Mesmo ajuste do windows/CMakeLists.txt.
 file(GLOB_RECURSE COCKPIT_SERVER_SOURCES CONFIGURE_DEPENDS
   "${COCKPIT_SERVER_PKG}/bin/*.dart" "${COCKPIT_SERVER_PKG}/lib/*.dart"
-  "${COCKPIT_SERVER_PKG}/../cockpit_core/lib/*.dart"
-  "${COCKPIT_SERVER_PKG}/../cockpit_engine/lib/*.dart"
-  "${COCKPIT_SERVER_PKG}/../cockpit_protocol/lib/*.dart")
+  "${COCKPIT_SERVER_PKG}/../desktop_core/lib/*.dart"
+  "${COCKPIT_SERVER_PKG}/../desktop_engine/lib/*.dart"
+  "${COCKPIT_SERVER_PKG}/../desktop_protocol/lib/*.dart")
 add_custom_command(
   OUTPUT "${COCKPIT_SERVER_EXE}"
   # Bundle limpo: `dart build cli` recusa diretório de saída já existente.
@@ -263,7 +263,7 @@ add_custom_command(
   COMMAND "${CMAKE_COMMAND}" -E copy_directory
           "${CMAKE_BINARY_DIR}/server-out/bundle" "${COCKPIT_SERVER_DIR}"
   COMMAND "${CMAKE_COMMAND}" -E rename
-          "${COCKPIT_SERVER_DIR}/bin/cockpit_server" "${COCKPIT_SERVER_EXE}"
+          "${COCKPIT_SERVER_DIR}/bin/desktop_server" "${COCKPIT_SERVER_EXE}"
   # A lib do PTY vai ao LADO do exe do servidor: é o 2º candidato do
   # openPtyDylib (o 1º é a env COCKPIT_PTY_DYLIB, que o sidecar preenche).
   # Reusa o artefato do plugin em vez de compilar o mesmo .c duas vezes.

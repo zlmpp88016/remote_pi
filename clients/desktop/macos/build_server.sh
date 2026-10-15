@@ -41,12 +41,12 @@ cc -dynamiclib -O2 -DDART_SHARED_LIB -arch arm64 -arch x86_64 \
   -o "$PTY" "$SRC/cockpit_pty.c" -I"$SRC" -lpthread
 
 # Servidor via dart build cli (bundle bin/ + lib/ com os native assets).
-( cd "$ROOT/packages/cockpit_server" && "$DART" pub get >/dev/null )
+( cd "$ROOT/packages/desktop_server" && "$DART" pub get >/dev/null )
 BUNDLE="$(mktemp -d)/out"
-( cd "$ROOT/packages/cockpit_server" && "$DART" build cli -o "$BUNDLE" >/dev/null )
+( cd "$ROOT/packages/desktop_server" && "$DART" build cli -o "$BUNDLE" >/dev/null )
 # `dart build cli` gera <out>/bundle/{bin,lib}.
 mv "$BUNDLE"/bundle/* "$DEST"/
-mv "$DEST/bin/cockpit_server" "$DEST/bin/cockpit-server"
+mv "$DEST/bin/desktop_server" "$DEST/bin/cockpit-server"
 cp "$PTY" "$DEST/lib/libcockpit_pty.dylib"
 chmod +x "$DEST/bin/cockpit-server"
 

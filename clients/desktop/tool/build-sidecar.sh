@@ -14,17 +14,17 @@ OUT="$ROOT/build/server-bundle"
 
 ./tool/wave0/build_pty_dylib.sh
 
-( cd packages/cockpit_server && dart pub get >/dev/null )
+( cd packages/desktop_server && dart pub get >/dev/null )
 rm -rf "$OUT"
-( cd packages/cockpit_server && dart build cli -o "$OUT" >/dev/null )
+( cd packages/desktop_server && dart build cli -o "$OUT" >/dev/null )
 
 # `dart build cli` gera <out>/bundle/{bin,lib}. Normaliza para <out>/{bin,lib}
-# e batiza o exe como `cockpit-server` (o pacote é `cockpit_server`).
+# e batiza o exe como `cockpit-server` (o pacote agora é `desktop_server`).
 if [ -d "$OUT/bundle" ]; then
   mv "$OUT"/bundle/* "$OUT"/ && rmdir "$OUT/bundle"
 fi
-if [ -f "$OUT/bin/cockpit_server" ]; then
-  mv "$OUT/bin/cockpit_server" "$OUT/bin/cockpit-server"
+if [ -f "$OUT/bin/desktop_server" ]; then
+  mv "$OUT/bin/desktop_server" "$OUT/bin/cockpit-server"
 fi
 
 # A dylib do PTY vai pra lib/ (o exe resolve @executable_path/../lib).

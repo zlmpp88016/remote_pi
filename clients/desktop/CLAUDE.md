@@ -20,7 +20,7 @@ Decisões fechadas que continuam valendo (plano 37, 2026-06-05):
 
 | # | Decisão |
 |---|---|
-| **A** | Código mora aqui em `clients/desktop/` (não dentro de `clients/mobile/`). Motor compartilhado com o `cockpit-server` via `packages/cockpit_*` |
+| **A** | Código mora aqui em `clients/desktop/` (não dentro de `clients/mobile/`). Motor compartilhado com o `cockpit-server` via `packages/desktop_*` |
 
 ## Stack
 
@@ -63,7 +63,7 @@ nossa) e quem é pacote externo:
 | **Syntax highlight** (léxico, ~190 linguagens) | pacote `highlight` ^0.7.0 + `core/ui/widgets/code_highlight.dart` (tema/integração) | Externo; decisão do plano LSP: highlight léxico mantido (LSP não colore) |
 | **LSP** (diagnostics/formatação — a camada "IDE") | `lib/app/core/data/lsp/` (cliente JSON-RPC genérico + pool por (lang, raiz)) | **Nosso** — fala com servidores externos achados no PATH |
 | **Status de turno dos agentes** | `lib/app/cockpit/data/hooks/` (hooks do harness + `cockpit-hook` + socket) | **Nosso** — agentes rodam em terminais; ver `docs/turn-status-hooks.md` |
-| **Keep awake** | `packages/cockpit_keepawake/` (caffeinate / SetThreadExecutionState / systemd-inhibit) | **Nosso** — Dart puro, desktop-only |
+| **Keep awake** | `packages/desktop_keepawake/` (caffeinate / SetThreadExecutionState / systemd-inhibit) | **Nosso** — Dart puro, desktop-only |
 | **DB drivers** (SQLite/Postgres/MySQL/MSSQL/Mongo/Redis) | pacotes `anaki_*` (Rust/FFI, do Jacob) + `lib/app/cockpit/data/db/` (Isolate workers + serviços) | Externo-mas-nosso (mantido pelo Jacob fora do repo) |
 | **Git** | `lib/app/cockpit/data/filesystem/git_*` (roda o binário `git`) | Motor é o git do sistema; nosso é o parser/orquestração |
 | **Mídia** (áudio/vídeo no viewer) | pacote `media_kit` (libmpv) | Externo |

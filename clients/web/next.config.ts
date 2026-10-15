@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
       {
         source: "/cockpit-server.sh",
         destination:
-          "https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/cockpit/install-server.sh",
+          "https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/clients/desktop/install-server.sh",
         permanent: false,
       },
       ...MOVED.map(({ from, to }) => ({

@@ -7,7 +7,7 @@
   "tasks": [
     {
       "label": "Cockpit", // shown in the Tasks list
-      "cwd": "cockpit", // run dir, relative to this file (monorepo-friendly)
+      "cwd": "clients/desktop", // run dir, relative to this file (monorepo-friendly)
       "command": "flutter", // base executable
       "args": ["run"], // base args, before the profile
       "kind": "watch", // "watch" = long-running (dev server); else "oneShot"
@@ -48,7 +48,7 @@
       // suporte a `env` na task; `exec` faz o pnpm ser o filho direto do PTY
       // (stop/restart batem nele).
       "label": "Site",
-      "cwd": "site",
+      "cwd": "clients/web",
       "command": "sh",
       "args": ["-c", "BROWSER=none exec pnpm dev"],
       "kind": "watch",

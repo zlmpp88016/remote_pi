@@ -7,7 +7,7 @@
 #       ├── lib/{libcockpit_pty.so,libanaki_*.so}
 #       ├── bundle.manifest   # sha256sum -c, mesmo formato que o cliente grava
 #       ├── VERSION           # linha 1: versão; linha 2: arch (x86_64|arm64)
-#       └── install.sh        # packages/cockpit_server/install.sh
+#       └── install.sh        # packages/desktop_server/install.sh
 #
 # Build NATIVO (dart build cli não cross-compila): roda no runner Linux de cada
 # arquitetura. Reusa tool/build-sidecar.sh, que já produz bin/ + lib/ com os
@@ -44,7 +44,7 @@ mkdir -p "$PKG"
 cp -R "$BUNDLE/bin" "$BUNDLE/lib" "$PKG/"
 chmod +x "$PKG"/bin/*
 printf '%s\n%s\n' "$VERSION" "$ARCH" > "$PKG/VERSION"
-cp "$ROOT/packages/cockpit_server/install.sh" "$PKG/install.sh"
+cp "$ROOT/packages/desktop_server/install.sh" "$PKG/install.sh"
 chmod +x "$PKG/install.sh"
 
 # Manifesto no formato exato do cliente (host_shell.dart buildManifest):

@@ -52,6 +52,6 @@ docker run --rm "${tty_args[@]}" \
   -v "$ANDROID_NDK":/opt/android-sdk-linux/ndk \
   -v "$ANDROID_CMAKE":/opt/android-sdk-linux/cmake \
   -v "$ANDROID_LICENSES":/opt/android-sdk-linux/licenses \
-  -w /work/app \
+  -w /work/clients/mobile \
   "$IMAGE" \
   bash -lc "yes | flutter doctor --android-licenses >/dev/null && flutter pub get && flutter build apk --$MODE"

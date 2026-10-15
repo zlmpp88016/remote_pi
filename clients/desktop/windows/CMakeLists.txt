@@ -173,19 +173,19 @@ install(PROGRAMS "${COCKPIT_CLI_EXE}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
 #
 # `dart build cli` NÃO cross-compila, mas aqui não é problema: o runner do CI é
 # x64 nativo, a única arquitetura que publicamos no Windows.
-set(COCKPIT_SERVER_PKG "${CMAKE_SOURCE_DIR}/../packages/cockpit_server")
+set(COCKPIT_SERVER_PKG "${CMAKE_SOURCE_DIR}/../packages/desktop_server")
 set(COCKPIT_SERVER_DIR "${CMAKE_BINARY_DIR}/server-bundle")
 set(COCKPIT_SERVER_EXE "${COCKPIT_SERVER_DIR}/bin/cockpit-server.exe")
 # O servidor NÃO é só o pacote dele: depende dos irmãos por `path:`
-# (cockpit_core, cockpit_engine, cockpit_protocol). Enquanto o glob só olhava
-# `cockpit_server/`, editar o engine não invalidava nada e o CMake dava o
+# (desktop_core, desktop_engine, desktop_protocol). Enquanto o glob só olhava
+# `desktop_server/`, editar o engine não invalidava nada e o CMake dava o
 # bundle por atualizado — o build saía com um `cockpit-server.exe` VELHO, em
 # silêncio. Aconteceu com a correção do login shell em host Windows.
 file(GLOB_RECURSE COCKPIT_SERVER_SOURCES CONFIGURE_DEPENDS
   "${COCKPIT_SERVER_PKG}/bin/*.dart" "${COCKPIT_SERVER_PKG}/lib/*.dart"
-  "${COCKPIT_SERVER_PKG}/../cockpit_core/lib/*.dart"
-  "${COCKPIT_SERVER_PKG}/../cockpit_engine/lib/*.dart"
-  "${COCKPIT_SERVER_PKG}/../cockpit_protocol/lib/*.dart")
+  "${COCKPIT_SERVER_PKG}/../desktop_core/lib/*.dart"
+  "${COCKPIT_SERVER_PKG}/../desktop_engine/lib/*.dart"
+  "${COCKPIT_SERVER_PKG}/../desktop_protocol/lib/*.dart")
 add_custom_command(
   OUTPUT "${COCKPIT_SERVER_EXE}"
   # Bundle limpo: `dart build cli` recusa diretório de saída já existente.
@@ -197,7 +197,7 @@ add_custom_command(
   COMMAND "${CMAKE_COMMAND}" -E copy_directory
           "${CMAKE_BINARY_DIR}/server-out/bundle" "${COCKPIT_SERVER_DIR}"
   COMMAND "${CMAKE_COMMAND}" -E rename
-          "${COCKPIT_SERVER_DIR}/bin/cockpit_server.exe" "${COCKPIT_SERVER_EXE}"
+          "${COCKPIT_SERVER_DIR}/bin/desktop_server.exe" "${COCKPIT_SERVER_EXE}"
   # A lib do PTY vai ao LADO do exe do servidor: é o 2º candidato do
   # openPtyDylib (o 1º é a env COCKPIT_PTY_DYLIB, que o sidecar preenche).
   # Reusa o artefato do plugin em vez de compilar o mesmo .c duas vezes.

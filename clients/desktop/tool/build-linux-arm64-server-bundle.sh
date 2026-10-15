@@ -44,7 +44,7 @@ rm -rf "$DEST"
 mkdir -p "$DEST"
 
 (
-  cd "$ROOT/packages/cockpit_server"
+  cd "$ROOT/packages/desktop_server"
   "$DART" pub get >/dev/null
   "$DART" build cli \
     --target-os linux \
@@ -52,7 +52,7 @@ mkdir -p "$DEST"
     -o "$TMP/dart" >/dev/null
 )
 mv "$TMP/dart/bundle"/* "$DEST"/
-mv "$DEST/bin/cockpit_server" "$DEST/bin/cockpit-server"
+mv "$DEST/bin/desktop_server" "$DEST/bin/cockpit-server"
 
 # cockpit_pty is intentionally not a Dart native asset yet. Build the same C
 # source as the native sidecar, but against Zig's Linux aarch64 sysroot.

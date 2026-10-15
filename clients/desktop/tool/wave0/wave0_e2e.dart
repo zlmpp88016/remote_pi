@@ -24,7 +24,7 @@ Future<void> main() async {
     'dart',
     [
       'run',
-      'packages/cockpit_server/bin/cockpit_server.dart',
+      'packages/desktop_server/bin/cockpit_server.dart',
       '--socket',
       socketPath,
     ],
@@ -220,7 +220,7 @@ String _cockpitRoot() {
   // O script roda de clients/desktop/ (dart run tool/wave0/...) ou de tool/wave0.
   var dir = Directory.current;
   while (!File('${dir.path}/pubspec.yaml').existsSync() ||
-      !Directory('${dir.path}/packages/cockpit_server').existsSync()) {
+      !Directory('${dir.path}/packages/desktop_server').existsSync()) {
     final parent = dir.parent;
     if (parent.path == dir.path) {
       throw StateError('run from the clients/desktop/ folder');

@@ -13,7 +13,7 @@
 ```bash
 curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash
 # 同一个脚本，直接走 GitHub（站点 URL 会重定向到这里）：
-curl -fsSL https://raw.githubusercontent.com/zlmpp88016/remote_pi/main/cockpit/install-server.sh | bash
+curl -fsSL https://raw.githubusercontent.com/zlmpp88016/remote_pi/main/clients/desktop/install-server.sh | bash
 ```
 
 脚本位于 [install-server.sh](install-server.sh)。它依次做这些事：

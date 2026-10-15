@@ -22,7 +22,7 @@ import { isolateHome } from "./paths.mjs";
 import { importDist, importSdk, distBuilt } from "./dist_api.mjs";
 import { createFleet } from "./fleet.mjs";
 
-const EXT_ENTRY = join(process.cwd(), "remote-pi", "dist", "index.js");
+const EXT_ENTRY = join(process.cwd(), "server", "dist", "index.js");
 
 export async function runE2E({ log } = {}) {
   const results = [];

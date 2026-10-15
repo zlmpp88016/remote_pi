@@ -102,7 +102,7 @@ jobs:
           sudo -E apt-get install -y clang zip
       - name: Testes do servidor (inclui o subcomando service, só roda em Linux)
         run: |
-          cd packages/cockpit_server
+          cd packages/desktop_server
           dart pub get
           dart test
       - name: Build + zip

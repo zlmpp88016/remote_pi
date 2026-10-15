@@ -176,7 +176,7 @@ cockpit-server/
 ├── lib/{libcockpit_pty.so,libanaki_*.so}
 ├── bundle.manifest   # sha256sum -c, mesmo formato que o cliente grava por SSH
 ├── VERSION           # linha 1 versão, linha 2 arch
-└── install.sh        # packages/cockpit_server/install.sh
+└── install.sh        # packages/desktop_server/install.sh
 ```
 
 Instalação no host: `curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash`

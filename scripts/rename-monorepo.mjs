@@ -194,6 +194,39 @@ const EXPLICIT_FIXES = [
  */
 const BARE_REF_PREFIXES = ["working-directory:", "cd ", "--directory ", "-C "];
 
+/**
+ * Referência "nua" em contextos que o texto não denuncia por prefixo, achados
+ * por review independente DEPOIS que o rename terminou:
+ *
+ *   "cwd": "cockpit"            (chave JSON/YAML)
+ *   APP="$ROOT/app"             (atribuição de shell/JS)
+ *   COCKPIT_DIR="$REPO_ROOT/cockpit"
+ *   -w /work/app                (flag do docker)
+ *
+ * O gate original (`pathRefRe`/`varRootedRe`/`bareRefRe`) exigia barra DEPOIS
+ * do nome ou um dos 4 prefixos acima, então essa classe inteira era invisível —
+ * foi assim que 6 quebras de runtime passaram. As formas abaixo são as que
+ * existem no repo; cada uma ancora num token introdutor próprio, nunca numa
+ * busca genérica por `\bapp\b` (que casaria `lib/app/` e prosa).
+ */
+const BARE_CONTEXT_RES = [
+  // `"cwd": "cockpit"`, `cwd: cockpit`
+  [/((?:["']?cwd["']?\s*:\s*["']?))((?:\.\.?\/)*)(NAME)(?![\w.\/-])/g],
+  // `APP="$ROOT/app"`, `DIR='$PWD/site'`, `X="$ROOT/remote-pi"`
+  [/((?:[\w$]+)=(?:"|')?\$(?:\{?[A-Za-z_][A-Za-z0-9_]*\}?|PWD)\/)((?:\.\.?\/)*)(NAME)(?![\w.\/-])/g],
+  // `-w /work/app`, `--workdir /srv/cockpit`. O caminho pode ser ABSOLUTO
+  // (`/work/app`), então o segmento precisa aceitar `[/\w$.-]` (não só `\w`).
+  [/((?:^|\s)-w\s+|(?:^|\s)--workdir\s+)((?:[\w$.-]*\/)*)(NAME)(?![\w.\/-])/g],
+];
+
+function bareContextHits(dirName, line) {
+  for (const [tpl] of BARE_CONTEXT_RES) {
+    const re = new RegExp(tpl.source.replace(/NAME/g, escapeRe(dirName)), "g");
+    if (re.test(line)) return true;
+  }
+  return false;
+}
+
 function bareRefRe(dirName) {
   const prefix = BARE_REF_PREFIXES.map(escapeRe).join("|");
   return new RegExp(
@@ -324,11 +357,35 @@ function resolvesToRepoDir(absFile, prefix, dirName) {
   return resolve(dirname(absFile), prefix + dirName) === resolve(ROOT, dirName);
 }
 
+/**
+ * Variáveis cujo valor NÃO é a raiz do repo, mas o diretório de INSTALAÇÃO do
+ * pacote publicado. `$root/remote-pi/dist/index.js` em `install.sh` é o caminho
+ * do pacote npm instalado (`npm_global_root`), identidade CONGELADA — nunca
+ * deve ser reescrita para `$root/server/`.
+ *
+ * A fase `server` já tinha um guard por lookahead, mas a fase `refs` reescreve
+ * por outro caminho de código (`rewriteAnchored`, caso c) SEM esse guard — o
+ * portão de completude acusava as duas linhas e um `--apply` as corromperia.
+ */
+const NON_REPO_ROOT_VARS = ["root", "npm_global_root", "prefix", "PREFIX"];
+
+function isNonRepoRootVar(head) {
+  const m = head.match(/^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?\//);
+  return !!m && NON_REPO_ROOT_VARS.includes(m[1]);
+}
+
 // ── reescrita ancorada ───────────────────────────────────────────────────
 
 function rewriteAnchored(rel, dirName, replacement) {
   const abs = join(ROOT, rel);
   if (!existsSync(abs)) return { changed: 0, skipped: 0 };
+  // Arquivos arrastados de FORA do repo (ver RESIDUAL_EXEMPT_FILES): todas as
+  // suas ocorrências do nome antigo são a identidade do pacote PUBLICADO, então
+  // reescrever qualquer uma corromperia o instalador. Ex.: a linha
+  // `die "plugin install ran but remote-pi/dist/index.js was not found.` é o
+  // caminho do pacote instalado, não o diretório do repo — o caso (a) a
+  // reescreveria para `server/dist/index.js`.
+  if (RESIDUAL_EXEMPT_FILES.some((a) => a.test(rel))) return { changed: 0, skipped: 0 };
   const text = readFileSync(abs, "utf8");
   const re = pathRefRe(dirName);
   const bare = bareRefRe(dirName);
@@ -379,6 +436,11 @@ function rewriteAnchored(rel, dirName, replacement) {
       if (vr.test(line)) {
         vr.lastIndex = 0;
         line = line.replace(vr, (full, head) => {
+          // `$root/remote-pi/...` = pacote INSTALADO, não diretório do repo.
+          if (isNonRepoRootVar(head)) {
+            skipped += 1;
+            return full;
+          }
           changed += 1;
           return `${head}${replacement}/`;
         });
@@ -713,6 +775,45 @@ function phaseDartPackages() {
       console.log(`  ~ ${rel} (path deps)`);
     }
   }
+
+  // ── Refs de DIRETÓRIO de pacote FORA dos pubspec ───────────────────────
+  // O bloco acima só varre `*pubspec.yaml`/`*pubspec.lock`. Mas `packages/
+  // cockpit_X` aparece também em CMake, shell, workflows e Dart como CAMINHO
+  // de arquivo — e todos os que escaparam eram quebras REAIS de build/CI:
+  //
+  //   linux|windows/CMakeLists.txt   set(COCKPIT_SERVER_PKG "…/packages/cockpit_server")
+  //   macos/build_server.sh          cd "$ROOT/packages/cockpit_server"
+  //   tool/build-sidecar.sh          cd packages/cockpit_server
+  //   .github/.../cockpit-server-release.yml   cd packages/cockpit_server
+  //
+  // Nada disso é pego por `flutter analyze`/`tsc`, então cada um passou
+  // silenciosamente até um review independente apontar UM deles.
+  const pkgPathRefs = git([
+    "grep", "-lE",
+    DART_PACKAGES.filter(([f]) => f.startsWith("cockpit_")).map(([f]) => `packages/${f}`).join("|"),
+  ]).split("\n").map((s) => s.trim()).filter(Boolean).filter((r) => !excluded(r));
+  for (const rel of pkgPathRefs) {
+    const abs = join(ROOT, rel);
+    if (!existsSync(abs)) continue;
+    let text = readFileSync(abs, "utf8");
+    const before = text;
+    for (const [from, to] of DART_PACKAGES) {
+      if (from === "app" || from === "cockpit") continue;
+      text = text.replaceAll(`packages/${from}`, `packages/${to}`);
+      // Glob de IRMÃOS no CMake, sem o prefixo `packages/`:
+      // `"${COCKPIT_SERVER_PKG}/../cockpit_core/lib/*.dart"`
+      text = text.replaceAll(`/../${from}/`, `/../${to}/`);
+    }
+    // O executável é batizado com o `name:` do pubspec (`dart build cli`), então
+    // renomear o pacote renomeia o BINÁRIO gerado: os passos que o normalizam
+    // para o artefato congelado (`cockpit-server`) precisam olhar o nome novo,
+    // senão o `mv`/checagem de existência falha em silêncio.
+    text = text.replaceAll("bin/cockpit_server", "bin/desktop_server");
+    if (text !== before) {
+      if (!DRY) writeFileSync(abs, text);
+      console.log(`  ~ ${rel} (path de pacote fora do pubspec)`);
+    }
+  }
 }
 
 /** Refs de `app/`/`site/` remanescentes (CI, scripts, docs) após as fases de dir. */
@@ -748,24 +849,83 @@ const RESIDUAL_ALLOWLIST = [
   /_test\.[a-z]+$/,
   /\.(test|spec)\.[cm]?[jt]sx?$/,
   /^clients\/web\/src\/app\//, // App Router do Next
+  // Conteúdo de AMOSTRA, não referência ao repo: monta um exemplo fictício de
+  // tasks.json (o mesmo arquivo também traz `"cwd": "api"`, que NUNCA foi
+  // diretório deste monorepo — prova de que é dado de exemplo).
+  /^clients\/desktop\/lib\/app\/cockpit\/domain\/entities\/gallery_template\.dart$/,
+  /^clients\/desktop\/docs\/tasks-json\.md$/, // documenta o mesmo exemplo
+  // README VENDORIZADO do plugin de PTY: fork de terceiro (pub.dev), mantido
+  // como está (`publish_to: none`). Suas refs `packages/cockpit_pty` são a
+  // IDENTIDADE EXTERNA do pacote upstream, não um caminho deste repo.
+  /^clients\/desktop\/plugins\/desktop_pty\/README(\.zh-CN)?\.md$/,
+];
+
+/**
+ * Arrastado de FORA do repo: o instalador só fala do pacote PUBLICADO
+ * (`npm:remote-pi`, `~/.pi/agent/npm/node_modules/remote-pi`, `$root/remote-pi`
+ * com `$root=$(npm_global_root)`). Nenhuma das suas ocorrências de `remote-pi`
+ * é o diretório do repo — a lista acima (`grep -oE 'remote-pi[^ ]*'`) não tem
+ * um único `app/`, `cockpit/`, `site/` nem caminho de fonte. Reescrever
+ * qualquer uma delas quebraria a instalação do pacote, então o arquivo é
+ * declarado imune ao gate.
+ */
+const RESIDUAL_EXEMPT_FILES = [
+  /^server\/install\.sh$/,
+  /^clients\/web\/public\/install\.sh$/, // espelho servido pelo site
+];
+
+/**
+ * Linhas legítimas, embora o texto casasse os padrões de referência.
+ *
+ * `remote-pi` aqui é o NOME DO PACOTE INSTALADO no global do npm — identidade
+ * publicada CONGELADA, não o diretório do repo. A fase de reescrita tem uma
+ * lookahead negativa justamente para PRESERVAR estes caminhos; o portão precisa
+ * reconhecer isso, senão acusa a própria garantia que ele deveria defender.
+ */
+const RESIDUAL_LINE_ALLOWLIST = [
+  /\$root\/remote-pi\/dist\/index\.js/,
+  /remote-pi\/dist\/index\.js was not found/,
 ];
 
 function assertNoResidualRefs() {
   const dirs = ["app", "cockpit", "site", "remote-pi"];
+
+  // Diretórios de PACOTE que mudaram de nome (fase dart-packages). Um caminho
+  // `packages/cockpit_X` que sobrou é quebra de build/CI que nenhum analyzer
+  // detecta — foi exatamente a classe que escapou na primeira passada.
+  const stalePkg = git([
+    "grep", "-lE",
+    DART_PACKAGES.filter(([f]) => f.startsWith("cockpit_")).map(([f]) => `packages/${f}`).join("|"),
+  ]).split("\n").map((s) => s.trim()).filter(Boolean)
+    .filter((r) => !excluded(r) && r !== SELF && !RESIDUAL_ALLOWLIST.some((a) => a.test(r)));
+  for (const rel of stalePkg) {
+    for (const [i, line] of readFileSync(join(ROOT, rel), "utf8").split("\n").entries()) {
+      if (/packages\/cockpit_/.test(line)) {
+        console.error(`  ${rel}:${i + 1}  ${line.trim().slice(0, 90)}`);
+      }
+    }
+  }
+  if (stalePkg.length && APPLY) process.exit(1);
   const suspects = [];
   for (const dir of dirs) {
     const re = pathRefRe(dir);
     const vr = varRootedRe(dir);
     const bare = bareRefRe(dir);
-    for (const rel of liveFiles(`${dir}/`)) {
+    // A descoberta de candidatos também era cega às formas nuas: `liveFiles`
+    // busca `"<dir>/"`, então um arquivo que só tem `"cwd": "cockpit"` nunca
+    // entrava na varredura. Somamos os arquivos que mencionam o nome nu.
+    const candidates = new Set([...liveFiles(`${dir}/`), ...liveFiles(dir, { fixed: true })]);
+    for (const rel of candidates) {
       if (RESIDUAL_ALLOWLIST.some((a) => a.test(rel))) continue;
+      if (RESIDUAL_EXEMPT_FILES.some((a) => a.test(rel))) continue;
       const abs = join(ROOT, rel);
       if (!existsSync(abs)) continue;
       for (const [i, line] of readFileSync(abs, "utf8").split("\n").entries()) {
         re.lastIndex = 0;
         vr.lastIndex = 0;
         bare.lastIndex = 0;
-        if (re.test(line) || vr.test(line) || bare.test(line)) {
+        if (RESIDUAL_LINE_ALLOWLIST.some((a) => a.test(line))) continue;
+        if (re.test(line) || vr.test(line) || bare.test(line) || bareContextHits(dir, line)) {
           suspects.push(`${rel}:${i + 1}  ${line.trim().slice(0, 90)}`);
         }
       }
@@ -785,9 +945,25 @@ const PUBLISHED = {
   "work.jacobmoura.cockpit": 45,
   "npm:remote-pi": 30,
   'registerCommand("remote-pi"': 1,
-  "app-v": 10,
-  "cockpit-v": 41,
+  // As contagens de `app-v`/`cockpit-v` são medidas COM a exclusão de
+  // PUBLISHED_COUNT_EXEMPT (a entrada de decisão cita as tags ao documentá-las,
+  // então soma +1 legitimamente). Logo o esperado é o baseline MENOS o que o
+  // plan/00-decisions.md já continha: 10-1=9 e 41-1=40.
+  "app-v": 9,
+  "cockpit-v": 40,
+  // Identidades que a POLÍTICA congela mas que o gate não protegia. Um review
+  // independente apontou a lacuna: estavam corretas por sorte, sem nada que
+  // impedisse uma regressão futura.
+  "pi-supervisord": 120,
+  "cockpit-server-v": 28,
+  "remote-pi-cockpit_": 5,
+  "node_modules/remote-pi": 7,
+  "cockpit-cli": 44,
 };
+
+/** Arquivos cuja contagem pode crescer legitimamente: a entrada de decisão CITA
+ *  as identidades ao documentá-las, logo soma +1 de forma esperada. */
+const PUBLISHED_COUNT_EXEMPT = ["plan/00-decisions.md"];
 
 function verify() {
   console.log("\n── invariantes ────────────────────────────────");
@@ -808,7 +984,8 @@ function verify() {
       // O pathspec precisa ser UM argumento (`:!path`); passar `":!"` e o
       // caminho separados faz o git tratar o primeiro como literal e a
       // exclusão não acontece (contagem inflada em 1, falso-FAIL).
-      n = git(["grep", "-F", id, "--", `:!${SELF}`]).split("\n").filter(Boolean).length;
+      const ex = [SELF, ...PUBLISHED_COUNT_EXEMPT].map((p) => `:!${p}`);
+      n = git(["grep", "-F", id, "--", ...ex]).split("\n").filter(Boolean).length;
     } catch {
       n = 0;
     }

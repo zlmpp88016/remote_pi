@@ -9,7 +9,7 @@
 #
 # Canonical file: clients/desktop/install-server.sh in the repo; the site URL above
 # redirects to the GitHub raw of this file:
-#   https://raw.githubusercontent.com/zlmpp88016/remote_pi/main/cockpit/install-server.sh
+#   https://raw.githubusercontent.com/zlmpp88016/remote_pi/main/clients/desktop/install-server.sh
 #
 # What it does (user-space, NO sudo, idempotent):
 #   1. Detects the architecture (x86_64 or arm64; Linux only).

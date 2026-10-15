@@ -4,7 +4,7 @@ Protocolo cliente ↔ `cockpit-server` do plano 58. Nesta wave cobre o
 **handshake** e o **domínio Terminais**; arquivos, git e databases entram nas
 waves seguintes com o mesmo envelope.
 
-As mensagens são classes Dart em `packages/cockpit_protocol` — a mesma classe
+As mensagens são classes Dart em `packages/desktop_protocol` — a mesma classe
 serializa e desserializa nos dois lados do fio. Este documento descreve o
 formato no fio para debugging e para futuros clientes.
 

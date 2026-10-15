@@ -138,7 +138,7 @@ cockpit-server/
 ├── lib/{libcockpit_pty.so,libanaki_*.so}
 ├── bundle.manifest   # sha256sum -c，与客户端经 SSH 写入的格式相同
 ├── VERSION           # 第 1 行版本，第 2 行 arch
-└── install.sh        # packages/cockpit_server/install.sh
+└── install.sh        # packages/desktop_server/install.sh
 ```
 
 在主机上安装：`curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash`（脚本在 `clients/desktop/install-server.sh`，只负责解析版本和 arch、下载、核对 hash，然后调用 zip 里的 `install.sh`）。`--service` 会通过 `cockpit-server service install|uninstall|status` 注册 `systemd --user` unit。文档：`clients/web/src/app/cockpit/docs/page.tsx` 里的「Remote hosts & VPS」一节。

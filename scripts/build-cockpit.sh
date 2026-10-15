@@ -13,7 +13,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-COCKPIT_DIR="$REPO_ROOT/cockpit"
+COCKPIT_DIR="$REPO_ROOT/clients/desktop"
 CLI_DIR="$COCKPIT_DIR/cli"
 
 DO_INSTALL=false

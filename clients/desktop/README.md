@@ -21,7 +21,7 @@ x86_64 and arm64 only, user space, no sudo.
 ```bash
 curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash
 # same script straight from GitHub (the site URL redirects here):
-curl -fsSL https://raw.githubusercontent.com/zlmpp88016/remote_pi/main/cockpit/install-server.sh | bash
+curl -fsSL https://raw.githubusercontent.com/zlmpp88016/remote_pi/main/clients/desktop/install-server.sh | bash
 ```
 
 The script lives at [install-server.sh](install-server.sh). What it does, in order:

@@ -38,7 +38,7 @@ Future<void> main() async {
     'dart',
     [
       'run',
-      'packages/cockpit_server/bin/cockpit_server.dart',
+      'packages/desktop_server/bin/cockpit_server.dart',
       '--socket',
       socketPath,
     ],
@@ -160,7 +160,7 @@ void _report(String label, double ffi, double remote) {
 
 String _cockpitRoot() {
   var dir = Directory.current;
-  while (!Directory('${dir.path}/packages/cockpit_server').existsSync()) {
+  while (!Directory('${dir.path}/packages/desktop_server').existsSync()) {
     final parent = dir.parent;
     if (parent.path == dir.path) throw StateError('run from clients/desktop/');
     dir = parent;

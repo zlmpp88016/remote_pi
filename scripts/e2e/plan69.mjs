@@ -25,7 +25,7 @@ import { pathToFileURL } from "node:url";
 import { isolateHome } from "./paths.mjs";
 import { importDist, distBuilt } from "./dist_api.mjs";
 
-const EXT_ENTRY = join(process.cwd(), "remote-pi", "dist", "index.js");
+const EXT_ENTRY = join(process.cwd(), "server", "dist", "index.js");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString("base64");

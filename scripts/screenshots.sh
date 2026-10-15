@@ -18,7 +18,7 @@ set -euo pipefail
 # Saida: clients/mobile/build/screenshots/*.png
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP="$ROOT/app"
+APP="$ROOT/clients/mobile"
 # O golden path e resolvido relativo ao arquivo de teste, nao ao cwd.
 SHOTS="$APP/build/screenshots"
 STAGE="$APP/test/screenshots/build/screenshots"
