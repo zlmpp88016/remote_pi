@@ -112,7 +112,7 @@ async function e2e() {
 /**
  * As telas novas que o plan/69 exige em PNG. Contrato para o trabalho do app
  * (todo #6): os goldens com EXATAMENTE estes nomes em
- * app/test/screenshots/screenshots_test.dart.
+ * clients/mobile/test/screenshots/screenshots_test.dart.
  *   - pairing-address-code: formulário endereço + código de pareamento
  *   - workspace-state: card de workspace com estado (crashed) + restart
  */
@@ -164,7 +164,7 @@ async function visual() {
   record(
     "visual: telas novas existem",
     missing.length === 0,
-    missing.length ? `faltando: ${missing.join(", ")}` : `${count} PNG(s) em app/build/screenshots`,
+    missing.length ? `faltando: ${missing.join(", ")}` : `${count} PNG(s) em clients/mobile/build/screenshots`,
   );
 }
 

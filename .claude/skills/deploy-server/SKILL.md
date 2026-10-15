@@ -1,6 +1,6 @@
 ---
 name: deploy-server
-description: Release the standalone cockpit-server zips for Linux hosts (VPS). Use when the user asks to deploy, release or "criar a tag" of the server, publish the cockpit-server zip, or watch/diagnose the cockpit-server-release GitHub Action. Pushes the cockpit-server-v<version> tag (version must equal cockpit/pubspec.yaml) and follows the workflow until the x86_64 and arm64 zips are on the GitHub Release.
+description: Release the standalone cockpit-server zips for Linux hosts (VPS). Use when the user asks to deploy, release or "criar a tag" of the server, publish the cockpit-server zip, or watch/diagnose the cockpit-server-release GitHub Action. Pushes the cockpit-server-v<version> tag (version must equal clients/desktop/pubspec.yaml) and follows the workflow until the x86_64 and arm64 zips are on the GitHub Release.
 ---
 
 # deploy-server
@@ -16,7 +16,7 @@ Output: GitHub Release `cockpit-server-v<version>` with
 
 Rules that always apply:
 - Work on `main`. Never create a branch for a release.
-- The tag version MUST equal `version:` in `cockpit/pubspec.yaml` (the meta
+- The tag version MUST equal `version:` in `clients/desktop/pubspec.yaml` (the meta
   job fails otherwise). Client and server are the same version by design:
   the mobile app refuses a different server version.
 - This skill publishes the server only. It does not bump `pubspec.yaml` and
@@ -28,7 +28,7 @@ Rules that always apply:
 ## 1. Pre-flight
 
 ```bash
-cd cockpit
+cd clients/desktop
 git status --short && git pull --ff-only
 VERSION=$(sed -n 's/^version: *\([0-9][0-9.]*\).*/\1/p' pubspec.yaml); echo $VERSION
 ( cd packages/cockpit_server && dart analyze && dart test )   # Linux-only cases skip on macOS
@@ -99,6 +99,6 @@ curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash           
 curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash -s -- --service   # + systemd --user
 ```
 
-Docs live in `site/src/app/cockpit/docs/page.tsx` (section "Remote hosts &
-VPS") and `cockpit/README.md`; the packaging runbook in
-`cockpit/packaging/README.md`.
+Docs live in `clients/web/src/app/cockpit/docs/page.tsx` (section "Remote hosts &
+VPS") and `clients/desktop/README.md`; the packaging runbook in
+`clients/desktop/packaging/README.md`.

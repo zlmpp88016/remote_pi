@@ -628,7 +628,7 @@ Longo prazo:
 
 - **Relay** (Rust, axum): [`relay/src/`](relay/src/)
 - **Pi-extension** (Node/TS): [`server/src/`](server/src/)
-- **App mobile** (Flutter): [`app/lib/`](app/lib/)
+- **App mobile** (Flutter): [`clients/mobile/lib/`](clients/mobile/lib/)
 - **Planos arquiteturais**: [`plan/`](plan/) (especialmente `plan/03-protocol.md`, `plan/23-owner-key-sync.md`, `plan/24-mesh-membership.md`, `plan/25-pc-mesh-bootstrap.md`)
 
 ---

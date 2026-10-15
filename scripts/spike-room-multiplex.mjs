@@ -9,7 +9,7 @@
 // Método: relay stub local que reproduz o contrato REAL do relay
 // (`relay/src/handlers/peer.rs` + `relay/src/peers/registry.rs`) e clientes
 // que reproduzem o comportamento REAL dos dois lados:
-//   - app-like  → app/lib/data/transport/ws_transport.dart
+//   - app-like  → clients/mobile/lib/data/transport/ws_transport.dart
 //                 (hello room_id='main'; demux de entrada por sender room;
 //                  setActiveRoom troca o room de saída SEM reconectar)
 //   - host      → server/src/daemon/host_bridge.ts

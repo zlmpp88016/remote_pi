@@ -1,4 +1,4 @@
-# CI da CLI interna do Cockpit (crate Rust em `cockpit/cli/`).
+# CI da CLI interna do Cockpit (crate Rust em `clients/desktop/cli/`).
 #
 # Ela é o binário que o app materializa em ~/.cockpit/bin/cockpit e que também
 # atende os hooks do Claude Code (`cockpit hook`). Roda nas TRÊS plataformas de
@@ -13,17 +13,17 @@ on:
   push:
     branches: [main]
     paths:
-      - "cockpit/cli/**"
+      - "clients/desktop/cli/**"
       - ".github/workflows/cockpit-cli.yml"
   pull_request:
     paths:
-      - "cockpit/cli/**"
+      - "clients/desktop/cli/**"
       - ".github/workflows/cockpit-cli.yml"
   workflow_dispatch:
 
 defaults:
   run:
-    working-directory: cockpit/cli
+    working-directory: clients/desktop/cli
 
 jobs:
   test:
@@ -49,8 +49,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            cockpit/cli/target
-          key: cargo-${{ matrix.os }}-${{ hashFiles('cockpit/cli/Cargo.lock') }}
+            clients/desktop/cli/target
+          key: cargo-${{ matrix.os }}-${{ hashFiles('clients/desktop/cli/Cargo.lock') }}
           restore-keys: cargo-${{ matrix.os }}-
 
       - name: Formatação

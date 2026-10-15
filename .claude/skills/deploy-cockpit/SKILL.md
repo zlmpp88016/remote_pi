@@ -1,11 +1,11 @@
 ---
 name: deploy-cockpit
-description: Release the Cockpit desktop/mobile app. Use when the user asks to deploy, release, publish or "criar a tag" of Cockpit, bump its version, or watch/diagnose the cockpit-release GitHub Action. Bumps cockpit/pubspec.yaml and CHANGELOG.md, commits on main, pushes the cockpit-v<version> tag and follows the workflow until every job finishes, fixing and re-tagging on failure.
+description: Release the Cockpit desktop/mobile app. Use when the user asks to deploy, release, publish or "criar a tag" of Cockpit, bump its version, or watch/diagnose the cockpit-release GitHub Action. Bumps clients/desktop/pubspec.yaml and CHANGELOG.md, commits on main, pushes the cockpit-v<version> tag and follows the workflow until every job finishes, fixing and re-tagging on failure.
 ---
 
 # deploy-cockpit
 
-Release of the Cockpit app (`cockpit/`). Trigger: tag `cockpit-v<version>` on
+Release of the Cockpit app (`clients/desktop/`). Trigger: tag `cockpit-v<version>` on
 the repo root, workflow `.github/workflows/cockpit-release.yml`. It produces
 macOS dmg, Windows exe, Linux deb/rpm (x64 + arm64), Android apk + aab,
 SHA256SUMS, latest.json and the Sparkle appcasts, and publishes latest.json to
@@ -21,7 +21,7 @@ Rules that always apply:
 ## 1. Pre-flight
 
 ```bash
-cd cockpit
+cd clients/desktop
 git status --short            # must be clean, or only the files you are about to commit
 git pull --ff-only
 flutter analyze && flutter test   # only if code changed since the last green run
@@ -41,7 +41,7 @@ Patch bump unless the user says otherwise: `1.28.32+95` -> `1.28.33+96`
 1. `pubspec.yaml`: `version: x.y.z+n`.
 2. `CHANGELOG.md`: add `## [x.y.z] - YYYY-MM-DD` at the top, in English,
    starting with the beta sentence, then `### Added` / `### Fixed` /
-   `### Changed` lists derived from `git log <last-tag>..HEAD -- cockpit/`.
+   `### Changed` lists derived from `git log <last-tag>..HEAD -- clients/desktop/`.
    Keep the first ~20 non-empty lines meaningful on their own (the download
    page shows only those). No `## [Unreleased]`.
 3. Commit and push:

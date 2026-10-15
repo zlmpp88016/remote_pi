@@ -1,6 +1,6 @@
-# Release Android do app Remote Pi (app/).
+# Release Android do app Remote Pi (clients/mobile/).
 #
-# Trigger: tag `app-v<versão>` (a versão DEVE bater com app/pubspec.yaml).
+# Trigger: tag `app-v<versão>` (a versão DEVE bater com clients/mobile/pubspec.yaml).
 # Produz: GitHub Release com `RemotePi.apk` assinado (keystore release) +
 # SHA256SUMS. Sem lojas — distribuição direta do APK.
 #
@@ -34,7 +34,7 @@ jobs:
   android:
     name: APK assinado
     runs-on: ubuntu-24.04
-    defaults: { run: { working-directory: app } }
+    defaults: { run: { working-directory: clients/mobile } }
     env:
       GH_TOKEN: ${{ github.token }}
     steps:

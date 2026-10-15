@@ -3,7 +3,7 @@
   // trailing commas are allowed; they're stripped before parsing).
   // Lives at the workspace root you open in Cockpit. Detected tasks (npm
   // scripts, pubspec) appear automatically; this file adds/overrides them.
-  // Full reference: cockpit/docs/tasks-json.md
+  // Full reference: clients/desktop/docs/tasks-json.md
   "tasks": [
     {
       "label": "Cockpit", // shown in the Tasks list

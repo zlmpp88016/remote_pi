@@ -15,7 +15,7 @@ set -euo pipefail
 #   scripts/screenshots.sh sessions home   # so essas (match de prefixo)
 #   scripts/screenshots.sh --open          # abre a pasta no Explorer ao final
 #
-# Saida: app/build/screenshots/*.png
+# Saida: clients/mobile/build/screenshots/*.png
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP="$ROOT/app"

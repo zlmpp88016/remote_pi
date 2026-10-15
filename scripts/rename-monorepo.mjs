@@ -32,7 +32,7 @@
  *    comentário em arquivo de teste = referência real (reescreve).
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, renameSync, mkdirSync, readdirSync } from "node:fs";
 import { join, relative, dirname, resolve } from "node:path";
 
 const ROOT = execFileSync("git", ["rev-parse", "--show-toplevel"], {
@@ -114,14 +114,16 @@ function git(args, opts = {}) {
 
 const SELF = "scripts/rename-monorepo.mjs";
 
-function liveFiles(pattern, { fixed = false } = {}) {
+function liveFiles(pattern, { fixed = false, regex = false } = {}) {
   try {
-    return git(["grep", "-l", ...(fixed ? ["-F"] : ["-E"]), pattern])
+    const flag = fixed ? ["-F"] : ["-E"];
+    return git(["grep", "-l", ...flag, pattern])
       .split("\n").map((s) => s.trim()).filter(Boolean).map(relOf)
       .filter((r) => !excluded(r) && r !== SELF);
   } catch {
     return []; // git grep sai 1 quando não há match
   }
+  void regex;
 }
 
 /** Âncora: início de linha ou um delimitador de token (nunca `/`, para não
@@ -190,6 +192,20 @@ function bareRefRe(dirName) {
     `((?:${prefix})\\s*["']?)((?:\\.\\.?/)*)${escapeRe(dirName)}(?![\\w./-])`,
     "g",
   );
+}
+
+/**
+ * Alvo de link markdown: `](./app)`, `](../cockpit)`, `[label](app/)`.
+ *
+ * A âncora normal NÃO pega porque o caractere anterior é `/` (do `./`) ou `(`.
+ * Pego por inspeção: os LABELS foram reescritos mas os TARGETS ficaram
+ * apontando para o diretório antigo — link quebrado silencioso.
+ */
+function mdLinkTargetRe(dirName) {
+  // Em string normal, `\\.` vira `\.` (ponto literal). Usar template literal
+  // aqui multiplica as barras e transforma o ponto em "qualquer char" — bug
+  // real que fez o alvo do link não ser reescrito.
+  return new RegExp(`(\\]\\((?:\\.{0,2}/)?)${escapeRe(dirName)}(?=[/)#\\s]|$)`, "g");
 }
 
 // ── classificadores ──────────────────────────────────────────────────────
@@ -309,6 +325,7 @@ function rewriteAnchored(rel, dirName, replacement) {
   const re = pathRefRe(dirName);
   const bare = bareRefRe(dirName);
   const vr = varRootedRe(dirName);
+  const md = mdLinkTargetRe(dirName);
   let changed = 0;
   let skipped = 0;
   let inBlockComment = false;
@@ -358,6 +375,14 @@ function rewriteAnchored(rel, dirName, replacement) {
           return `${head}${replacement}/`;
         });
       }
+      // (d) alvo de link markdown: `](./app)` → `](./clients/mobile)`
+      if (md.test(line)) {
+        md.lastIndex = 0;
+        line = line.replace(md, (_full, head) => {
+          changed += 1;
+          return `${head}${replacement}`;
+        });
+      }
       return line;
     })
     .join("\n");
@@ -367,7 +392,11 @@ function rewriteAnchored(rel, dirName, replacement) {
 }
 
 function applyDirRename(dirName, replacement, label) {
-  const files = liveFiles(`${dirName}/`);
+  // A lista de candidatos NÃO pode depender de `dirName + "/"`: formas reais não
+  // têm barra (`](./cockpit)`, `working-directory: cockpit`) e escapariam da
+  // varredura — bug real que deixou os alvos de link markdown apontando para o
+  // diretório antigo enquanto os LABELS já tinham sido atualizados.
+  const files = liveFiles(escapeRe(dirName), { regex: true });
   let changed = 0;
   let skipped = 0;
   for (const rel of files) {
@@ -406,6 +435,24 @@ function gitMove(from, to) {
     console.log(`  > (dry-run) git mv ${from} ${to}`);
     return;
   }
+  // Origem ausente: a onda já foi aplicada.
+  if (!existsSync(join(ROOT, from))) {
+    console.log(`  > ${from} já movido — pulando`);
+    return;
+  }
+  // Diretório VAZIO e sem arquivos rastreados: nada a mover (o conteúdo já foi
+  // para o destino; o diretório pode até estar travado por um lock residual do
+  // Windows, e o git não rastreia diretório vazio).
+  let tracked = 0;
+  try {
+    tracked = git(["ls-files", "--", from]).split("\n").filter(Boolean).length;
+  } catch {
+    tracked = 0;
+  }
+  if (tracked === 0 && readdirSync(join(ROOT, from)).length === 0) {
+    console.log(`  > ${from}/ vazio e sem rastreados — nada a mover`);
+    return;
+  }
   // `git mv app clients/mobile` falha se `clients/` não existir ainda (o git não
   // cria o diretório-pai). Criar antes é o que torna a fase `clients` atômica.
   const parent = dirname(to);
@@ -423,8 +470,23 @@ function lockProbe(dirName) {
     renameSync(probe, abs);
     console.log(`  · ${dirName}/ livre (sonda OK)`);
   } catch (err) {
-    console.error(`[rename] ${dirName}/ TRAVADO — um processo vivo o usa como cwd.`);
-    console.error(`[rename] pare esse processo (next dev / flutter_tester / supervisor) e repita.`);
+    // Diretório JÁ VAZIO e não rastreado pelo git: nada a mover. O Windows pode
+    // manter um lock residual no diretório (indexador, terminal) mesmo sem
+    // conteúdo; abortar aqui travaria a onda por um diretório que o git
+    // nem enxerga. O conteúdo já foi movido, então seguimos.
+    const empty = existsSync(abs) && readdirSync(abs).length === 0;
+    let tracked = 1;
+    try {
+      tracked = git(["ls-files", "--", dirName]).split("\n").filter(Boolean).length;
+    } catch {
+      tracked = 1;
+    }
+    if (empty && tracked === 0) {
+      console.log(`  · ${dirName}/ travado mas VAZIO e sem arquivos rastreados — seguindo`);
+      return;
+    }
+    console.error(`[rename] ${dirName}/ está TRAVADO — um processo vivo o usa como cwd.`);
+    console.error(`[rename] pare o processo (ex.: next dev / flutter_tester / supervisor) e repita.`);
     console.error(`[rename] causa: ${String(err).split("\n")[0]}`);
     process.exit(2);
   }
@@ -435,13 +497,18 @@ function lockProbe(dirName) {
 function phaseServer() {
   const OLD = "remote-pi";
   const NEW = "server";
-  if (!existsSync(join(ROOT, OLD))) {
-    console.log(`  · ${OLD}/ já não existe — pulando`);
-    return;
+  if (existsSync(join(ROOT, OLD))) {
+    lockProbe(OLD);
+    applyDirRename(OLD, NEW, `${OLD}/ → ${NEW}/`);
+    gitMove(OLD, NEW);
+  } else {
+    // Diretório já movido: NÃO retornar cedo. A reescrita de referências precisa
+    // rodar mesmo assim para pegar formas que a passada anterior deixou
+    // escapar (ex.: alvo de link markdown `](./remote-pi)` em README) — sem
+    // isso o link fica quebrado, apontando para um diretório inexistente.
+    console.log(`  · ${OLD}/ já movido — reescrevendo referências restantes`);
+    applyDirRename(OLD, NEW, `${OLD}/ → ${NEW}/`);
   }
-  lockProbe(OLD);
-  applyDirRename(OLD, NEW, `${OLD}/ → ${NEW}/`);
-  gitMove(OLD, NEW);
   if (!DRY) {
     const inside = git(["grep", "-l", "-F", `${OLD}/`, "--", NEW])
       .split("\n").map((s) => s.trim()).filter(Boolean);
@@ -467,8 +534,7 @@ function phaseClients() {
     }
     lockProbe(from);
     gitMove(from, to);
-  }
-  // Refs ao repo apontando para os diretórios novos.
+  }  // Refs ao repo apontando para os diretórios novos.
   applyDirRename("app", "clients/mobile");
   applyDirRename("cockpit", "clients/desktop");
   applyDirRename("site", "clients/web");

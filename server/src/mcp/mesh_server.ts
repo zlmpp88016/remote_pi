@@ -31,7 +31,7 @@ const _argv = process.argv.slice(2);
 // This agent's folder = the dir the `claude` session was launched in, which
 // Claude sets as this subprocess's `process.cwd()`. We deliberately do NOT use
 // CLAUDE_PROJECT_DIR: that's the git repo root, which would collapse every
-// monorepo subproject (app/, relay/, …) into one identity + one lock. The
+// monorepo subproject (clients/mobile/, relay/, …) into one identity + one lock. The
 // `remote-pi claude` launcher therefore registers us WITHOUT a baked `--cwd`,
 // so one shared local-scope entry self-identifies per session. `--cwd` and
 // REMOTE_PI_MCP_CWD remain as explicit overrides (tests / manual launches).

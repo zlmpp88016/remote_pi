@@ -7,7 +7,7 @@
 # PUT /upload (Bearer RP_S3_UPLOAD_TOKEN) — ver rp-s3/README.md. Sem gate
 # manual: a release vai ao ar assim que o workflow termina.
 #
-# Runbook por plataforma: cockpit/packaging/README.md.
+# Runbook por plataforma: clients/desktop/packaging/README.md.
 
 name: cockpit-release
 
@@ -45,7 +45,7 @@ jobs:
       - id: v
         run: |
           VERSION="${RELEASE_TAG#cockpit-v}"
-          FULL=$(grep '^version:' cockpit/pubspec.yaml | awk '{print $2}')
+          FULL=$(grep '^version:' clients/desktop/pubspec.yaml | awk '{print $2}')
           PUBSPEC="${FULL%%+*}"
           BUILD="${FULL##*+}"
           if [ "$VERSION" != "$PUBSPEC" ]; then
@@ -63,7 +63,7 @@ jobs:
           # publica silenciosamente a nota da versão ANTERIOR — foi o que
           # aconteceu de 1.15.4 até 1.18.1: releases seguidas exibindo o mesmo
           # texto. Falha aqui (segundos) em vez de depois dos builds.
-          CHANGELOG_VERSION=$(awk '/^## /{print; exit}' cockpit/CHANGELOG.md \
+          CHANGELOG_VERSION=$(awk '/^## /{print; exit}' clients/desktop/CHANGELOG.md \
             | sed -E 's/^## *\[?([0-9]+\.[0-9]+\.[0-9]+)\]?.*/\1/')
           if [ "$VERSION" != "$CHANGELOG_VERSION" ]; then
             echo "::error::CHANGELOG.md começa em '$CHANGELOG_VERSION' mas a release é $VERSION — escreva a seção ## [$VERSION] no topo (é dela que sai a nota do update)"
@@ -89,7 +89,7 @@ jobs:
     # disponível até ago/2027. Depois disso, a fatia Intel precisa de outra
     # estratégia (cross via Rosetta num runner ARM, ou abrir mão do Intel).
     runs-on: macos-15-intel
-    defaults: { run: { working-directory: cockpit } }
+    defaults: { run: { working-directory: clients/desktop } }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -122,14 +122,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: cockpit-server-x64
-          path: cockpit/build/server-bundle
+          path: clients/desktop/build/server-bundle
           retention-days: 1
 
   macos:
     name: macOS dmg (universal, notarizado)
     needs: [meta, server-x64]
     runs-on: macos-latest
-    defaults: { run: { working-directory: cockpit } }
+    defaults: { run: { working-directory: clients/desktop } }
     env:
       VERSION: ${{ needs.meta.outputs.version }}
       SIGN_ID: "Developer ID Application: Jacob Moura (U843T2P7A2)"
@@ -153,7 +153,7 @@ jobs:
         with:
           version: 0.16.0
 
-      # A CLI interna (`cockpit-cli`, crate em cockpit/cli) é compilada pelo
+      # A CLI interna (`cockpit-cli`, crate em clients/desktop/cli) é compilada pelo
       # Run Script phase do Xcode como binário UNIVERSAL: o build_cli.sh gera
       # arm64 + x86_64 e junta com `lipo`. O mesmo build empacota uma CLI Linux
       # arm64 ao lado do cockpit-server cross-compiled para workspaces remotos.
@@ -169,7 +169,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: cockpit-server-x64
-          path: cockpit/build/server-x64
+          path: clients/desktop/build/server-x64
 
       - name: Importa certificado Developer ID em keychain temporário
         env:
@@ -355,14 +355,14 @@ jobs:
         with:
           name: macos
           # dmg (primeira instalação) + Cockpit-<v>-macos.zip (update Sparkle).
-          path: cockpit/dist/*
+          path: clients/desktop/dist/*
           if-no-files-found: error
 
   windows:
     name: Windows exe (x64, Inno Setup)
     needs: meta
     runs-on: windows-latest
-    defaults: { run: { working-directory: cockpit, shell: bash } }
+    defaults: { run: { working-directory: clients/desktop, shell: bash } }
     env:
       VERSION: ${{ needs.meta.outputs.version }}
     steps:
@@ -431,7 +431,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: windows-exe
-          path: cockpit/out/*.exe
+          path: clients/desktop/out/*.exe
           if-no-files-found: error
 
   linux:
@@ -454,7 +454,7 @@ jobs:
     # transformam "pendurado indefinidamente" em "falha alto, com log, e
     # `gh run rerun --failed` refaz só este job".
     timeout-minutes: 45
-    defaults: { run: { working-directory: cockpit } }
+    defaults: { run: { working-directory: clients/desktop } }
     env:
       VERSION: ${{ needs.meta.outputs.version }}
     steps:
@@ -605,14 +605,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: linux-${{ matrix.deb_arch }}
-          path: cockpit/out/*
+          path: clients/desktop/out/*
           if-no-files-found: error
 
   android:
     name: Android apk (arm64) + aab
     needs: meta
     runs-on: ubuntu-24.04
-    defaults: { run: { working-directory: cockpit } }
+    defaults: { run: { working-directory: clients/desktop } }
     env:
       VERSION: ${{ needs.meta.outputs.version }}
     steps:
@@ -701,7 +701,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: android
-          path: cockpit/out/*
+          path: clients/desktop/out/*
           if-no-files-found: error
 
   publish:
@@ -882,7 +882,7 @@ jobs:
             echo ""
             echo "---"
             echo "**Publicação:** \`latest.json\` + appcasts são enviados automaticamente"
-            echo "pro rp-s3 no fim do workflow (liga site/card e o self-update"
+            echo "pro rp-s3 no fim do workflow (liga clients/web/card e o self-update"
             echo "Sparkle/WinSparkle). Se o passo de publish falhar, o fallback manual"
             echo "é baixar os 3 arquivos desta release e colocar em"
             echo "\`/Users/flutterando/cockpit/data/\` (ver \`rp-s3/README.md\`)."
@@ -910,7 +910,7 @@ jobs:
       # Publica os manifests no rp-s3 (substitui o gate manual). Roda DEPOIS da
       # release existir no GitHub: as URLs dentro do latest.json/appcasts apontam
       # pros assets da release, então só faz sentido publicar com eles no ar.
-      # Appcasts primeiro, latest.json por último: o site/card só anuncia a
+      # Appcasts primeiro, latest.json por último: o clients/web/card só anuncia a
       # versão quando o self-update já tem o que servir.
       - name: Publica manifests no rp-s3
         env:

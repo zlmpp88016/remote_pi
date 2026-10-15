@@ -77,4 +77,4 @@
 *.aab     binary
 
 # ── 派生/生成目录：不参与语言统计 ────────────────────────────────────
-cockpit/lib/**/generated/** linguist-generated=true
+clients/desktop/lib/**/generated/** linguist-generated=true

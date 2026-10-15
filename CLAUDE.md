@@ -11,7 +11,7 @@ Você está na **raiz** do monorepo Remote Pi. Esta pasta é exclusivamente para
 
 ## O que NÃO fazer aqui
 
-- Não editar código em `app/`, `server/`, `relay/`, `site/`, `cockpit/`
+- Não editar código em `clients/mobile/`, `server/`, `relay/`, `clients/web/`, `clients/desktop/`
 - Não rodar comandos de build/test dos subprojetos a partir daqui
 - Para implementar algo, despache via `cmux send` pro pane do subprojeto
   alvo (ver seção [Panes deste workspace cmux](#panes-deste-workspace-cmux)
@@ -48,11 +48,11 @@ Para fotografar o estado de qualquer subprojeto antes de planejar, invoque os
 subagents Scout em paralelo via `Task` — eles são read-only e reportam em
 formato fixo:
 
-- `scout-app` — Flutter (`app/`)
+- `scout-app` — Flutter (`clients/mobile/`)
 - `scout-remote-pi` — Node/TS (`server/`)
 - `scout-relay` — Rust (`relay/`)
-- `scout-site` — NextJS (`site/`)
-- `scout-cockpit` — Flutter Desktop (`cockpit/`)
+- `scout-site` — NextJS (`clients/web/`)
+- `scout-cockpit` — Flutter Desktop (`clients/desktop/`)
 
 Dispare múltiplos numa única mensagem para rodar em paralelo. Cada reporte
 volta com Stack & versões, Dependências, Estrutura, Saúde (lint/build/testes)
@@ -66,11 +66,11 @@ panes existentes em vez de pedir pro usuário abrir terminal novo.**
 
 | Pane (título) | Subprojeto (cwd) |
 |---|---|
-| `App` | `app/` |
+| `App` | `clients/mobile/` |
 | `Relay` | `relay/` |
 | `Extension` | `server/` |
-| `Site` | `site/` |
-| `Cockpit` | `cockpit/` |
+| `Site` | `clients/web/` |
+| `Cockpit` | `clients/desktop/` |
 | `Orquestrador` (você) | raiz do monorepo |
 
 > **Cockpit é o pane mais novo** e por enquanto é **iniciado manualmente** pelo

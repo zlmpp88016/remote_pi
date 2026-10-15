@@ -34,10 +34,10 @@ plus the clients that reach it.
 
 | Package | Stack | Role |
 |---|---|---|
-| [`server/`](./remote-pi) | Node + TypeScript | **Daemon and control plane** — the `pi-supervisord` host daemon, the `remote-pi` CLI, the `/remote-pi` Pi command, and the local agent mesh |
-| [`app/`](./app) | Flutter (iOS / Android) | Mobile client (operator console) |
-| [`cockpit/`](./cockpit) | Flutter Desktop | Desktop client (macOS / Windows / Linux, + iPad / Android) |
-| [`site/`](./site) | NextJS | Landing page, docs, and the browser client |
+| [`server/`](./server) | Node + TypeScript | **Daemon and control plane** — the `pi-supervisord` host daemon, the `remote-pi` CLI, the `/remote-pi` Pi command, and the local agent mesh |
+| [`clients/mobile/`](./clients/mobile) | Flutter (iOS / Android) | Mobile client (operator console) |
+| [`clients/desktop/`](./clients/desktop) | Flutter Desktop | Desktop client (macOS / Windows / Linux, + iPad / Android) |
+| [`clients/web/`](./clients/web) | NextJS | Landing page, docs, and the browser client |
 | [`relay/`](./relay) | Rust + Tokio | WebSocket routing + signed mesh membership storage |
 
 ## Architecture

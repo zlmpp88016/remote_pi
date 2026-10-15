@@ -164,7 +164,7 @@ async function visual() {
   record(
     "visual: telas novas existem",
     missing.length === 0,
-    missing.length ? `faltando: ${missing.join(", ")}` : `${count} PNG(s) em app/build/screenshots`,
+    missing.length ? `faltando: ${missing.join(", ")}` : `${count} PNG(s) em clients/mobile/build/screenshots`,
   );
 }
 

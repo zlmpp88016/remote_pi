@@ -1,7 +1,7 @@
 # Release avulsa do cockpit-server (plano 2.0, k25).
 #
 # Trigger: tag `cockpit-server-v<versão>` (a versão DEVE bater com o
-# `version:` do cockpit/pubspec.yaml: cliente e servidor andam juntos, o
+# `version:` do clients/desktop/pubspec.yaml: cliente e servidor andam juntos, o
 # mobile recusa versão diferente). Separada da release do app de propósito:
 # são dois jobs Linux nativos, sem Flutter, e terminam em poucos minutos.
 #
@@ -9,8 +9,8 @@
 #   cockpit-server-<versão>-linux-x86_64.zip
 #   cockpit-server-<versão>-linux-arm64.zip
 #   SHA256SUMS
-# É o que o instalador (cockpit/install-server.sh, servido pelo site e pelo raw) baixa.
-# Layout do zip: cockpit/tool/build-server-zip.sh.
+# É o que o instalador (clients/desktop/install-server.sh, servido pelo site e pelo raw) baixa.
+# Layout do zip: clients/desktop/tool/build-server-zip.sh.
 
 name: cockpit-server-release
 
@@ -47,7 +47,7 @@ jobs:
       - id: v
         run: |
           TAG_VERSION="${RELEASE_TAG#cockpit-server-v}"
-          PUB_VERSION="$(sed -n 's/^version: *\([0-9][0-9.]*\).*/\1/p' cockpit/pubspec.yaml)"
+          PUB_VERSION="$(sed -n 's/^version: *\([0-9][0-9.]*\).*/\1/p' clients/desktop/pubspec.yaml)"
           echo "tag=$TAG_VERSION pubspec=$PUB_VERSION"
           [ "$TAG_VERSION" = "$PUB_VERSION" ] || {
             echo "::error::tag $RELEASE_TAG não bate com pubspec ($PUB_VERSION)"; exit 1; }
@@ -65,7 +65,7 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    defaults: { run: { working-directory: cockpit } }
+    defaults: { run: { working-directory: clients/desktop } }
     env:
       VERSION: ${{ needs.meta.outputs.version }}
     steps:
@@ -111,7 +111,7 @@ jobs:
       - name: Smoke do instalador (instala no próprio runner)
         run: |
           cd "$RUNNER_TEMP"
-          unzip -q "$GITHUB_WORKSPACE/cockpit/out/cockpit-server-${VERSION}-linux-${{ matrix.arch }}.zip"
+          unzip -q "$GITHUB_WORKSPACE/clients/desktop/out/cockpit-server-${VERSION}-linux-${{ matrix.arch }}.zip"
           ./cockpit-server/install.sh
           test -x "$HOME/.cockpit/server/bin/cockpit-server"
           test -L "$HOME/.local/bin/cockpit-server"
@@ -124,7 +124,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: server-${{ matrix.arch }}
-          path: cockpit/out/*.zip
+          path: clients/desktop/out/*.zip
           if-no-files-found: error
 
   publish:

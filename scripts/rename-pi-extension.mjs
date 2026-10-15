@@ -34,9 +34,9 @@ const EXCLUDE_PREFIXES = [
   "review/",
   "docs/plan/",
   ".git/",
-  "app/build/",
-  "cockpit/build/",
-  "site/.next/",
+  "clients/mobile/build/",
+  "clients/desktop/build/",
+  "clients/web/.next/",
 ];
 /** The tree being moved: its own references are rewritten after the move. */
 /** Files that also need their *name* changed (not just content). */

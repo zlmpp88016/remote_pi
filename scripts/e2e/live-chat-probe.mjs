@@ -6,8 +6,8 @@
 import { mkdtempSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RemotePiWebClient } from "../../site/src/lib/remote-pi/client.ts";
-import { parsePairUri } from "../../site/src/lib/remote-pi/protocol.ts";
+import { RemotePiWebClient } from "../../clients/web/src/lib/remote-pi/client.ts";
+import { parsePairUri } from "../../clients/web/src/lib/remote-pi/protocol.ts";
 
 const pairUri = process.argv[2];
 if (!pairUri) { console.error("uso: node scripts/e2e/live-chat-probe.mjs \"<remotepi://pair?...>\" [cwd]"); process.exit(2); }
