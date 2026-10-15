@@ -3,7 +3,7 @@
 //
 // The daemon-issued code carries `rm=host` and its `pair_ok` echoes
 // `room_id: "host"` ("the app addresses every subsequent inner to the host
-// room" — remote-pi/src/daemon/host_control.ts). These tests pin that
+// room" — server/src/daemon/host_control.ts). These tests pin that
 // end to end: the pairing transport is pointed at the host room and the
 // persisted PeerRecord carries `host` as its room.
 

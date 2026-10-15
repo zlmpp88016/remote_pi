@@ -327,7 +327,7 @@ export function pairRequest(id: string, token: string, deviceName: string): Pair
 }
 
 // ── minimal inner message shapes (subset of remote-pi ClientMessage /
-//    ServerMessage — see remote-pi/src/protocol/types.ts) ─────────────────
+//    ServerMessage — see server/src/protocol/types.ts) ─────────────────
 
 export interface ClientMessage {
   type: string;
@@ -469,7 +469,7 @@ export interface ActionError extends ServerMessage {
 
 /**
  * One entry of `models_list.models` / `models_list.current`. Mirrors the
- * daemon's `WireModel` (remote-pi/src/protocol/types.ts), which is derived
+ * daemon's `WireModel` (server/src/protocol/types.ts), which is derived
  * from the SDK's live ModelRegistry (`pi.registerProvider` included). These
  * strings come from the host/Pi and are RENDERED AS TEXT — never interpreted,
  * never used to build a request other than echoing `provider` + `id` back.
@@ -600,7 +600,7 @@ export interface SessionReadRequest extends ClientMessage {
 }
 
 /** One transcript event. Mirrors the host's `SessionHistoryEvent`
- *  (`remote-pi/src/protocol/types.ts`) FIELD FOR FIELD: a mismatch here is not
+ *  (`server/src/protocol/types.ts`) FIELD FOR FIELD: a mismatch here is not
  *  a stricter guard, it is a guard that rejects real host frames. `usage` is
  *  carried as an opaque number map because nothing renders it today. */
 interface SessionEventBase {
@@ -1084,7 +1084,7 @@ export interface PairRequest extends ClientMessage {
   device_name: string;
 }
 
-/** `pair_error` as sent by the host (remote-pi/src/protocol/types.ts). */
+/** `pair_error` as sent by the host (server/src/protocol/types.ts). */
 export interface PairError extends ServerMessage {
   type: "pair_error";
   code: string;

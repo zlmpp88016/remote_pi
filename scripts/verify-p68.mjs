@@ -60,7 +60,7 @@ function checkPrerequisites() {
   if (missing.length > 0) {
     console.error("Pré-requisitos ausentes:");
     for (const m of missing) console.error(`  - ${m}`);
-    console.error("Rode `npx -y pnpm@10 install` em remote-pi/ primeiro.");
+    console.error("Rode `npx -y pnpm@10 install` em server/ primeiro.");
     process.exit(2);
   }
 }

@@ -10,7 +10,7 @@
  *
  * Once running, it:
  *   - Reads `~/.pi/remote/daemons.json`
- *   - Spawns `pi --mode rpc -e <remote-pi/dist/index.js>` per entry
+ *   - Spawns `pi --mode rpc -e <server/dist/index.js>` per entry
  *   - Listens on `~/.pi/remote/supervisor.sock` for CLI control requests
  *   - Restarts crashed children with exponential backoff
  *

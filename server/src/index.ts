@@ -1408,7 +1408,7 @@ function _detachPeerChannel(appPeerId: string): void {
  *   1. Broker-assigned name (when this Pi is on the local UDS mesh) — may
  *      carry a `#N` suffix from a name collision. Matches what other
  *      agents see, so the mobile UI shows the exact same string.
- *   2. `agent_name` from `<cwd>/.pi/remote-pi/config.json` — set by the
+ *   2. `agent_name` from `<cwd>/.pi/server/config.json` — set by the
  *      wizard on first run; this is "the name the user configured".
  *   3. `defaultAgentName(cwd)` (parent/folder) — fallback when no config
  *      exists yet and the mesh hasn't been joined.
@@ -2991,7 +2991,7 @@ async function _cmdRootInner(
     }
     saveLocalConfig(cwd, newConfig);
     ctx.ui.notify(
-      `[remote-pi] Config saved to ${cwd}/.pi/remote-pi/config.json`,
+      `[remote-pi] Config saved to ${cwd}/.pi/server/config.json`,
       "info",
     );
     if (!_isCurrentRootLifecycle(rootLifecycleGeneration)) return;
@@ -3684,7 +3684,7 @@ async function _cmdRelay(arg: string, ctx: ExtensionContext): Promise<void> {
  * canonical entry. Relative paths resolve against the Pi process's
  * current working directory, not the slash-command's `ctx.cwd`.
  *
- * Side effects on the cwd's local config (`<cwd>/.pi/remote-pi/config.json`):
+ * Side effects on the cwd's local config (`<cwd>/.pi/server/config.json`):
  *   - If the config doesn't exist: created with `auto_start_relay=true`
  *     (mandatory for daemons) and `agent_name` from `--name` if provided.
  *   - If the config already exists: left untouched. Re-running `create`
@@ -3714,7 +3714,7 @@ async function _cmdCreate(arg: string, ctx: Pick<ExtensionContext, "ui">): Promi
     return;
   }
 
-  // No local `.pi/remote-pi/config.json` is written anymore — the name lives
+  // No local `.pi/server/config.json` is written anymore — the name lives
   // in the registry and the supervisor injects the full config (agent_name,
   // auto_start_relay true) via REMOTE_PI_DIRECT_CONFIG when it spawns the
   // daemon. The cwd needs no init folder.
@@ -3778,7 +3778,7 @@ async function _cmdRemove(arg: string, ctx: Pick<ExtensionContext, "ui">): Promi
     }
     ctx.ui.notify(
       `[remote-pi] Daemon removed + process stopped: id=${id} cwd=${data.cwd}. ` +
-      `Local config at ${data.cwd}/.pi/remote-pi/config.json was kept.`,
+      `Local config at ${data.cwd}/.pi/server/config.json was kept.`,
       "info",
     );
     return;

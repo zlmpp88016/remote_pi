@@ -236,7 +236,7 @@ check("submit terminal mantém só o novo ativo", reduceChat(settled, submitEven
 //
 // F1 regression: the host reports a FAILED turn as
 // `{type:'error', code:'provider_error', in_reply_to:<turnId>}` (see
-// remote-pi/src/index.ts `message_end`). The reducer must settle the EXACT
+// server/src/index.ts `message_end`). The reducer must settle the EXACT
 // correlated turn as a distinct, safe failure kind — before OR after the echo
 // — and a `done`/`timeout` that arrives afterwards must NOT turn the failed
 // turn back into a success.

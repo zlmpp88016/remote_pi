@@ -1,5 +1,5 @@
 // Plan/68 W3b — protocol surface for the Pi (skills + packages).
-// Mirrors `remote-pi/src/protocol/types.ts`:
+// Mirrors `server/src/protocol/types.ts`:
 //   ClientMessage:  pi_surface, skill_invoke, skill_set_enabled,
 //                   package_install, package_remove, package_update
 //   ServerMessage:  pi_surface_ok, skill_invoke_ok, skill_set_enabled_ok,

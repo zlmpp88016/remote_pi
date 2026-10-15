@@ -22,7 +22,7 @@ remote-pi daemon start
 remote-pi daemon status
 ```
 
-Paste the address + code into the browser client at `/remote-pi/connect`.
+Paste the address + code into the browser client at `/server/connect`.
 Keep both ends on the same relay (`/remote-pi config` to verify). Full setup
 lives in [Daemon mode](#daemon-mode).
 
@@ -266,7 +266,7 @@ Behavior depends on whether there's a local config for this directory:
 
 | State | What happens |
 |---|---|
-| First run (no `.pi/remote-pi/config.json`) | Interactive wizard → saves config → joins agent session → starts relay (if you opted in) |
+| First run (no `.pi/server/config.json`) | Interactive wizard → saves config → joins agent session → starts relay (if you opted in) |
 | Returning user, auto-start enabled | Joins agent session + starts relay automatically, then prints status |
 | Returning user, auto-start disabled | Prints status only; join/relay must be run manually |
 
@@ -659,7 +659,7 @@ with a `[<cwd>]` prefix, so a single log stream shows every agent.
 
 | Path | Scope | What's in it |
 |---|---|---|
-| `<cwd>/.pi/remote-pi/config.json` | Per-directory | `agent_name`, `session_name`, `auto_start_relay` |
+| `<cwd>/.pi/server/config.json` | Per-directory | `agent_name`, `session_name`, `auto_start_relay` |
 | `~/.pi/remote/config.json` | Per-user | `relay` URL |
 | `~/.pi/remote/peers.json` | Per-machine | Paired mobile devices |
 | `~/.pi/remote/sessions/<name>/` | Per-session | Broker socket + `audit.jsonl` |

@@ -1,7 +1,7 @@
 // Caminhos e isolamento compartilhados pelo harness e2e do plan/68.
 //
 // Por que existe: os scripts vivem em `scripts/` na raiz do monorepo, mas os
-// módulos que eles precisam resolvem de dentro de `remote-pi/` (é lá que
+// módulos que eles precisam resolvem de dentro de `server/` (é lá que
 // está o `node_modules` com `ws`). Ancorar os caminhos aqui deixa o harness na
 // raiz sem duplicar dependências nem depender do cwd de quem chamou.
 
@@ -39,7 +39,7 @@ export function isolateHome({ mkdtempSync, mkdirSync, tmpdir }) {
 /** Pré-requisitos do harness — o verify usa isso para falhar cedo e claro. */
 export function missingPrerequisites() {
   const missing = [];
-  if (!existsSync(join(PI_EXT, "src", "index.ts"))) missing.push("remote-pi/src/index.ts");
-  if (!existsSync(join(PI_EXT, "node_modules", "ws"))) missing.push("remote-pi/node_modules/ws");
+  if (!existsSync(join(PI_EXT, "src", "index.ts"))) missing.push("server/src/index.ts");
+  if (!existsSync(join(PI_EXT, "node_modules", "ws"))) missing.push("server/node_modules/ws");
   return missing;
 }

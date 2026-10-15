@@ -21,7 +21,7 @@ remote-pi daemon start
 remote-pi daemon status
 ```
 
-把地址 + 配对码粘贴到浏览器客户端 `/remote-pi/connect`。两端 relay 必须一致
+把地址 + 配对码粘贴到浏览器客户端 `/server/connect`。两端 relay 必须一致
 （用 `/remote-pi config` 核对）。完整安装见[守护进程模式](#守护进程模式)。
 
 本包提供**守护进程与控制平面**（`pi-supervisord` + `remote-pi` CLI），以及把它们全部接通
@@ -196,7 +196,7 @@ pi install npm:remote-pi
 
 | 状态 | 会发生什么 |
 |---|---|
-| 首次运行（没有 `.pi/remote-pi/config.json`） | 交互式向导 → 保存配置 → 加入智能体会话 → 启动中继（若向导里选了自动启动） |
+| 首次运行（没有 `.pi/server/config.json`） | 交互式向导 → 保存配置 → 加入智能体会话 → 启动中继（若向导里选了自动启动） |
 | 老用户，已启用自动启动 | 自动加入智能体会话 + 启动中继，然后打印状态 |
 | 老用户，未启用自动启动 | 只打印状态；加入会话 / 中继需要手动执行 |
 
@@ -496,7 +496,7 @@ remote-pi uninstall                # remove the supervisor service (registry kep
 
 | 路径 | 范围 | 内容 |
 |---|---|---|
-| `<cwd>/.pi/remote-pi/config.json` | 按目录 | `agent_name`、`session_name`、`auto_start_relay` |
+| `<cwd>/.pi/server/config.json` | 按目录 | `agent_name`、`session_name`、`auto_start_relay` |
 | `~/.pi/remote/config.json` | 按用户 | `relay` URL |
 | `~/.pi/remote/peers.json` | 按机器 | 已配对的移动设备 |
 | `~/.pi/remote/sessions/<name>/` | 按会话 | broker socket + `audit.jsonl` |

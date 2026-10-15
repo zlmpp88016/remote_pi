@@ -11,18 +11,18 @@
  *   • src/lib/remote-pi/persistence.ts — the stored record is exactly
  *     relayUrl/hostEpk/name/roomId/token under `remote-pi-web-session-v1`;
  *     there is no private key field and `localStorage` is used unencrypted.
- *   • remote-pi/src/session + relay `ct` — `ct` is base64(JSON), not E2EE.
+ *   • server/src/session + relay `ct` — `ct` is base64(JSON), not E2EE.
  *   • relay/src/origin.rs — the Origin allow-list is a browser-context
  *     restriction, "not an authentication mechanism"; empty/unset is
  *     permissive and Origin-less handshakes are always accepted.
- *   • remote-pi/src/daemon/host_bridge.ts — the host room drops non-pair
+ *   • server/src/daemon/host_bridge.ts — the host room drops non-pair
  *     traffic from peers outside the allow-list only while
  *     `allowedPeers.size > 0`; `pair_request` is carved out of that check, so
  *     an unknown peer may always ask for pairing. The request itself is still
- *     authorized: remote-pi/src/daemon/host_control.ts only persists the peer
+ *     authorized: server/src/daemon/host_control.ts only persists the peer
  *     when `host_pairing.ts` reports the token `ok` (`unknown`/`expired`/
  *     `consumed` tokens are rejected).
- *   • remote-pi/src/pairing/host_pairing.ts — a persistent token stays valid
+ *   • server/src/pairing/host_pairing.ts — a persistent token stays valid
  *     until `--rotate`; rotation invalidates the token, not the peers already
  *     registered with it.
  *

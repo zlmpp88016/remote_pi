@@ -2,7 +2,7 @@
 /**
  * rename-monorepo.mjs — reestrutura o monorepo por ondas, sem quebrar nada.
  *
- *   remote-pi/  →  server/
+ *   server/  →  server/
  *   app/        →  clients/mobile/     (+ pacote Dart app      → mobile)
  *   cockpit/    →  clients/desktop/    (+ pacote Dart cockpit  → desktop,
  *                                        e os 7 pacotes cockpit_* → desktop_*)
@@ -112,10 +112,13 @@ function git(args, opts = {}) {
   return execFileSync("git", args, { cwd: ROOT, encoding: "utf8", ...opts });
 }
 
+const SELF = "scripts/rename-monorepo.mjs";
+
 function liveFiles(pattern, { fixed = false } = {}) {
   try {
     return git(["grep", "-l", ...(fixed ? ["-F"] : ["-E"]), pattern])
-      .split("\n").map((s) => s.trim()).filter(Boolean).map(relOf).filter((r) => !excluded(r));
+      .split("\n").map((s) => s.trim()).filter(Boolean).map(relOf)
+      .filter((r) => !excluded(r) && r !== SELF);
   } catch {
     return []; // git grep sai 1 quando não há match
   }
@@ -133,7 +136,7 @@ function pathRefRe(dirName) {
  * Referência apoiada numa VARIÁVEL de raiz:
  *
  *   "$GITHUB_WORKSPACE/cockpit/out/..."
- *   "$root/remote-pi/dist/index.js"
+ *   "$root/server/dist/index.js"
  *
  * A âncora normal não pega (o que precede é `/`), então sem esta forma dois
  * caminhos reais ficavam para trás — falso-negativo encontrado por varredura.
@@ -279,7 +282,7 @@ function inLineComment(line, pos) {
  *
  * A distinção é comentário vs código, não “tem aspas”:
  *   _linkAt('app/lib/config/dependencies.dart')   → código, string → fixture
- *   // `remote-pi/src/protocol/types.ts`          → comentário → referência real
+ *   // `server/src/protocol/types.ts`          → comentário → referência real
  *
  * A versão anterior contava aspas na linha e errava nos dois sentidos: uma
  * aspa desbalanceada vinda da linha de cima fazia um comentário passar por
@@ -605,6 +608,9 @@ function verify() {
   console.log("\n── invariantes ────────────────────────────────");
   let bad = 0;
 
+  // O próprio script é excluído: ele CONTÉM as strings de corrupção e os nomes
+  // das identidades como literais (são o que ele procura e afirma), então
+  // contá-lo infla toda contagem em 1 e produz falso-positivo.
   for (const c of ["clients/clients/", "desktop/lib/clients/", "package:clients/", "server/server/"]) {
     const hits = liveFiles(c, { fixed: true });
     console.log(`  ${hits.length ? "FAIL" : "OK  "} corrupção "${c}"${hits.length ? ` → ${hits.join(", ")}` : ""}`);
@@ -614,7 +620,10 @@ function verify() {
   for (const [id, expected] of Object.entries(PUBLISHED)) {
     let n = 0;
     try {
-      n = git(["grep", "-F", id]).split("\n").filter(Boolean).length;
+      // O pathspec precisa ser UM argumento (`:!path`); passar `":!"` e o
+      // caminho separados faz o git tratar o primeiro como literal e a
+      // exclusão não acontece (contagem inflada em 1, falso-FAIL).
+      n = git(["grep", "-F", id, "--", `:!${SELF}`]).split("\n").filter(Boolean).length;
     } catch {
       n = 0;
     }

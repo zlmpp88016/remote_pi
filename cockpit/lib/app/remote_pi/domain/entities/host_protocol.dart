@@ -3,7 +3,7 @@
 /// "Pareamento" e "Filesystem navigation (plan 68)"). Zero contrato novo
 /// aqui: este arquivo espelha `site/src/lib/remote-pi/protocol.ts` (cliente
 /// web de referência, já validado contra o relay) e
-/// `remote-pi/src/protocol/types.ts` (fonte dos tipos).
+/// `server/src/protocol/types.ts` (fonte dos tipos).
 ///
 /// Transporte (PROTOCOL.md "Camadas do protocolo"): WebSocket no relay com
 /// handshake `hello → challenge → auth` (Ed25519 sobre os bytes crus do

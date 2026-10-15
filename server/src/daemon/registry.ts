@@ -10,7 +10,7 @@ import { defaultAgentName } from "../session/local_config.js";
  *
  * Schema rationale (decision Q in plan/26): the registry stores **only**
  * `cwd` per entry. Everything else (agent_name, auto_start_relay, etc.)
- * is the cwd's local config at `<cwd>/.pi/remote-pi/config.json` — single
+ * is the cwd's local config at `<cwd>/.pi/server/config.json` — single
  * source of truth, no duplication. The daemon `id` is *derived* from cwd
  * via `daemonIdForCwd`, never persisted.
  *
@@ -33,7 +33,7 @@ export interface DaemonEntry {
   /**
    * Display name (mesh `agent_name`). Persisted here because the supervisor
    * now injects the daemon's config via `REMOTE_PI_DIRECT_CONFIG` at spawn
-   * instead of reading a per-cwd `.pi/remote-pi/config.json`. Legacy entries
+   * instead of reading a per-cwd `.pi/server/config.json`. Legacy entries
    * (cwd only) fall back to `defaultAgentName(cwd)`.
    */
   name?: string;

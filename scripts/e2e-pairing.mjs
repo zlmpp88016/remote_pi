@@ -35,7 +35,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64");
 const unb64 = (s) => JSON.parse(Buffer.from(s, "base64").toString("utf8"));
 
-// ── Mini QRSession (mesma semantica de remote-pi/src/pairing/qr.ts) ───────
+// ── Mini QRSession (mesma semantica de server/src/pairing/qr.ts) ───────
 class QRSession {
   constructor() { this.active = null; }
   issue(ttlMs = 60_000) {

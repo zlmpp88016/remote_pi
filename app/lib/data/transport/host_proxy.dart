@@ -19,7 +19,7 @@ import 'dart:typed_data';
 
 /// Inner message types the HOST itself answers on room `host` — these must
 /// never be wrapped in `host_forward`. Mirrors the `HostBridge` handler
-/// switch in `remote-pi/src/daemon/host_bridge.ts` (`ping` included: the
+/// switch in `server/src/daemon/host_bridge.ts` (`ping` included: the
 /// daemon answers it, which is what keeps the machine-liveness probe
 /// independent of any workspace Pi).
 const kHostDirectTypes = <String>{

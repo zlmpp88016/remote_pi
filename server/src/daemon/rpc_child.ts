@@ -36,7 +36,7 @@ export interface RpcChildOptions {
   env?: NodeJS.ProcessEnv;
   /**
    * Daemon config injected into the child via `REMOTE_PI_DIRECT_CONFIG`
-   * (JSON inline) instead of a per-cwd `.pi/remote-pi/config.json` file. The
+   * (JSON inline) instead of a per-cwd `.pi/server/config.json` file. The
    * supervisor builds this from the registry. When set, the child reads it
    * env-first (see `loadLocalConfig`) and no config file is needed. Also the
    * source of the `--name` for the session. Falls back to the on-disk config

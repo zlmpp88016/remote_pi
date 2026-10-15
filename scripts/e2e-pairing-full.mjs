@@ -87,7 +87,7 @@ console.log(`QR room     : ${ROOM}\n`);
 // CENARIO = incidente exato do usuario: app no relay errado, cola o codigo.
 {
   const qr = new QRS(); const pi = await startPi(ROOM, qr); const token = qr.issue();
-  // 1. QR carrega o relay do Pi (fix de remote-pi/src/pairing/qr.ts)
+  // 1. QR carrega o relay do Pi (fix de server/src/pairing/qr.ts)
   // index.ts passa `_relayUrl ?? resolveRelayUrl().url` — forma canonica http(s).
   const qrRelay = "https://relay.880160.xyz";
   log("QR gerado carrega o relay do Pi (campo r)", qrRelay === "https://relay.880160.xyz", `r=${qrRelay}`);

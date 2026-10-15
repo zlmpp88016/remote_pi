@@ -58,7 +58,7 @@ describe("findTemplate", () => {
     const p = findTemplate("systemd");
     expect(p.endsWith("systemd.service.template")).toBe(true);
     // The file should be readable from this project's checkout (tests
-    // run from remote-pi/, and templates live next to dist/).
+    // run from server/, and templates live next to dist/).
     const content = readFileSync(p, "utf8");
     expect(content).toContain("[Service]");
     expect(content).toContain("{NODE}");

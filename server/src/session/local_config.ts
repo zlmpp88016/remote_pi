@@ -109,7 +109,7 @@ function directConfig(): LocalConfig | null {
 
 /**
  * True when a local config is available for this cwd — either inline via
- * `REMOTE_PI_DIRECT_CONFIG` or as `<cwd>/.pi/remote-pi/config.json` on disk.
+ * `REMOTE_PI_DIRECT_CONFIG` or as `<cwd>/.pi/server/config.json` on disk.
  */
 export function localConfigExists(cwd: string): boolean {
   return directConfig() !== null || existsSync(pathFor(cwd));

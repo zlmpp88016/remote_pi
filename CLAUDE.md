@@ -11,7 +11,7 @@ Você está na **raiz** do monorepo Remote Pi. Esta pasta é exclusivamente para
 
 ## O que NÃO fazer aqui
 
-- Não editar código em `app/`, `remote-pi/`, `relay/`, `site/`, `cockpit/`
+- Não editar código em `app/`, `server/`, `relay/`, `site/`, `cockpit/`
 - Não rodar comandos de build/test dos subprojetos a partir daqui
 - Para implementar algo, despache via `cmux send` pro pane do subprojeto
   alvo (ver seção [Panes deste workspace cmux](#panes-deste-workspace-cmux)
@@ -49,7 +49,7 @@ subagents Scout em paralelo via `Task` — eles são read-only e reportam em
 formato fixo:
 
 - `scout-app` — Flutter (`app/`)
-- `scout-remote-pi` — Node/TS (`remote-pi/`)
+- `scout-remote-pi` — Node/TS (`server/`)
 - `scout-relay` — Rust (`relay/`)
 - `scout-site` — NextJS (`site/`)
 - `scout-cockpit` — Flutter Desktop (`cockpit/`)
@@ -68,7 +68,7 @@ panes existentes em vez de pedir pro usuário abrir terminal novo.**
 |---|---|
 | `App` | `app/` |
 | `Relay` | `relay/` |
-| `Extension` | `remote-pi/` |
+| `Extension` | `server/` |
 | `Site` | `site/` |
 | `Cockpit` | `cockpit/` |
 | `Orquestrador` (você) | raiz do monorepo |

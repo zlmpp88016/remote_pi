@@ -1,5 +1,5 @@
 // Plan/68 — protocol surface for host filesystem navigation + the explicit
-// workspace catalog. Mirrors `remote-pi/src/protocol/types.ts`:
+// workspace catalog. Mirrors `server/src/protocol/types.ts`:
 //   ClientMessage:  fs_list, workspace_add, workspace_remove
 //   ServerMessage:  fs_list_ok (+ source on workspace_list_ok rows)
 //

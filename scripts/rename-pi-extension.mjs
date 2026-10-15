@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * rename-pi-extension.mjs — move `pi-extension/` → `remote-pi/` and rewrite
+ * rename-pi-extension.mjs — move `pi-extension/` → `server/` and rewrite
  * only the LIVE (non-historical) references.
  *
  * Why a script: the rename touches 51 live files across 6 subprojects and must
@@ -77,7 +77,7 @@ function rewrite(rel, { alsoName = false } = {}) {
   const abs = join(ROOT, rel);
   if (!existsSync(abs)) return null;
   const before = readFileSync(abs, "utf8");  // Replace the token only where it denotes the directory/package:
-  //   `pi-extension/`  → `remote-pi/`
+  //   `pi-extension/`  → `server/`
   //   "pi-extension"   → "remote-pi"  (JSON/paths)
   //   `pi-extension`   → `remote-pi`  (bare in prose/comments)
   // A blanket token replace is correct here because the npm package is already

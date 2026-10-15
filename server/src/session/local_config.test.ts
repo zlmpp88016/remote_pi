@@ -10,7 +10,7 @@ function makeCwd(): string {
   return mkdtempSync(join(tmpdir(), "rp-localcfg-"));
 }
 
-/** Write a config.json into <cwd>/.pi/remote-pi/. */
+/** Write a config.json into <cwd>/.pi/server/. */
 function writeFileConfig(cwd: string, obj: unknown): void {
   const dir = join(cwd, ".pi", "remote-pi");
   mkdirSync(dir, { recursive: true });

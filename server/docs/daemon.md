@@ -21,7 +21,7 @@ exist yet, or from a partial install.
 
 ```bash
 # Dev clone:
-cd remote-pi && pnpm build
+cd server && pnpm build
 
 # Production install:
 npm install -g remote-pi      # or pnpm install -g remote-pi
@@ -91,7 +91,7 @@ errors live:
 
 ```bash
 pi-supervisord
-# or: node /path/to/remote-pi/dist/bin/supervisord.js
+# or: node /path/to/server/dist/bin/supervisord.js
 ```
 
 Ctrl-C to stop. If that works but the service doesn't, the problem is
@@ -123,13 +123,13 @@ Reproduce the failure with full visibility:
 
 ```bash
 cd /Users/x/Movies
-REMOTE_PI_DAEMON=1 pi --mode rpc -e $(npm root -g)/remote-pi/dist/index.js
+REMOTE_PI_DAEMON=1 pi --mode rpc -e $(npm root -g)/server/dist/index.js
 ```
 
 Common reasons a daemon won't start:
 
 - **Local config missing.** `cd` into the daemon's folder and check
-  `.pi/remote-pi/config.json` exists with `auto_start_relay: true`.
+  `.pi/server/config.json` exists with `auto_start_relay: true`.
   Recreate via `remote-pi create <cwd>` (it provisions a default config
   when missing).
 - **Pi extension config drift.** Pi's own settings (model, API keys)
@@ -189,7 +189,7 @@ remote-pi daemon restart
 
 ### Confirm the relay URL matches
 
-The daemon uses the cwd's local config (`<cwd>/.pi/remote-pi/config.json`
+The daemon uses the cwd's local config (`<cwd>/.pi/server/config.json`
 agent_name + `~/.pi/remote/config.json` relay). Verify with:
 
 ```bash
@@ -254,7 +254,7 @@ remote-pi install
 ```
 
 This is the "nuke everything" path. After this, the only state left is
-each cwd's `<cwd>/.pi/remote-pi/config.json` — which you can either
+each cwd's `<cwd>/.pi/server/config.json` — which you can either
 keep (re-create restores the daemon) or delete (full reset).
 
 ---
@@ -269,7 +269,7 @@ ls -la ~/.pi/remote/supervisor.sock
 echo '{"op":"list"}' | nc -U ~/.pi/remote/supervisor.sock
 
 # Where are the daemon configs?
-find ~/Projects -name "config.json" -path "*/.pi/remote-pi/*" 2>/dev/null
+find ~/Projects -name "config.json" -path "*/.pi/server/*" 2>/dev/null
 
 # Where are the cwd locks?
 ls ~/.pi/remote/locks/

@@ -33,7 +33,7 @@ Remote Pi 不是单个插件 —— 它是「在一台机器上运行和管理 P
 
 | 包 | 技术栈 | 作用 |
 |---|---|---|
-| [`remote-pi/`](./remote-pi) | Node + TypeScript | **守护进程与控制平面** —— `pi-supervisord` 主机守护进程、`remote-pi` CLI、`/remote-pi` Pi 命令，以及本机智能体 mesh |
+| [`server/`](./remote-pi) | Node + TypeScript | **守护进程与控制平面** —— `pi-supervisord` 主机守护进程、`remote-pi` CLI、`/remote-pi` Pi 命令，以及本机智能体 mesh |
 | [`app/`](./app) | Flutter（iOS / Android） | 移动端客户端（操作台） |
 | [`cockpit/`](./cockpit) | Flutter Desktop | 桌面端客户端（macOS / Windows / Linux，另含 iPad / Android） |
 | [`site/`](./site) | NextJS | 落地页、文档，以及浏览器客户端 |

@@ -123,8 +123,8 @@ class BoundedInMemoryPiLink {
 
 /**
  * Frozen old-Extension oracle, derived directly from
- * `19c2997^:remote-pi/src/session/broker_remote.ts` and
- * `19c2997^:remote-pi/src/mesh/siblings.ts`.
+ * `19c2997^:server/src/session/broker_remote.ts` and
+ * `19c2997^:server/src/mesh/siblings.ts`.
  *
  * The old source selected `nickname ?? pcPubkey.slice(0, 8)`, required the
  * first `from` segment to equal the sibling label, handled controls before

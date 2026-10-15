@@ -413,7 +413,7 @@ sealed class ClientMessage {
 }
 
 /// Plan/30 — one image carried inline on a `user_message` (base64 + mime).
-/// Mirrors `WireImage` in `remote-pi/src/protocol/types.ts` and the SDK's
+/// Mirrors `WireImage` in `server/src/protocol/types.ts` and the SDK's
 /// `ImageContent`. The relay forwards it opaquely inside the existing `ct`.
 class WireImage {
   final String data; // base64, no data-URI prefix
@@ -893,7 +893,7 @@ class SessionSync extends ClientMessage {
 /// Plan/28 — Curated catalogue of actions the app can dispatch on the
 /// Pi-side session. Each value matches an `action_ok`/`action_error`
 /// reply emitted by the remote-pi handlers in
-/// `remote-pi/src/actions/handlers.ts`.
+/// `server/src/actions/handlers.ts`.
 enum ActionName {
   sessionNew('session_new'),
   sessionCompact('session_compact'),
@@ -957,7 +957,7 @@ enum ThinkingLevel {
 
 /// Plan/28 — Wire shape for one entry in the model picker. Subset of
 /// the SDK's `Model` interface; matches the `WireModel` declared in
-/// `remote-pi/src/protocol/types.ts`.
+/// `server/src/protocol/types.ts`.
 class WireModel {
   /// Stable id inside the provider's catalog (e.g. `claude-opus-4-7`).
   final String id;
@@ -2534,7 +2534,7 @@ class HostHelloOk extends ServerMessage {
 
 /// Plan/69 — lifecycle state of a workspace Pi, mirroring the supervisor's
 /// ChildSlot. Same closed union as `WorkspaceState` in
-/// `remote-pi/src/protocol/types.ts`.
+/// `server/src/protocol/types.ts`.
 enum WorkspaceStateValue {
   running('running'),
   starting('starting'),
