@@ -993,6 +993,10 @@ const MUST_BE_ABSENT = [
   "BDZ7" + "AJ7ZN2",
   "zlmpp" + "88016",
   "Jacob" + " Moura",
+  // Entidade legal / app de referência do site (CNPJ e endereço reais no plano).
+  "biblia" + "ehinario",
+  "33.637" + ".582",
+  "Rua Clara" + " Nunes",
 ];
 
 /** Arquivos cuja contagem pode crescer legitimamente: a entrada de decisão CITA
@@ -1036,11 +1040,13 @@ function verify() {
   }
 
   // Vazamento de dado pessoal / infra privada: regra de ausência TOTAL.
-  // SELF é excluído: ele CONTÉM os tokens como dado (é a lista de detecção).
+  // `-i`: os tokens aparecem com casing variado ("Flutterando"/"flutterando");
+  // uma checagem sensível a maiúsculas deixava passar o vazamento. SELF é
+  // excluído: ele CONTÉM os tokens como dado (é a lista de detecção).
   for (const token of MUST_BE_ABSENT) {
     let hits = [];
     try {
-      hits = git(["grep", "-l", "-F", token, "--", `:!${SELF}`]).split("\n").filter(Boolean);
+      hits = git(["grep", "-l", "-i", "-F", token, "--", `:!${SELF}`]).split("\n").filter(Boolean);
     } catch {
       hits = [];
     }

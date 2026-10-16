@@ -47,7 +47,7 @@ app.*.map.json
 # Android release signing — keep secrets out of git. The keystore is
 # the source of truth for Play Store updates; lose it and you can't
 # ship signed updates. Back it up out-of-band (see iCloud copy in
-# Flutterando/remotepi).
+# Example Company/remotepi).
 android/key.properties
 android/signing/
 *.jks

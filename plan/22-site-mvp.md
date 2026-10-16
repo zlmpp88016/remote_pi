@@ -13,10 +13,10 @@ Plano 22 entrega o **site institucional MVP** em inglês, com 3 páginas:
 3. `/privacy` — Privacy Policy
 
 Conteúdo legal é **adaptação direta** do site
-[bibliaehinario.app/termos](https://bibliaehinario.app/termos) e
-[bibliaehinario.app/privacidade](https://bibliaehinario.app/privacidade)
-— mesma empresa responsável (Flutterando Desenvolvimento de Programas
-de Computador LTDA, CNPJ 33.637.582/0001-70), mesmo DPO
+[example-app.app/termos](https://example-app.app/termos) e
+[example-app.app/privacidade](https://example-app.app/privacidade)
+— mesma empresa responsável (Example Company Desenvolvimento de Programas
+de Computador LTDA, CNPJ 00.000.000/0001-00), mesmo DPO
 (Example Developer <noreply@example.com>), só trocando o produto e seu
 escopo de funcionalidades/dados.
 
@@ -35,9 +35,9 @@ provável é `https://remote-pi.example.invalid` (já referenciada em
 | **Branding** | Favicon e OG image gerados a partir de `branding/logo-full.svg`. Hero usa `logo-foreground.svg` sobre background preto (consistente com app icon) |
 | **Paleta** | `#000000` background, `#FFFFFF` texto principal, `#4FC3F7` accent (mesma do branding). Tailwind tokens via `theme` extension em `globals.css` |
 | **Tipografia** | Geist (já bundlada pelo bootstrap) — sans pra UI, mono pra code snippets |
-| **Conteúdo legal** | Adaptação dos termos/privacidade do bibliaehinario, mantendo entidade legal Flutterando e DPO Example Developer. Estrutura de 13 seções por documento espelha o original |
-| **Entidade legal** | Flutterando Desenvolvimento de Programas de Computador LTDA (CNPJ 33.637.582/0001-70). Endereço: Rua Clara Nunes, 198, Maringá/PR, CEP 87.045-650 |
-| **Contato/DPO** | noreply@example.com (mesmo do bibliaehinario) |
+| **Conteúdo legal** | Adaptação dos termos/privacidade do example-app, mantendo entidade legal Example Company e DPO Example Developer. Estrutura de 13 seções por documento espelha o original |
+| **Entidade legal** | Example Company Ltda (CNPJ 00.000.000/0001-00). Endereço: Rua Exemplo, 100, Cidade/UF, CEP 00.000-000 |
+| **Contato/DPO** | noreply@example.com (mesmo do example-app) |
 | **Lei aplicável** | LGPD (Brasil) — coerente com a empresa responsável |
 | **Hosting** | Vercel (padrão NextJS). `vercel.json` mínimo se necessário. Decisão de DNS fica fora deste plano |
 | **Analytics** | **Sem analytics** no MVP. Sem cookies de tracking. Coerente com a postura "no precise data" do projeto |
@@ -92,7 +92,7 @@ site/
 
 ### 2. Layout shell (header + footer)
 - Cria `src/components/header.tsx`: logo (link pra `/`) + 3 links de nav (GitHub, Docs disabled, "App soon"). Sticky no topo, padding compacto, divisor sutil
-- Cria `src/components/footer.tsx`: links pra `/terms`, `/privacy`, GitHub repo, copyright "© 2026 Flutterando"
+- Cria `src/components/footer.tsx`: links pra `/terms`, `/privacy`, GitHub repo, copyright "© 2026 Example Company"
 - Monta header + main + footer em `app/layout.tsx` (envolve `{children}`)
 
 **Aceite**: Header e footer aparecem em todas as rotas (`/`, `/terms`, `/privacy`).
@@ -117,12 +117,12 @@ Componentes: `hero`, `feature-card`, `code-block` em `src/components/`.
 Cria `app/terms/page.tsx` com:
 
 - Header: "Terms of Service" + "Last updated: 2026-05-22"
-- Subtítulo: "Provider: Flutterando Desenvolvimento de Programas de Computador LTDA (CNPJ 33.637.582/0001-70)"
-- 13 seções adaptadas do bibliaehinario, com escopo Remote Pi:
+- Subtítulo: "Provider: Example Company Ltda (CNPJ 00.000.000/0001-00)"
+- 13 seções adaptadas do example-app, com escopo Remote Pi:
   1. **Acceptance of Terms** — idem original
   2. **Account & Pairing** — Remote Pi não exige cadastro com email. Pareamento é via QR code efêmero. Menor de 13 não suportado
   3. **Features** — controle remoto do Pi coding agent via app mobile, mensageria multi-agente local, relay opcional self-hosted
-  4. **User-Generated Content** — prompts e respostas geradas pelo Pi pertencem ao usuário; Flutterando não armazena nem inspeciona conteúdo de mensagens (relay encaminha ciphertext)
+  4. **User-Generated Content** — prompts e respostas geradas pelo Pi pertencem ao usuário; Example Company não armazena nem inspeciona conteúdo de mensagens (relay encaminha ciphertext)
   5. **Prohibited Conduct** — adaptado (sem spam/impersonação aplicável; foco em: não tentar quebrar a criptografia do relay, não atacar a infra)
   6. **Reporting and Moderation** — N/A no MVP (sem servidor de conteúdo). Substitui por: "report security issues to noreply@example.com"
   7. **Platform Intellectual Property** — código MIT; marca "Remote Pi" e branding (logos, paleta) protegidos
@@ -141,9 +141,9 @@ Markup: usa `<section>`, headings semânticas (h1, h2), parágrafos. Tipografia 
 Cria `app/privacy/page.tsx` com:
 
 - Header: "Privacy Policy" + "Last updated: 2026-05-22"
-- Intro: data controller info (Flutterando + DPO Example Developer)
+- Intro: data controller info (Example Company + DPO Example Developer)
 - 13 seções adaptadas:
-  1. **Who We Are (Data Controller)** — Flutterando + DPO contact
+  1. **Who We Are (Data Controller)** — Example Company + DPO contact
   2. **Data We Collect**:
      - **2.1 You provide**: nothing on the relay path (E2E). No account, no email. On the device: pairing peers list (stored locally in Keychain/Keystore)
      - **2.2 Automatic**: relay logs **connection metadata only** (IP, timestamp, pubkey identifier) for abuse prevention. No message content
@@ -151,7 +151,7 @@ Cria `app/privacy/page.tsx` com:
   3. **How We Use Your Data** — operar o relay, prevenir abuso, segurança
   4. **Legal Bases (LGPD Article 7)** — legítimo interesse (segurança), execução de contrato (operar o serviço)
   5. **Data Sharing** — não compartilhamos. Caso opere relay próprio: o operador é o controlador
-  6. **International Transfer** — relay padrão hospedado por Flutterando; usuários podem self-host
+  6. **International Transfer** — relay padrão hospedado por Example Company; usuários podem self-host
   7. **Data Retention** — connection logs do relay: 30 dias máx; pareamentos locais: até o usuário revogar
   8. **Your Rights (LGPD Article 18)** — confirmation, access, correction, deletion. Contato via noreply@example.com
   9. **Security** — TLS in transit, NaCl E2E encryption, relay sees only ciphertext + routing metadata
@@ -191,8 +191,8 @@ Mesma tipografia/estrutura da `/terms`.
 - [ ] Bootstrap placeholder removido; tokens visuais aplicados (preto/branco/azul)
 - [ ] Header + footer compartilhados em todas as rotas
 - [ ] Landing `/` com hero, features (≥3 cards), quick start, CTA pro GitHub
-- [ ] `/terms` com 13 seções adaptadas, identificação Flutterando + DPO presente
-- [ ] `/privacy` com 13 seções adaptadas, identificação Flutterando + DPO presente
+- [ ] `/terms` com 13 seções adaptadas, identificação Example Company + DPO presente
+- [ ] `/privacy` com 13 seções adaptadas, identificação Example Company + DPO presente
 - [ ] Favicon + OG image derivados do branding
 - [ ] `pnpm lint && pnpm build` clean
 - [ ] `site/README.md` documenta comandos básicos

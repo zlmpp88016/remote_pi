@@ -14,7 +14,7 @@ GitHub Release em tag própria, asset baixável, ofertado na `/download` do site
 | Canal | APK assinado como asset de GitHub Release. ⚠️ **Revisão 2026-06-12**: a **Play Store é MANTIDA** como canal — o APK direto é **adicional**, não substituto ("não precisamos subir pras lojas" ≠ "sair da loja"). Site oferta os dois caminhos (loja + `/download`). O aviso de update in-app pode aparecer mesmo pra instalação vinda da loja — **sem** detecção de origem de instalação (decisão do usuário: não tem problema) |
 | Tag | **`app-v<versão>`** (separada da `cockpit-v*`; versão bate com `app/pubspec.yaml`) |
 | Nome do asset | **`RemotePi.apk`** (+ `SHA256SUMS`) |
-| Assinatura | Keystore release `remotepi-release.jks` (alias `remotepi`). Original guardado no iCloud (`~/Library/Mobile Documents/com~apple~CloudDocs/Flutterando/RemotePi/Android/`), cópia de trabalho gitignored em `app/android/signing/` |
+| Assinatura | Keystore release `remotepi-release.jks` (alias `remotepi`). Original guardado no iCloud (`~/Library/Mobile Documents/com~apple~CloudDocs/Example Company/RemotePi/Android/`), cópia de trabalho gitignored em `app/android/signing/` |
 | Secrets | `ANDROID_KEYSTORE` (jks base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS` — **cadastrados em 2026-06-12** |
 | Builds de loja | ⚠️ **Correção 2026-06-12 (via agente do App)**: distribuição é **dupla** — além do APK direto, o app vai pras **duas lojas** (iOS App Store + Android Play Store, que consome **AAB**). Artefatos store-ready buildados e verificados em `1.1.0+5`: IPA assinado Apple Distribution, AAB assinado release e APK release. Builds de loja são fluxo à parte (manual/agente do App); o `app-release.yml` segue cobrindo só o APK direto |
 
