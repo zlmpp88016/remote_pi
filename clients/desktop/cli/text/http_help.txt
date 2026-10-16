@@ -39,7 +39,7 @@ FILE EXAMPLE:
   POST {{baseUrl}}/users
   Content-Type: application/json
 
-  {"name": "Jacob"}
+  {"name": "User"}
 
   ### Body from a file
   PUT {{baseUrl}}/users/1

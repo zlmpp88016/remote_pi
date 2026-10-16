@@ -132,7 +132,7 @@ jobs:
               echo "APK Android assinado — instalação direta. Conferir integridade com o SHA256SUMS."
               echo ""
               echo "---"
-              echo "**Publicação no site (gate manual):** baixe o \`latest.json\` desta release e coloque em \`/Users/flutterando/app/data/\` no host do rp-s3 — só então o site e o aviso in-app passam a ofertar esta versão."
+              echo "**Publicação no site (gate manual):** baixe o \`latest.json\` desta release e coloque em \`/home/user/app/data/\` no host do rp-s3 — só então o site e o aviso in-app passam a ofertar esta versão."
             } > "$NOTES_FILE"
             gh release create "$RELEASE_TAG" out/RemotePi.apk out/SHA256SUMS out/latest.json \
               --title "Remote Pi (app) ${VERSION}" \
@@ -150,5 +150,5 @@ jobs:
             echo "Asset: \`RemotePi.apk\` (assinado com o keystore release, verificado no job)."
             echo ""
             echo "**Próximo passo (manual):** baixar o \`latest.json\` da release e"
-            echo "colocar no rp-s3 (\`/Users/flutterando/app/data/\`) pra ir ao ar no site e no aviso in-app."
+            echo "colocar no rp-s3 (\`/home/user/app/data/\`) pra ir ao ar no site e no aviso in-app."
           } >> "$GITHUB_STEP_SUMMARY"

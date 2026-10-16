@@ -14,7 +14,7 @@ void main() {
   PairingCode buildUri({
     String token = '',
     String epk = '',
-    String name = 'Mac do Jacob',
+    String name = 'Mac do User',
     String? rm,
     String? r,
   }) {
@@ -32,7 +32,7 @@ void main() {
   test('happy path: token/epk/n e default do room host', () {
     final code = buildUri();
     expect(code.token, tokenB64Url);
-    expect(code.name, 'Mac do Jacob');
+    expect(code.name, 'Mac do User');
     expect(code.roomId, 'host');
     expect(code.relayUrl, isNull);
     // epk normalizado pra base64 padrão COM padding (formato do relay).

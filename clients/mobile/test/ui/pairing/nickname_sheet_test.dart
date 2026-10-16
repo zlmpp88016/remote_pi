@@ -39,7 +39,7 @@ void main() {
         String? result;
         await _openSheet(
           tester,
-          defaultName: 'Mac do Jacob',
+          defaultName: 'Mac do User',
           onResult: (v) => result = v,
         );
 
@@ -60,14 +60,14 @@ void main() {
         String? result;
         await _openSheet(
           tester,
-          defaultName: 'Mac do Jacob',
+          defaultName: 'Mac do User',
           onResult: (v) => result = v,
         );
 
         await tester.tap(find.byKey(const Key('nickname-sheet-save')));
         await tester.pumpAndSettle();
 
-        expect(result, 'Mac do Jacob');
+        expect(result, 'Mac do User');
       },
     );
 
@@ -77,14 +77,14 @@ void main() {
         String? result;
         await _openSheet(
           tester,
-          defaultName: 'Mac do Jacob',
+          defaultName: 'Mac do User',
           onResult: (v) => result = v,
         );
 
         await tester.tap(find.byKey(const Key('nickname-sheet-skip')));
         await tester.pumpAndSettle();
 
-        expect(result, 'Mac do Jacob');
+        expect(result, 'Mac do User');
       },
     );
 
@@ -110,13 +110,13 @@ void main() {
       (tester) async {
         await _openSheet(
           tester,
-          defaultName: 'Mac do Jacob',
+          defaultName: 'Mac do User',
           onResult: (_) {},
         );
 
         // hintText is rendered as a Text inside the TextField — assert
         // by finding it on screen.
-        expect(find.text('Mac do Jacob'), findsWidgets);
+        expect(find.text('Mac do User'), findsWidgets);
       },
     );
   });

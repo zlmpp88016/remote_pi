@@ -104,7 +104,7 @@ aba "No Pi yet" com o curl real; depende da Wave 0 **e** de a Wave A já existir
 ### Wave 0 — Curl installer (pi-extension) · pré-requisito
 
 **Despachar pro pane `Extension`.** Script de bootstrap zero→rodando, invocável por
-`curl -fsSL https://remote-pi.jacobmoura.work/install.sh | bash`.
+`curl -fsSL https://remote-pi.example.invalid/install.sh | bash`.
 
 Passos do script (**idempotente, sem `sudo` — tudo user-space**; detecta macOS/Linux):
 1. **Node** — usa o do sistema se já houver ≥ versão mínima; senão instala via nvm
@@ -194,7 +194,7 @@ Decisões de implementação:
   secundário → GitHub. (Estrutura do hero preservada: logo, H1, 2 botões.)
 - **Install (componente de abas, EN)**: substituir o Quick start atual por um
   bloco de **2 abas**:
-  - **"No Pi yet"** → o one-liner `curl -fsSL https://remote-pi.jacobmoura.work/install.sh | bash`.
+  - **"No Pi yet"** → o one-liner `curl -fsSL https://remote-pi.example.invalid/install.sh | bash`.
     **Acende só quando a Wave 0 aterrissar** — até lá, aba desabilitada com
     "Coming soon" (ou oculta).
   - **"Already have Pi"** → mostra **três comandos** (caminho básico correto,

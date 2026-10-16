@@ -46,8 +46,8 @@ qualquer outro valor, inclusive ausente, mantém ligado.
 
 ## Publicação (deploy)
 
-O site roda em produção (`remote-pi.jacobmoura.work`) como **imagem Docker** no
-Docker Hub: `jacobmoura7/remote-pi-site`. O host de produção puxa a tag
+O site roda em produção (`remote-pi.example.invalid`) como **imagem Docker** no
+Docker Hub: `exampleorg/remote-pi-site`. O host de produção puxa a tag
 `:latest` — então **publicar = buildar e dar push da imagem**.
 
 ```bash

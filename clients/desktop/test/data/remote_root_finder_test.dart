@@ -57,7 +57,7 @@ class _FakeFs implements FileService {
   }
 
   @override
-  Future<String> home() async => '/home/jacob';
+  Future<String> home() async => '/home/user';
 
   @override
   Future<void> write(String path, Uint8List bytes) async {}

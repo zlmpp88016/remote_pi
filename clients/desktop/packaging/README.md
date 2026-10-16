@@ -8,10 +8,10 @@ referência: [`../../plan/43-cockpit-packaging.md`](../../plan/43-cockpit-packag
 
 | Item | Valor |
 |---|---|
-| App ID (macOS bundle id / Linux app id) | `work.jacobmoura.cockpit` |
+| App ID (macOS bundle id / Linux app id) | `com.example.cockpit` |
 | Nome de exibição | **Remote Pi Cockpit** |
 | Binário | `cockpit` (Linux/Windows) / `Cockpit` (macOS) — **não** renomeado |
-| Team ID (Apple) | `U843T2P7A2` |
+| Team ID (Apple) | `EXAMPLETEAM` |
 | Versão (SSOT) | `version:` do `pubspec.yaml` (`x.y.z+n`) |
 
 - macOS: `PRODUCT_BUNDLE_IDENTIFIER` em `macos/Runner/Configs/AppInfo.xcconfig`;
@@ -21,7 +21,7 @@ referência: [`../../plan/43-cockpit-packaging.md`](../../plan/43-cockpit-packag
 - Windows: `CompanyName`/`ProductName`/`LegalCopyright` em
   `windows/runner/Runner.rc`; versão vem dos defines `FLUTTER_VERSION_*`
   (injetados em build; o `#else "1.0.0"` é só fallback).
-- Linux: `.desktop` + ícones hicolor + `work.jacobmoura.cockpit.metainfo.xml`
+- Linux: `.desktop` + ícones hicolor + `com.example.cockpit.metainfo.xml`
   (AppStream), instalados via `linux/CMakeLists.txt`.
 
 ## Ferramenta
@@ -48,7 +48,7 @@ linux/packaging/rpm/make_config.yaml
 ## macOS — build + sign + DMG + notarize + staple (ponta a ponta)
 
 Validado localmente em 2026-06-12 (DMG aceito pelo Gatekeeper). Pré-requisitos:
-identidade **"Developer ID Application: Jacob Moura (U843T2P7A2)"** no Keychain,
+identidade **"Developer ID Application: Example Developer (EXAMPLETEAM)"** no Keychain,
 a API key do App Store Connect, Zig 0.16.0 e o target Rust usado pela CLI do
 servidor Linux remoto (`rustup target add aarch64-unknown-linux-gnu`).
 
@@ -62,7 +62,7 @@ APP="build/macos/Build/Products/Release/Cockpit.app"
 # 2. Assina o .app com Developer ID + Hardened Runtime + entitlements de Release.
 codesign --force --deep --options runtime --timestamp \
   --entitlements macos/Runner/Release.entitlements \
-  --sign "Developer ID Application: Jacob Moura (U843T2P7A2)" "$APP"
+  --sign "Developer ID Application: Example Developer (EXAMPLETEAM)" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"   # checagem
 
 # 3. Monta o DMG (hdiutil — sem dependências; o maker do Fastforge usa `appdmg`
@@ -75,11 +75,11 @@ rm -rf "$STAGE"
 
 # 4. Assina o DMG.
 codesign --force --timestamp \
-  --sign "Developer ID Application: Jacob Moura (U843T2P7A2)" "$DMG"
+  --sign "Developer ID Application: Example Developer (EXAMPLETEAM)" "$DMG"
 
 # 5. Notariza (App Store Connect API key) e aguarda.
 xcrun notarytool submit "$DMG" \
-  --key "/Users/jacob/Library/Mobile Documents/com~apple~CloudDocs/Flutterando/RemotePi/CockpitApp/AuthKey_3Y2J8MA3M4.p8" \
+  --key "/Users/user/Library/Mobile Documents/com~apple~CloudDocs/ExampleOrg/RemotePi/CockpitApp/AuthKey_EXAMPLEKEY.p8" \
   --key-id 3Y2J8MA3M4 \
   --issuer a76c76e6-a413-449e-926c-f2c30d5645c4 \
   --wait
@@ -179,7 +179,7 @@ cockpit-server/
 └── install.sh        # packages/desktop_server/install.sh
 ```
 
-Instalação no host: `curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash`
+Instalação no host: `curl -fsSL https://remote-pi.example.invalid/cockpit-server.sh | bash`
 (script em `clients/desktop/install-server.sh`, só resolve versão e arch, baixa, confere o hash e
 chama o `install.sh` do zip). `--service` registra a unit `systemd --user`
 via `cockpit-server service install|uninstall|status`. Documentação: seção
@@ -214,7 +214,7 @@ Por isso há **um par** de chaves, não dois.
   - macOS: `SUPublicEDKey` em `macos/Runner/Info.plist`.
   - Windows: recurso `EdDSAPub EDDSA {...}` em `windows/runner/Runner.rc`.
 - **Privada** (NUNCA commitar): backup em
-  `…/CloudDocs/Flutterando/RemotePi/CockpitApp/sparkle_ed25519_private_key.txt`
+  `…/CloudDocs/ExampleOrg/RemotePi/CockpitApp/sparkle_ed25519_private_key.txt`
   (iCloud, junto dos certs Apple) **e** no secret do GitHub `SPARKLE_PRIVATE_KEY`.
   Gerada via Sparkle na conta de keychain `remote-pi-cockpit`.
 
@@ -228,7 +228,7 @@ cd clients/desktop
 ./macos/Pods/Sparkle/bin/generate_keys --account remote-pi-cockpit
 # exporta a privada pro iCloud (pede "Allow" no Keychain)
 ./macos/Pods/Sparkle/bin/generate_keys --account remote-pi-cockpit -x \
-  "/Users/jacob/Library/Mobile Documents/com~apple~CloudDocs/Flutterando/RemotePi/CockpitApp/sparkle_ed25519_private_key.txt"
+  "/Users/user/Library/Mobile Documents/com~apple~CloudDocs/ExampleOrg/RemotePi/CockpitApp/sparkle_ed25519_private_key.txt"
 # atualizar: SUPublicEDKey (Info.plist), EdDSAPub (Runner.rc) e o secret SPARKLE_PRIVATE_KEY
 ```
 
@@ -242,8 +242,8 @@ e gera `appcast-macos.xml` + `appcast-windows.xml`. macOS usa
 ### Publicação (gate manual)
 
 Junto do `latest.json`, suba `appcast-macos.xml` e `appcast-windows.xml` pro rp-s3
-(`/Users/flutterando/cockpit/data/`). Até subir, ninguém se auto-atualiza. As feed
-URLs são `https://rp-s3.jacobmoura.work/downloads/cockpit/appcast-{macos,windows}.xml`.
+(`/home/user/cockpit/data/`). Até subir, ninguém se auto-atualiza. As feed
+URLs são `https://rp-s3.example.invalid/downloads/cockpit/appcast-{macos,windows}.xml`.
 
 ### Pendências (não testáveis neste Mac)
 

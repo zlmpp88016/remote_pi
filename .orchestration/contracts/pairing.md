@@ -59,7 +59,7 @@ abre WS, auth Ed25519 (challenge-resp)
 pair_request {                            ──▶  valida t (presente, vivo, não consumido)
   id: uuid,                                    valida peer Ed25519 do app (já tem do relay auth)
   token: "<t do QR>",                          consome t
-  device_name: "iPhone do Jacob"               salva peer em peers.json:
+  device_name: "iPhone do User"               salva peer em peers.json:
 }                                                {epk_app, name, paired_at}
 
                                           ◀──  pair_ok {
@@ -98,7 +98,7 @@ trafegam em **JSON em claro base64** no `ct` do outer envelope.
 {
   "peers": [
     {
-      "name": "iPhone do Jacob",
+      "name": "iPhone do User",
       "remote_epk": "<base64 standard, 32 bytes Ed25519>",
       "paired_at": "2026-05-19T16:00:00Z"
     }

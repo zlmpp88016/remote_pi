@@ -62,7 +62,7 @@ class RemoteWorkspaceController extends ChangeNotifier {
   /// remoto, eles caem aqui.
   ///
   /// A chave é composta (e não só o path, como no [GitController] local)
-  /// porque dois hosts diferentes têm caminhos iguais — `/home/jacob/app` no
+  /// porque dois hosts diferentes têm caminhos iguais — `/home/user/app` no
   /// host A e no host B são repos distintos.
   final Map<String, Map<String, GitInfo>> _gitInfo =
       <String, Map<String, GitInfo>>{};

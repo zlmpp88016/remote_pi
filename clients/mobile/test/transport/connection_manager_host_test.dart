@@ -108,7 +108,7 @@ void main() {
         inReplyTo: hellos.first.id,
         daemon: const HostDaemonInfo(
           version: '1.2.3',
-          hostname: 'mac do jacob',
+          hostname: 'mac do user',
           platform: 'darwin',
         ),
         capabilities: const ['host_pairing', 'workspace_state', 'fs_nav'],
@@ -118,7 +118,7 @@ void main() {
 
     expect(hellosOk, hasLength(1));
     expect(hellosOk.first.daemon.version, '1.2.3');
-    expect(conn.hostHelloFor(_epkA)?.daemon.hostname, 'mac do jacob');
+    expect(conn.hostHelloFor(_epkA)?.daemon.hostname, 'mac do user');
     // url-safe / standard epk lookups agree.
     expect(conn.hostHelloFor(_epkA)?.capabilities, contains('workspace_state'));
 
@@ -180,7 +180,7 @@ void main() {
     // The supervisor pushes the crash of the workspace Pi…
     ch.push(
       WorkspaceState(
-        cwd: '/Users/jacob/Projects/remote_pi',
+        cwd: '/Users/user/Projects/remote_pi',
         state: WorkspaceStateValue.crashed,
         lastError: 'Pi process exited with code 1 (SIGKILL)',
         restarts: 1,
@@ -190,7 +190,7 @@ void main() {
     // …and later the restart coming back up.
     ch.push(
       WorkspaceState(
-        cwd: '/Users/jacob/Projects/remote_pi',
+        cwd: '/Users/user/Projects/remote_pi',
         state: WorkspaceStateValue.running,
         lastError: null,
         restarts: 1,
@@ -206,7 +206,7 @@ void main() {
     expect(statuses.whereType<StatusOffline>(), isEmpty);
     expect(conn.status, isA<StatusOnline>());
 
-    final state = conn.workspaceStateFor('/Users/jacob/Projects/remote_pi');
+    final state = conn.workspaceStateFor('/Users/user/Projects/remote_pi');
     expect(state, isNotNull);
     expect(state!.state, WorkspaceStateValue.running);
     expect(state.restarts, 1);

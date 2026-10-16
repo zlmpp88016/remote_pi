@@ -51,7 +51,7 @@ const ic = (n, cls) =>
   '<svg class="icon' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[n] || '') + '</svg>';
 
 const HOST = {
-  name:'jacob-mac', label:'MacBook Pro · M3 Pro',
+  name:'example-mac', label:'MacBook Pro · M3 Pro',
   relay:'wss://relay.remote-pi.dev', version:'0.9.4', commit:'3df5650',
   peer:'ed25519:8f3a91c4…c21e', caps:['host_pairing','workspace_state','fs_nav'],
 };

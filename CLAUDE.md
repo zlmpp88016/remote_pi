@@ -119,7 +119,7 @@ Diferenças-chave vs cmux:
 - **Conversa solo**: `cockpit send --tab-id <id> "<texto>"` +
   `cockpit send-key --tab-id <id> Enter` (Enter separado, mesma razão do cmux).
 
-Skill de referência: [`cockpit-cli`](file:///Users/jacob/.claude/skills/cockpit-cli/SKILL.md).
+Skill de referência: [`cockpit-cli`](file:///Users/user/.claude/skills/cockpit-cli/SKILL.md).
 
 **Push de conclusão (implementado 2026-07-19)**: quando o dispatch roda de
 dentro de um pane do Cockpit, o script embute `[ORCH-REPLY:$COCKPIT_PANE_ID]`
@@ -343,7 +343,7 @@ Não fique chamando `set-progress` a cada turno — só quando o estado real mud
 
 Para qualquer coisa além do `set-progress` básico — dispatch entre panes, escuta de
 `agent.hook.Stop`, notificações, padrão `.orchestration/` — use a skill
-[`claude-cmux`](file:///Users/jacob/.claude/skills/claude-cmux/SKILL.md).
+[`claude-cmux`](file:///Users/user/.claude/skills/claude-cmux/SKILL.md).
 
 Ela cobre:
 - CLI essentials (`send`, `send-key`, `events`, `notify`, `tree`, `list-panes`)

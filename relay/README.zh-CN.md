@@ -18,7 +18,7 @@ docker run -d \
   -p 3000:3000 \
   -v remote-pi-data:/data \
   --restart unless-stopped \
-  jacobmoura7/remote-pi-relay
+  exampleorg/remote-pi-relay
 
 # 方案 C —— 源码构建启动
 cargo build --release
@@ -86,7 +86,7 @@ docker run -d \
   -p 3000:3000 \
   -v remote-pi-data:/data \
   --restart unless-stopped \
-  jacobmoura7/remote-pi-relay
+  exampleorg/remote-pi-relay
 ```
 
 中继只监听**一个端口**（默认 `3000`），同时提供三个对外服务面：
@@ -117,7 +117,7 @@ docker run -d \
   -e REMOTEPI_RELAY_PORT=8080 \
   -e RUST_LOG=info \
   --restart unless-stopped \
-  jacobmoura7/remote-pi-relay
+  exampleorg/remote-pi-relay
 ```
 
 ### Mesh 成员关系端点

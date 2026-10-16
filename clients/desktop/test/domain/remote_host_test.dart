@@ -7,12 +7,12 @@ void main() {
       final h = RemoteHost.fromJson({
         'id': '1',
         'name': 'box',
-        'ssh': 'jacob@host',
+        'ssh': 'user@host',
       });
-      expect(h.sshTarget, 'jacob@host');
+      expect(h.sshTarget, 'user@host');
       expect(h.port, 22);
       expect(h.auth, RemoteHostAuth.key);
-      expect(h.user, 'jacob');
+      expect(h.user, 'user');
       expect(h.host, 'host');
     });
 
@@ -20,9 +20,9 @@ void main() {
       final h = RemoteHost.fromJson({
         'id': '1',
         'name': 'box',
-        'ssh': 'jacob@host:2222',
+        'ssh': 'user@host:2222',
       });
-      expect(h.sshTarget, 'jacob@host');
+      expect(h.sshTarget, 'user@host');
       expect(h.port, 2222);
     });
 
@@ -30,7 +30,7 @@ void main() {
       final h = RemoteHost.fromJson({
         'id': '1',
         'name': 'box',
-        'ssh': 'jacob@host',
+        'ssh': 'user@host',
         'port': 2200,
         'auth': 'password',
       });

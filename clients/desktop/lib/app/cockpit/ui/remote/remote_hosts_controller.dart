@@ -250,7 +250,7 @@ class RemoteHostsController extends ChangeNotifier {
   }
 
   /// Nome do pin a partir do caminho do HOST — que pode ser Windows.
-  /// Procurar só por `/` fazia `C:\\Users\\jacob\\projeto` virar o nome inteiro
+  /// Procurar só por `/` fazia `C:\Users\user\\projeto` virar o nome inteiro
   /// do workspace, em vez de `projeto`.
   static String _basename(String path) => remotePathBasename(path);
 

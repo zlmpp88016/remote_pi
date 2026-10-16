@@ -6,7 +6,7 @@ description: Release the standalone cockpit-server zips for Linux hosts (VPS). U
 # deploy-server
 
 Release of `cockpit-server` as standalone zips, the thing
-`https://remote-pi.jacobmoura.work/cockpit-server.sh` downloads. Trigger: tag
+`https://remote-pi.example.invalid/cockpit-server.sh` downloads. Trigger: tag
 `cockpit-server-v<version>`, workflow
 `.github/workflows/cockpit-server-release.yml`. Two native Linux jobs
 (ubuntu-24.04 and ubuntu-24.04-arm), no Flutter build, a few minutes each.
@@ -95,8 +95,8 @@ Report the version, run id and assets, and give the user the install line
 for a host:
 
 ```bash
-curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash            # on demand
-curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash -s -- --service   # + systemd --user
+curl -fsSL https://remote-pi.example.invalid/cockpit-server.sh | bash            # on demand
+curl -fsSL https://remote-pi.example.invalid/cockpit-server.sh | bash -s -- --service   # + systemd --user
 ```
 
 Docs live in `clients/web/src/app/cockpit/docs/page.tsx` (section "Remote hosts &

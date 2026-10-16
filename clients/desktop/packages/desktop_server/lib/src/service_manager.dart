@@ -31,7 +31,7 @@ String buildSystemdUnit({
 }) => '''
 [Unit]
 Description=Remote Pi Cockpit server
-Documentation=https://remote-pi.jacobmoura.work/cockpit
+Documentation=https://remote-pi.example.invalid/cockpit
 After=network.target
 
 [Service]

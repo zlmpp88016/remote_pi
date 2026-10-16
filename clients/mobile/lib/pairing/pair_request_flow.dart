@@ -48,7 +48,7 @@ class PairingError implements Exception {
 /// Wraps the persisted [PeerRecord] plus side hints the post-pair UI
 /// (nickname modal) needs but that don't belong on the PeerRecord
 /// itself. Plan/27 Wave A added [hostnameHint] so the modal can
-/// pre-fill "Mac do Jacob" instead of the generic "Pi"; legacy Pis
+/// pre-fill "Mac do User" instead of the generic "Pi"; legacy Pis
 /// that don't emit `hostname` leave it null and the modal falls back
 /// to `peer.sessionName`.
 class PairingResult {

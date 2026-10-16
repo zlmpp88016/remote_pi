@@ -10,8 +10,8 @@ package_name: remote-pi-cockpit
 # `du -sk build/linux/*/release/bundle` quando houver build Linux real.
 installed_size: 150000
 maintainer:
-  name: Jacob Moura
-  email: jacobaraujo7@gmail.com
+  name: Example Developer
+  email: noreply@example.com
 section: devel
 priority: optional
 # Deps de runtime: GTK3 + libs base do bundle Flutter Linux. (Confirmar/expandir
@@ -35,6 +35,6 @@ keywords:
   - agent
   - cockpit
 startup_notify: true
-startup_wm_class: work.jacobmoura.cockpit
+startup_wm_class: com.example.cockpit
 icon: linux/runner/resources/app_icon_512.png
-metainfo: linux/work.jacobmoura.cockpit.metainfo.xml
+metainfo: linux/com.example.cockpit.metainfo.xml

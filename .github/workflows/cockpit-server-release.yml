@@ -148,7 +148,7 @@ jobs:
           ls -la
           sha256sum *.zip > SHA256SUMS
           cat SHA256SUMS
-          NOTES="cockpit-server ${VERSION} for Linux (x86_64, arm64). Install: \`curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash\` or unzip and run \`cockpit-server/install.sh\`. Must match the Cockpit app version."
+          NOTES="cockpit-server ${VERSION} for Linux (x86_64, arm64). Install: \`curl -fsSL https://remote-pi.example.invalid/cockpit-server.sh | bash\` or unzip and run \`cockpit-server/install.sh\`. Must match the Cockpit app version."
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" *.zip SHA256SUMS --clobber
           else

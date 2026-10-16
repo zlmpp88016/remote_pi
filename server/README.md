@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/branding/logo-full.svg" width="160" alt="Remote Pi logo" />
+  <img src="https://raw.githubusercontent.com/exampleorg/remote_pi/main/branding/logo-full.svg" width="160" alt="Remote Pi logo" />
 </p>
 
 <h1 align="center">Remote Pi</h1>
@@ -10,7 +10,7 @@
 > and watch its work from your phone, browser, or desktop. On the same machine,
 > Pi agents can also discover and message each other over a local broker.
 
-**Homepage:** <https://remote-pi.jacobmoura.work>
+**Homepage:** <https://remote-pi.example.invalid>
 
 ## Start
 
@@ -171,7 +171,7 @@ trust boundaries.
 **Get the app** — all current download options (Google Play, App Store, and
 direct builds while public releases roll out):
 
-<https://remote-pi.jacobmoura.work/#get-the-app>
+<https://remote-pi.example.invalid/#get-the-app>
 
 ---
 
@@ -361,7 +361,7 @@ keypair authentication, layering a VPN on top means **only your devices** can
 even reach the WebSocket port — defense in depth.
 
 Quick Docker outline (see the
-[relay README](https://github.com/jacobaraujo7/remote_pi/blob/main/relay/README.md#self-hosted-relay-recommended-for-privacy)
+[relay README](https://github.com/exampleorg/remote_pi/blob/main/relay/README.md#self-hosted-relay-recommended-for-privacy)
 for the full setup, environment variables, and reverse-proxy guidance):
 
 ```bash
@@ -369,7 +369,7 @@ docker run -d \
   --name remote-pi-relay \
   -p 3000:3000 \
   --restart unless-stopped \
-  ghcr.io/jacobaraujo7/remote-pi-relay:latest
+  ghcr.io/exampleorg/remote-pi-relay:latest
 ```
 
 Bind the container to your VPN interface, terminate TLS in a reverse proxy,
@@ -536,7 +536,7 @@ the mesh/app like any prompt; the cron layer only audits the dispatch.
   `woke_and_delivered`, `deliver_failed`, `skipped_busy`, `skipped_down`, or
   `skipped_disabled` — read it with `remote-pi cron log`.
 
-Step-by-step walkthrough: the [daemon tutorial](https://remote-pi.jacobmoura.work/tutorials/daemon).
+Step-by-step walkthrough: the [daemon tutorial](https://remote-pi.example.invalid/tutorials/daemon).
 
 ### Footer + title
 
@@ -740,24 +740,24 @@ other terminal first.
 ## Branding
 
 Official brand assets live in
-[`/branding`](https://github.com/jacobaraujo7/remote_pi/tree/main/branding) —
+[`/branding`](https://github.com/exampleorg/remote_pi/tree/main/branding) —
 SVG sources for the logo (full, foreground, background, monochrome) plus a
 banner. See the
-[branding README](https://github.com/jacobaraujo7/remote_pi/blob/main/branding/README.md)
+[branding README](https://github.com/exampleorg/remote_pi/blob/main/branding/README.md)
 for palette and export sizes.
 
 <table>
   <tr>
     <td align="center">
-      <img src="https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/branding/logo-full.svg" width="96" alt="logo-full" /><br/>
+      <img src="https://raw.githubusercontent.com/exampleorg/remote_pi/main/branding/logo-full.svg" width="96" alt="logo-full" /><br/>
       <sub><code>logo-full</code></sub>
     </td>
     <td align="center">
-      <img src="https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/branding/logo-foreground.svg" width="96" alt="logo-foreground" /><br/>
+      <img src="https://raw.githubusercontent.com/exampleorg/remote_pi/main/branding/logo-foreground.svg" width="96" alt="logo-foreground" /><br/>
       <sub><code>logo-foreground</code></sub>
     </td>
     <td align="center">
-      <img src="https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/branding/logo-monochrome.svg" width="96" alt="logo-monochrome" /><br/>
+      <img src="https://raw.githubusercontent.com/exampleorg/remote_pi/main/branding/logo-monochrome.svg" width="96" alt="logo-monochrome" /><br/>
       <sub><code>logo-monochrome</code></sub>
     </td>
   </tr>
@@ -767,11 +767,11 @@ for palette and export sizes.
 
 ## Links
 
-- Homepage: <https://remote-pi.jacobmoura.work>
-- Source: <https://github.com/jacobaraujo7/remote_pi>
+- Homepage: <https://remote-pi.example.invalid>
+- Source: <https://github.com/exampleorg/remote_pi>
 - Pi coding agent: <https://github.com/earendil-works/pi>
-- Relay (self-hosting guide): <https://github.com/jacobaraujo7/remote_pi/blob/main/relay/README.md>
-- Issues / bugs: <https://github.com/jacobaraujo7/remote_pi/issues>
+- Relay (self-hosting guide): <https://github.com/exampleorg/remote_pi/blob/main/relay/README.md>
+- Issues / bugs: <https://github.com/exampleorg/remote_pi/issues>
 
 ---
 

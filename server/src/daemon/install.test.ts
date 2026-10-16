@@ -113,7 +113,7 @@ describe("renderTemplate", () => {
     node: "/usr/local/bin/node",
     supervisor: "/Users/x/dist/bin/supervisord.js",
     home: "/Users/x",
-    user: "jacob",
+    user: "user",
     path: "/usr/local/bin:/usr/bin:/bin",
     vbs: "/Users/x/.pi/remote/RemotePiSupervisorLauncher.vbs",
     logPath: "/Users/x/.pi/remote/supervisord.log",

@@ -463,7 +463,7 @@ describe("state machine + pair_request flow", () => {
       type: "pair_request",
       id: "req-1",
       token: "test-token",
-      device_name: "iPhone do Jacob",
+      device_name: "iPhone do User",
     }));
 
     await vi.waitFor(() => expect(_getState()).toBe("paired"), { timeout: 2000 });
@@ -496,7 +496,7 @@ describe("state machine + pair_request flow", () => {
     // Peer must have been persisted
     expect(_addedPeers).toHaveLength(1);
     expect(_addedPeers[0]).toMatchObject({
-      name: "iPhone do Jacob",
+      name: "iPhone do User",
       remote_epk: APP_PEER_ID,
     });
   });

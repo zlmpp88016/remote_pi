@@ -134,7 +134,7 @@ dependencies:
   # vendor: quiver (+ meta via SDK).
   quiver: ^3.0.0
   # PTY nativo (ConPTY/forkpty) — plugin interno absorvido do fork
-  # jacobaraujo7/kyroon_pty v1.0.6 (ver plugins/desktop_pty/pubspec.yaml).
+  # exampleorg/kyroon_pty v1.0.6 (ver plugins/desktop_pty/pubspec.yaml).
   desktop_pty:
     path: plugins/desktop_pty
 
@@ -321,7 +321,7 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
-# TEMPORÁRIO — fork jacobaraujo7/libghostty (tag flterm-cockpit-2). Baseado no
+# TEMPORÁRIO — fork exampleorg/libghostty (tag flterm-cockpit-2). Baseado no
 # RELEASE v0.0.11 (nativo prebuilt de elias8, mesmo do pub) + 2 fixes: (1) scroll
 # interno de TUI no Ghostty (wheel->mouse no alt-buffer) e (2) text input do
 # Windows (#114). NÃO usa o dev-branch do fork (que tem compressão e exige um
@@ -384,11 +384,11 @@ dependency_overrides:
   # patch for merjado upstream), trocar por versoes do pub.dev e remover os git.
   flterm:
     git:
-      url: https://github.com/jacobaraujo7/libghostty.git
+      url: https://github.com/exampleorg/libghostty.git
       ref: cockpit-pin-flterm-link-click
       path: packages/flterm
   libghostty:
     git:
-      url: https://github.com/jacobaraujo7/libghostty.git
+      url: https://github.com/exampleorg/libghostty.git
       ref: cockpit-pin-flterm-link-click
       path: packages/libghostty

@@ -85,7 +85,7 @@ terminal da aba). "Não aparece retorno" é runtime.
 ### Wave E — Empacotamento e distribuição
 
 - **E1. Bundle IDs com flavor `.debug`.** Espelhar o padrão desktop
-  (`work.jacobmoura.cockpit` / `.debug`) em iOS (schemes/xcconfig) e Android
+  (`com.example.cockpit` / `.debug`) em iOS (schemes/xcconfig) e Android
   (`productFlavors`), pra E2E isolado não colidir com o app instalado.
   - Aceite: build debug instala lado a lado do release; ids corretos nos dois OS.
 - **E2. Nome + ícone "Cockpit Remote" (decisão C), só mobile.** `CFBundleDisplayName`

@@ -110,7 +110,7 @@ Everything released as 1.28.x since 2026-08-18 is part of this version.
 **`cockpit-server` on a VPS**
 
 - A standalone server for headless Linux hosts (x86_64 and arm64), one command
-  away: `curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash`.
+  away: `curl -fsSL https://remote-pi.example.invalid/cockpit-server.sh | bash`.
   No desktop, no sudo, idempotent.
 - `cockpit-server service install|uninstall|status` registers a `systemd --user`
   unit so the host is ready at boot; without it the client starts the server on
@@ -282,7 +282,7 @@ current layout, and the code editor indents with Tab.
 - Windows/Linux: "Open with Cockpit" for `.kanban`, `.ckp`, `.dbq`, `.http`
   and Markdown; a second launch forwards the file to the running app.
 - `cockpit-server` standalone for Linux x86_64 and arm64: `curl -fsSL
-  https://remote-pi.jacobmoura.work/cockpit-server.sh | bash` installs it on a
+  https://remote-pi.example.invalid/cockpit-server.sh | bash` installs it on a
   host without a desktop; `cockpit-server service install|uninstall|status`
   registers a `systemd --user` unit; `cockpit-server --version`.
 - Code editor: Tab and Shift+Tab indent and outdent (tabs or spaces detected
@@ -1657,7 +1657,7 @@ PowerShell 7 aparece na lista de terminais.
 Primeira release distribuível do Cockpit (cliente desktop do Remote Pi).
 
 ### Adicionado
-- Identidade de release: app ID `work.jacobmoura.cockpit`, nome de exibição
+- Identidade de release: app ID `com.example.cockpit`, nome de exibição
   **Remote Pi Cockpit** nas três plataformas.
 - macOS: Hardened Runtime no Release; build assinado com Developer ID +
   notarização + staple (DMG universal x86_64+arm64).

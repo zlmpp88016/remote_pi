@@ -112,7 +112,7 @@ quase inalterado.
    (`winsparkle-tool`). Públicas **commitadas** (`SUPublicEDKey` no Info.plist; `EdDSAPub`
    no `Runner.rc`). Privadas viram os secrets `SPARKLE_PRIVATE_KEY`/`WINSPARKLE_PRIVATE_KEY`
    **e** backup junto dos certs na pasta iCloud
-   `/Users/jacob/Library/Mobile Documents/com~apple~CloudDocs/Flutterando/RemotePi/CockpitApp`
+   `/Users/user/Library/Mobile Documents/com~apple~CloudDocs/ExampleOrg/RemotePi/CockpitApp`
    (mesma que hoje guarda `certs.p12` + `AuthKey_*.p8`). **Aceite:** públicas no repo;
    privadas salvas no iCloud e como secrets; `sign_update`/`winsparkle-tool` produzem
    assinatura válida localmente contra um zip/exe de teste.
@@ -158,7 +158,7 @@ quase inalterado.
 9. **CI publish + versão.** Ajustar o **gate de 6 artefatos** (`cockpit-release.yml:284`)
    pro novo total (+`.app.zip`; mantê-lo **fora** do `latest.json` — serve só ao Sparkle);
    publicar `appcast-macos.xml`+`appcast-windows.xml` no **mesmo gate manual** do rp-s3
-   (`/Users/flutterando/cockpit/data/`); o job `meta` passa a validar que o **build
+   (`/home/user/cockpit/data/`); o job `meta` passa a validar que o **build
    number `+n` foi incrementado**. **Aceite:** release ponta a ponta gera os dois appcasts;
    subir os appcasts no rp-s3 faz um cockpit antigo se auto-atualizar.
 

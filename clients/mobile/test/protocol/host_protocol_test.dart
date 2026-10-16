@@ -19,14 +19,14 @@ void main() {
       final msg = ServerMessage.fromJson({
         'type': 'host_hello_ok',
         'in_reply_to': 'h1',
-        'daemon': {'version': '1.2.3', 'hostname': 'mac do jacob', 'platform': 'darwin'},
+        'daemon': {'version': '1.2.3', 'hostname': 'mac do user', 'platform': 'darwin'},
         'capabilities': ['host_pairing', 'workspace_state', 'host_forward', 'fs_nav'],
       });
       expect(msg, isA<HostHelloOk>());
       final ok = msg as HostHelloOk;
       expect(ok.inReplyTo, 'h1');
       expect(ok.daemon.version, '1.2.3');
-      expect(ok.daemon.hostname, 'mac do jacob');
+      expect(ok.daemon.hostname, 'mac do user');
       expect(ok.daemon.platform, 'darwin');
       expect(ok.capabilities, contains('workspace_state'));
     });
@@ -58,14 +58,14 @@ void main() {
     test('parses a crashed push with last_error + restarts', () {
       final msg = ServerMessage.fromJson({
         'type': 'workspace_state',
-        'cwd': '/Users/jacob/Projects/remote_pi',
+        'cwd': '/Users/user/Projects/remote_pi',
         'state': 'crashed',
         'last_error': 'Pi process exited with code 1 (SIGKILL)',
         'restarts': 2,
       });
       expect(msg, isA<WorkspaceState>());
       final s = msg as WorkspaceState;
-      expect(s.cwd, '/Users/jacob/Projects/remote_pi');
+      expect(s.cwd, '/Users/user/Projects/remote_pi');
       expect(s.state, WorkspaceStateValue.crashed);
       expect(s.lastError, contains('SIGKILL'));
       expect(s.restarts, 2);

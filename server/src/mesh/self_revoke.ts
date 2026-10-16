@@ -134,7 +134,7 @@ export class SelfRevoke {
   private readonly log: NonNullable<SelfRevokeOptions["log"]>;
   /**
    * Accepted anti-rollback floor, deliberately independent from pending I/O.
-   * https://github.com/jacobaraujo7/remote_pi/issues/73: this in-memory floor
+   * https://github.com/exampleorg/remote_pi/issues/73: this in-memory floor
    * resets on process restart, allowing pre-revocation membership replay.
    */
   private readonly lastSeenVersion = new Map<string, number>();

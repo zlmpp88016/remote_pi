@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/branding/logo-full.svg" width="160" alt="Remote Pi logo" />
+  <img src="https://raw.githubusercontent.com/exampleorg/remote_pi/main/branding/logo-full.svg" width="160" alt="Remote Pi logo" />
 </p>
 
 <h1 align="center">Remote Pi</h1>
@@ -9,7 +9,7 @@
 > 之后就能浏览目录、在任意目录启动 Pi、驱动它的会话、看着它干活 ——
 > 用手机、浏览器或桌面端都行。同一台机器上的 Pi 智能体之间，还能通过本地 broker 互相发现、互相发消息。
 
-**官网：** <https://remote-pi.jacobmoura.work>
+**官网：** <https://remote-pi.example.invalid>
 
 ## 启动
 
@@ -127,7 +127,7 @@ Remote Pi 是 Pi 的管理层。在目标机器上，**常驻的主机守护进�
 
 **获取 app** —— 当前所有下载方式（Google Play、App Store，以及公开发布逐步铺开期间的直接构建）：
 
-<https://remote-pi.jacobmoura.work/#get-the-app>
+<https://remote-pi.example.invalid/#get-the-app>
 
 ---
 
@@ -261,14 +261,14 @@ Extension 0.6 接受旧中继的小写 32 个十六进制字符的可信错误 I
 
 自己在 Docker 里跑中继，放到 [Tailscale](https://tailscale.com)、[WireGuard](https://www.wireguard.com) 之类的 VPN 或你自己的 VPC 后面。因为中继在网络层的保护只有 TLS + 密钥对认证，再叠一层 VPN 意味着**只有你的设备**才能访问到那个 WebSocket 端口 —— 纵深防御。
 
-Docker 快速概览（完整安装步骤、环境变量和反向代理指引见 [relay README](https://github.com/jacobaraujo7/remote_pi/blob/main/relay/README.md#self-hosted-relay-recommended-for-privacy)）：
+Docker 快速概览（完整安装步骤、环境变量和反向代理指引见 [relay README](https://github.com/exampleorg/remote_pi/blob/main/relay/README.md#self-hosted-relay-recommended-for-privacy)）：
 
 ```bash
 docker run -d \
   --name remote-pi-relay \
   -p 3000:3000 \
   --restart unless-stopped \
-  ghcr.io/jacobaraujo7/remote-pi-relay:latest
+  ghcr.io/exampleorg/remote-pi-relay:latest
 ```
 
 把容器绑到你的 VPN 网卡上，在反向代理里终止 TLS，然后让你的 Pi 和手机都指向最终那个 `https://…` URL。
@@ -393,7 +393,7 @@ mesh 地址是不透明的路由值：原样回显，包括带百分号编码字
 - **前提**：supervisor 必须作为服务运行（`remote-pi install`）。没有它就没有调度器，`cron` 命令会如实说明，而不是默默假装已安排。
 - **审计**：每次触发**和**每次跳过都会往 `~/.pi/remote/cron.jsonl` 追加一行，带一个 `result` 值 —— `delivered`、`woke_and_delivered`、`deliver_failed`、`skipped_busy`、`skipped_down` 或 `skipped_disabled` —— 用 `remote-pi cron log` 读它。
 
-分步演练：[守护进程教程](https://remote-pi.jacobmoura.work/tutorials/daemon)。
+分步演练：[守护进程教程](https://remote-pi.example.invalid/tutorials/daemon)。
 
 ### 页脚 + 标题
 
@@ -559,20 +559,20 @@ pi-supervisord --log full --log-file /tmp/relay.log
 
 ## 品牌
 
-官方品牌资源在 [`/branding`](https://github.com/jacobaraujo7/remote_pi/tree/main/branding) —— logo 的 SVG 源文件（full、foreground、background、monochrome）加一张 banner。配色和导出尺寸见 [branding README](https://github.com/jacobaraujo7/remote_pi/blob/main/branding/README.md)。
+官方品牌资源在 [`/branding`](https://github.com/exampleorg/remote_pi/tree/main/branding) —— logo 的 SVG 源文件（full、foreground、background、monochrome）加一张 banner。配色和导出尺寸见 [branding README](https://github.com/exampleorg/remote_pi/blob/main/branding/README.md)。
 
 <table>
   <tr>
     <td align="center">
-      <img src="https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/branding/logo-full.svg" width="96" alt="logo-full" /><br/>
+      <img src="https://raw.githubusercontent.com/exampleorg/remote_pi/main/branding/logo-full.svg" width="96" alt="logo-full" /><br/>
       <sub><code>logo-full</code></sub>
     </td>
     <td align="center">
-      <img src="https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/branding/logo-foreground.svg" width="96" alt="logo-foreground" /><br/>
+      <img src="https://raw.githubusercontent.com/exampleorg/remote_pi/main/branding/logo-foreground.svg" width="96" alt="logo-foreground" /><br/>
       <sub><code>logo-foreground</code></sub>
     </td>
     <td align="center">
-      <img src="https://raw.githubusercontent.com/jacobaraujo7/remote_pi/main/branding/logo-monochrome.svg" width="96" alt="logo-monochrome" /><br/>
+      <img src="https://raw.githubusercontent.com/exampleorg/remote_pi/main/branding/logo-monochrome.svg" width="96" alt="logo-monochrome" /><br/>
       <sub><code>logo-monochrome</code></sub>
     </td>
   </tr>
@@ -582,11 +582,11 @@ pi-supervisord --log full --log-file /tmp/relay.log
 
 ## 链接
 
-- 官网：<https://remote-pi.jacobmoura.work>
-- 源码：<https://github.com/jacobaraujo7/remote_pi>
+- 官网：<https://remote-pi.example.invalid>
+- 源码：<https://github.com/exampleorg/remote_pi>
 - Pi coding agent：<https://github.com/earendil-works/pi>
-- Relay（自建指南）：<https://github.com/jacobaraujo7/remote_pi/blob/main/relay/README.md>
-- Issues / bug：<https://github.com/jacobaraujo7/remote_pi/issues>
+- Relay（自建指南）：<https://github.com/exampleorg/remote_pi/blob/main/relay/README.md>
+- Issues / bug：<https://github.com/exampleorg/remote_pi/issues>
 
 ---
 

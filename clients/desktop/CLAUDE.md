@@ -64,7 +64,7 @@ nossa) e quem é pacote externo:
 | **LSP** (diagnostics/formatação — a camada "IDE") | `lib/app/core/data/lsp/` (cliente JSON-RPC genérico + pool por (lang, raiz)) | **Nosso** — fala com servidores externos achados no PATH |
 | **Status de turno dos agentes** | `lib/app/cockpit/data/hooks/` (hooks do harness + `cockpit-hook` + socket) | **Nosso** — agentes rodam em terminais; ver `docs/turn-status-hooks.md` |
 | **Keep awake** | `packages/desktop_keepawake/` (caffeinate / SetThreadExecutionState / systemd-inhibit) | **Nosso** — Dart puro, desktop-only |
-| **DB drivers** (SQLite/Postgres/MySQL/MSSQL/Mongo/Redis) | pacotes `anaki_*` (Rust/FFI, do Jacob) + `lib/app/cockpit/data/db/` (Isolate workers + serviços) | Externo-mas-nosso (mantido pelo Jacob fora do repo) |
+| **DB drivers** (SQLite/Postgres/MySQL/MSSQL/Mongo/Redis) | pacotes `anaki_*` (Rust/FFI, do User) + `lib/app/cockpit/data/db/` (Isolate workers + serviços) | Externo-mas-nosso (mantido pelo User fora do repo) |
 | **Git** | `lib/app/cockpit/data/filesystem/git_*` (roda o binário `git`) | Motor é o git do sistema; nosso é o parser/orquestração |
 | **Mídia** (áudio/vídeo no viewer) | pacote `media_kit` (libmpv) | Externo |
 | **Self-update** | pacote `auto_updater` (Sparkle/WinSparkle) + `lib/app/cockpit/data/update/` | Externo + integração nossa (plano 47) |

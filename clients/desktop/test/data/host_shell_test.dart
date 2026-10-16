@@ -90,26 +90,26 @@ const _posixProbe = HostProbe(
   family: HostOsFamily.posix,
   os: 'darwin',
   arch: 'arm64',
-  home: '/Users/jacob',
+  home: '/Users/user',
 );
 
 const _windowsProbe = HostProbe(
   family: HostOsFamily.windows,
   os: 'windows',
   arch: 'x64',
-  home: r'C:\Users\jacob',
+  home: r'C:\Users\user',
 );
 
 void main() {
   group('probeHost', () {
     test('identifica POSIX pelo uname, num único comando', () async {
-      final exec = _FakeExec((_) => [(0, 'Darwin arm64\n/Users/jacob', '')]);
+      final exec = _FakeExec((_) => [(0, 'Darwin arm64\n/Users/user', '')]);
       final probe = await probeHost(exec.call);
 
       expect(probe!.family, HostOsFamily.posix);
       expect(probe.os, 'darwin');
       expect(probe.arch, 'arm64');
-      expect(probe.home, '/Users/jacob');
+      expect(probe.home, '/Users/user');
       // O probe substituiu o `printf %s "$HOME"` que o SshTunnel fazia: se
       // voltar a custar dois round-trips, o caminho POSIX ficou mais lento.
       expect(exec.commands, hasLength(1));
@@ -133,13 +133,13 @@ void main() {
             // O cmd.exe responde na codepage local; o conteúdo não importa,
             // o que importa é o exit != 0.
             ? [(1, '', "'uname' não é reconhecido")]
-            : [(0, '{"arch":"x64","home":"C:\\\\Users\\\\jacob"}', '')],
+            : [(0, '{"arch":"x64","home":"C:\\\\Users\\\\user"}', '')],
       );
       final probe = await probeHost(exec.call);
 
       expect(probe!.family, HostOsFamily.windows);
       expect(probe.os, 'windows');
-      expect(probe.home, r'C:\Users\jacob');
+      expect(probe.home, r'C:\Users\user');
       expect(exec.commands, hasLength(2));
     });
 
@@ -151,12 +151,12 @@ void main() {
       final exec = _FakeExec(
         (cmd) => cmd.startsWith('uname')
             ? [(1, "'uname' nao e reconhecido\\nou externo, em lotes.", '')]
-            : [(0, '{"arch":"x64","home":"C:\\\\Users\\\\jacob"}', '')],
+            : [(0, '{"arch":"x64","home":"C:\\\\Users\\\\user"}', '')],
       );
       final probe = await probeHost(exec.call);
 
       expect(probe!.family, HostOsFamily.windows);
-      expect(probe.home, r'C:\Users\jacob');
+      expect(probe.home, r'C:\Users\user');
     });
 
     test('devolve null quando nenhum dialeto responde', () async {
@@ -293,7 +293,7 @@ void main() {
       expect(endpoint, isA<UnixSocketEndpoint>());
       expect(
         (endpoint! as UnixSocketEndpoint).path,
-        '/Users/jacob/.cockpit/cockpit-server.sock',
+        '/Users/user/.cockpit/cockpit-server.sock',
       );
       // A ausência de servidor segue sendo descoberta pelo túnel, como antes
       // do plano 61 — é o que preserva a latência de abertura.

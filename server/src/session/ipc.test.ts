@@ -17,8 +17,8 @@ describe("ipcAddress", () => {
   });
 
   test("Windows → per-user named pipe", () => {
-    expect(ipcAddress("supervisor", "/ignored.sock", "win32", "jacob"))
-      .toBe("\\\\.\\pipe\\remote-pi-supervisor-jacob");
+    expect(ipcAddress("supervisor", "/ignored.sock", "win32", "user"))
+      .toBe("\\\\.\\pipe\\remote-pi-supervisor-user");
     expect(ipcAddress("broker-local", "/ignored.sock", "win32", "alice"))
       .toBe("\\\\.\\pipe\\remote-pi-broker-local-alice");
   });

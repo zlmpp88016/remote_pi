@@ -40,9 +40,9 @@ cockpit (passo 4 do plano 43), com 1 artefato:
 ```
 
 Gate manual idêntico ao do cockpit: colocar o `latest.json` em
-`/Users/flutterando/app/data/` no host do rp-s3 (volume `/data/app`, já no
+`/home/user/app/data/` no host do rp-s3 (volume `/data/app`, já no
 docker-compose) → servido em
-`https://rp-s3.jacobmoura.work/downloads/app/latest.json`.
+`https://rp-s3.example.invalid/downloads/app/latest.json`.
 
 ## Passos
 

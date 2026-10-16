@@ -6,15 +6,15 @@
 
 | 项 | 值 |
 |---|---|
-| App ID（macOS bundle id / Linux app id） | `work.jacobmoura.cockpit` |
+| App ID（macOS bundle id / Linux app id） | `com.example.cockpit` |
 | 显示名称 | **Remote Pi Cockpit** |
 | 二进制 | `cockpit`（Linux/Windows）／`Cockpit`（macOS）—— **没有**改名 |
-| Team ID（Apple） | `U843T2P7A2` |
+| Team ID（Apple） | `EXAMPLETEAM` |
 | 版本（SSOT） | `pubspec.yaml` 里的 `version:`（`x.y.z+n`） |
 
 - macOS：`PRODUCT_BUNDLE_IDENTIFIER` 在 `macos/Runner/Configs/AppInfo.xcconfig`；`CFBundleDisplayName` 在 `Info.plist`；Release 下开启 **Hardened Runtime**（`ENABLE_HARDENED_RUNTIME = YES`，公证的硬性要求），配合 `Release.entitlements`（sandbox 关闭 —— 与 Developer ID 兼容）。
 - Windows：`CompanyName`／`ProductName`／`LegalCopyright` 在 `windows/runner/Runner.rc`；版本来自 `FLUTTER_VERSION_*` 这些 define（构建时注入；`#else "1.0.0"` 只是兜底）。
-- Linux：`.desktop` + hicolor 图标 + `work.jacobmoura.cockpit.metainfo.xml`（AppStream），通过 `linux/CMakeLists.txt` 安装。
+- Linux：`.desktop` + hicolor 图标 + `com.example.cockpit.metainfo.xml`（AppStream），通过 `linux/CMakeLists.txt` 安装。
 
 ## 工具
 
@@ -35,7 +35,7 @@ linux/packaging/rpm/make_config.yaml
 
 ## macOS —— build + sign + DMG + notarize + staple（端到端）
 
-2026-06-12 本地验证通过（DMG 被 Gatekeeper 接受）。前置条件：Keychain 里有 **"Developer ID Application: Jacob Moura (U843T2P7A2)"** 身份、App Store Connect 的 API key、Zig 0.16.0，以及远程 Linux server CLI 用到的 Rust target（`rustup target add aarch64-unknown-linux-gnu`）。
+2026-06-12 本地验证通过（DMG 被 Gatekeeper 接受）。前置条件：Keychain 里有 **"Developer ID Application: Example Developer (EXAMPLETEAM)"** 身份、App Store Connect 的 API key、Zig 0.16.0，以及远程 Linux server CLI 用到的 Rust target（`rustup target add aarch64-unknown-linux-gnu`）。
 
 ```bash
 cd clients/desktop
@@ -47,7 +47,7 @@ APP="build/macos/Build/Products/Release/Cockpit.app"
 # 2. 用 Developer ID + Hardened Runtime + Release entitlements 给 .app 签名。
 codesign --force --deep --options runtime --timestamp \
   --entitlements macos/Runner/Release.entitlements \
-  --sign "Developer ID Application: Jacob Moura (U843T2P7A2)" "$APP"
+  --sign "Developer ID Application: Example Developer (EXAMPLETEAM)" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"   # 校验
 
 # 3. 制作 DMG（hdiutil —— 无额外依赖；Fastforge 的 maker 走 npm 上的 `appdmg`，
@@ -60,11 +60,11 @@ rm -rf "$STAGE"
 
 # 4. 给 DMG 签名。
 codesign --force --timestamp \
-  --sign "Developer ID Application: Jacob Moura (U843T2P7A2)" "$DMG"
+  --sign "Developer ID Application: Example Developer (EXAMPLETEAM)" "$DMG"
 
 # 5. 公证（App Store Connect API key）并等待。
 xcrun notarytool submit "$DMG" \
-  --key "/Users/jacob/Library/Mobile Documents/com~apple~CloudDocs/Flutterando/RemotePi/CockpitApp/AuthKey_3Y2J8MA3M4.p8" \
+  --key "/Users/user/Library/Mobile Documents/com~apple~CloudDocs/ExampleOrg/RemotePi/CockpitApp/AuthKey_EXAMPLEKEY.p8" \
   --key-id 3Y2J8MA3M4 \
   --issuer a76c76e6-a413-449e-926c-f2c30d5645c4 \
   --wait
@@ -141,7 +141,7 @@ cockpit-server/
 └── install.sh        # packages/desktop_server/install.sh
 ```
 
-在主机上安装：`curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash`（脚本在 `clients/desktop/install-server.sh`，只负责解析版本和 arch、下载、核对 hash，然后调用 zip 里的 `install.sh`）。`--service` 会通过 `cockpit-server service install|uninstall|status` 注册 `systemd --user` unit。文档：`clients/web/src/app/cockpit/docs/page.tsx` 里的「Remote hosts & VPS」一节。
+在主机上安装：`curl -fsSL https://remote-pi.example.invalid/cockpit-server.sh | bash`（脚本在 `clients/desktop/install-server.sh`，只负责解析版本和 arch、下载、核对 hash，然后调用 zip 里的 `install.sh`）。`--service` 会通过 `cockpit-server service install|uninstall|status` 注册 `systemd --user` unit。文档：`clients/web/src/app/cockpit/docs/page.tsx` 里的「Remote hosts & VPS」一节。
 
 注意：zip 里的 bundle 和打进 app 的 bundle 是在不同 runner 上编译的，所以字节可能不同，桌面端可能在首次连接时覆盖重装（manifest 摘要不同）。这无害；如果变得烦人，可以让 app 的 job 改为直接消费那个 zip。
 
@@ -164,7 +164,7 @@ Sparkle 和 WinSparkle 都用 **ed25519**，它是确定性的 —— 同一把�
 - **公钥**（已提交）：`WoJTWryr48pWiAnDPqqt/Iu9f6gAsU7A1zBb5mBLruI=`
   - macOS：`macos/Runner/Info.plist` 里的 `SUPublicEDKey`。
   - Windows：`windows/runner/Runner.rc` 里的 `EdDSAPub EDDSA {...}` 资源。
-- **私钥**（绝不提交）：备份在 `…/CloudDocs/Flutterando/RemotePi/CockpitApp/sparkle_ed25519_private_key.txt`（iCloud，和 Apple 证书放在一起）**以及** GitHub secret `SPARKLE_PRIVATE_KEY`。用 Sparkle 在 keychain 账号 `remote-pi-cockpit` 下生成。
+- **私钥**（绝不提交）：备份在 `…/CloudDocs/ExampleOrg/RemotePi/CockpitApp/sparkle_ed25519_private_key.txt`（iCloud，和 Apple 证书放在一起）**以及** GitHub secret `SPARKLE_PRIVATE_KEY`。用 Sparkle 在 keychain 账号 `remote-pi-cockpit` 下生成。
 
 重新生成／轮换（⚠️ 换密钥会**锁死已安装的存量用户**：旧 app 只信任内嵌在它们里面的那把公钥 —— 只有在私钥泄漏时才做，并且要明白现有用户必须手动重装）：
 
@@ -174,7 +174,7 @@ cd clients/desktop
 ./macos/Pods/Sparkle/bin/generate_keys --account remote-pi-cockpit
 # 把私钥导出到 iCloud（Keychain 会请求 "Allow"）
 ./macos/Pods/Sparkle/bin/generate_keys --account remote-pi-cockpit -x \
-  "/Users/jacob/Library/Mobile Documents/com~apple~CloudDocs/Flutterando/RemotePi/CockpitApp/sparkle_ed25519_private_key.txt"
+  "/Users/user/Library/Mobile Documents/com~apple~CloudDocs/ExampleOrg/RemotePi/CockpitApp/sparkle_ed25519_private_key.txt"
 # 更新：SUPublicEDKey（Info.plist）、EdDSAPub（Runner.rc）和 secret SPARKLE_PRIVATE_KEY
 ```
 
@@ -184,7 +184,7 @@ cd clients/desktop
 
 ### 发布（手动闸门）
 
-和 `latest.json` 一起，把 `appcast-macos.xml` 和 `appcast-windows.xml` 上传到 rp-s3（`/Users/flutterando/cockpit/data/`）。上传之前，没人会自更新。feed URL 是 `https://rp-s3.jacobmoura.work/downloads/cockpit/appcast-{macos,windows}.xml`。
+和 `latest.json` 一起，把 `appcast-macos.xml` 和 `appcast-windows.xml` 上传到 rp-s3（`/home/user/cockpit/data/`）。上传之前，没人会自更新。feed URL 是 `https://rp-s3.example.invalid/downloads/cockpit/appcast-{macos,windows}.xml`。
 
 ### 待办（这台 Mac 上无法测试）
 

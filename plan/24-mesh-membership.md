@@ -111,7 +111,7 @@ remote_pi/
   "members": [
     {
       "remote_epk": "<base64>",
-      "relay_url": "https://relay-rp1.jacobmoura.work",
+      "relay_url": "https://relay-rp1.example.invalid",
       "paired_at": "2026-05-15T10:30:00Z",
       "nickname": "Mac do trabalho"
     },

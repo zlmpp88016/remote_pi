@@ -318,7 +318,7 @@ Future<Module> buildCockpitModule({
 
 /// Base do rp-s3 onde moram `latest.json` (notify) e os appcasts (self-update).
 const String _kDownloadsBase =
-    'https://rp-s3.jacobmoura.work/downloads/cockpit';
+    'https://rp-s3.example.invalid/downloads/cockpit';
 
 /// [UpdateTarget] da máquina atual: versão do app + plataforma/formato/arch do
 /// manifest + URL do appcast de self-update (macOS/Windows; `null` no Linux).

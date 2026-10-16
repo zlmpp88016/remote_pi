@@ -1,4 +1,4 @@
-package work.jacobmoura.cockpit
+package com.example.remotepi
 
 import io.flutter.embedding.android.FlutterActivity
 

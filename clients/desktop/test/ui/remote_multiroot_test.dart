@@ -49,7 +49,7 @@ class _FakeHosts extends RemoteHostsController {
   static const RemoteHost _h = RemoteHost(
     id: 'h1',
     name: 'host',
-    sshTarget: 'jacob@example',
+    sshTarget: 'user@example',
   );
 
   @override

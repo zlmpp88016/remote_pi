@@ -19,7 +19,7 @@ class UpdateCheckerImpl implements UpdateChecker {
         _dio = dio ?? _defaultDio(timeout);
 
   static const String defaultManifestUrl =
-      'https://rp-s3.jacobmoura.work/downloads/app/latest.json';
+      'https://rp-s3.example.invalid/downloads/app/latest.json';
 
   final String manifestUrl;
   final Dio _dio;

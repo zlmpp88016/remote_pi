@@ -849,7 +849,7 @@ function _attachBridgeIfReady(): void {
  * Prefer an explicit ctx, then the always-fresh session_start ctx, then the
  * last command ctx. Relay/async paths must not rely on `_lastCtx` alone —
  * the SDK marks captured command ctxs stale after session replacement.
- * @see https://github.com/jacobaraujo7/remote_pi/issues/55
+ * @see https://github.com/exampleorg/remote_pi/issues/55
  */
 function _liveCtx(
   preferred?: { ui?: unknown } | null,

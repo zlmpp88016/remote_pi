@@ -11,7 +11,7 @@ void main() {
         'peer': 'epk_A',
         'room_id': 'room-uuid-1',
         'name': 'work',
-        'cwd': '/Users/jacob/projects/app',
+        'cwd': '/Users/user/projects/app',
         'started_at': 1700000000000,
       });
       expect(c, isA<RoomAnnounced>());
@@ -19,7 +19,7 @@ void main() {
       expect(r.peer, 'epk_A');
       expect(r.roomId, 'room-uuid-1');
       expect(r.name, 'work');
-      expect(r.cwd, '/Users/jacob/projects/app');
+      expect(r.cwd, '/Users/user/projects/app');
       expect(r.startedAt, 1700000000000);
     });
 

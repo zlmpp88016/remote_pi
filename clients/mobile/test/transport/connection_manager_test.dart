@@ -1413,7 +1413,7 @@ void _registerRoomsTests() {
           peer: 'epk_test',
           roomId: 'r1',
           name: 'work',
-          cwd: '/Users/jacob/projects/app',
+          cwd: '/Users/user/projects/app',
           startedAt: 1000,
           model: 'claude-sonnet-4.5',
         ));
@@ -1429,7 +1429,7 @@ void _registerRoomsTests() {
             reason: 'local name override applied');
         expect(after.model, 'claude-sonnet-4.5',
             reason: 'model must survive rename');
-        expect(after.cwd, '/Users/jacob/projects/app',
+        expect(after.cwd, '/Users/user/projects/app',
             reason: 'cwd must survive rename');
         expect(after.startedAt, 1000,
             reason: 'startedAt must survive rename');

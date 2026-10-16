@@ -55,7 +55,7 @@ simultaneamente**?
 
 Sintaxe pra `/remote-pi revoke`?
 
-- A) Por nome (`/remote-pi revoke "iPhone do Jacob"`) — frágil com aspas
+- A) Por nome (`/remote-pi revoke "iPhone do User"`) — frágil com aspas
 - **B) Por epk-shortid (`/remote-pi revoke aB12CD34`)** + tab completion lista as shortids existentes — proposta
 - C) Por índice (`/remote-pi revoke 0`) — frágil quando lista muda
 

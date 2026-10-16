@@ -3,15 +3,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('RemoteWorktreeGateway.parsePorcelain', () {
-    const repo = '/home/jacob/proj';
+    const repo = '/home/user/proj';
 
     test('descarta a raiz e extrai forks com branch', () {
       const out = '''
-worktree /home/jacob/proj
+worktree /home/user/proj
 HEAD aaaa
 branch refs/heads/main
 
-worktree /home/jacob/proj/.cockpit/worktrees/feature
+worktree /home/user/proj/.cockpit/worktrees/feature
 HEAD bbbb
 branch refs/heads/feature
 ''';
@@ -23,11 +23,11 @@ branch refs/heads/feature
 
     test('detached HEAD usa o basename como rótulo', () {
       const out = '''
-worktree /home/jacob/proj
+worktree /home/user/proj
 HEAD aaaa
 branch refs/heads/main
 
-worktree /home/jacob/proj/.cockpit/worktrees/wip
+worktree /home/user/proj/.cockpit/worktrees/wip
 HEAD cccc
 detached
 ''';

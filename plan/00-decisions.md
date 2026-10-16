@@ -114,7 +114,7 @@ Para ser honesto desde o início:
 - **Mac comprometido** → atacante é o Pi. Fim de jogo
 - **Celular comprometido** → atacante tem Keychain. Fim de jogo
 - **Usuário aprovando comando malicioso** → sistema obedece. UI mostra diff, mas se você toca Aprovar sem ler, é problema seu
-- **Análise de tráfego** → relay sabe tamanho/timing. ~~Não vaza conteúdo, mas vaza padrões ("Jacob ativo às 22h")~~ Pós-rollback E2E (plano 06): relay vê tamanho/timing **e conteúdo**. Mitigação: self-host trivial + roadmap pra religar E2E (plano 09 opcional)
+- **Análise de tráfego** → relay sabe tamanho/timing. ~~Não vaza conteúdo, mas vaza padrões ("User ativo às 22h")~~ Pós-rollback E2E (plano 06): relay vê tamanho/timing **e conteúdo**. Mitigação: self-host trivial + roadmap pra religar E2E (plano 09 opcional)
 - **Operador do relay público (pós-rollback E2E)** → vê todo conteúdo das mensagens (código, comandos shell, outputs). Aceito no MVP beta. Usuário sério deve self-hostar o relay (open-source, ~200 LOC Rust)
 - **Quantum** → ver linha acima
 

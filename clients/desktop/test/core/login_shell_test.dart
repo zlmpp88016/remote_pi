@@ -27,7 +27,7 @@ void main() {
     test('\$SHELL setada vence — não consulta o SO', () async {
       final runner = _FakeRunner({});
       final shell = LoginShell(
-        environment: const {'SHELL': '/opt/homebrew/bin/fish', 'USER': 'jacob'},
+        environment: const {'SHELL': '/opt/homebrew/bin/fish', 'USER': 'user'},
         runProcess: runner.call,
         operatingSystem: 'macos',
       );
@@ -38,12 +38,12 @@ void main() {
 
     test('\$SHELL vazia é ignorada — cai no dscl', () async {
       final runner = _FakeRunner({
-        'dscl . -read /Users/jacob UserShell': _ok(
+        'dscl . -read /Users/user UserShell': _ok(
           'UserShell: /opt/homebrew/bin/fish\n',
         ),
       });
       final shell = LoginShell(
-        environment: const {'SHELL': '  ', 'USER': 'jacob'},
+        environment: const {'SHELL': '  ', 'USER': 'user'},
         runProcess: runner.call,
         operatingSystem: 'macos',
       );
@@ -53,24 +53,24 @@ void main() {
 
     test('macOS sem \$SHELL (aberto pelo Finder) → dscl', () async {
       final runner = _FakeRunner({
-        'dscl . -read /Users/jacob UserShell': _ok(
+        'dscl . -read /Users/user UserShell': _ok(
           'UserShell: /opt/homebrew/bin/fish\n',
         ),
       });
       final shell = LoginShell(
-        environment: const {'USER': 'jacob'},
+        environment: const {'USER': 'user'},
         runProcess: runner.call,
         operatingSystem: 'macos',
       );
 
       expect(await shell.resolve(), '/opt/homebrew/bin/fish');
-      expect(runner.calls, ['dscl . -read /Users/jacob UserShell']);
+      expect(runner.calls, ['dscl . -read /Users/user UserShell']);
     });
 
     test('sem \$USER → descobre o usuário via `id -un`', () async {
       final runner = _FakeRunner({
-        'id -un': _ok('jacob\n'),
-        'dscl . -read /Users/jacob UserShell': _ok('UserShell: /bin/bash\n'),
+        'id -un': _ok('user\n'),
+        'dscl . -read /Users/user UserShell': _ok('UserShell: /bin/bash\n'),
       });
       final shell = LoginShell(
         environment: const {},
@@ -84,12 +84,12 @@ void main() {
 
     test('Linux sem \$SHELL → getent passwd, 7º campo', () async {
       final runner = _FakeRunner({
-        'getent passwd jacob': _ok(
-          'jacob:x:1000:1000:Jacob,,,:/home/jacob:/usr/bin/fish\n',
+        'getent passwd user': _ok(
+          'user:x:1000:1000:user,,,:/home/user:/usr/bin/fish\n',
         ),
       });
       final shell = LoginShell(
-        environment: const {'USER': 'jacob'},
+        environment: const {'USER': 'user'},
         runProcess: runner.call,
         operatingSystem: 'linux',
       );
@@ -100,7 +100,7 @@ void main() {
     test('dscl falhando → fallback /bin/zsh no macOS', () async {
       final runner = _FakeRunner({}); // tudo lança ProcessException
       final shell = LoginShell(
-        environment: const {'USER': 'jacob'},
+        environment: const {'USER': 'user'},
         runProcess: runner.call,
         operatingSystem: 'macos',
       );
@@ -110,10 +110,10 @@ void main() {
 
     test('getent com exitCode != 0 → fallback /bin/sh no Linux', () async {
       final runner = _FakeRunner({
-        'getent passwd jacob': ProcessResult(1, 2, '', 'nope'),
+        'getent passwd user': ProcessResult(1, 2, '', 'nope'),
       });
       final shell = LoginShell(
-        environment: const {'USER': 'jacob'},
+        environment: const {'USER': 'user'},
         runProcess: runner.call,
         operatingSystem: 'linux',
       );
@@ -123,12 +123,12 @@ void main() {
 
     test('saída inesperada do dscl não vira shell inválido', () async {
       final runner = _FakeRunner({
-        'dscl . -read /Users/jacob UserShell': _ok(
+        'dscl . -read /Users/user UserShell': _ok(
           '<dscl_cmd> DS Error: -14136 (eDSRecordNotFound)\n',
         ),
       });
       final shell = LoginShell(
-        environment: const {'USER': 'jacob'},
+        environment: const {'USER': 'user'},
         runProcess: runner.call,
         operatingSystem: 'macos',
       );
@@ -138,10 +138,10 @@ void main() {
 
     test('resolve() cacheia — o SO é consultado uma vez só', () async {
       final runner = _FakeRunner({
-        'dscl . -read /Users/jacob UserShell': _ok('UserShell: /bin/bash\n'),
+        'dscl . -read /Users/user UserShell': _ok('UserShell: /bin/bash\n'),
       });
       final shell = LoginShell(
-        environment: const {'USER': 'jacob'},
+        environment: const {'USER': 'user'},
         runProcess: runner.call,
         operatingSystem: 'macos',
       );
@@ -155,12 +155,12 @@ void main() {
 
     test('cachedOrFallback: fallback antes, valor resolvido depois', () async {
       final runner = _FakeRunner({
-        'dscl . -read /Users/jacob UserShell': _ok(
+        'dscl . -read /Users/user UserShell': _ok(
           'UserShell: /opt/homebrew/bin/fish\n',
         ),
       });
       final shell = LoginShell(
-        environment: const {'USER': 'jacob'},
+        environment: const {'USER': 'user'},
         runProcess: runner.call,
         operatingSystem: 'macos',
       );

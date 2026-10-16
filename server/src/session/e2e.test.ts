@@ -1302,12 +1302,12 @@ describe("ACK protocol (plan/25 Wave 0)", () => {
 describe("plan/38 — address encoder + name migration (pure)", () => {
   test("composeAddress renders [<pc>:]<cwd>@<nome>; cwd-less → name", () => {
     // The render matrix from the plan.
-    expect(composeAddress({ cwd: "/Users/jacob/acme/backend", name: "backend" }))
-      .toBe("/Users/jacob/acme/backend@backend");
-    expect(composeAddress({ cwd: "/Users/jacob/acme/backend", name: "reviewer" }))
-      .toBe("/Users/jacob/acme/backend@reviewer");
-    expect(composeAddress({ cwd: "/Users/jacob/.wt/feat-login", name: "backend" }))
-      .toBe("/Users/jacob/.wt/feat-login@backend");
+    expect(composeAddress({ cwd: "/Users/user/acme/backend", name: "backend" }))
+      .toBe("/Users/user/acme/backend@backend");
+    expect(composeAddress({ cwd: "/Users/user/acme/backend", name: "reviewer" }))
+      .toBe("/Users/user/acme/backend@reviewer");
+    expect(composeAddress({ cwd: "/Users/user/.wt/feat-login", name: "backend" }))
+      .toBe("/Users/user/.wt/feat-login@backend");
     expect(composeAddress({ cwd: "/x/backend", name: "backend#2" }))
       .toBe("/x/backend@backend#2");               // collision suffix is part of the name
     expect(composeAddress({ pc: "MacMini", cwd: "/Users/jose/work/acme", name: "app" }))

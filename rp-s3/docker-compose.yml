@@ -1,7 +1,7 @@
 services:
   rp-s3:
     build: .
-    image: jacobmoura7/rp-s3:latest
+    image: exampleorg/rp-s3:latest
     container_name: rp-s3
     restart: unless-stopped
     ports:
@@ -12,9 +12,9 @@ services:
       - UPLOAD_TOKEN=${UPLOAD_TOKEN:-}
     volumes:
       # Montados rw: o CI publica latest.json/appcast via PUT /upload.
-      # Host: /Users/flutterando/cockpit/data/latest.json
-      # URL:  https://rp-s3.jacobmoura.work/downloads/cockpit/latest.json
-      - /Users/flutterando/cockpit/data:/data/cockpit
+      # Host: /home/user/cockpit/data/latest.json
+      # URL:  https://rp-s3.example.invalid/downloads/cockpit/latest.json
+      - /home/user/cockpit/data:/data/cockpit
       # Manifest do app mobile (APK Android, plano 44).
-      # URL: https://rp-s3.jacobmoura.work/downloads/app/latest.json
-      - /Users/flutterando/app/data:/data/app
+      # URL: https://rp-s3.example.invalid/downloads/app/latest.json
+      - /home/user/app/data:/data/app

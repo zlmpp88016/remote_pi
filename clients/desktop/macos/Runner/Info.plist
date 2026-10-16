@@ -72,7 +72,7 @@
 			<key>LSHandlerRank</key>
 			<string>Owner</string>
 			<key>LSItemContentTypes</key>
-			<array><string>work.jacobmoura.cockpit.kanban</string></array>
+			<array><string>com.example.cockpit.kanban</string></array>
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
@@ -84,7 +84,7 @@
 			<key>LSTypeIsPackage</key>
 			<true/>
 			<key>LSItemContentTypes</key>
-			<array><string>work.jacobmoura.cockpit.notebook</string></array>
+			<array><string>com.example.cockpit.notebook</string></array>
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
@@ -94,7 +94,7 @@
 			<key>LSHandlerRank</key>
 			<string>Owner</string>
 			<key>LSItemContentTypes</key>
-			<array><string>work.jacobmoura.cockpit.layout</string></array>
+			<array><string>com.example.cockpit.layout</string></array>
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
@@ -104,7 +104,7 @@
 			<key>LSHandlerRank</key>
 			<string>Owner</string>
 			<key>LSItemContentTypes</key>
-			<array><string>work.jacobmoura.cockpit.dbquery</string></array>
+			<array><string>com.example.cockpit.dbquery</string></array>
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
@@ -131,7 +131,7 @@
 	<array>
 		<dict>
 			<key>UTTypeIdentifier</key>
-			<string>work.jacobmoura.cockpit.kanban</string>
+			<string>com.example.cockpit.kanban</string>
 			<key>UTTypeDescription</key>
 			<string>Cockpit Kanban Board</string>
 			<key>UTTypeConformsTo</key>
@@ -144,7 +144,7 @@
 		</dict>
 		<dict>
 			<key>UTTypeIdentifier</key>
-			<string>work.jacobmoura.cockpit.notebook</string>
+			<string>com.example.cockpit.notebook</string>
 			<key>UTTypeDescription</key>
 			<string>Cockpit Notebook</string>
 			<key>UTTypeConformsTo</key>
@@ -157,7 +157,7 @@
 		</dict>
 		<dict>
 			<key>UTTypeIdentifier</key>
-			<string>work.jacobmoura.cockpit.layout</string>
+			<string>com.example.cockpit.layout</string>
 			<key>UTTypeDescription</key>
 			<string>Cockpit Pane Layout</string>
 			<key>UTTypeConformsTo</key>
@@ -170,7 +170,7 @@
 		</dict>
 		<dict>
 			<key>UTTypeIdentifier</key>
-			<string>work.jacobmoura.cockpit.dbquery</string>
+			<string>com.example.cockpit.dbquery</string>
 			<key>UTTypeDescription</key>
 			<string>Cockpit Database Query</string>
 			<key>UTTypeConformsTo</key>

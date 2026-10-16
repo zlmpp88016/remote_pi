@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 ///
 /// Asks the user for a friendly label for the just-paired PC. The
 /// caller seeds [defaultName] with `pair_ok.hostname` when present
-/// (e.g. "Mac do Jacob"), or the session name as a softer fallback,
+/// (e.g. "Mac do User"), or the session name as a softer fallback,
 /// or `null` so the field hints with the generic placeholder "Pi".
 ///
 /// Returns the trimmed nickname string the user wants persisted:

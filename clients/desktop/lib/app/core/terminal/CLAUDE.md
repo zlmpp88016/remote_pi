@@ -7,7 +7,7 @@ Tudo de terminal num lugar só:
   view Flutter. É o padrão para buffers novos; o motor escolhido é persistido
   por aba/task.
 - **`xterm/`** — emulador VT **absorvido** (2026-07-19) do fork
-  `jacobaraujo7/xterm.dart` (upstream TerminalStudio/xterm.dart 4.0.0, parado).
+  `exampleorg/xterm.dart` (upstream TerminalStudio/xterm.dart 4.0.0, parado).
   Dart puro, zero nativo. Razões da absorção: upstream sem manutenção, o app já
   importava internals (`src/`), e o repo já mantinha view/render forkados. O
   LICENSE (MIT) original está em `xterm/LICENSE` — preserve-o. Mudanças que
@@ -22,7 +22,7 @@ Testes do emulador: `test/core/terminal/xterm/` (suíte do upstream adaptada;
 2 casos de `getText()` com wrap já falhavam no fork e estão `skip: true`).
 
 O PTY (nativo, C/FFI) também é nosso: **`plugins/cockpit_pty/`** — absorvido
-2026-07-19 do fork `jacobaraujo7/kyroon_pty` v1.0.6 (upstream
+2026-07-19 do fork `exampleorg/kyroon_pty` v1.0.6 (upstream
 cesarmod2017/kyroon_pty, MIT preservado), renomeado `kyroon_pty`→`cockpit_pty`
 (package, podspecs, CMake, dylib) e usado via path dependency. Não publicado;
 manutenção é nossa. Zero `dependency_overrides` git restantes no pubspec.

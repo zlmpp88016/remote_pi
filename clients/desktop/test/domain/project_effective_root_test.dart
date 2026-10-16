@@ -11,11 +11,11 @@ void main() {
     final p = Project(
       id: 'w1',
       name: 'app',
-      path: '/home/jacob/app',
+      path: '/home/user/app',
       colorValue: 0,
       createdAt: DateTime(2026),
     );
-    expect(p.effectiveRoot, '/home/jacob/app');
+    expect(p.effectiveRoot, '/home/user/app');
   });
 
   test('workspace remoto: a raiz é a pasta do HOST, não o path vazio', () {

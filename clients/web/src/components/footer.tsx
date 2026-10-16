@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { isRemotePiWebClientEnabled } from "@/lib/flags";
 
-const GITHUB_URL = "https://github.com/zlmpp88016/remote_pi";
+const GITHUB_URL = "https://github.com/exampleorg/remote_pi";
 
 export function SiteFooter() {
   const clientEnabled = isRemotePiWebClientEnabled();

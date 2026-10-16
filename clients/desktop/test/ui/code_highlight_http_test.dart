@@ -52,7 +52,7 @@ POST {{baseUrl}}/users
 Content-Type: application/json
 
 {
-  "name": "Jacob"
+  "name": "User"
 }
 
 ### Body de arquivo

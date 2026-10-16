@@ -41,7 +41,7 @@ terminais congelam em vez de morrer.
 
 ### 3. Uma VPS vira host com um curl
 ```
-curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash
+curl -fsSL https://remote-pi.example.invalid/cockpit-server.sh | bash
 ```
 Sem desktop, sem sudo, sem systemd obrigatório. A flag `--service` registra uma
 unit `systemd --user` para manter o host de pé. Validado em VPS real, x86_64 e

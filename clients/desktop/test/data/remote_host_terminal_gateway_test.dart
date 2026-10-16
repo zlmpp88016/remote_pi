@@ -13,7 +13,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// Integração da Wave 2 (plano 58): o gateway de terminal REMOTO, via túnel
 /// SSH real. Requer:
 /// - `./tool/build-sidecar.sh` (binário/dylib em build/wave0/);
-/// - `ssh <COCKPIT_TEST_SSH_HOST>` sem senha (env; ex.: `jacob@localhost`
+/// - `ssh <COCKPIT_TEST_SSH_HOST>` sem senha (env; ex.: `user@localhost`
 ///   com a própria chave em authorized_keys).
 /// Sem essas condições o teste é pulado (o backend já tem e2e dedicado).
 void main() {

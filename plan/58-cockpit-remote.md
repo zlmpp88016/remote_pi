@@ -263,7 +263,7 @@ classe dos dois lados do fio).
       `test/data/sidecar_terminal_gateway_test.dart` (gateway real via
       sidecar: eco, fila de ops, resize, ack, kill), suíte 884 verde,
       `flutter build macos` ok, analyze sem issues novos.
-- [x] E2E manual no app real (2026-08-11, validado pelo Jacob): terminais
+- [x] E2E manual no app real (2026-08-11, validado pelo Example): terminais
       idênticos ao comportamento anterior; `ps` confirma o desenho — shell
       `/bin/zsh -l` filho do `cockpit-server` (~17MB RSS), GUI conectada no
       UDS, zero duplicados/órfãos.
@@ -373,7 +373,7 @@ classe dos dois lados do fio).
       sessão (sem re-prompt do Keychain).
 - **Aceite**: workspace numa VPS sem GUI (terminal + arquivos + git +
   commit) e query num Postgres acessível só pela VPS, tudo do MacBook.
-  > Mecanismo validado contra `jacob@localhost` (mesmo caminho SSH→server); um
+  > Mecanismo validado contra `user@localhost` (mesmo caminho SSH→server); um
   > VPS real usa exatamente o mesmo fluxo.
 
 ### Pendência — Task Run remoto (plano 48) NÃO remotizado

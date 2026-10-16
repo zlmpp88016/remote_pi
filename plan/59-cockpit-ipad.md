@@ -93,7 +93,7 @@ Hoje o `RemoteConnection` (em `cockpit_remote`) está preso ao `Socket` do
 ## Passos (waves)
 
 ### Wave 0 — Scaffolding + landscape ✅ (2026-08-13)
-- [x] `flutter create --platforms=android,ios --org work.jacobmoura .`
+- [x] `flutter create --platforms=android,ios --org com.example .`
 - [x] Landscape travado: `Info.plist`, `AndroidManifest` (`sensorLandscape`),
       `SystemChrome` no `main` (gated iOS/Android).
 
@@ -103,7 +103,7 @@ melhor que o esperado. O que precisou:
 - [x] **Native-asset hooks do `anaki_*` (6 pacotes)**: lançavam
       `UnsupportedError('Unsupported OS')` mesmo sem o código ser chamado.
       Guard aplicado (no-op em OS não-desktop). **PENDENTE UPSTREAM**: a correção
-      está só no pub-cache local (efêmera). Jacob precisa aplicar o guard nos
+      está só no pub-cache local (efêmera). User precisa aplicar o guard nos
       repos anaki e republicar (ou usar `dependency_overrides` de path). Diff:
       após `final os = input.config.code.targetOS;`, inserir
       `if (os != OS.macOS && os != OS.linux && os != OS.windows) return;`.
@@ -161,7 +161,7 @@ consertar compilação — o app já roda.
 - [x] UI: aba Remote hosts mostra a chave pública do device (copiar).
 - [ ] **E2E real**: conectar de um device/simulador a um host com a chave no
       `authorized_keys` (a chave nasce no Keychain do device — validação é do
-      Jacob com host real). Build iOS/Android verde com as deps novas.
+      User com host real). Build iOS/Android verde com as deps novas.
 
 ### Wave 4 — Superfície mobile (UI) — núcleo feito 2026-08-14
 - [x] Gating de Configurações (matriz): esconde Terminal/Languages/Automations/

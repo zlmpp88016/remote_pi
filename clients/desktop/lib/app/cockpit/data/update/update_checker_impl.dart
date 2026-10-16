@@ -15,7 +15,7 @@ class UpdateCheckerImpl implements UpdateChecker {
   });
 
   static const String defaultManifestUrl =
-      'https://rp-s3.jacobmoura.work/downloads/cockpit/latest.json';
+      'https://rp-s3.example.invalid/downloads/cockpit/latest.json';
 
   final String manifestUrl;
   final Duration timeout;

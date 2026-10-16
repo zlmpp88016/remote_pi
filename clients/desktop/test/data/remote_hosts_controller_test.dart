@@ -30,21 +30,21 @@ void main() {
       const RemoteHost(
         id: '1',
         name: 'Rog',
-        sshTarget: 'jacob@host',
-        identityFile: '/Users/jacob/.ssh/id_ed25519.pub',
+        sshTarget: 'user@host',
+        identityFile: '/Users/user/.ssh/id_ed25519.pub',
       ),
     );
 
     await controller
-        .editHost('1', identityFile: '/Users/jacob/.ssh/id_ed25519')
+        .editHost('1', identityFile: '/Users/user/.ssh/id_ed25519')
         .timeout(const Duration(seconds: 2));
 
-    expect(store.hosts().single.identityFile, '/Users/jacob/.ssh/id_ed25519');
+    expect(store.hosts().single.identityFile, '/Users/user/.ssh/id_ed25519');
   });
 
   test('remover host acontece mesmo com o Keychain pendurado', () async {
     await store.save(
-      const RemoteHost(id: '1', name: 'Rog', sshTarget: 'jacob@host'),
+      const RemoteHost(id: '1', name: 'Rog', sshTarget: 'user@host'),
     );
 
     await controller.removeHost('1').timeout(const Duration(seconds: 2));

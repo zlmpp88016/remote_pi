@@ -132,7 +132,7 @@ jobs:
     defaults: { run: { working-directory: clients/desktop } }
     env:
       VERSION: ${{ needs.meta.outputs.version }}
-      SIGN_ID: "Developer ID Application: Jacob Moura (U843T2P7A2)"
+      SIGN_ID: "Developer ID Application: Example Developer (EXAMPLETEAM)"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -885,7 +885,7 @@ jobs:
             echo "pro rp-s3 no fim do workflow (liga clients/web/card e o self-update"
             echo "Sparkle/WinSparkle). Se o passo de publish falhar, o fallback manual"
             echo "é baixar os 3 arquivos desta release e colocar em"
-            echo "\`/Users/flutterando/cockpit/data/\` (ver \`rp-s3/README.md\`)."
+            echo "\`/home/user/cockpit/data/\` (ver \`rp-s3/README.md\`)."
           } >> "$NOTES_FILE"
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release/* --clobber
@@ -920,13 +920,13 @@ jobs:
             curl -fsS --retry 3 --retry-delay 5 -X PUT \
               -H "Authorization: Bearer ${RP_S3_UPLOAD_TOKEN}" \
               --data-binary "@release/$1" \
-              "https://rp-s3.jacobmoura.work/upload/cockpit/$1"
+              "https://rp-s3.example.invalid/upload/cockpit/$1"
           }
           upload appcast-macos.xml
           upload appcast-windows.xml
           upload SHA256SUMS
           upload latest.json
-          echo "publicado: https://rp-s3.jacobmoura.work/downloads/cockpit/latest.json"
+          echo "publicado: https://rp-s3.example.invalid/downloads/cockpit/latest.json"
 
       - name: Resumo
         run: |
@@ -936,7 +936,7 @@ jobs:
             echo "Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${RELEASE_TAG}"
             echo ""
             echo "Manifests publicados automaticamente no rp-s3:"
-            echo "- https://rp-s3.jacobmoura.work/downloads/cockpit/latest.json"
-            echo "- https://rp-s3.jacobmoura.work/downloads/cockpit/appcast-macos.xml"
-            echo "- https://rp-s3.jacobmoura.work/downloads/cockpit/appcast-windows.xml"
+            echo "- https://rp-s3.example.invalid/downloads/cockpit/latest.json"
+            echo "- https://rp-s3.example.invalid/downloads/cockpit/appcast-macos.xml"
+            echo "- https://rp-s3.example.invalid/downloads/cockpit/appcast-windows.xml"
           } >> "$GITHUB_STEP_SUMMARY"

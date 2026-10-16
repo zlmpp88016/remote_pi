@@ -286,7 +286,7 @@ Documented for context:
 - Privacy Policy and Terms of Service pages (`/privacy`, `/terms`).
 - Site documentation layout improvements: sidebar + table of contents.
 - Multi-platform Docker build for the relay (`linux/amd64`, `linux/arm64`).
-- Relay published at `wss://relay-rp1.jacobmoura.work` (default community
+- Relay published at `wss://relay-rp1.example.invalid` (default community
   endpoint).
 - Visual identity and launch icons for Android, iOS, and macOS.
 
@@ -313,5 +313,5 @@ chat-state recovery, onboarding, mirror cache, rooms, agent network, agent
 tools, setup wizard, and the site MVP. See [`plan/`](plan/) for the design
 history of each.
 
-[Unreleased]: https://github.com/jacobaraujo7/remote_pi/compare/v0.1.3...HEAD
-[0.1.3]: https://github.com/jacobaraujo7/remote_pi/releases/tag/v0.1.3
+[Unreleased]: https://github.com/exampleorg/remote_pi/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/exampleorg/remote_pi/releases/tag/v0.1.3

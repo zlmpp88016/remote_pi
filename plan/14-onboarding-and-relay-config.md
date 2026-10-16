@@ -21,7 +21,7 @@ lados + criar onboarding stepper de 3 passos pro primeiro uso.
 
 | Decisão | Valor / razão |
 |---|---|
-| **Default público hardcoded** | `kDefaultRelayUrl = 'https://relay-rp1.jacobmoura.work'` em ambos lados. Plano 07 (relay deploy) ativa essa URL |
+| **Default público hardcoded** | `kDefaultRelayUrl = 'https://relay-rp1.example.invalid'` em ambos lados. Plano 07 (relay deploy) ativa essa URL |
 | **Pi-ext config order** | `env REMOTE_PI_RELAY` > `~/.pi/remote/config.json` > `kDefaultRelayUrl` |
 | **App config order** | `Preferences.relayUrl` > `kDefaultRelayUrl` |
 | **QR sem `r`** | Pi-ext sempre gera QR sem campo `r`. App usa Settings/Preferences |
@@ -46,7 +46,7 @@ lados + criar onboarding stepper de 3 passos pro primeiro uso.
   function resolveRelayUrl(): { url: string; source: 'env' | 'config' | 'default' }
   ```
 - `src/index.ts`:
-  - `DEFAULT_RELAY_URL` vira `kDefaultRelayUrl = 'https://relay-rp1.jacobmoura.work'` (constante)
+  - `DEFAULT_RELAY_URL` vira `kDefaultRelayUrl = 'https://relay-rp1.example.invalid'` (constante)
   - Resolução de relay usa `resolveRelayUrl()` em `_cmdStart`
   - Novo comando: `/remote-pi set-relay <url>`
     - Valida URL (deve começar com `http://` ou `https://`, hostname não vazio)
@@ -99,7 +99,7 @@ lados + criar onboarding stepper de 3 passos pro primeiro uso.
   ```
 - `lib/ui/settings/`:
   - `SettingsPage` ganha seção "Relay" no topo
-  - TextField + placeholder "Default Relay (https://relay-rp1.jacobmoura.work)"
+  - TextField + placeholder "Default Relay (https://relay-rp1.example.invalid)"
   - Botão "Salvar" → valida URL → `prefs.setRelayUrl(url)`. Vazio = volta pro default
 - `lib/ui/home/`:
   - `HomeNoPeer` ganha botão "Scan QR" mais visível → navega pra `/pair` (não `/onboarding`)
@@ -141,7 +141,7 @@ lados + criar onboarding stepper de 3 passos pro primeiro uso.
 
 #### W1.A — pi-extension
 - [ ] `src/config.ts` (NOVO): load/save/resolve config
-- [ ] `kDefaultRelayUrl = 'https://relay-rp1.jacobmoura.work'` constante
+- [ ] `kDefaultRelayUrl = 'https://relay-rp1.example.invalid'` constante
 - [ ] `/remote-pi set-relay <url>` com validação
 - [ ] `/remote-pi config` mostra source
 - [ ] `_cmdStart` usa `resolveRelayUrl()`
@@ -236,7 +236,7 @@ lados + criar onboarding stepper de 3 passos pro primeiro uso.
 
 | Risco | Mitigação |
 |---|---|
-| Default `https://relay-rp1.jacobmoura.work` não existe ainda (plano 07 deploy) | Pra dev, user sempre sobrepõe via env ou Settings. Constante documenta intent; commit do plano 07 ativa URL real |
+| Default `https://relay-rp1.example.invalid` não existe ainda (plano 07 deploy) | Pra dev, user sempre sobrepõe via env ou Settings. Constante documenta intent; commit do plano 07 ativa URL real |
 | User configura relay errado e fica preso sem conseguir parear | Settings sempre editável; reset pra default = TextField vazio |
 | Onboarding step 2 com URL inválida confunde user | Validação inline com mensagem clara ("URL deve começar com http:// ou https://") |
 | Migração de install legacy (sem onboardingCompleted) abre onboarding em quem já usava | Marker silencioso: `if peers.isNotEmpty && !onboardingCompleted → setOnboardingCompleted(true)` no boot |

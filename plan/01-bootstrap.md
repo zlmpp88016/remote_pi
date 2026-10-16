@@ -56,7 +56,7 @@ Verificar antes de começar:
 
 **Comando**:
 ```bash
-cd /Users/jacob/Projects/remote_pi
+cd /Users/user/Projects/remote_pi
 flutter create \
   --org dev.remotepi \
   --project-name app \
@@ -88,7 +88,7 @@ app/
 
 **Comandos**:
 ```bash
-cd /Users/jacob/Projects/remote_pi
+cd /Users/user/Projects/remote_pi
 mkdir pi-extension && cd pi-extension
 
 pnpm init
@@ -141,7 +141,7 @@ export function registerRemotePi(): void {
 
 **Comandos**:
 ```bash
-cd /Users/jacob/Projects/remote_pi
+cd /Users/user/Projects/remote_pi
 cargo new relay --bin
 cd relay
 
@@ -180,7 +180,7 @@ async fn main() -> anyhow::Result<()> {
 
 **Comando**:
 ```bash
-cd /Users/jacob/Projects/remote_pi
+cd /Users/user/Projects/remote_pi
 pnpm create next-app@latest site \
   --typescript \
   --tailwind \
@@ -201,7 +201,7 @@ pnpm create next-app@latest site \
 
 **Função**: documento explicativo na raiz do monorepo. Primeiro contato pra quem clona o repo.
 
-**Conteúdo mínimo** (`/Users/jacob/Projects/remote_pi/README.md`):
+**Conteúdo mínimo** (`/Users/user/Projects/remote_pi/README.md`):
 
 ```markdown
 # Remote Pi
@@ -259,7 +259,7 @@ A definir.
 1. **Ordem dos passos é livre** — todos são independentes. Recomendo na ordem listada pra fechar capacidades incrementais (UI → core → infra → site → docs).
 2. **Não escrever features** em nenhum projeto neste plano. Só esqueleto buildável.
 3. **Não configurar CI/CD** ainda. Vira plano próprio mais à frente.
-4. **Não inicializar git** automaticamente — fazer 1 vez na raiz após terminar todos os passos: `cd /Users/jacob/Projects/remote_pi && git init && git add -A && git commit -m "bootstrap: scaffold app/, pi-extension/, relay/, site/"`.
+4. **Não inicializar git** automaticamente — fazer 1 vez na raiz após terminar todos os passos: `cd /Users/user/Projects/remote_pi && git init && git add -A && git commit -m "bootstrap: scaffold app/, pi-extension/, relay/, site/"`.
 5. **`.gitignore` raiz** vai precisar agregar: `node_modules/`, `dist/`, `target/`, `.next/`, `build/`, `.dart_tool/`, `ios/Pods/`, etc. Pode ser criado num refinamento depois ou junto do commit inicial.
 
 ---
@@ -277,7 +277,7 @@ A definir.
 
 ## Próximos planos (não fazer aqui)
 
-- **`02-ai-orchestration.md`** — CLAUDE.md raiz como **Orquestrador** (modelo do [`/Users/jacob/pc/ORCHESTRATION.md`](file:///Users/jacob/pc/ORCHESTRATION.md)) que só planeja e escreve em `plan/`. CLAUDE.md específico para cada subprojeto (persona Flutter, persona Node/TS, persona Rust, persona NextJS). Subagents customizados se necessário. Possível overlay `.orchestration/` com contracts cross-project.
+- **`02-ai-orchestration.md`** — CLAUDE.md raiz como **Orquestrador** (modelo do [`/Users/user/pc/ORCHESTRATION.md`](file:///Users/user/pc/ORCHESTRATION.md)) que só planeja e escreve em `plan/`. CLAUDE.md específico para cada subprojeto (persona Flutter, persona Node/TS, persona Rust, persona NextJS). Subagents customizados se necessário. Possível overlay `.orchestration/` com contracts cross-project.
 - **`03-protocol.md`** — definição dos tipos de mensagem JSONL trocados app ↔ relay ↔ extensão.
 - **`04-pairing.md`** — esquema concreto de QR + E2E (Noise vs libsodium direto, formato do QR, safety number).
 - **`05-mvp-features.md`** — checklist mínima de features pro MVP (list sessions, chat, approvals, switch session).

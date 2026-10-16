@@ -97,9 +97,9 @@ Consequências:
 
 | Cenário | pc · cwd · nome | render |
 |---|---|---|
-| 1 agente, pasta `~/acme/backend`, sem `agent_name` | — · `/Users/jacob/acme/backend` · `backend` | `/Users/jacob/acme/backend@backend` |
-| 2º agente na mesma pasta, `agent_name=reviewer` | — · `…/acme/backend` · `reviewer` | `/Users/jacob/acme/backend@reviewer` |
-| Worktree em `~/.wt/feat-login` | — · `/Users/jacob/.wt/feat-login` · `backend` | `/Users/jacob/.wt/feat-login@backend` |
+| 1 agente, pasta `~/acme/backend`, sem `agent_name` | — · `/Users/user/acme/backend` · `backend` | `/Users/user/acme/backend@backend` |
+| 2º agente na mesma pasta, `agent_name=reviewer` | — · `…/acme/backend` · `reviewer` | `/Users/user/acme/backend@reviewer` |
+| Worktree em `~/.wt/feat-login` | — · `/Users/user/.wt/feat-login` · `backend` | `/Users/user/.wt/feat-login@backend` |
 | Mesmo cwd + mesmo nome (colisão real) | — · `…/backend` · `backend` | `…/backend@backend#2` |
 | Cross-PC | `MacMini` · `/Users/jose/work/acme` · `app` | `MacMini:/Users/jose/work/acme@app` |
 

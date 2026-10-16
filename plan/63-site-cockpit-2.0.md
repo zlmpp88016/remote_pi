@@ -19,7 +19,7 @@ Insumos (levantamento feito em 2026-09-17 pelos agentes dos subprojetos):
 - `.orchestration/results/cockpit-distribuicao.md`, matriz de distribuição
 - `.orchestration/results/cockpit-2.0-novidades.md`, o que contar da 2.0
 
-## Decisões tomadas (2026-09-17, com o Jacob)
+## Decisões tomadas (2026-09-17, com o User)
 
 1. **Cockpit vira a home.** A landing do Cockpit passa a ser `/`; o Remote Pi
    desce para `/remote-pi/*`. Um domínio, um deploy. As URLs já nascem
@@ -105,7 +105,7 @@ Seções, na ordem:
 3. **Mobile**: APK arm64 direto, com o passo de "instalar de fonte
    desconhecida". Sem link de loja, sem iOS.
 4. **VPS / cockpit-server**, em destaque:
-   `curl -fsSL https://remote-pi.jacobmoura.work/cockpit-server.sh | bash`
+   `curl -fsSL https://remote-pi.example.invalid/cockpit-server.sh | bash`
    com a variante `--service` (systemd --user), `COCKPIT_VERSION=` para pinar,
    link para o script cru ("leia antes de canalizar pro bash") e a regra dura:
    **a versão do servidor tem que ser igual à do app**.

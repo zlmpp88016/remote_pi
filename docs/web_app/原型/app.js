@@ -549,7 +549,7 @@ function resolveApproval(t, b, verdict) {
   ses_.pending = null; ses_.status = 'running';
   turn.blocks.push({ k:'tool', name:'bash', target:'pnpm vitest run test/pairing_host_test.ts', kind:'bash', state:'ok',
     input:'pnpm vitest run test/pairing_host_test.ts',
-    output:' RUN  v2.1.8  /Users/jacob/Projects/remote_pi\n\n ✓ test/pairing_host_test.ts (3 tests) 412ms\n   ✓ lets an unknown peer pair\n   ✓ refuses a rotated token\n   ✓ still drops other types from an unknown peer\n\n Test Files  1 passed (1)\n      Tests  3 passed (3)' });
+    output:' RUN  v2.1.8  /Users/user/Projects/remote_pi\n\n ✓ test/pairing_host_test.ts (3 tests) 412ms\n   ✓ lets an unknown peer pair\n   ✓ refuses a rotated token\n   ✓ still drops other types from an unknown peer\n\n Test Files  1 passed (1)\n      Tests  3 passed (3)' });
   turn.blocks.push({ k:'md', html:'<p>All three pass. The carve-out is now covered: pairing succeeds, a rotated token is refused with <code>token_invalid</code>, and every other unknown type is still dropped.</p>' });
   turn.blocks.push({ k:'usage', meta:'6 tool calls · 24.1k in / 3.8k out · 45.9k context (19%)' });
   renderAll();

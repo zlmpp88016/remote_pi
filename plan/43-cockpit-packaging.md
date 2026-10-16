@@ -4,7 +4,7 @@
 
 O Cockpit (`cockpit/`, Flutter desktop) está com MVP funcional: os três runners
 existem (`macos/`, `windows/`, `linux/`), lint e testes verdes, e o Linux já tem
-integração de desktop (app ID `work.jacobmoura.cockpit`, `.desktop`, ícones).
+integração de desktop (app ID `com.example.cockpit`, `.desktop`, ícones).
 Mas **nada está pronto pra distribuir**: assinatura macOS é ad-hoc, bundle ID é
 placeholder `com.example.cockpit`, `CompanyName` do Windows é `com.example`,
 não há instalador de nenhuma plataforma, nenhum workflow de CI no monorepo e
@@ -36,7 +36,7 @@ Total: **6 artefatos** + `SHA256SUMS` + `latest.json` por release.
 ### Premissas e riscos a validar cedo
 
 - **Runner Linux arm64**: usar `ubuntu-24.04-arm`. ~~Validar custo~~ →
-  **resolvido 2026-06-12**: o repo `jacobaraujo7/remote_pi` é público, então
+  **resolvido 2026-06-12**: o repo `exampleorg/remote_pi` é público, então
   os runners arm64 são gratuitos.
 - **`.rpm` em runner Ubuntu**: `rpmbuild` disponível via `apt install rpm` —
   não precisa de runner Fedora.
@@ -80,14 +80,14 @@ VPS:
 ### 1. Identidade e metadados (cockpit/)
 
 > **Status 2026-06-12**: concluído via `[ORCH:43-cockpit-identity-packaging]`.
-> Bundle ID já estava `work.jacobmoura.cockpit`; display name, Hardened
+> Bundle ID já estava `com.example.cockpit`; display name, Hardened
 > Runtime, Runner.rc e metainfo AppStream aplicados. Confirmado: a versão do
 > Windows usa os defines `FLUTTER_VERSION_*` (o `1.0.0` era só fallback).
 
-- Bundle ID macOS: adotar **`work.jacobmoura.cockpit`** (mesmo app ID que o
+- Bundle ID macOS: adotar **`com.example.cockpit`** (mesmo app ID que o
   Linux já usa), fixando `PRODUCT_BUNDLE_IDENTIFIER` no pbxproj/xcconfig.
   Nome de exibição: **"Remote Pi Cockpit"**; binário continua `cockpit`.
-- Windows `Runner.rc`: `CompanyName` → `Jacob Moura`, `ProductName` →
+- Windows `Runner.rc`: `CompanyName` → `Example Developer`, `ProductName` →
   `Remote Pi Cockpit`; confirmar que a versão vem dos defines
   `FLUTTER_VERSION_*` (corrigir se hardcoded).
 - macOS Release: garantir Hardened Runtime habilitado (exigência da
@@ -151,7 +151,7 @@ containers.
     `MACOS_CERT_PASSWORD`), build, sign, dmg, notarize (App Store Connect API
     key: `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, `APPLE_API_KEY`), staple.
     **Os 5 secrets Apple já estão cadastrados no repo (2026-06-12)**; Team ID
-    de assinatura: `U843T2P7A2`. Com o publish via GitHub Release, **não
+    de assinatura: `EXAMPLETEAM`. Com o publish via GitHub Release, **não
     falta nenhum secret** (os `VPS_HOST`/`VPS_DEPLOY_PATH` cadastrados ficam
     sem uso no CI; servem só de documentação do host).
   - `windows` (`windows-latest`): build + Inno Setup → `Setup.exe`.
@@ -160,7 +160,7 @@ containers.
   - `publish` (needs: todos) — **revisado 2026-06-12 (sem SSH na VPS)**:
     junta artefatos, gera `SHA256SUMS` e o `latest.json` (URLs absolutas
     apontando pros assets da release:
-    `https://github.com/jacobaraujo7/remote_pi/releases/download/cockpit-v<versão>/<arquivo>`),
+    `https://github.com/exampleorg/remote_pi/releases/download/cockpit-v<versão>/<arquivo>`),
     e cria a **GitHub Release** `cockpit-v<versão>` com os 6 artefatos +
     `SHA256SUMS` + `latest.json` anexados. Usa o `GITHUB_TOKEN` nativo do
     workflow — **nenhum secret extra**. Passo manual pós-CI (gate de
@@ -175,15 +175,15 @@ download público via HTTPS.
 
 > **Status 2026-06-12**: lado servidor pronto — novo subprojeto **`rp-s3/`**
 > (Rust/axum + Dockerfile + docker-compose) roda em container na VPS com o
-> `VPS_DEPLOY_PATH` (`/Users/flutterando/cockpit/data`, host macOS) montado
+> `VPS_DEPLOY_PATH` (`/home/user/cockpit/data`, host macOS) montado
 > read-only em `/data/cockpit`; serve `/downloads/...` com cache/CORS/
 > attachment corretos e `/healthz`. Build release verde + smoke test local OK.
-> URL pública: `https://rp-s3.jacobmoura.work` (TLS no proxy da VPS).
+> URL pública: `https://rp-s3.example.invalid` (TLS no proxy da VPS).
 > **Revisão 2026-06-12 (sem SSH na VPS)**: o rp-s3 passa a hospedar **só o
 > `latest.json`** (e opcionalmente `SHA256SUMS`) — os binários ficam nos
 > assets da GitHub Release. O usuário coloca o `latest.json` no volume
 > manualmente a cada release (gate de publicação). **Pendência única**:
-> subir o container na VPS e apontar o proxy de `rp-s3.jacobmoura.work`.
+> subir o container na VPS e apontar o proxy de `rp-s3.example.invalid`.
 
 - A VPS guarda só `/downloads/cockpit/latest.json` (URL estável, nunca muda)
   e opcionalmente `SHA256SUMS`. As URLs **dentro** do manifest apontam pros
@@ -257,7 +257,7 @@ improvisado.
 > rp-s3 com versão > app).
 
 - No startup, consultar
-  `https://rp-s3.jacobmoura.work/downloads/cockpit/latest.json` (GET com
+  `https://rp-s3.example.invalid/downloads/cockpit/latest.json` (GET com
   timeout curto; qualquer falha é silenciosa — sem rede, sem manifest, payload
   inválido → nenhum aviso). Comparar `version` (semver `x.y.z`) com a versão
   do app.
@@ -276,7 +276,7 @@ analyze` zero issues.
 
 ## Definition of Done
 
-- [x] Identidade aplicada: bundle ID `work.jacobmoura.cockpit`, nome "Remote Pi Cockpit", CompanyName corrigido, versão Windows dinâmica
+- [x] Identidade aplicada: bundle ID `com.example.cockpit`, nome "Remote Pi Cockpit", CompanyName corrigido, versão Windows dinâmica
 - [x] DMG universal assinado + notarizado abre sem aviso do Gatekeeper após download real (validado 2026-06-12: download da URL do manifest, sha256 OK, spctl accepted/Notarized Developer ID, staple válido)
 - [ ] `Setup.exe` instala/desinstala em Windows 10/11 x64 (aviso SmartScreen documentado no site)
 - [x] `.deb` x86_64 e arm64 instalam em Ubuntu 24.04; `.rpm` x86_64 e arm64 instalam em Fedora (smoke no CI com `.desktop` presente; menu/ícone visual a confirmar em máquina real)

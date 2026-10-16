@@ -1,6 +1,6 @@
 # Plano 02 — AI Orchestration
 
-Objetivo: configurar a "camada de IA" do monorepo. Definir como Claude Code se comporta na **raiz** (Orquestrador, só planeja) e em cada **subprojeto** (persona técnica específica). Inspirado em [`/Users/jacob/pc/ORCHESTRATION.md`](file:///Users/jacob/pc/ORCHESTRATION.md), mas com escopo enxuto adequado a 4 subprojetos pequenos.
+Objetivo: configurar a "camada de IA" do monorepo. Definir como Claude Code se comporta na **raiz** (Orquestrador, só planeja) e em cada **subprojeto** (persona técnica específica). Inspirado em [`/Users/user/pc/ORCHESTRATION.md`](file:///Users/user/pc/ORCHESTRATION.md), mas com escopo enxuto adequado a 4 subprojetos pequenos.
 
 **Este plano não escreve código de feature. Só configura personas e instruções.**
 
@@ -18,7 +18,7 @@ Em paralelo, a **raiz** do monorepo serve como local de **planejamento**: cada d
 
 ## Princípios
 
-Puxados de [`/Users/jacob/pc/ORCHESTRATION.md`](file:///Users/jacob/pc/ORCHESTRATION.md) e adaptados:
+Puxados de [`/Users/user/pc/ORCHESTRATION.md`](file:///Users/user/pc/ORCHESTRATION.md) e adaptados:
 
 1. **Persona vive no projeto** — `app/CLAUDE.md`, `pi-extension/CLAUDE.md`, etc. Nunca duplicada na raiz
 2. **Raiz é Orquestrador, não dev** — só planeja, só escreve em `plan/` e em `.orchestration/` (se viermos a usar)
@@ -52,7 +52,7 @@ remote_pi/
 
 **Função**: define a raiz como ambiente de **planejamento**. Proíbe edição direta de código de subprojeto.
 
-**Localização**: `/Users/jacob/Projects/remote_pi/CLAUDE.md`
+**Localização**: `/Users/user/Projects/remote_pi/CLAUDE.md`
 
 **Conteúdo mínimo** (esqueleto, será refinado iterativamente):
 
@@ -128,7 +128,7 @@ Não fique chamando `set-progress` a cada turno — só quando o estado real mud
 
 Para qualquer coisa além do `set-progress` básico — dispatch entre panes, escuta de
 `agent.hook.Stop`, notificações, padrão `.orchestration/` — use a skill
-[`claude-cmux`](file:///Users/jacob/.claude/skills/claude-cmux/SKILL.md).
+[`claude-cmux`](file:///Users/user/.claude/skills/claude-cmux/SKILL.md).
 
 Ela cobre:
 - CLI essentials (`send`, `send-key`, `events`, `notify`, `tree`, `list-panes`)
@@ -150,7 +150,7 @@ paralela. Não duplique conteúdo dela aqui — invoque a skill.
 
 **Função**: persona técnica do app mobile.
 
-**Localização**: `/Users/jacob/Projects/remote_pi/app/CLAUDE.md`
+**Localização**: `/Users/user/Projects/remote_pi/app/CLAUDE.md`
 
 **Conteúdo mínimo**:
 
@@ -203,7 +203,7 @@ chat com streaming, approval cards para tool calls.
 
 **Função**: persona técnica da extensão Pi.
 
-**Localização**: `/Users/jacob/Projects/remote_pi/pi-extension/CLAUDE.md`
+**Localização**: `/Users/user/Projects/remote_pi/pi-extension/CLAUDE.md`
 
 **Conteúdo mínimo**:
 
@@ -259,7 +259,7 @@ adiciona o slash command `/remote-pi`. Embarca o SDK do Pi
 
 **Função**: persona técnica do servidor de relay.
 
-**Localização**: `/Users/jacob/Projects/remote_pi/relay/CLAUDE.md`
+**Localização**: `/Users/user/Projects/remote_pi/relay/CLAUDE.md`
 
 **Conteúdo mínimo**:
 
@@ -321,7 +321,7 @@ ciphertext entre app e pi-extension. **Nunca decifra payload.**
 
 **Função**: persona técnica da landing page.
 
-**Localização**: `/Users/jacob/Projects/remote_pi/site/CLAUDE.md`
+**Localização**: `/Users/user/Projects/remote_pi/site/CLAUDE.md`
 
 **Conteúdo mínimo**:
 

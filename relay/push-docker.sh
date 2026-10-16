@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-IMAGE="jacobmoura7/remote-pi-relay"
+IMAGE="exampleorg/remote-pi-relay"
 PLATFORMS="linux/amd64,linux/arm64"
 BUILDER="multiarch"
 

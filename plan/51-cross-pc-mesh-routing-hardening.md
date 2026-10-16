@@ -40,7 +40,7 @@ trânsito, mas o operador do Relay pode observar o conteúdo atual.
 - Migração ou mudança de schema do SQLite do Relay.
 - Floor anti-rollback persistente entre reinícios ou coordenação SelfRevoke
   persistente entre processos; acompanhado em
-  [#73](https://github.com/jacobaraujo7/remote_pi/issues/73).
+  [#73](https://github.com/exampleorg/remote_pi/issues/73).
 - Negociação de capabilities ou compatibilidade de labels além do shim limitado
   de uma release aceito para este PR.
 - E2E encryption ou transporte P2P.
@@ -150,7 +150,7 @@ hex do Relay antigo; envelopes comuns continuam exigindo UUID estrito.
 - O floor anti-rollback em memória reinicia com o processo; `issued_at` é
   informativo e membership não expira. Assim, membership anterior à revogação
   pode ser repetida após restart. Persistência segura fica fora deste plano e é
-  acompanhada em [#73](https://github.com/jacobaraujo7/remote_pi/issues/73).
+  acompanhada em [#73](https://github.com/exampleorg/remote_pi/issues/73).
 
 ## Passos e critérios de aceite
 
@@ -240,6 +240,6 @@ exploratórios ou documentação operacional duplicada.
 O shim mixed-version limitado foi aceito pelo upstream e incorporado neste plano.
 Validação final, revisões independentes e aprovação para commit/push foram
 concluídas. Floor persistente continua adiado e acompanhado em
-[#73](https://github.com/jacobaraujo7/remote_pi/issues/73); capability negotiation
+[#73](https://github.com/exampleorg/remote_pi/issues/73); capability negotiation
 permanece trabalho separado. Publicação, deployment, rollback e hardening do
 verificador de artefatos continuam ações separadas.

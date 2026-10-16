@@ -14,18 +14,18 @@
 
 ## 相关链接
 
-- **官网** —— <https://remote-pi.jacobmoura.work>
+- **官网** —— <https://remote-pi.example.invalid>
 - **包文档** —— <https://pi.dev/packages/remote-pi?name=remote-pi>
-- **GitHub** —— <https://github.com/jacobaraujo7/remote_pi>
+- **GitHub** —— <https://github.com/exampleorg/remote_pi>
 
 ### 下载
 
 | 平台 | 状态 |
 |---|---|
-| Google Play（Android） | [在 Google Play 获取](https://play.google.com/store/apps/details?id=work.jacobmoura.remotepi) |
+| Google Play（Android） | [在 Google Play 获取](https://play.google.com/store/apps/details?id=com.example.remotepi) |
 | App Store（iOS） | [在 App Store 下载](https://apps.apple.com/app/remote-pi-coding-agent/id6773499691) |
-| APK（侧载，Android） | [GitHub Releases](https://github.com/jacobaraujo7/remote_pi/releases) |
-| 桌面端（Cockpit） | [GitHub Releases](https://github.com/jacobaraujo7/remote_pi/releases?q=cockpit-v) |
+| APK（侧载，Android） | [GitHub Releases](https://github.com/exampleorg/remote_pi/releases) |
+| 桌面端（Cockpit） | [GitHub Releases](https://github.com/exampleorg/remote_pi/releases?q=cockpit-v) |
 
 ## 仓库里有什么
 

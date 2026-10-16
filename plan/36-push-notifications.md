@@ -15,7 +15,7 @@ bloqueado esperando o usuário** (pergunta/permissão).
 
 FCM/APNs têm um invariante: **uma mensagem só é entregue a um token que pertence
 ao mesmo Firebase project das credenciais de quem envia.** O app publicado
-(`work.jacobmoura.remotepi.app`) embute **um** Firebase project. Logo:
+(`com.example.remotepi.app`) embute **um** Firebase project. Logo:
 
 - Todo install oficial gera token do **seu** projeto; só uma service account
   **sua** envia pra ele.

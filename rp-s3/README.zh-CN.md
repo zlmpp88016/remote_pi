@@ -1,6 +1,6 @@
 # rp-s3 — Remote Pi 的下载服务器
 
-一个极简 HTTP 服务器（Rust + axum），从挂载为 volume 的目录里提供 Cockpit（以及未来产品）的安装包。在 VPS 上以容器运行，位于负责 TLS 终止的代理之后，对外是 `https://rp-s3.jacobmoura.work`。
+一个极简 HTTP 服务器（Rust + axum），从挂载为 volume 的目录里提供 Cockpit（以及未来产品）的安装包。在 VPS 上以容器运行，位于负责 TLS 终止的代理之后，对外是 `https://rp-s3.example.invalid`。
 
 它是[计划 43](../plan/43-cockpit-packaging.md) 第 4 步中「读取」的那一侧。VPS 没有 SSH 访问权限，所以流程是：CI（`cockpit-release.yml`）把二进制文件发布为 **GitHub Release** `cockpit-v<版本>` 的 assets，并把 `latest.json` / appcast 通过 `PUT /upload`（Bearer token）直接发布到这台主机上。rp-s3 在站点读取的那个稳定 URL 上提供 manifest。
 
@@ -24,7 +24,7 @@
     curl -fsS -X PUT \
       -H "Authorization: Bearer ${{ secrets.RP_S3_UPLOAD_TOKEN }}" \
       --data-binary @latest.json \
-      https://rp-s3.jacobmoura.work/upload/cockpit/latest.json
+      https://rp-s3.example.invalid/upload/cockpit/latest.json
 ```
 
 > 为什么用 token 而不是「校验仓库」？带仓库名的 header 是可以伪造的。密码学上的替代方案是 GitHub Actions 的 OIDC（签名 JWT，带 `repository` claim）—— 可以在同一 endpoint 上升级，但相对这个服务器目前的体量来说有些过重（不成比例）。
@@ -50,13 +50,13 @@
 `docker-compose.yml` 把 CI 的 deploy 路径**挂载为产品子目录** —— 这样主机侧保持扁平，URL 又能带上正确的前缀：
 
 ```
-host:  /Users/flutterando/cockpit/data/          （通过 PUT /upload 写入）
+host:  /home/user/cockpit/data/          （通过 PUT /upload 写入）
          latest.json
          SHA256SUMS                              （可选）
 
-mount: /Users/flutterando/cockpit/data → /data/cockpit (rw, 供上传)
+mount: /home/user/cockpit/data → /data/cockpit (rw, 供上传)
 
-URL:   https://rp-s3.jacobmoura.work/downloads/cockpit/latest.json
+URL:   https://rp-s3.example.invalid/downloads/cockpit/latest.json
 ```
 
 二进制文件本身放在 GitHub Release 的 assets 里 —— `latest.json` 内部的 URL 指向那边。万一以后真有文件托管在这里，服务器照样知道怎么把 `.dmg` / `.exe` / `.deb` / `.rpm` 以 attachment 形式提供出去。
@@ -76,11 +76,11 @@ curl -fsS http://localhost:8080/healthz
 
 ## 发布到 Docker Hub
 
-和 relay 一样的流程：脚本从 `Cargo.toml` 读取版本号，通过 buildx 构建多架构（amd64 + arm64），并发布 `jacobmoura7/rp-s3:v<版本>` + `:latest`。
+和 relay 一样的流程：脚本从 `Cargo.toml` 读取版本号，通过 buildx 构建多架构（amd64 + arm64），并发布 `exampleorg/rp-s3:v<版本>` + `:latest`。
 
 ```bash
 docker login          # 只需一次
 ./push-docker.sh
 ```
 
-VPS 上的反向代理把 `rp-s3.jacobmoura.work` 指向 `localhost:8080`。
+VPS 上的反向代理把 `rp-s3.example.invalid` 指向 `localhost:8080`。

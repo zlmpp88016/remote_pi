@@ -426,7 +426,7 @@ packages:
       path: "packages/flterm"
       ref: cockpit-pin-flterm-link-click
       resolved-ref: "891b2af4199fed478e76137feedeefae7cd38026"
-      url: "https://github.com/jacobaraujo7/libghostty.git"
+      url: "https://github.com/exampleorg/libghostty.git"
     source: git
     version: "0.0.5"
   flutter:
@@ -831,7 +831,7 @@ packages:
       path: "packages/libghostty"
       ref: cockpit-pin-flterm-link-click
       resolved-ref: "891b2af4199fed478e76137feedeefae7cd38026"
-      url: "https://github.com/jacobaraujo7/libghostty.git"
+      url: "https://github.com/exampleorg/libghostty.git"
     source: git
     version: "0.0.12"
   lints:

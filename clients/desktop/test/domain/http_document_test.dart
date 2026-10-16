@@ -17,7 +17,7 @@ POST {{baseUrl}}/users
 Content-Type: application/json
 
 {
-  "name": "Jacob",
+  "name": "User",
   "note": "# isto não é comentário"
 }
 
@@ -60,7 +60,7 @@ void main() {
       final r = doc.requests[1];
       expect(
         r.body,
-        '{\n  "name": "Jacob",\n  "note": "# isto não é comentário"\n}',
+        '{\n  "name": "User",\n  "note": "# isto não é comentário"\n}',
       );
     });
 

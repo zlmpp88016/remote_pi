@@ -114,7 +114,7 @@ void main() {
             ],
             child: const ChatPage(
               initialTitle: 'My Project',
-              initialDevice: 'MacBook de Jacob',
+              initialDevice: 'MacBook de User',
               initialOnline: true,
             ),
           ),
@@ -123,7 +123,7 @@ void main() {
       await tester.pump();
 
       // Line 2 = device (from initialDevice, even with no PeerRecord loaded).
-      expect(find.text('MacBook de Jacob'), findsOneWidget);
+      expect(find.text('MacBook de User'), findsOneWidget);
       // Line 1 = room title (from initialTitle) — distinct from the device, so
       // we know the subtitle isn't just echoing the title fallback.
       expect(find.text('My Project'), findsOneWidget);

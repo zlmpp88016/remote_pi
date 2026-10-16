@@ -58,7 +58,7 @@ class UpdateViewModel extends ChangeNotifier {
   final String fallbackUrl;
 
   static const String _kFallbackUrl =
-      'https://remote-pi.jacobmoura.work/download';
+      'https://remote-pi.example.invalid/download';
 
   UpdateInfo? _available; // caminho Linux/notify
   StreamSubscription<SelfUpdateState>? _selfSub;

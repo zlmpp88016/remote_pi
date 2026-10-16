@@ -264,21 +264,21 @@ class _Channel implements IChannel, IControlLink {
                 name: 'code-review',
                 description: 'Revisa o diff atual procurando bugs e regressoes',
                 source: SkillSource.project,
-                path: '/Users/jacob/Projects/remote_pi/.pi/skills/code-review/SKILL.md',
+                path: '/Users/user/Projects/remote_pi/.pi/skills/code-review/SKILL.md',
                 enabled: true,
               ),
               WireSkill(
                 name: 'pdf-tools',
                 description: 'Extrai texto e tabelas de PDFs',
                 source: SkillSource.user,
-                path: '/Users/jacob/.pi/agent/skills/pdf-tools/SKILL.md',
+                path: '/Users/user/.pi/agent/skills/pdf-tools/SKILL.md',
                 enabled: true,
               ),
               WireSkill(
                 name: 'commit-style',
                 description: 'Convencoes de mensagem de commit',
                 source: SkillSource.package,
-                path: '/Users/jacob/.pi/agent/npm/node_modules/pi-extras/skills/commit-style/SKILL.md',
+                path: '/Users/user/.pi/agent/npm/node_modules/pi-extras/skills/commit-style/SKILL.md',
                 enabled: true,
                 disableModelInvocation: true,
               ),
@@ -325,7 +325,7 @@ class _Channel implements IChannel, IControlLink {
         inReplyTo: id,
         workspaces: const [
           WireWorkspaceInfo(
-            cwd: '/Users/jacob/Projects/remote_pi',
+            cwd: '/Users/user/Projects/remote_pi',
             daemonId: 'd1',
             roomId: 'r-remote-pi',
             name: 'remote_pi',
@@ -333,7 +333,7 @@ class _Channel implements IChannel, IControlLink {
             daemon: true,
           ),
           WireWorkspaceInfo(
-            cwd: '/Users/jacob/Projects/cockpit',
+            cwd: '/Users/user/Projects/cockpit',
             daemonId: 'd2',
             roomId: 'r-cockpit',
             name: 'cockpit',
@@ -348,7 +348,7 @@ class _Channel implements IChannel, IControlLink {
   /// Uma árvore de pastas plausível para a captura do seletor de workspace.
   /// O `path` pedido define o nível, para o breadcrumb não ficar vazio.
   FsListOk _fsListOk(String replyTo, String path) {
-    const home = '/Users/jacob';
+    const home = '/Users/user';
     if (path == home) {
       return FsListOk(
         inReplyTo: replyTo,
@@ -460,7 +460,7 @@ Future<_Scenario> _home(WidgetTester tester, {bool withPeer = true}) async {
         peer: _epk,
         roomId: _roomId,
         startedAt: 1759500000,
-        cwd: '/Users/jacob/Projects/remote_pi',
+        cwd: '/Users/user/Projects/remote_pi',
         name: 'proj',
       ),
     );
@@ -539,7 +539,7 @@ Future<_Scenario> _workspaceBrowser(WidgetTester tester) async {
   final vm = WorkspaceBrowserViewModel(SessionCatalog(conn));
   await _real(tester, 80);
   // Entra em ~/Projects para a captura mostrar o nível interessante (repos).
-  vm.openTyped('/Users/jacob/Projects');
+  vm.openTyped('/Users/user/Projects');
   await _real(tester, 80);
   return _Scenario(
     providers: [ChangeNotifierProvider<WorkspaceBrowserViewModel>.value(value: vm)],
@@ -643,7 +643,7 @@ Future<_Scenario> _pairingForm(WidgetTester tester) async {
   vm.onCodeChanged(
     'remotepi://pair?t=AAAAAAAAAAAAAAAAAAAAAA&'
     'epk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&'
-    'n=Mac%20do%20Jacob&rm=host&r=ws%3A%2F%2Frelay.remote-pi.dev',
+    'n=Mac%20do%20User&rm=host&r=ws%3A%2F%2Frelay.remote-pi.dev',
   );
   await _real(tester);
   return _Scenario(
@@ -683,7 +683,7 @@ Future<_Scenario> _workspaceState(WidgetTester tester) async {
   await _real(tester, 80);
   ch.pushServer(
     WorkspaceState(
-      cwd: '/Users/jacob/Projects/remote_pi',
+      cwd: '/Users/user/Projects/remote_pi',
       state: WorkspaceStateValue.crashed,
       lastError: 'Pi process exited with code 1 (SIGKILL)',
       restarts: 2,
@@ -692,7 +692,7 @@ Future<_Scenario> _workspaceState(WidgetTester tester) async {
   );
   ch.pushServer(
     WorkspaceState(
-      cwd: '/Users/jacob/Projects/cockpit',
+      cwd: '/Users/user/Projects/cockpit',
       state: WorkspaceStateValue.running,
       lastError: null,
       restarts: 0,

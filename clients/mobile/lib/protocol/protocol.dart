@@ -1645,7 +1645,7 @@ class PairOk extends ServerMessage {
 
   /// Plan/27 Wave A — hostname hint for the post-pair nickname modal.
   /// The remote-pi reports its OS hostname so the modal can
-  /// pre-fill a sensible placeholder ("Mac do Jacob") instead of a
+  /// pre-fill a sensible placeholder ("Mac do User") instead of a
   /// generic "Pi". `null` on legacy Pis.
   final String? hostname;
   PairOk({

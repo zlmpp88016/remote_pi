@@ -25,7 +25,7 @@ const { generateEd25519Keypair } = await import(pathToFileURL(join(pkgRoot, "dis
 import { randomBytes } from "node:crypto";
 
 const RELAY = process.env.E2E_RELAY || "wss://relay.880160.xyz/";
-const WRONG_RELAY = "wss://relay-rp1.jacobmoura.work/";
+const WRONG_RELAY = "wss://relay-rp1.example.invalid/";
 const ROOM = process.env.E2E_ROOM || "H2E6llkN71e5";
 const OTHER_ROOM = "G_O9FHmyTGS9";
 

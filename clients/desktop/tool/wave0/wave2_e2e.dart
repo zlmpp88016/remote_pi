@@ -3,7 +3,7 @@
 //
 // Uso (da pasta clients/desktop/):
 //   ./tool/build-sidecar.sh
-//   dart run tool/wave0/wave2_e2e.dart jacob@imac.local
+//   dart run tool/wave0/wave2_e2e.dart user@host.local
 //
 // O script faz o fluxo completo do RemoteHostConnector, standalone:
 // 1. instala o cockpit-server no host via ssh (binário local → stdin → arquivo)

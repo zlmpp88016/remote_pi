@@ -17,11 +17,11 @@ Conteúdo legal é **adaptação direta** do site
 [bibliaehinario.app/privacidade](https://bibliaehinario.app/privacidade)
 — mesma empresa responsável (Flutterando Desenvolvimento de Programas
 de Computador LTDA, CNPJ 33.637.582/0001-70), mesmo DPO
-(Jacob Moura <jacob@flutterando.com.br>), só trocando o produto e seu
+(Example Developer <noreply@example.com>), só trocando o produto e seu
 escopo de funcionalidades/dados.
 
 Branding (logos, paleta) já existe em `/branding/`. URL canônica
-provável é `https://remote-pi.jacobmoura.work` (já referenciada em
+provável é `https://remote-pi.example.invalid` (já referenciada em
 `pi-extension/package.json` como `homepage`).
 
 ## Decisões fixadas
@@ -35,9 +35,9 @@ provável é `https://remote-pi.jacobmoura.work` (já referenciada em
 | **Branding** | Favicon e OG image gerados a partir de `branding/logo-full.svg`. Hero usa `logo-foreground.svg` sobre background preto (consistente com app icon) |
 | **Paleta** | `#000000` background, `#FFFFFF` texto principal, `#4FC3F7` accent (mesma do branding). Tailwind tokens via `theme` extension em `globals.css` |
 | **Tipografia** | Geist (já bundlada pelo bootstrap) — sans pra UI, mono pra code snippets |
-| **Conteúdo legal** | Adaptação dos termos/privacidade do bibliaehinario, mantendo entidade legal Flutterando e DPO Jacob Moura. Estrutura de 13 seções por documento espelha o original |
+| **Conteúdo legal** | Adaptação dos termos/privacidade do bibliaehinario, mantendo entidade legal Flutterando e DPO Example Developer. Estrutura de 13 seções por documento espelha o original |
 | **Entidade legal** | Flutterando Desenvolvimento de Programas de Computador LTDA (CNPJ 33.637.582/0001-70). Endereço: Rua Clara Nunes, 198, Maringá/PR, CEP 87.045-650 |
-| **Contato/DPO** | jacob@flutterando.com.br (mesmo do bibliaehinario) |
+| **Contato/DPO** | noreply@example.com (mesmo do bibliaehinario) |
 | **Lei aplicável** | LGPD (Brasil) — coerente com a empresa responsável |
 | **Hosting** | Vercel (padrão NextJS). `vercel.json` mínimo se necessário. Decisão de DNS fica fora deste plano |
 | **Analytics** | **Sem analytics** no MVP. Sem cookies de tracking. Coerente com a postura "no precise data" do projeto |
@@ -45,7 +45,7 @@ provável é `https://remote-pi.jacobmoura.work` (já referenciada em
 
 ## Open questions (não bloqueantes — defaults assumidos)
 
-- **Site GitHub link**: assumindo `https://github.com/jacobaraujo7/remote_pi` (mesmo que `repository.url` do pi-extension). Confirmar antes de publicar
+- **Site GitHub link**: assumindo `https://github.com/exampleorg/remote_pi` (mesmo que `repository.url` do pi-extension). Confirmar antes de publicar
 - **Download/install CTA**: no MVP aponta pra **npm install + GitHub README**. Quando app for publicado na Play Store / App Store, plano novo adiciona badges
 - **Docs**: link "Docs" no header fica desabilitado (ou aponta pra GitHub README) até existir plano de docs site
 
@@ -84,7 +84,7 @@ site/
 - Atualiza metadata global em `app/layout.tsx`:
   - `title: "Remote Pi — Control your Pi coding agent from your phone"`
   - `description` (1-2 frases, ver §6)
-  - `metadataBase: new URL("https://remote-pi.jacobmoura.work")`
+  - `metadataBase: new URL("https://remote-pi.example.invalid")`
 - Copia `branding/logo-full.svg` e `logo-foreground.svg` pra `site/public/`
 - Atualiza `globals.css`: define CSS vars `--bg: #000`, `--fg: #fff`, `--accent: #4FC3F7`; aplica `body { background: var(--bg); color: var(--fg) }`; remove dark/light scheme inverted (site é dark-only, alinhado com app icon)
 
@@ -124,14 +124,14 @@ Cria `app/terms/page.tsx` com:
   3. **Features** — controle remoto do Pi coding agent via app mobile, mensageria multi-agente local, relay opcional self-hosted
   4. **User-Generated Content** — prompts e respostas geradas pelo Pi pertencem ao usuário; Flutterando não armazena nem inspeciona conteúdo de mensagens (relay encaminha ciphertext)
   5. **Prohibited Conduct** — adaptado (sem spam/impersonação aplicável; foco em: não tentar quebrar a criptografia do relay, não atacar a infra)
-  6. **Reporting and Moderation** — N/A no MVP (sem servidor de conteúdo). Substitui por: "report security issues to jacob@flutterando.com.br"
+  6. **Reporting and Moderation** — N/A no MVP (sem servidor de conteúdo). Substitui por: "report security issues to noreply@example.com"
   7. **Platform Intellectual Property** — código MIT; marca "Remote Pi" e branding (logos, paleta) protegidos
   8. **Availability and Service Modifications** — "as is"
   9. **Liability Limitation** — idem
   10. **Terms Modifications** — atualizações comunicadas via README + site
   11. **Termination** — usuário pode deletar pareamentos a qualquer momento via app ou comando `/remote-pi revoke <id>`
   12. **Applicable Law** — Brazilian law, jurisdiction Maringá/PR
-  13. **Contact** — jacob@flutterando.com.br
+  13. **Contact** — noreply@example.com
 
 Markup: usa `<section>`, headings semânticas (h1, h2), parágrafos. Tipografia legível (max-width ~70ch, line-height generoso).
 
@@ -141,7 +141,7 @@ Markup: usa `<section>`, headings semânticas (h1, h2), parágrafos. Tipografia 
 Cria `app/privacy/page.tsx` com:
 
 - Header: "Privacy Policy" + "Last updated: 2026-05-22"
-- Intro: data controller info (Flutterando + DPO Jacob Moura)
+- Intro: data controller info (Flutterando + DPO Example Developer)
 - 13 seções adaptadas:
   1. **Who We Are (Data Controller)** — Flutterando + DPO contact
   2. **Data We Collect**:
@@ -153,12 +153,12 @@ Cria `app/privacy/page.tsx` com:
   5. **Data Sharing** — não compartilhamos. Caso opere relay próprio: o operador é o controlador
   6. **International Transfer** — relay padrão hospedado por Flutterando; usuários podem self-host
   7. **Data Retention** — connection logs do relay: 30 dias máx; pareamentos locais: até o usuário revogar
-  8. **Your Rights (LGPD Article 18)** — confirmation, access, correction, deletion. Contato via jacob@flutterando.com.br
+  8. **Your Rights (LGPD Article 18)** — confirmation, access, correction, deletion. Contato via noreply@example.com
   9. **Security** — TLS in transit, NaCl E2E encryption, relay sees only ciphertext + routing metadata
   10. **Children and Minors** — not directed at users under 13
   11. **Cookies** — "This site does not use tracking or advertising cookies"
   12. **Policy Updates** — comunicadas via site
-  13. **Contact** — jacob@flutterando.com.br ou ANPD
+  13. **Contact** — noreply@example.com ou ANPD
 
 Mesma tipografia/estrutura da `/terms`.
 

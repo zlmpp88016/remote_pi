@@ -20,7 +20,7 @@ const { RelayClient } = await import(pathToFileURL(join(pkgRoot, "dist", "transp
 const { generateEd25519Keypair } = await import(pathToFileURL(join(pkgRoot, "dist", "pairing", "crypto.js")).href);
 
 const PI_RELAY = process.env.E2E_RELAY || "wss://relay.880160.xyz/";
-const APP_WRONG_RELAY = "wss://relay-rp1.jacobmoura.work/"; // o default do app
+const APP_WRONG_RELAY = "wss://relay-rp1.example.invalid/"; // o default do app
 const ROOM = "H2E6llkN71e5";
 
 const res = [];

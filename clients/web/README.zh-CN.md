@@ -1,6 +1,6 @@
 # Remote Pi — 官网
 
-[Remote Pi](https://github.com/jacobaraujo7/remote_pi) 的落地页 —— 这个项目让你用手机操控 Pi coding agent，消息经中继转发。
+[Remote Pi](https://github.com/exampleorg/remote_pi) 的落地页 —— 这个项目让你用手机操控 Pi coding agent，消息经中继转发。
 
 本包提供三个静态路由：
 
@@ -8,7 +8,7 @@
 - `/terms` —— 服务条款
 - `/privacy` —— 隐私政策（LGPD）
 
-目标域名：<https://remote-pi.jacobmoura.work>。
+目标域名：<https://remote-pi.example.invalid>。
 
 ## 启动
 

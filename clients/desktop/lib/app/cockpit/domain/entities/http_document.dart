@@ -12,7 +12,7 @@
 /// POST {{baseUrl}}/users
 /// Content-Type: application/json
 ///
-/// {"name": "Jacob"}
+/// {"name": "User"}
 /// ```
 ///
 /// O parse é **tolerante por design**: linha que não casa com nada é ignorada

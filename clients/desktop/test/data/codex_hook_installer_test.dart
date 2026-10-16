@@ -46,7 +46,7 @@ void main() {
     // o `codex exec` executou os hooks SEM `--dangerously-bypass-hook-trust`.
     // Se o Codex mudar o algoritmo, é aqui que a gente descobre.
     const command =
-        '/private/tmp/claude-501/-Users-jacob-Projects-remote-pi-cockpit'
+        '/private/tmp/claude-501/-Users-user-Projects-remote-pi-cockpit'
         '/5221e354-8d12-4aa7-9ca6-66fb9a82d33c/scratchpad/capture/hook.sh';
     const installer = CodexHookInstallerImpl();
 

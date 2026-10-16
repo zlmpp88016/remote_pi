@@ -194,10 +194,10 @@ class _StubHost {
           _sendToClient({
             'type': 'pair_ok',
             'in_reply_to': inner['id'],
-            'session_name': 'Mac do Jacob',
+            'session_name': 'Mac do User',
             'session_started_at': 1782250000000,
             'room_id': hostRoom,
-            'hostname': 'mac-do-jacob',
+            'hostname': 'mac-do-user',
           });
         } else {
           _sendToClient({
@@ -213,7 +213,7 @@ class _StubHost {
           'in_reply_to': inner['id'],
           'daemon': {
             'version': '1.4.0',
-            'hostname': 'mac-do-jacob',
+            'hostname': 'mac-do-user',
             'platform': 'darwin',
           },
           'capabilities': ['host_pairing', 'workspace_state', 'fs_nav'],
@@ -414,13 +414,13 @@ void main() {
       PairingCode(
         token: _StubHost.validToken,
         hostEpk: stub.hostEpkB64,
-        name: 'Mac do Jacob',
+        name: 'Mac do User',
       ),
     );
     expect(paired.isSuccess, true);
     final pairOk = (paired as Success<PairOk, HostError>).value;
-    expect(pairOk.sessionName, 'Mac do Jacob');
-    expect(pairOk.hostname, 'mac-do-jacob');
+    expect(pairOk.sessionName, 'Mac do User');
+    expect(pairOk.hostname, 'mac-do-user');
     expect(client.hostEpk, stub.hostEpkB64);
 
     // TODO envelope do control plane vai endereçado a (host, "host") — a
@@ -433,7 +433,7 @@ void main() {
     final hello = await client.helloHost();
     expect(hello.isSuccess, true);
     final helloOk = (hello as Success<HostHelloOk, HostError>).value;
-    expect(helloOk.daemon.hostname, 'mac-do-jacob');
+    expect(helloOk.daemon.hostname, 'mac-do-user');
     expect(helloOk.daemon.version, '1.4.0');
     expect(helloOk.capabilities, contains('host_pairing'));
     expect(helloOk.capabilities, contains('fs_nav'));

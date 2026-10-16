@@ -22,7 +22,7 @@ docker run -d \
   -p 3000:3000 \
   -v remote-pi-data:/data \
   --restart unless-stopped \
-  jacobmoura7/remote-pi-relay
+  exampleorg/remote-pi-relay
 
 # Option C — build from source
 cargo build --release
@@ -115,7 +115,7 @@ docker run -d \
   -p 3000:3000 \
   -v remote-pi-data:/data \
   --restart unless-stopped \
-  jacobmoura7/remote-pi-relay
+  exampleorg/remote-pi-relay
 ```
 
 The relay listens on a **single port** (`3000` by default) and serves three
@@ -154,7 +154,7 @@ docker run -d \
   -e REMOTEPI_RELAY_PORT=8080 \
   -e RUST_LOG=info \
   --restart unless-stopped \
-  jacobmoura7/remote-pi-relay
+  exampleorg/remote-pi-relay
 ```
 
 ### WebSocket origin allowlist (browser clients)
@@ -170,7 +170,7 @@ docker run -d \
   -v remote-pi-data:/data \
   -e RELAY_ALLOWED_ORIGINS="https://app.example.com,https://cockpit.example.com" \
   --restart unless-stopped \
-  jacobmoura7/remote-pi-relay
+  exampleorg/remote-pi-relay
 ```
 
 ```bash

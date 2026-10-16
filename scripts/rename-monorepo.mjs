@@ -941,8 +941,10 @@ function assertNoResidualRefs() {
 // ── invariantes ──────────────────────────────────────────────────────────
 
 const PUBLISHED = {
-  "work.jacobmoura.remotepi": 15,
-  "work.jacobmoura.cockpit": 45,
+  // Identidades PUBLICADAS seguem congeladas: nome npm, comando, bins, tags,
+  // artefatos publicados e o caminho do pacote instalado. Os applicationId /
+  // bundle IDs NÃO estão aqui de propósito — a de-identificação autorizada os
+  // trocou por `com.example.*`, então deixaram de ser congelados.
   "npm:remote-pi": 30,
   'registerCommand("remote-pi"': 1,
   // As contagens de `app-v`/`cockpit-v` são medidas COM a exclusão de
@@ -960,6 +962,38 @@ const PUBLISHED = {
   "node_modules/remote-pi": 7,
   "cockpit-cli": 44,
 };
+
+/**
+ * App IDs já de-identificados (placeholders neutros) — resultado da
+ * substituição autorizada `work.jacobmoura.*` → `com.example.*`.
+ *
+ * `com.example.cockpit` conta 49 e não 45 porque o token também casa por
+ * PREFIXO o id PRÉ-EXISTENTE do plugin de PTY (`com.example.cockpit_pty`, 3
+ * linhas) e uma linha do plan/43 que já dizia "placeholder
+ * `com.example.cockpit`" antes da troca.
+ */
+const DEIDENTIFIED = {
+  "com.example.remotepi": 15,
+  "com.example.cockpit": 49,
+};
+
+/**
+ * Dado pessoal / infraestrutura privada: a exigência é AUSÊNCIA TOTAL (não
+ * igualdade de contagem), então qualquer ocorrência é vazamento.
+ *
+ * Este arquivo é EXCLUÍDO da varredura (SELF): ele é justamente a lista que
+ * detecta esses tokens, então precisa contê-los como dado. Sem a exclusão o
+ * gate acusaria a si mesmo.
+ */
+const MUST_BE_ABSENT = [
+  "jacob" + "moura",
+  "jacob" + "araujo7",
+  "flutter" + "ando",
+  "U843" + "T2P7A2",
+  "BDZ7" + "AJ7ZN2",
+  "zlmpp" + "88016",
+  "Jacob" + " Moura",
+];
 
 /** Arquivos cuja contagem pode crescer legitimamente: a entrada de decisão CITA
  *  as identidades ao documentá-las, logo soma +1 de forma esperada. */
@@ -994,10 +1028,37 @@ function verify() {
     if (!ok) bad += 1;
   }
 
+  for (const [id, expected] of Object.entries(DEIDENTIFIED)) {
+    const n = git(["grep", "-F", id, "--", `:!${SELF}`]).split("\n").filter(Boolean).length;
+    const ok = n === expected;
+    console.log(`  ${ok ? "OK  " : "FAIL"} [${id}] = ${n} (esperado ${expected})`);
+    if (!ok) bad += 1;
+  }
+
+  // Vazamento de dado pessoal / infra privada: regra de ausência TOTAL.
+  // SELF é excluído: ele CONTÉM os tokens como dado (é a lista de detecção).
+  for (const token of MUST_BE_ABSENT) {
+    let hits = [];
+    try {
+      hits = git(["grep", "-l", "-F", token, "--", `:!${SELF}`]).split("\n").filter(Boolean);
+    } catch {
+      hits = [];
+    }
+    const ok = hits.length === 0;
+    console.log(`  ${ok ? "OK  " : "FAIL"} ausente "${token}"${ok ? "" : ` → ${hits.slice(0, 4).join(", ")}`}`);
+    if (!ok) bad += 1;
+  }
+
   const hist = git(["status", "--porcelain", "--", "plan/", ".workflow/", "review/"])
-    .split("\n").filter((l) => l.trim() && !l.includes("00-decisions.md")).length;
-  console.log(`  ${hist ? "FAIL" : "OK  "} histórico intocado (${hist} arquivo(s) inesperado(s))`);
-  if (hist) bad += 1;
+    .split("\n").filter((l) => l.trim()).length;
+  if (hist) {
+    // Exceção AUTORIZADA pelo usuário: remover domínio/nome de toda a árvore,
+    // inclusive o histórico. Fica visível como NOTA para que uma execução futura
+    // não trate a alteração como acidente.
+    console.log(`  NOTA histórico com ${hist} arquivo(s) — exceção AUTORIZADA (de-identificação)`);
+  } else {
+    console.log("  OK   histórico intocado");
+  }
 
   if (bad) {
     console.error(`\n[rename] ${bad} invariante(s) VIOLADA(S)`);

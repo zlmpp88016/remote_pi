@@ -3,7 +3,7 @@
 Servidor HTTP mínimo (Rust + axum) que serve os instaladores do Cockpit (e
 futuros produtos) a partir de um diretório montado como volume. Roda em
 container na VPS atrás do proxy que termina TLS em
-`https://rp-s3.jacobmoura.work`.
+`https://rp-s3.example.invalid`.
 
 É o lado "leitura" do passo 4 do [plano 43](../plan/43-cockpit-packaging.md).
 A VPS não tem acesso SSH, então o fluxo é: o CI (`cockpit-release.yml`)
@@ -35,7 +35,7 @@ secrets não vazam pra fork/PR, então na prática só o nosso repo publica):
     curl -fsS -X PUT \
       -H "Authorization: Bearer ${{ secrets.RP_S3_UPLOAD_TOKEN }}" \
       --data-binary @latest.json \
-      https://rp-s3.jacobmoura.work/upload/cockpit/latest.json
+      https://rp-s3.example.invalid/upload/cockpit/latest.json
 ```
 
 > Por que token e não "verificar o repositório"? Um header com o nome do
@@ -69,13 +69,13 @@ O `docker-compose.yml` monta o deploy path do CI **como o subdiretório do
 produto** — assim o host fica plano e a URL ganha o prefixo certo:
 
 ```
-host:  /Users/flutterando/cockpit/data/          (gravado via PUT /upload)
+host:  /home/user/cockpit/data/          (gravado via PUT /upload)
          latest.json
          SHA256SUMS                              (opcional)
 
-mount: /Users/flutterando/cockpit/data → /data/cockpit (rw, pro upload)
+mount: /home/user/cockpit/data → /data/cockpit (rw, pro upload)
 
-URL:   https://rp-s3.jacobmoura.work/downloads/cockpit/latest.json
+URL:   https://rp-s3.example.invalid/downloads/cockpit/latest.json
 ```
 
 Os binários em si vivem nos assets da GitHub Release — as URLs dentro do
@@ -99,11 +99,11 @@ curl -fsS http://localhost:8080/healthz
 ## Publicar no Docker Hub
 
 Mesmo fluxo do relay: o script lê a versão do `Cargo.toml`, builda multiarch
-(amd64+arm64) via buildx e publica `jacobmoura7/rp-s3:v<versão>` + `:latest`.
+(amd64+arm64) via buildx e publica `exampleorg/rp-s3:v<versão>` + `:latest`.
 
 ```bash
 docker login          # uma vez
 ./push-docker.sh
 ```
 
-O proxy reverso da VPS aponta `rp-s3.jacobmoura.work` → `localhost:8080`.
+O proxy reverso da VPS aponta `rp-s3.example.invalid` → `localhost:8080`.

@@ -3,9 +3,9 @@
 Reference copy for both store listings. Keep in sync when metadata changes.
 Google Play section is at the bottom; most copy is shared.
 
-- **iOS Bundle ID:** `work.jacobmoura.remotepi.app` (the plain `work.jacobmoura.remotepi` is reserved by another Apple team)
-- **Android applicationId:** `work.jacobmoura.remotepi` (separate Play namespace — no conflict)
-- **Apple Team:** `U843T2P7A2`
+- **iOS Bundle ID:** `com.example.remotepi.app` (the plain `com.example.remotepi` is reserved by another Apple team)
+- **Android applicationId:** `com.example.remotepi` (separate Play namespace — no conflict)
+- **Apple Team:** `EXAMPLETEAM`
 - **Min iOS:** 18.0 · **Min Android:** API 34 (Android 14)
 - **Platforms:** iPhone **+ iPad** (universal — iPad 13" screenshots required)
 
@@ -75,9 +75,9 @@ First public release of Remote Pi. Pair your phone with your machines, watch you
 
 ## URLs
 ```
-Support URL:        https://remote-pi.jacobmoura.work
-Marketing URL:      https://remote-pi.jacobmoura.work
-Privacy Policy URL: https://remote-pi.jacobmoura.work/privacy
+Support URL:        https://remote-pi.example.invalid
+Marketing URL:      https://remote-pi.example.invalid
+Privacy Policy URL: https://remote-pi.example.invalid/privacy
 ```
 
 ## Classification
@@ -133,9 +133,9 @@ routes ephemeral traffic.
 
 **Contact information** (required fields):
 ```
-First / Last name:  Jacob / Moura
+First / Last name:  Example / Moura
 Phone:              <your phone, intl format e.g. +55 ...>
-Email:              jacobaraujo7@gmail.com
+Email:              noreply@example.com
 ```
 
 **Attachment:** the demo video (mp4) and/or a link to it in the notes below.
@@ -158,7 +158,7 @@ NETWORK & PRIVACY
 The app connects to a relay over TLS to reach your machines. Public relays must use TLS; cleartext (http/ws) is permitted only on the local network for self-hosted relays. No personal data is collected.
 
 CONTACT
-Jacob Moura — jacobaraujo7@gmail.com
+Example Developer — noreply@example.com
 ```
 
 ### Demo video — recording checklist
@@ -182,7 +182,7 @@ above. (A direct .mp4 can also be uploaded to the attachment field.)
 
 Reuses the same brand voice and the **no-E2E copy rule** above.
 
-- **applicationId:** `work.jacobmoura.remotepi` (Play namespace is independent of
+- **applicationId:** `com.example.remotepi` (Play namespace is independent of
   Apple — the iOS rename does NOT apply here; this ID is fine on Play)
 - **Min SDK:** API 34 (Android 14) — intentional, `remote_pi_identity` needs
   Block Store. **Target SDK:** Flutter default (verify it meets Play's current
@@ -237,7 +237,7 @@ Remote Pi is open source. Start with the public relay, or point the app at your 
 Built for developers who want their agents within reach — on the couch, on the move, or away from the desk.
 ```
 
-**Privacy Policy URL** (required): `https://remote-pi.jacobmoura.work/privacy`
+**Privacy Policy URL** (required): `https://remote-pi.example.invalid/privacy`
 
 **Category:** Tools (primary). **Tags:** developer tools, productivity.
 **Contains ads:** No. **In-app purchases:** No.

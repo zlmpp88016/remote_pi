@@ -236,7 +236,7 @@ describe("defaultAgentName", () => {
   // plan/38 decision D: the name is the LEAF only — the cwd now travels as its
   // own address axis, so the old `parent/folder` prefix is gone.
   test("returns the leaf (basename) of the cwd", () => {
-    expect(defaultAgentName("/Users/jacob/Projects/remote_pi")).toBe("remote_pi");
+    expect(defaultAgentName("/Users/user/Projects/remote_pi")).toBe("remote_pi");
     expect(defaultAgentName("/home/dev/myapp/backend")).toBe("backend");
     expect(defaultAgentName("/foo")).toBe("foo");
   });

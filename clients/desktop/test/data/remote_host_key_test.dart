@@ -11,7 +11,7 @@ void main() {
   const host = RemoteHost(
     id: '1',
     name: 'iMac',
-    sshTarget: 'flutterando@192.168.18.10',
+    sshTarget: 'user@192.168.18.10',
   );
 
   RemoteHostConnector connector({
@@ -74,12 +74,12 @@ void main() {
     const withKey = RemoteHost(
       id: '1',
       name: 'iMac',
-      sshTarget: 'flutterando@192.168.18.10',
-      identityFile: '/Users/jacob/.ssh/id_ed25519',
+      sshTarget: 'user@192.168.18.10',
+      identityFile: '/Users/user/.ssh/id_ed25519',
     );
     expect(
       RemoteHost.fromJson(withKey.toJson()).identityFile,
-      '/Users/jacob/.ssh/id_ed25519',
+      '/Users/user/.ssh/id_ed25519',
     );
 
     // Registro antigo (sem o campo) segue válido: o ssh decide como sempre.

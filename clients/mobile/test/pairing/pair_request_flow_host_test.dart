@@ -85,7 +85,7 @@ class _FakeStorage extends PairingStorage {
 const _hostCode =
     'remotepi://pair?t=AAAAAAAAAAAAAAAAAAAAAA&'
     'epk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA&'
-    'n=Mac%20do%20Jacob&rm=host&r=ws%3A%2F%2Flocalhost';
+    'n=Mac%20do%20User&rm=host&r=ws%3A%2F%2Flocalhost';
 
 void main() {
   test('código do daemon (rm=host) pareia e persiste room_id=host', () async {
@@ -109,10 +109,10 @@ void main() {
             jsonEncode({
               'type': 'pair_ok',
               'in_reply_to': req['id'],
-              'session_name': 'Mac do Jacob',
+              'session_name': 'Mac do User',
               'session_started_at': 1759500000,
               'room_id': 'host',
-              'hostname': 'Mac do Jacob',
+              'hostname': 'Mac do User',
             }),
           ),
         ),
@@ -133,7 +133,7 @@ void main() {
     // …and the persisted record keeps addressing the host room.
     expect(result.peer.roomId, 'host');
     expect(result.peer.remoteEpk, payload.epk);
-    expect(result.hostnameHint, 'Mac do Jacob');
+    expect(result.hostnameHint, 'Mac do User');
     expect(storage.saved?.roomId, 'host');
   });
 
@@ -152,7 +152,7 @@ void main() {
             jsonEncode({
               'type': 'pair_ok',
               'in_reply_to': req['id'],
-              'session_name': 'Mac do Jacob',
+              'session_name': 'Mac do User',
               'session_started_at': 1759500000,
               // No room_id — legacy shape.
             }),

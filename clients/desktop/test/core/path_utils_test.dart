@@ -15,7 +15,7 @@ void main() {
     });
 
     test('não mexe em caminho POSIX', () {
-      expect(normalizePath('/Users/jacob/proj'), '/Users/jacob/proj');
+      expect(normalizePath('/Users/user/proj'), '/Users/user/proj');
     });
 
     test('preserva a letra do drive', () {

@@ -104,8 +104,8 @@ export function remoteParent(path: string): string | null {
  *   ("/", "usr")            → "/usr"          (POSIX root keeps one slash)
  *   ("/usr/", "bin")        → "/usr/bin"      (trailing separator preserved)
  *   ("C:", "Users")         → "C:\Users"      (bare drive = drive root)
- *   ("C:\Users", "jacob")   → "C:\Users\jacob"
- *   ("C:/Users", "jacob")   → "C:/Users/jacob" (style kept as given)
+ *   ("C:\Users", "user")   → "C:\Users\user"
+ *   ("C:/Users", "user")   → "C:/Users/user" (style kept as given)
  *   ("\\srv\share", "a")    → "\\srv\share\a" (native UNC)
  *   ("//srv/share", "a")    → "//srv/share/a"
  *   ("", "x")               → "x"             (nothing to join yet)

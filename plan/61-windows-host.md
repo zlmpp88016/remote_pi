@@ -161,12 +161,12 @@ Windows não deve chegar na frente.
 
 ## Spike 2026-08-26 — o que foi medido, não suposto
 
-Rodado contra esta máquina Windows 11 (26300) via `ssh jacob@127.0.0.1`, com o
+Rodado contra esta máquina Windows 11 (26300) via `ssh user@127.0.0.1`, com o
 `cockpit-server.exe` do bundle instalado. Resultados:
 
 | # | Hipótese | Resultado |
 |---|---|---|
-| 1 | `powershell -NoProfile -EncodedCommand` funciona com `cmd.exe` como shell default (**D1**) | ✅ Probe devolveu `{"os":"windows","arch":"x64","home":"C:\\Users\\jacob"}` |
+| 1 | `powershell -NoProfile -EncodedCommand` funciona com `cmd.exe` como shell default (**D1**) | ✅ Probe devolveu `{"os":"windows","arch":"x64","home":"C:\\Users\\user"}` |
 | 2 | Preâmbulo de `OutputEncoding` mata o CP-850 na origem (**D1**) | ✅ `"configuração não é ção"` atravessou o SSH intacto |
 | 3 | Bundle do app instalado é achável e copiável localmente (**D2**) | ✅ `cockpit-server-bundle\bin\cockpit-server.exe` presente; cópia pra `~/.cockpit/` sem transferir bytes pelo SSH |
 | 4 | Servidor sobe no Windows e escreve o rendezvous (**B3**) | ✅ `{"v":1,"port":51511,"token":"…"}` + log `cockpit-server listening on …` |

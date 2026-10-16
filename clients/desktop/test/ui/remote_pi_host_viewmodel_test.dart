@@ -19,7 +19,7 @@ const _kPairUri =
     'AAAAAAAAAAAAAAAAAAAAAA'
     '&epk='
     'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
-    '&n=Mac%20do%20Jacob&r=wss://relay.example';
+    '&n=Mac%20do%20User&r=wss://relay.example';
 
 WorkspaceInfo _ws({
   required String cwd,
@@ -47,10 +47,10 @@ class _FakeHostClient implements HostClient {
   Result<PairOk, HostError> pairResult = const Success(
     PairOk(
       inReplyTo: 'x',
-      sessionName: 'Mac do Jacob',
+      sessionName: 'Mac do User',
       sessionStartedAt: 1,
       roomId: 'host',
-      hostname: 'mac-do-jacob',
+      hostname: 'mac-do-user',
     ),
   );
   Result<HostHelloOk, HostError> helloResult = const Success(

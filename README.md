@@ -14,18 +14,18 @@
 
 ## Links
 
-- **Official site** — <https://remote-pi.jacobmoura.work>
+- **Official site** — <https://remote-pi.example.invalid>
 - **Package documentation** — <https://pi.dev/packages/remote-pi?name=remote-pi>
-- **GitHub** — <https://github.com/jacobaraujo7/remote_pi>
+- **GitHub** — <https://github.com/exampleorg/remote_pi>
 
 ### Downloads
 
 | Platform | Status |
 |---|---|
-| Google Play (Android) | [Get it on Google Play](https://play.google.com/store/apps/details?id=work.jacobmoura.remotepi) |
+| Google Play (Android) | [Get it on Google Play](https://play.google.com/store/apps/details?id=com.example.remotepi) |
 | App Store (iOS) | [Download on the App Store](https://apps.apple.com/app/remote-pi-coding-agent/id6773499691) |
-| APK (sideload, Android) | [GitHub Releases](https://github.com/jacobaraujo7/remote_pi/releases) |
-| Desktop (Cockpit) | [GitHub Releases](https://github.com/jacobaraujo7/remote_pi/releases?q=cockpit-v) |
+| APK (sideload, Android) | [GitHub Releases](https://github.com/exampleorg/remote_pi/releases) |
+| Desktop (Cockpit) | [GitHub Releases](https://github.com/exampleorg/remote_pi/releases?q=cockpit-v) |
 
 ## What's in this repo
 

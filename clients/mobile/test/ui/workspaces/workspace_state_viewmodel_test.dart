@@ -18,8 +18,8 @@ import 'package:mobile/ui/workspaces/viewmodels/workspace_list_viewmodel.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _epk = 'Bz02uLi';
-const _cwdA = '/Users/jacob/Projects/remote_pi';
-const _cwdB = '/Users/jacob/Projects/cockpit';
+const _cwdA = '/Users/user/Projects/remote_pi';
+const _cwdB = '/Users/user/Projects/cockpit';
 
 PeerRecord _peer() => const PeerRecord(
   remoteEpk: _epk,

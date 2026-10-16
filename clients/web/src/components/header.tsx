@@ -15,7 +15,7 @@ import { isRemotePiWebClientEnabled } from "@/lib/flags";
    routes can never disagree). */
 type NavLink = { href: string; label: string };
 
-const GITHUB_URL = "https://github.com/zlmpp88016/remote_pi";
+const GITHUB_URL = "https://github.com/exampleorg/remote_pi";
 
 const LINKS: NavLink[] = [
   { href: "/", label: "Connect" },

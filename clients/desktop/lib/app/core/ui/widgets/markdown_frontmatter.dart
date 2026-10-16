@@ -1,4 +1,4 @@
-// Portado do PR jacobaraujo7 → Infinitix-LLC/gpt_markdown#139 (frontmatter),
+// Portado do PR exampleorg → Infinitix-LLC/gpt_markdown#139 (frontmatter),
 // que o upstream não absorveu. Pré-processamento local: o `AgentMarkdown` faz
 // o split e renderiza a tabela ANTES de entregar o corpo ao GptMarkdown de
 // fábrica (pub.dev) — o fork git foi descomissionado (2026-07-19).

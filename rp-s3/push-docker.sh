@@ -12,7 +12,7 @@
 #   Log in first with: docker login
 set -euo pipefail
 
-IMAGE="jacobmoura7/rp-s3"
+IMAGE="exampleorg/rp-s3"
 PLATFORMS="linux/amd64,linux/arm64"
 BUILDER="multiarch"
 
