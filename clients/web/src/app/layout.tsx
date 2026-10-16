@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Hanken_Grotesk, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { SiteHeader } from "@/components/header";
 import { SiteFooter } from "@/components/footer";
 
 const display = Space_Grotesk({
@@ -73,7 +72,6 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-bg text-fg">
         <div className="app flex min-h-full flex-1 flex-col" id="top">
-          <SiteHeader />
           <main className="flex-1">{children}</main>
           <SiteFooter />
         </div>
