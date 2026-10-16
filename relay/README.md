@@ -17,6 +17,7 @@ For a full overview of the project, see the
 # https://relay.880160.xyz
 
 # Option B — self-host with Docker (single port 3000: WS + /health + /mesh/*)
+#            (docker-compose.yml in this directory is the same setup)
 docker run -d \
   --name remote-pi-relay \
   -p 3000:3000 \
@@ -24,13 +25,20 @@ docker run -d \
   --restart unless-stopped \
   exampleorg/remote-pi-relay
 
-# Option C — build from source
+# Option C — build from source (or use the helper script)
 cargo build --release
 ./target/release/relay
 # Custom port: REMOTEPI_RELAY_PORT=8080 ./target/release/relay
+
+# Option D — helper scripts in this directory
+./run.sh                 # build (first run) + run, bare-metal
+./run.sh --help          # all flags
+
+docker compose up -d     # Compose variant of Option B (named volume + healthcheck)
 ```
 
-Health check: `GET /health` returns `200 OK`. Details and env vars live in
+Health check: `GET /health` returns `200 OK`. Details, env vars and the systemd
+unit live in
 [Self-hosted relay](#self-hosted-relay-recommended-for-privacy).
 
 ---
@@ -134,6 +142,71 @@ the example above) or a host directory (`-v /srv/remote-pi:/data`) so the state
 survives `docker rm` and image upgrades. Without a mount, the database is
 recreated empty each time the container starts and clients re-publish their
 state at the next mutation.
+
+### Bare-metal (no Docker)
+
+Two options that need no container runtime.
+
+**Quick start** — `run.sh` builds on first run, then execs the binary. It reads
+the same four environment variables as the Docker image and defaults
+`REMOTEPI_MESH_DB_PATH` to `./data/mesh.db` (gitignored), so `git status`
+stays clean:
+
+```bash
+cd relay
+./run.sh                 # build if needed, then run
+./run.sh --no-build      # run only (fail if the binary is missing)
+./run.sh --build         # build and exit
+```
+
+**As a systemd service** — `relay.service` is a hardened unit (dedicated
+unprivileged user, `ProtectSystem=strict` with a single `ReadWritePaths`
+exception for the DB). Adjust the paths and create the user first:
+
+```bash
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin relay
+sudo mkdir -p /opt/remote-pi-relay /var/lib/remote-pi-relay
+sudo chown relay:relay /var/lib/remote-pi-relay
+
+# Ship the binary + the unit
+cargo build --release
+sudo install -m 0755 target/release/relay /opt/remote-pi-relay/relay
+sudo install -m 0644 relay.service /etc/systemd/system/remote-pi-relay.service
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now remote-pi-relay
+systemctl status remote-pi-relay
+journalctl -u remote-pi-relay -f
+```
+
+Port `3000` is above 1024, so the service needs **no root and no
+`CAP_NET_BIND_SERVICE`**.
+
+**Docker Compose** — `docker-compose.yml` mirrors the `docker run` above with a
+named volume for the DB and a healthcheck:
+
+```bash
+cd relay
+RELAY_ALLOWED_ORIGINS=https://app.example.com docker compose up -d
+docker compose logs -f
+```
+
+#### Runtime requirements
+
+The container image bundles everything; a bare-metal install needs only:
+
+| Need | Why | Notes |
+|---|---|---|
+| Linux or macOS | The relay binds TCP and writes SQLite | Windows: use Docker or WSL |
+| A writable directory | SQLite stores Owner-signed membership versions | Default `./data`; parent dir is created on first boot |
+| One free TCP port | WS + `/health` + `/mesh/*` share it | Default `3000`; `REMOTEPI_RELAY_PORT` |
+| TLS terminator (production) | The relay speaks plain HTTP/WS | Caddy/nginx in front for `wss://` |
+
+**No system libraries are required.** `rusqlite` is compiled with the
+`bundled` feature, so SQLite is linked into the binary — there is no
+`libsqlite3` dependency and no runtime package to install. The build stage
+needs a Rust toolchain (1.94+, edition 2024); the produced binary is
+self-contained.
 
 ### Environment variables
 

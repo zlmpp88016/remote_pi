@@ -1,0 +1,52 @@
+[Unit]
+Description=Remote Pi relay (WebSocket router for clients <-> host daemon)
+Documentation=https://remote-pi.example.invalid
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Run as a dedicated unprivileged user. Create it first:
+#   sudo useradd --system --no-create-home --shell /usr/sbin/nologin relay
+# Port 3000 is above 1024, so no CAP_NET_BIND_SERVICE and no root needed.
+User=relay
+Group=relay
+
+WorkingDirectory=/opt/remote-pi-relay
+
+# Everything the relay reads at runtime. Only the first two are required.
+Environment=REMOTEPI_RELAY_PORT=3000
+Environment=REMOTEPI_MESH_DB_PATH=/var/lib/remote-pi-relay/mesh.db
+# Comma-separated Origin allowlist for BROWSER clients. Empty accepts all
+# origins; native clients (app, remote-pi, Cockpit) send no Origin and are
+# always accepted. Write entries lowercase, exact match (scheme+host+port).
+# Environment=RELAY_ALLOWED_ORIGINS=https://app.example.com
+# Outer-envelope size ceiling in MiB (binary default: 4).
+# Environment=RELAY_MAX_CT_MIB=4
+Environment=RUST_LOG=info
+
+ExecStart=/opt/remote-pi-relay/relay
+
+# The relay handles WebSocket upgrades and long-lived connections; SIGTERM
+# triggers axum's graceful shutdown (ctrl_c handler is mapped by axum::serve
+# when running under a supervisor that sends SIGTERM).
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# SQLite writes synchronously; a plain restart is enough. Do NOT use
+# `always` — crash-looping on a corrupt DB is worse than staying down.
+Restart=on-failure
+RestartSec=5s
+
+# Hardening. The relay only needs to read itself and write its DB dir.
+# NoNewPrivileges/ProtectSystem are safe defaults; the relay never shells out.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# Exceptions to ProtectSystem=strict: the only writable path the relay needs.
+ReadWritePaths=/var/lib/remote-pi-relay
+
+[Install]
+WantedBy=multi-user.target

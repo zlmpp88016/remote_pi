@@ -24,6 +24,12 @@ docker run -d \
 cargo build --release
 ./target/release/relay
 # 换端口：REMOTEPI_RELAY_PORT=8080 ./target/release/relay
+
+# 方案 D —— 本目录内的辅助脚本
+./run.sh                 # 首次运行会先构建，然后启动（裸机）
+./run.sh --help          # 全部参数
+
+docker compose up -d     # 方案 B 的 Compose 版本（具名 volume + healthcheck）
 ```
 
 健康检查：`GET /health` 返回 `200 OK`。详细配置与环境变量见
@@ -98,6 +104,53 @@ docker run -d \
 把你的 app 和 `remote-pi` 指向 `ws://<your-server-ip>:3000`（如果放在 Caddy、nginx 这类终止 TLS 的反向代理后面，就用 `wss://`）。
 
 **`/data` volume**：中继把它的 SQLite 数据库（带签名的成员关系版本）存在容器内的 `/data/mesh.db`。挂一个具名 volume（如上面的例子）或宿主机目录（`-v /srv/remote-pi:/data`），以便状态在 `docker rm` 删除和镜像升级后仍保留。不挂载的话，每次容器启动数据库都会重建为空库，客户端会在下一次变更时重新发布其状态。
+
+### 裸机部署（不用 Docker）
+
+**快速启动** —— `run.sh` 首次运行会构建，然后 exec 该二进制。它读取的环境变量与
+Docker 镜像完全一致，并把 `REMOTEPI_MESH_DB_PATH` 默认指向 `./data/mesh.db`
+（已在 .gitignore 中），所以 `git status` 保持干净：
+
+```bash
+cd relay
+./run.sh                 # 按需构建，然后运行
+./run.sh --no-build      # 只运行（二进制缺失则报错）
+./run.sh --build         # 只构建后退出
+```
+
+**作为 systemd 服务** —— `relay.service` 是加固过的 unit（专用非特权用户、
+`ProtectSystem=strict`，只为数据库目录开一个 `ReadWritePaths` 例外）。
+先按需改路径并创建用户：
+
+```bash
+sudo useradd --system --no-create-home --shell /usr/sbin/nologin relay
+sudo mkdir -p /opt/remote-pi-relay /var/lib/remote-pi-relay
+sudo chown relay:relay /var/lib/remote-pi-relay
+
+cargo build --release
+sudo install -m 0755 target/release/relay /opt/remote-pi-relay/relay
+sudo install -m 0644 relay.service /etc/systemd/system/remote-pi-relay.service
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now remote-pi-relay
+systemctl status remote-pi-relay
+journalctl -u remote-pi-relay -f
+```
+
+端口 `3000` 大于 1024，所以服务**不需要 root，也不需要 `CAP_NET_BIND_SERVICE`**。
+
+#### 运行环境要求
+
+| 需要 | 原因 | 说明 |
+|---|---|---|
+| Linux 或 macOS | 中继要监听 TCP 并写 SQLite | Windows：用 Docker 或 WSL |
+| 一个可写目录 | SQLite 存 Owner 签名的成员关系版本 | 默认 `./data`，父目录首次启动自动创建 |
+| 一个空闲 TCP 端口 | WS + `/health` + `/mesh/*` 共用同一端口 | 默认 `3000`，用 `REMOTEPI_RELAY_PORT` 改 |
+| TLS 终止器（生产） | 中继本身讲明文 HTTP/WS | 前置 Caddy/nginx 以提供 `wss://` |
+
+**不需要任何系统库。** `rusqlite` 启用了 `bundled` 特性，SQLite 直接链进二进制——
+既没有 `libsqlite3` 依赖，也不需要安装任何运行时包。只有**构建**阶段需要 Rust
+工具链（1.94+，edition 2024）；产出的二进制是自包含的。
 
 ### 环境变量
 

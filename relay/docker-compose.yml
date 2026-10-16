@@ -1,0 +1,36 @@
+services:
+  relay:
+    build: .
+    image: exampleorg/remote-pi-relay:latest
+    container_name: remote-pi-relay
+    restart: unless-stopped
+    ports:
+      # Single port: WebSocket upgrade + /health + /mesh/* all share it.
+      # Both sides read the same REMOTEPI_RELAY_PORT so the published port and
+      # the port the relay binds can never drift apart. Override in .env:
+      #   REMOTEPI_RELAY_PORT=8080
+      - "${REMOTEPI_RELAY_PORT:-3000}:${REMOTEPI_RELAY_PORT:-3000}"
+    environment:
+      - REMOTEPI_RELAY_PORT=${REMOTEPI_RELAY_PORT:-3000}
+      # SQLite (Owner-signed membership versions). Lives on the named volume
+      # declared below, NOT in the image — otherwise every `docker rm` would
+      # lose the membership state.
+      - REMOTEPI_MESH_DB_PATH=/data/mesh.db
+      # Comma-separated Origin allowlist for BROWSER WebSocket upgrades.
+      # Empty (default) accepts every origin. Native clients (app, remote-pi,
+      # Cockpit) send no Origin and are always accepted regardless.
+      # Set it in .env or the shell as RELAY_ALLOWED_ORIGINS=...
+      - RELAY_ALLOWED_ORIGINS=${RELAY_ALLOWED_ORIGINS:-}
+      # Log level filter for tracing.
+      - RUST_LOG=${RUST_LOG:-info}
+    volumes:
+      # Named volume (not a host bind) so the DB survives `docker rm` and
+      # image upgrades without depending on the host's directory layout.
+      - remote-pi-relay-data:/data
+    # No healthcheck here on purpose: the Dockerfile already declares one
+    # (curl /health every 30s, 10s start period) and it reads the container's
+    # own REMOTEPI_RELAY_PORT, so it stays correct if you change the port.
+    # Duplicating it here would just be a second copy that can drift.
+
+volumes:
+  remote-pi-relay-data:
