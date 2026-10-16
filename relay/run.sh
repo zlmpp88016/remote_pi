@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rimote Pi relay — start bare-metal (no Docker).
+# Remote Pi relay — start bare-metal (no Docker).
 #
 # Builds on first run if the release binary is missing, then execs it.
 # Everything the relay needs at runtime is in this file's env block below.
@@ -20,7 +20,11 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")"
+# Absolutizar o diretório do script ANTES do `cd`: depois do cd, `$0`
+# (caminho relativo, ex.: `relay/run.sh`) deixa de resolver e o `--help`
+# falha com "sed: can't read relay/run.sh: No such file or directory".
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+cd "$(dirname "$SELF")"
 
 # ── Environment ───────────────────────────────────────────────────────────────
 # All four knobs the relay reads. Override any of them from the shell; the
@@ -53,7 +57,8 @@ for arg in "$@"; do
     --no-build) BUILD=no ;;
     --build)    BUILD=yes ;;
     -h|--help)
-      sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+      # `$SELF` (absoluto) e não `$0`: já estamos dentro do diretório do script.
+      sed -n '2,20p' "$SELF" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)

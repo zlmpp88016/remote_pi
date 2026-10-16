@@ -12,6 +12,81 @@
 
 ---
 
+## Deploy
+
+Three machines. Run in order. Commands are Linux/bash (WSL on Windows).
+
+### 1. Relay — a VPS or any host with a public IP
+
+```bash
+curl -fsSL https://get.docker.com | sh
+
+git clone https://github.com/exampleorg/remote_pi
+cd remote_pi
+docker compose -f docker-compose.relay.yml up -d
+```
+
+The relay now listens on `127.0.0.1:3001`, with SQLite state in the `relay-data` volume.
+
+### 2. Cloudflare Tunnel — public `wss://`, no open inbound ports
+
+On the same host:
+
+```bash
+curl -fsSL -o /usr/local/bin/cloudflared \
+  https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+chmod +x /usr/local/bin/cloudflared
+
+cloudflared tunnel login
+cloudflared tunnel create remote-pi
+cloudflared tunnel route dns remote-pi relay.example.com
+
+# 127.0.0.1:3001 is the port the relay is published on (step 1)
+cloudflared tunnel run --url http://127.0.0.1:3001 remote-pi
+```
+
+Verify: `curl https://relay.example.com/health` returns 200.
+
+### 3. Server — the machine that runs Pi (no public IP needed)
+
+Not the VPS. This is the machine you want to reach.
+
+```bash
+git clone https://github.com/exampleorg/remote_pi
+cd remote_pi
+bash server/install.sh
+
+remote-pi set-relay https://relay.example.com   # http(s), not wss
+remote-pi pair                                  # prints address + code
+```
+
+`install.sh` installs Node, Pi, the plugin and the daemon service. No `sudo`.
+Set the relay before pairing: the pairing payload carries the relay URL, so a
+client that pairs first would point at the wrong relay. `set-relay` accepts
+`http://`/`https://` only (the clients convert to `ws(s)://` themselves).
+Skip it to use the community relay `https://relay.880160.xyz`.
+
+### 4. Client — web
+
+```bash
+cd clients/web
+docker build -t remote-pi-web .
+docker run -d --restart unless-stopped -p 3000:3000 remote-pi-web
+```
+
+Open `http://<that-host>:3000/remote-pi/connect` and paste the address + code
+from step 3. No environment variables: the relay URL and the pairing code are
+typed into the page (and stored in the browser afterwards).
+
+### 5. Optional — mobile app
+
+[Google Play](https://play.google.com/store/apps/details?id=com.example.remotepi) ·
+[App Store](https://apps.apple.com/app/remote-pi-coding-agent/id6773499691) ·
+[APK](https://github.com/exampleorg/remote_pi/releases)
+
+Scan the QR printed by `remote-pi pair`, or enter the same address + code.
+
+
 ## Links
 
 - **Official site** — <https://remote-pi.example.invalid>
