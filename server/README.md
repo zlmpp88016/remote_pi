@@ -365,11 +365,9 @@ Quick Docker outline (see the
 for the full setup, environment variables, and reverse-proxy guidance):
 
 ```bash
-docker run -d \
-  --name remote-pi-relay \
-  -p 3000:3000 \
-  --restart unless-stopped \
-  ghcr.io/exampleorg/remote-pi-relay:latest
+# No relay image is published — build it from the repo, then run it.
+git clone https://github.com/exampleorg/remote_pi && cd remote_pi
+docker compose -f docker-compose.relay.yml up -d
 ```
 
 Bind the container to your VPN interface, terminate TLS in a reverse proxy,

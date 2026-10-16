@@ -75,9 +75,9 @@ BIN="target/release/relay"
 if [[ "$BUILD" != "no" && ! -x "$BIN" ]]; then
   if ! command -v cargo >/dev/null 2>&1; then
     echo "✗ $BIN not found and cargo is not installed." >&2
-    echo "  Install Rust from https://rustup.rs, or use the Docker image:" >&2
-    echo "    docker run -d --name remote-pi-relay -p 3000:3000 \\" >&2
-    echo "      -v remote-pi-data:/data --restart unless-stopped exampleorg/remote-pi-relay" >&2
+    echo "  Install Rust from https://rustup.rs, or build the container from the repo:" >&2
+    echo "    git clone https://github.com/exampleorg/remote_pi && cd remote_pi" >&2
+    echo "    docker compose -f docker-compose.relay.yml up -d" >&2
     exit 1
   fi
   echo "→ Building release binary (first run)…"

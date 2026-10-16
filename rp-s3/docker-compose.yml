@@ -1,7 +1,7 @@
 services:
   rp-s3:
     build: .
-    image: exampleorg/rp-s3:latest
+    image: rp-s3                   # local tag; no published image is pulled
     container_name: rp-s3
     restart: unless-stopped
     ports:

@@ -264,11 +264,9 @@ Extension 0.6 接受旧中继的小写 32 个十六进制字符的可信错误 I
 Docker 快速概览（完整安装步骤、环境变量和反向代理指引见 [relay README](https://github.com/exampleorg/remote_pi/blob/main/relay/README.md#self-hosted-relay-recommended-for-privacy)）：
 
 ```bash
-docker run -d \
-  --name remote-pi-relay \
-  -p 3000:3000 \
-  --restart unless-stopped \
-  ghcr.io/exampleorg/remote-pi-relay:latest
+# 没有发布镜像：先从仓库构建（完整步骤见 relay/README.md）
+git clone https://github.com/exampleorg/remote_pi && cd remote_pi
+docker compose -f docker-compose.relay.yml up -d
 ```
 
 把容器绑到你的 VPN 网卡上，在反向代理里终止 TLS，然后让你的 Pi 和手机都指向最终那个 `https://…` URL。

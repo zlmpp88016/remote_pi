@@ -388,12 +388,9 @@ export default function DocsPage() {
             guidance):
           </p>
           <CodeBlock
-            code={`docker run -d \\
-  --name remote-pi-relay \\
-  -p 3000:3000 \\
-  -v remote-pi-data:/data \\
-  --restart unless-stopped \\
-  exampleorg/remote-pi-relay`}
+            code={`# No image is published — build it from the repo first.
+git clone https://github.com/exampleorg/remote_pi && cd remote_pi
+docker compose -f docker-compose.relay.yml up -d`}
             label="On your relay host"
             language="bash"
           />

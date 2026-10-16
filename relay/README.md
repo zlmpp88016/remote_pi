@@ -16,14 +16,9 @@ For a full overview of the project, see the
 # Option A — public relay, no setup
 # https://relay.880160.xyz
 
-# Option B — self-host with Docker (single port 3000: WS + /health + /mesh/*)
-#            (docker-compose.yml in this directory is the same setup)
-docker run -d \
-  --name remote-pi-relay \
-  -p 3000:3000 \
-  -v remote-pi-data:/data \
-  --restart unless-stopped \
-  exampleorg/remote-pi-relay
+# Option B — self-host with Docker. No image is published: build it locally.
+git clone https://github.com/exampleorg/remote_pi && cd remote_pi
+docker compose -f docker-compose.relay.yml up -d
 
 # Option C — build from source (or use the helper script)
 cargo build --release
@@ -34,8 +29,12 @@ cargo build --release
 ./run.sh                 # build (first run) + run, bare-metal
 ./run.sh --help          # all flags
 
-docker compose up -d     # Compose variant of Option B (named volume + healthcheck)
+docker compose up -d     # Option B, but using the relay-local compose
+                         # (from inside this directory; named volume, same build)
 ```
+
+No image is published to any registry, so every Docker path builds locally.
+The \`remote-pi-relay\` tag produced by the \`docker build\` below is local-only.
 
 Health check: `GET /health` returns `200 OK`. Details, env vars and the systemd
 unit live in
@@ -118,13 +117,21 @@ places the TLS endpoint, executable, and storage under infrastructure you contro
 ### Docker (quickest)
 
 ```bash
+git clone https://github.com/exampleorg/remote_pi
+cd remote_pi/relay
+docker build -t remote-pi-relay .
+
 docker run -d \
   --name remote-pi-relay \
   -p 3000:3000 \
   -v remote-pi-data:/data \
   --restart unless-stopped \
-  exampleorg/remote-pi-relay
+  remote-pi-relay
 ```
+
+`remote-pi-relay` is a local tag. There is no published image to pull, so the
+`docker build` line is required. Substitute your own `registry/name` if you
+publish one.
 
 The relay listens on a **single port** (`3000` by default) and serves three
 surfaces at once:
@@ -187,7 +194,7 @@ named volume for the DB and a healthcheck:
 
 ```bash
 cd relay
-RELAY_ALLOWED_ORIGINS=https://app.example.com docker compose up -d
+RELAY_ALLOWED_ORIGINS=https://app.example.com docker compose up -d   # builds locally
 docker compose logs -f
 ```
 
@@ -227,7 +234,7 @@ docker run -d \
   -e REMOTEPI_RELAY_PORT=8080 \
   -e RUST_LOG=info \
   --restart unless-stopped \
-  exampleorg/remote-pi-relay
+  remote-pi-relay        # the tag built above
 ```
 
 ### WebSocket origin allowlist (browser clients)
@@ -243,7 +250,7 @@ docker run -d \
   -v remote-pi-data:/data \
   -e RELAY_ALLOWED_ORIGINS="https://app.example.com,https://cockpit.example.com" \
   --restart unless-stopped \
-  exampleorg/remote-pi-relay
+  remote-pi-relay        # the tag built above
 ```
 
 ```bash

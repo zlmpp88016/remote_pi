@@ -12,13 +12,9 @@
 # 方案 A —— 公共中继，零部署
 # https://relay.880160.xyz
 
-# 方案 B —— Docker 自建（单 3000 端口：WS + /health + /mesh/*）
-docker run -d \
-  --name remote-pi-relay \
-  -p 3000:3000 \
-  -v remote-pi-data:/data \
-  --restart unless-stopped \
-  exampleorg/remote-pi-relay
+# 方案 B —— Docker 自建。没有发布镜像，必须本地构建。
+git clone https://github.com/exampleorg/remote_pi && cd remote_pi
+docker compose -f docker-compose.relay.yml up -d
 
 # 方案 C —— 源码构建启动
 cargo build --release
@@ -87,13 +83,20 @@ App↔Pi 配对和 room 寻址由客户端协议自身负责。Pi→Pi 转发另
 ### Docker（最快）
 
 ```bash
+git clone https://github.com/exampleorg/remote_pi
+cd remote_pi/relay
+docker build -t remote-pi-relay .
+
 docker run -d \
   --name remote-pi-relay \
   -p 3000:3000 \
   -v remote-pi-data:/data \
   --restart unless-stopped \
-  exampleorg/remote-pi-relay
+  remote-pi-relay
 ```
+
+`remote-pi-relay` 是本地 tag。没有可拉取的发布镜像，所以 `docker build` 这步
+是必须的。如果你要发布到自己的仓库，把名字换成 `registry/name`。
 
 中继只监听**一个端口**（默认 `3000`），同时提供三个对外服务面：
 
@@ -170,7 +173,7 @@ docker run -d \
   -e REMOTEPI_RELAY_PORT=8080 \
   -e RUST_LOG=info \
   --restart unless-stopped \
-  exampleorg/remote-pi-relay
+  remote-pi-relay        # 上面构建的本地 tag
 ```
 
 ### Mesh 成员关系端点

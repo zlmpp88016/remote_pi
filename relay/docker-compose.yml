@@ -1,7 +1,7 @@
 services:
   relay:
-    build: .
-    image: exampleorg/remote-pi-relay:latest
+    build: .                       # builds locally; nothing is published to pull
+    image: remote-pi-relay         # local tag only (no registry prefix)
     container_name: remote-pi-relay
     restart: unless-stopped
     ports:
