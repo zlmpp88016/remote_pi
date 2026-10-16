@@ -104,9 +104,9 @@ class _RemoteFolderPickerState extends State<_RemoteFolderPicker> {
 
   // Caminhos do HOST (que pode ser de outra família que a do cliente):
   // ver `core/utils/remote_path.dart`. Era tudo POSIX cru aqui — em
-  // `C:\Users\user` o `lastIndexOf('/')` dava -1, então subir uma
+  // `C:\\Users\\user` o `lastIndexOf('/')` dava -1, então subir uma
   // pasta caía na raiz e a hierarquia se perdia; o join produzia separador
-  // misto (`C:\Users\user/pasta`).
+  // misto (`C:\\Users\\user/pasta`).
   bool get _atRoot => isRemotePathRoot(_path);
   String get _parent => remotePathParent(_path);
   String _join(String dir, String name) => remotePathJoin(dir, name);

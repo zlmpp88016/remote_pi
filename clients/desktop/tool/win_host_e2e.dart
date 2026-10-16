@@ -124,7 +124,7 @@ Future<void> main(List<String> args) async {
   _check('handshake aceito', connection.isOpen);
 
   if (args.contains('--bench')) {
-    await _bench('desktop (ssh -L)', connection, r'C:\Users\user');
+    await _bench('desktop (ssh -L)', connection, r'C:\\Users\\user');
   }
 
   // C2b — o que o spike deixou em aberto: PTY REAL, com o servidor na sessão 0.
@@ -231,7 +231,7 @@ Future<void> _runMobile(
 ) async {
   // --cwd: reproduz o workingDirectory que o picker remoto produz. Ele é
   // POSIX hardcoded, então num host Windows sai com separador MISTO
-  // (`C:\Users\user/pasta`) e, ao subir um nível, vira `/`.
+  // (`C:\\Users\\user/pasta`) e, ao subir um nível, vira `/`.
   final cwdIndex = _mobileArgs.indexOf('--cwd');
   final cwd = cwdIndex >= 0 ? _mobileArgs[cwdIndex + 1] : null;
   final user = target.split('@').first;
@@ -255,7 +255,7 @@ Future<void> _runMobile(
   _check('mobile: handshake aceito', connection.isOpen);
 
   if (_mobileArgs.contains('--bench')) {
-    await _bench('mobile (dartssh2)', connection, r'C:\Users\user');
+    await _bench('mobile (dartssh2)', connection, r'C:\\Users\\user');
   }
 
   final service = RemoteTerminalService(connection);

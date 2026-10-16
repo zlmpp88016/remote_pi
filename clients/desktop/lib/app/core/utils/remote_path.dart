@@ -61,7 +61,7 @@ String remotePathJoin(String dir, String name) {
 /// pinado.
 ///
 /// Lê os dois separadores pelo mesmo motivo do [remotePathParent]: em
-/// `C:\Users\user\\projeto`, procurar só por `/` devolvia o caminho INTEIRO
+/// `C:\\Users\\user\\projeto`, procurar só por `/` devolvia o caminho INTEIRO
 /// como nome do pin.
 String remotePathBasename(String path) {
   var trimmed = path;
