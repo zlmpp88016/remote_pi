@@ -90,23 +90,64 @@ wss://relay.880160.xyz
 
 ## 快速开始
 
-### 1. 跑起主机守护进程
+### 1. 从本地仓库构建并安装
 
-全局安装，让 `remote-pi` CLI 和 `pi-supervisord` 守护进程进 PATH：
-
-```bash
-npm install -g remote-pi-server
-```
-
-把守护进程装成用户级系统服务（Linux `systemd --user`、macOS launchd、Windows 任务计划程序）。登录即自启，重启也不丢：
+这个仓库**没有发布到 npm**，所以要装的是本地工作副本。`npm install -g .` 建的是软链而非拷贝，
+改完代码重新 build 就生效。
 
 ```bash
-remote-pi-server install
+git clone https://github.com/exampleorg/remote_pi
+cd remote_pi/server
+
+npm install          # 装依赖
+npm run build        # tsc → dist/
+npm install -g .     # 把这份副本链成全局的 `remote-pi-server`
+
+remote-pi-server set-relay https://relay.example.com   # 只收 http(s)，不收 wss
+remote-pi-server pair                                 # 打印地址 + 配对码
 ```
 
-守护进程随即起来、连上中继，让这台机器保持在线 —— **无需任何 Pi 在跑**。
+改了代码之后：
 
-### 2. 配对客户端
+```bash
+git pull && cd server && npm install && npm run build
+remote-pi-server daemon restart        # 换成新的 dist/
+```
+
+> 守护进程是用显式的 `-e dist/index.js` 启动的，**不经过 `pi install`**。只有当你还想在
+> **交互式** Pi 会话里用 `/remote-pi start` 时，才需要 `pi install "$PWD"`。
+
+> 之前用旧包名装过？npm 不会删别的包留下的可执行文件，先清掉：
+> ```bash
+> npm uninstall -g remote-pi
+> npm install -g .
+> ```
+
+### 2. 装成常驻服务
+
+```bash
+remote-pi-server create /path/to/workspace --name "项目名"
+remote-pi-server install              # 注册用户级服务
+remote-pi-server daemon status         # 确认真在跑
+```
+
+`install` 写的是**用户级**单元 —— Linux `systemd --user`、macOS LaunchAgent、Windows 任务计划程序，
+不需要 root。Windows 是唯一的例外：第一次 `install` 要创建计划任务（存在于机器级存储），因此会弹
+一次 UAC；之后 `daemon restart` / `restart-supervisor` / `uninstall` 都不提权。
+
+登录即自启，重启也不丢。守护进程起来后连上中继，让这台机器保持在线 —— **无需任何 Pi 在跑**。
+
+### 3. 停止 / 重启
+
+```bash
+remote-pi-server daemon restart       # rebuild 之后用这个，工作区不丢
+remote-pi-server daemon start|stop    # 启停 supervisor
+remote-pi-server daemon status        # 每个工作区的 pid / 运行时长 / 重启次数
+remote-pi-server daemons              # 列出已注册的工作区
+remote-pi-server uninstall            # 移除服务（工作区保留）
+```
+
+### 4. 配对客户端
 
 直接从守护进程配对（不需要 Pi）：
 
@@ -117,7 +158,7 @@ remote-pi-server pair        # 打印地址 + 一次性/持久配对码
 把地址和配对码填进手机应用、浏览器客户端或 Cockpit。配对完成后，客户端即可浏览主机文件系统、
 注册目录，并在那里启动 Pi。
 
-### 3. 或者照旧在本机跑 Pi
+### 5. 或者照旧在本机跑 Pi
 
 `/remote-pi` 这条 Pi 命令在日常本地场景下依然可用。在任意 Pi 会话里：
 

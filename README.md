@@ -39,7 +39,7 @@ chmod +x /usr/local/bin/cloudflared
 
 cloudflared tunnel login
 cloudflared tunnel create remote-pi
-cloudflared tunnel route dns remote-pi-server relay.example.com
+cloudflared tunnel route dns remote-pi relay.example.com
 
 # 127.0.0.1:3001 is the port the relay is published on (step 1)
 cloudflared tunnel run --url http://127.0.0.1:3001 remote-pi
@@ -51,28 +51,101 @@ Verify: `curl https://relay.example.com/health` returns 200.
 
 Not the VPS. This is the machine you want to reach.
 
+Needs Node >= 20.6 and the Pi coding agent installed.
+
+#### Build and install from a local checkout
+
+This repo is not published to npm. Install the CLI from the working copy, which
+npm links rather than copies — so a rebuild is enough to pick up code changes.
+
 ```bash
-# Needs Node >= 20.6 and the Pi coding agent already installed.
-npm install -g remote-pi-server        # puts `remote-pi-server` on PATH
-pi install npm:remote-pi-server        # loads the plugin into Pi itself
+git clone https://github.com/exampleorg/remote_pi
+cd remote_pi/server
+
+npm install          # dependencies
+npm run build        # tsc → dist/
+npm install -g .     # links this checkout as the global `remote-pi-server`
 
 remote-pi-server set-relay https://relay.example.com   # http(s), not wss
 remote-pi-server pair                                 # prints address + code
 ```
 
-The two installs are separate on purpose: the npm package gives you the CLI, and
-`pi install` is what makes Pi load the extension. For the resident daemon (Pi
-reachable with no interactive session), register and start it:
+`npm install -g .` symlinks the checkout, so after changing code:
+
+```bash
+git pull && cd server && npm install && npm run build
+remote-pi-server daemon restart        # picks up the new dist/
+```
+
+The daemon is launched with an explicit `-e dist/index.js`, so it does not go
+through `pi install`. Use `pi install "$PWD"` only if you also want the extension
+available inside your **interactive** Pi sessions (`/remote-pi start`):
+
+```bash
+pi install "$PWD"      # optional — interactive use only
+```
+
+Already have an older global install under a different name? npm will not delete
+another package's binaries, so remove them first:
+
+```bash
+npm uninstall -g remote-pi            # the pre-rename package
+npm install -g .                      # then this
+```
+
+#### Run it
+
+Two modes. Pick based on whether you want Pi reachable while you are not sitting
+at the machine.
+
+**Foreground (interactive)** — the extension inside Pi. Nothing resident; `/remote-pi`
+commands work only while that Pi session is open.
+
+```bash
+pi                                    # then use /remote-pi start, /remote-pi pair
+```
+
+**Resident daemon** — a supervisor that keeps Pi workspaces running in the
+background and answers pairing with no interactive session. Use this to reach
+the machine from your phone or browser at any time.
 
 ```bash
 remote-pi-server create /path/to/a/workspace --name "my project"
-remote-pi-server install        # user-level systemd/launchd/Task Scheduler unit
+remote-pi-server install              # registers the user-level service
+remote-pi-server daemon status        # confirm it is running
 ```
 
-No `sudo` is needed. Set the relay before pairing: the pairing payload carries
-the relay URL, so a client that pairs first would point at the wrong relay.
-`set-relay` accepts `http://`/`https://` only (the clients convert to `ws(s)://`
-themselves). Skip it to use the community relay `https://relay.880160.xyz`.
+`install` writes a **user-level** unit — systemd `--user` on Linux, a LaunchAgent
+on macOS, a Task Scheduler entry on Windows. It does not need root.
+
+Windows is the one exception: the very first `install` has to create the
+scheduled task, which lives in the machine-wide store, so it raises one UAC
+prompt. Everything after that — `daemon restart`, `restart-supervisor`,
+`uninstall` — runs un-elevated.
+
+#### Restart / stop
+
+```bash
+remote-pi-server daemon restart       # after a rebuild; keeps the workspaces
+remote-pi-server daemon start|stop    # start or stop the supervisor
+remote-pi-server daemon status        # pid, uptime, restart count per workspace
+remote-pi-server daemons              # list registered workspaces
+remote-pi-server uninstall            # remove the service (workspaces kept)
+```
+
+#### Relay choice
+
+Set the relay **before** pairing: the pairing payload carries the relay URL, so a
+client that pairs first would point at the wrong relay. `set-relay` accepts
+`http://`/`https://` only — the clients convert to `ws(s)://` themselves. Skip it
+to use the community relay `https://relay.880160.xyz`.
+
+```bash
+remote-pi-server set-relay https://relay.example.com
+```
+
+The effective value and where it came from live in `~/.pi/remote/config.json`;
+inside Pi, `/remote-pi config` prints the same thing.
 
 ### 4. Client — web
 
