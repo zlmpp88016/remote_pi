@@ -6,10 +6,18 @@
  * Node 22 runs the TypeScript directly. No relay, no socket, no browser, no
  * adapter, no wire: only typed `ChatEvent`s go in and `ChatState` comes out.
  *
- * The regression under test (confirmed bug): a turn the host has NOT echoed
- * yet (`awaiting_echo`) must contribute ZERO items — no optimistic user bubble
- * and no agent placeholder. The user item appears only together with the
- * agent item, after an EXACT echo (same room + id) or a terminal settle.
+ * The contract under test: a turn contributes its USER bubble the instant the
+ * send is accepted — the text the user just typed is drawn locally, before any
+ * network round trip. Only the AGENT item is withheld until the host confirms
+ * the turn with an EXACT echo (same room + id), because before that echo there
+ * is no reply to stream and an empty live bubble would claim work that may
+ * never start. A terminal settle also makes the agent item appear (carrying its
+ * fixed failure status).
+ *
+ * History note: this file previously asserted the opposite ("an un-echoed turn
+ * must contribute ZERO items"), which is what made every send feel laggy — the
+ * user's own text stayed invisible for a full client→relay→host→Pi round trip.
+ * The assertions below were rewritten with the behaviour, not around it.
  *
  * Run: node scripts/verify-web-chat.mjs
  */
@@ -70,8 +78,8 @@ check("initialChatState.history é vazio", initialChatState.history.length === 0
 check("projeção inicial é vazia", visibleChatItems(initialChatState).length === 0);
 check("canSubmit(initial) é true", canSubmit(initialChatState) === true);
 
-// ── B. submit → awaiting_echo é INVISÍVEL (regressão) ───────────────────────
-console.log("\nB. submit pendente (awaiting_echo) não emite bolha");
+// ── B. submit → user bubble JÁ, agent ainda não ────────────────────────────
+console.log("\nB. submit pendente (awaiting_echo) desenha o user, segura o agent");
 check("submit entra em phase awaiting_echo", submitted.active?.phase === "awaiting_echo");
 check("submit preserva roomId exato", submitted.active?.roomId === ROOM);
 check("submit preserva id exato", submitted.active?.id === ID);
@@ -81,9 +89,12 @@ check("submit preserva retryRisk", submitted.active?.retryRisk === true);
 check("submit zera echoed", submitted.active?.echoed === false);
 check("submit zera response", submitted.active?.response === "");
 check("submit zera error", submitted.active?.error === null);
-check("NÃO há item user otimista", userItems(submitted).length === 0);
-check("NÃO há item agent", agentItems(submitted).length === 0);
-check("projeção de await_echo é totalmente vazia", visibleChatItems(submitted).length === 0);
+check("HÁ exatamente 1 item user otimista", userItems(submitted).length === 1);
+check("o user otimista carrega o texto exato", userItems(submitted)[0]?.text === "pergunta");
+check("o user otimista carrega o id exato", userItems(submitted)[0]?.id === ID);
+check("o user otimista carrega a room exata", userItems(submitted)[0]?.roomId === ROOM);
+check("NÃO há item agent antes do echo", agentItems(submitted).length === 0);
+check("projeção de await_echo tem só o user", kinds(submitted).join(",") === "user");
 check("canSubmit é false enquanto awaiting_echo", canSubmit(submitted) === false);
 check("submit não arquiva nada em history", submitted.history.length === 0);
 
@@ -157,7 +168,8 @@ check("submit durante streaming é rejeitado", busyWhileStreaming === streaming)
 check("submit durante streaming não altera history", busyWhileStreaming.history.length === 0);
 check("canSubmit é false durante awaiting_echo", canSubmit(submitted) === false);
 check("canSubmit é false durante streaming", canSubmit(streaming) === false);
-check("submit pendente rejeitado não emite bolha extra", visibleChatItems(busyWhilePending).length === 0);
+check("submit pendente rejeitado não emite bolha agent extra", agentItems(busyWhilePending).length === 0);
+check("submit pendente rejeitado mantém 1 user só", userItems(busyWhilePending).length === 1);
 
 // ── H. error ────────────────────────────────────────────────────────────────
 console.log("\nH. error");
@@ -227,7 +239,7 @@ check("o turno mais novo é preservado", capped.history.at(-1)?.id === `t-${HIST
 check(`projeção do cap tem ${HISTORY_LIMIT * 2} itens`, visibleChatItems(capped).length === HISTORY_LIMIT * 2);
 check("projeção do cap alterna user/agent", visibleChatItems(capped)[0]?.kind === "user" && visibleChatItems(capped)[1]?.kind === "agent");
 check("projeção do cap não repete ids", new Set(ids(capped)).size === HISTORY_LIMIT);
-check("cap sobrevive a um novo submit pendente (invisível)", visibleChatItems(reduceChat(capped, submitEvent({ id: "t-final" }))).length === HISTORY_LIMIT * 2);
+check("cap sobrevive a um novo submit pendente (user extra)", visibleChatItems(reduceChat(capped, submitEvent({ id: "t-final" }))).length === HISTORY_LIMIT * 2 + 1);
 check("submit após done não duplica o turno já arquivado", reduceChat(settled, submitEvent({ id: "t-2" })).history.length === 1);
 check("turno arquivado mantém phase completed", reduceChat(settled, submitEvent({ id: "t-2" })).history[0]?.phase === "completed");
 check("submit terminal mantém só o novo ativo", reduceChat(settled, submitEvent({ id: "t-2" })).active?.id === "t-2");
@@ -335,7 +347,7 @@ check("retryRisk sobrevive ao timeout", run([submitEvent({ retryRisk: true }), e
 check("retryRisk sobrevive ao error", run([submitEvent({ retryRisk: true }), echo(), error("action_rejected")]).history[0]?.retryRisk === true);
 check("retryRisk sobrevive ao disconnected", run([submitEvent({ retryRisk: true }), echo(), disconnected()]).history[0]?.retryRisk === true);
 check("retryRisk do arquivado mantém true", reduceChat(settled, submitEvent({ id: "t-2" })).history[0]?.retryRisk === true);
-check("projeção do retry pendente mostra só o turno arquivado", visibleChatItems(reduceChat(settled, submitEvent({ id: "t-2" }))).length === 2);
+check("projeção do retry pendente mostra o arquivado + o user novo", visibleChatItems(reduceChat(settled, submitEvent({ id: "t-2" }))).length === 3);
 const retried = run([submitEvent({ attempt: 1, retryRisk: true }), echo(), timeout(), submitEvent({ attempt: 2, retryRisk: false })]);
 check("retry usa novo attempt", retried.active?.attempt === 2);
 check("retry usa novo retryRisk", retried.active?.retryRisk === false);
@@ -351,7 +363,7 @@ check("estado tem exatamente as chaves active/history/tools", Object.keys(submit
 check("turno não carrega campos extras de wire", Object.keys(submitted.active).sort().join(",") === "attempt,echoed,error,id,phase,response,retryRisk,roomId,text");
 check("item user carrega só campos de projeção", Object.keys(userItems(streaming)[0]).sort().join(",") === "id,kind,roomId,text");
 check("item agent carrega status fixo", Object.keys(agentItems(streaming)[0]).sort().join(",") === "attempt,error,id,kind,phase,retryRisk,roomId,text");
-check("texto pendente não vaza na projeção", !JSON.stringify(visibleChatItems(submitted)).includes("pergunta"));
+check("texto pendente É visível (echo local otimista)", JSON.stringify(visibleChatItems(submitted)).includes("pergunta"));
 check("texto pendente vaza só após echo", JSON.stringify(visibleChatItems(streaming)).includes("pergunta"));
 check("nenhum segredo/token na projeção", !/token|secret|password|epk|pair/i.test(JSON.stringify(visibleChatItems(capped))));
 check("sem dedup: ids iguais geram itens distintos", visibleChatItems(run([submitEvent({ id: "dup" }), echo(ROOM, "dup"), done(ROOM, "dup"), submitEvent({ id: "dup" }), echo(ROOM, "dup"), done(ROOM, "dup")])).length === 4);

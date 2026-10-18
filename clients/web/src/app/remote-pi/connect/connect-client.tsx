@@ -379,6 +379,32 @@ export function ConnectClient() {
   const workspaceSeqRef = useRef(0);
   const pairSeqRef = useRef(0);
 
+  /** Handle of the coalescing animation frame that will publish streamed text
+   *  (see `dispatchChat`). Non-null means a chunk already scheduled the frame. */
+  const chatFrameRef = useRef<number | null>(null);
+
+  /** Schedules one frame. Falls back to a microtask when rAF is absent (SSR /
+   *  a background tab in some engines) so a delta can never be stranded. */
+  const scheduleChatFrame = useCallback((publish: () => void): number => {
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      return window.requestAnimationFrame(publish);
+    }
+    return setTimeout(publish, 0) as unknown as number;
+  }, []);
+
+  /** Drops a queued frame. The text itself is NOT lost: it already lives in
+   *  `chatStateRef`, so whatever commits next publishes it. */
+  const cancelChatFrame = useCallback((): void => {
+    const handle = chatFrameRef.current;
+    if (handle === null) return;
+    chatFrameRef.current = null;
+    if (typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function") {
+      window.cancelAnimationFrame(handle);
+    } else {
+      clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
+    }
+  }, []);
+
   /** Drops the pending turn timer (idempotent). */
   const clearChatTimer = useCallback((): void => {
     const pending = chatTimerRef.current;
@@ -387,13 +413,37 @@ export function ConnectClient() {
   }, []);
 
   /** Synchronous reducer forwarder: ref first (so a same-tick reader sees the
-   *  new state), React state second. A settled turn cancels the pending timer. */
+   *  new state), React state second. A settled turn cancels the pending timer.
+   *
+   *  STREAM COALESCING: `agent_chunk` arrives once per SSE-style delta — far
+   *  faster than the display refresh. Committing each one forces a React render
+   *  (and a Markdown re-parse of the whole accumulated reply) per token, which
+   *  is what made a streaming answer feel mushy and stole the main thread from
+   *  the composer. Chunks are therefore folded into the ref IMMEDIATELY (so no
+   *  delta is ever lost, and a reader in the same tick already sees the full
+   *  text) while the React commit is deferred to the next animation frame. One
+   *  paint = one render, regardless of how many deltas landed in it.
+   *
+   *  Everything else (submit/echo/done/error/tool/reset) commits synchronously:
+   *  those are phase edges the user is waiting on, and there are at most a few
+   *  per turn. */
   const dispatchChat = useCallback(
     (event: ChatEvent): void => {
       const next = reduceChat(chatStateRef.current, event);
       if (next === chatStateRef.current) return;
       chatStateRef.current = next;
-      setChatState(next);
+      // A pending frame already scheduled by an earlier chunk publishes THIS
+      // state when it fires, because it reads the ref, not a captured value.
+      if (event.type === "chunk" && chatFrameRef.current !== null) return;
+      if (event.type === "chunk") {
+        chatFrameRef.current = scheduleChatFrame(() => {
+          chatFrameRef.current = null;
+          setChatState(chatStateRef.current);
+        });
+      } else {
+        cancelChatFrame();
+        setChatState(next);
+      }
       const phase = next.active?.phase;
       const settled =
         next.active === null ||
@@ -403,7 +453,7 @@ export function ConnectClient() {
         phase === "disconnected";
       if (settled) clearChatTimer();
     },
-    [clearChatTimer],
+    [cancelChatFrame, clearChatTimer, scheduleChatFrame],
   );
 
   /** Arms the pending-turn timeout for one EXACT turn (adapter + generation +
@@ -781,9 +831,9 @@ export function ConnectClient() {
       return;
     }
 
-    // No optimistic echo: the reducer only reveals a turn once the host
-    // confirms it, and only when room+id match the ACTIVE turn exactly —
-    // anything else is ignored rather than merged into the transcript.
+    // The host's exact echo promotes the turn from `awaiting_echo` to
+    // `streaming`, which is what reveals the AGENT item. The user bubble is
+    // already on screen from the local send, so nothing is withheld here.
     if (msg.type === "user_message") {
       if (typeof msg.id !== "string") return;
       dispatchChat({ type: "echo", roomId: room, id: msg.id });
@@ -941,11 +991,15 @@ export function ConnectClient() {
       workspaceSeqRef.current += 1;
       pairSeqRef.current += 1;
       clearChatTimer();
+      // Drop a queued stream frame too: its callback calls setChatState, which
+      // must not fire into an unmounted tree. The text itself is not lost — it
+      // lives in `chatStateRef` and the reset below discards it deliberately.
+      cancelChatFrame();
       dispatchChat({ type: "reset" });
       const live = releaseBinding();
       live?.dispose();
     };
-  }, [clearChatTimer, dispatchChat, ensureAdapter, releaseBinding]);
+  }, [cancelChatFrame, clearChatTimer, dispatchChat, ensureAdapter, releaseBinding]);
 
   // ── derived from the adapter snapshot (never from local guesses) ─────────
 
@@ -1245,10 +1299,12 @@ export function ConnectClient() {
     }
   }
 
-  /** Submit one turn. No optimistic echo: the reducer hides the turn until the
-   *  host confirms it with an exact echo, so nothing is drawn from the draft.
-   *  The draft is cleared ONLY after the send was accepted (a synchronous throw
-   *  keeps the text in place and reports a fixed failure). */
+  /** Submit one turn. The user's own bubble is drawn IMMEDIATELY from the
+   *  local draft (the reducer renders an `awaiting_echo` turn's user item
+   *  optimistically), so the text appears before any network round trip; only
+   *  the agent item waits for the host's exact echo. The draft is cleared ONLY
+   *  after the send was accepted (a synchronous throw keeps the text in place
+   *  and reports a fixed failure). */
   function handleSend(event: React.FormEvent) {
     event.preventDefault();
     const adapter = bindingRef.current?.adapter ?? null;

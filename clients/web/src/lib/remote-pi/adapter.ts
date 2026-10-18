@@ -1151,10 +1151,28 @@ export class RemotePiAdapter {
       await transport.pair(pairTargetOf(credential));
       if (this.stale(seq)) return this.getSnapshot();
       this.advance({ type: "pair_accepted" });
-      const hello = await transport.helloHost(credential.hostEpk, HOST_WEB_ROOM_ID);
+      // `pair` MUST precede these: the host room drops every other inner type
+      // from a peer that is not yet on its allow-list (host_bridge.ts:181-189),
+      // and `pair_request` is the only carve-out. Once paired, the two reads
+      // below are independent — `host_hello` and `workspace_list` are separate
+      // synchronous handlers on the host (host_bridge.ts:197, :228) and the
+      // transport correlates replies by id out of a `pending` map
+      // (client.ts:1019-1052), so sending both in one flight halves the
+      // handshake's serial round trips from 4 to 3.
+      //
+      // `allSettled`, not `all`: if `hello` rejects first, `all` would return
+      // with `list` still in flight and its later rejection would surface as an
+      // unhandled promise. Settlement waits for BOTH and rethrows the first
+      // failure, which keeps the existing single-error `failFlow` contract.
+      const [helloResult, listResult] = await Promise.allSettled([
+        transport.helloHost(credential.hostEpk, HOST_WEB_ROOM_ID),
+        transport.listWorkspaces(credential.hostEpk, HOST_WEB_ROOM_ID),
+      ]);
       if (this.stale(seq)) return this.getSnapshot();
-      const list = await transport.listWorkspaces(credential.hostEpk, HOST_WEB_ROOM_ID);
-      if (this.stale(seq)) return this.getSnapshot();
+      if (helloResult.status === "rejected") throw helloResult.reason;
+      if (listResult.status === "rejected") throw listResult.reason;
+      const hello = helloResult.value;
+      const list = listResult.value;
 
       this.host = projectHello(hello);
       this.setCatalog(list.workspaces);

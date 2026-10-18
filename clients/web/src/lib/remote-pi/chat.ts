@@ -252,21 +252,31 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
 }
 
 /**
- * Ordered user/agent items for the UI. A turn the host has NOT echoed yet
- * (`awaiting_echo`) contributes NOTHING: no optimistic user bubble and no
- * agent placeholder — the submitted text is invisible until the host confirms
- * it with an exact-echo event (same room + id). After that echo the user item
- * and the streaming agent item appear together; a settled turn (completed /
- * error / timed_out / disconnected) shows the user item plus the fixed agent
- * status carried by `phase`/`error`/`retryRisk`/`attempt`.
+ * Ordered user/agent items for the UI.
+ *
+ * OPTIMISTIC LOCAL ECHO: a turn the host has not confirmed yet
+ * (`awaiting_echo`) renders its USER bubble immediately, so the text the user
+ * just sent appears on screen before any network round trip. Only the agent
+ * placeholder is withheld: an `awaiting_echo` turn contributes no agent item,
+ * because there is nothing to stream yet. The host's exact echo (same room +
+ * id) then promotes the turn to `streaming` and its agent item appears.
+ *
+ * A settled turn (completed / error / timed_out / disconnected) shows the user
+ * item plus the fixed agent status carried by
+ * `phase`/`error`/`retryRisk`/`attempt`.
  */
 export function visibleChatItems(state: ChatState): readonly ChatItem[] {
   const turns: readonly ChatTurn[] =
     state.active === null ? state.history : [...state.history, state.active];
   const items: ChatItem[] = [];
   for (const turn of turns) {
-    if (!turn.echoed && !isTerminalPhase(turn.phase)) continue;
+    // The user's own text is never withheld: it is drawn from the local draft
+    // the moment the send was accepted (see `visibleChatItems` doc above).
     items.push({ kind: 'user', id: turn.id, roomId: turn.roomId, text: turn.text });
+    // The agent item exists only once the host has taken the turn: before the
+    // echo there is no reply to show, and showing an empty streaming bubble
+    // would claim work that may never start.
+    if (!turn.echoed && !isTerminalPhase(turn.phase)) continue;
     items.push({
       kind: 'agent',
       id: turn.id,

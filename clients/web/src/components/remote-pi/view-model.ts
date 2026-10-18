@@ -101,7 +101,7 @@ export const CAPABILITIES: readonly Capability[] = [
     label: "Chat turn state machine",
     status: "ready",
     reason:
-      "Wired to the Wave 4 typed reducer (src/lib/remote-pi/chat.ts): single-flight submit (`canSubmit` locks the composer while a turn is open), echo-gated user/agent items (`visibleChatItems` hides an un-echoed turn), and terminal error/timed_out/disconnected recovery. Retry is explicit and one-shot (`retryRisk` is stated next to the Retry control); there is no automatic resend.",
+      "Wired to the Wave 4 typed reducer (src/lib/remote-pi/chat.ts): single-flight submit (`canSubmit` locks the composer while a turn is open), an optimistic LOCAL ECHO for the user's own bubble (drawn from the draft before any round trip) with the agent item echo-gated until the host confirms the turn, and terminal error/timed_out/disconnected recovery. Streamed deltas are coalesced to one React commit per animation frame. Retry is explicit and one-shot (`retryRisk` is stated next to the Retry control); there is no automatic resend.",
   },
   {
     id: "trajectory",

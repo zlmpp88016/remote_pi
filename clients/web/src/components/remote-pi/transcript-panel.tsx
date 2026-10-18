@@ -7,7 +7,7 @@
  * AGENT half goes through `./markdown`, which is the single audited place wire
  * text becomes markup: no raw HTML, protocol-checked links, plain code blocks.
  */
-import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, memo, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { Icon } from "./icons";
 import { Markdown } from "./markdown";
@@ -72,6 +72,54 @@ function agentStatusLabel(item: TranscriptAgentItem): string {
 function isLiveItem(item: TranscriptAgentItem): boolean {
   return item.status !== undefined ? item.status === "streaming" : !item.done;
 }
+
+/* ── transcript rows ─────────────────────────────────────────────────────
+ * One memo component per row kind, keyed by TURN ID (never by array index).
+ *
+ * Why this matters: a streaming reply commits once per animation frame, and
+ * without a memo boundary every commit re-rendered every row in the transcript
+ * — and an index-carrying key changed whenever the list shifted, so React also
+ * REMOUNTED rows that had not changed, throwing away their DOM and (for the
+ * agent row) their parsed Markdown tree. `Markdown` is itself memoised on
+ * `text`, so with a stable key a frame that touches turn N now re-renders turn
+ * N only and leaves the rest of the transcript untouched.
+ */
+const USER_ROW = "flex justify-end py-2";
+const USER_BUBBLE =
+  "max-w-[88%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-[14px_14px_4px_14px] border border-white/10 bg-white/[0.045] px-3.5 py-2.5 text-[14.5px] leading-relaxed text-white";
+
+const UserRow = memo(function UserRow({ text }: { text: string }) {
+  return (
+    <div className={USER_ROW}>
+      <div className={USER_BUBBLE}>{text}</div>
+    </div>
+  );
+});
+
+const AgentRow = memo(function AgentRow({ item }: { item: TranscriptAgentItem }) {
+  return (
+    <div className="grid gap-2.5 py-2">
+      <div className="flex items-center gap-2 text-[12px] text-[#a3a3a3]">
+        <span className="grid size-5 place-items-center rounded-md border border-[rgba(79,195,247,0.3)] bg-[rgba(79,195,247,0.13)] text-[#4fc3f7]">
+          <Icon name="cpu" size={12} />
+        </span>
+        <b
+          className="text-[12px] font-semibold text-[#a3a3a3]"
+          style={{ fontFamily: "var(--ff-display)" }}
+        >
+          Pi
+        </b>
+        <span className="font-mono text-[10.5px]">{agentStatusLabel(item)}</span>
+      </div>
+      <div className="min-w-0 break-words [overflow-wrap:anywhere]">
+        <Markdown text={item.text} />
+        {isLiveItem(item) ? (
+          <span className="ml-0.5 inline-block h-[13px] w-[7px] animate-pulse bg-[#4fc3f7] align-[-2px]" />
+        ) : null}
+      </div>
+    </div>
+  );
+});
 
 export interface TranscriptPanelProps {
   workspaceName: string | null;
@@ -414,36 +462,11 @@ export function TranscriptPanel({
               >1023 → 70px, <=1023 → 52/24, <=760 → 38/16. */}
           <div className="mx-auto grid max-w-[848px] gap-0.5 px-[70px] pb-8 pt-5 max-[1023px]:pl-[52px] max-[1023px]:pr-6 max-[760px]:pl-[38px] max-[760px]:pr-4">
             {hasTurns ? (
-              chat.map((item, index) =>
+              chat.map((item) =>
                 item.kind === "user" ? (
-                  <div key={`u-${item.id}-${index}`} className="flex justify-end py-2">
-                    <div className="max-w-[88%] whitespace-pre-wrap break-words [overflow-wrap:anywhere] rounded-[14px_14px_4px_14px] border border-white/10 bg-white/[0.045] px-3.5 py-2.5 text-[14.5px] leading-relaxed text-white">
-                      {item.text}
-                    </div>
-                  </div>
+                  <UserRow key={`u-${item.id}`} text={item.text} />
                 ) : (
-                  <div key={`a-${item.id}-${index}`} className="grid gap-2.5 py-2">
-                    <div className="flex items-center gap-2 text-[12px] text-[#a3a3a3]">
-                      <span className="grid size-5 place-items-center rounded-md border border-[rgba(79,195,247,0.3)] bg-[rgba(79,195,247,0.13)] text-[#4fc3f7]">
-                        <Icon name="cpu" size={12} />
-                      </span>
-                      <b
-                        className="text-[12px] font-semibold text-[#a3a3a3]"
-                        style={{ fontFamily: "var(--ff-display)" }}
-                      >
-                        Pi
-                      </b>
-                      <span className="font-mono text-[10.5px]">
-                        {agentStatusLabel(item)}
-                      </span>
-                    </div>
-                    <div className="min-w-0 break-words [overflow-wrap:anywhere]">
-                      <Markdown text={item.text} />
-                      {isLiveItem(item) ? (
-                        <span className="ml-0.5 inline-block h-[13px] w-[7px] animate-pulse bg-[#4fc3f7] align-[-2px]" />
-                      ) : null}
-                    </div>
-                  </div>
+                  <AgentRow key={`a-${item.id}`} item={item} />
                 ),
               )
             ) : (
