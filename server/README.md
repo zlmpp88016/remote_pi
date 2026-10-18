@@ -54,7 +54,7 @@ to the checkout, not a copy — that is what makes the update flow below short.
 
 ```bash
 cd remote_pi/server
-npm install          # dependencies (honours pnpm-lock.yaml if you use pnpm)
+npm install          # dependencies
 npm run build        # tsc → dist/
 npm install -g .     # symlink this checkout as the global remote-pi-server
 
@@ -62,6 +62,14 @@ remote-pi-server set-relay https://relay.example.com
 remote-pi-server create /path/to/workspace --name "my project"
 remote-pi-server install      # user-level service (systemd/launchd/Task Scheduler)
 remote-pi-server daemon status
+```
+
+**Requires npm >= 11.** npm 10 crashes on this dependency tree with
+`Cannot read properties of null (reading 'edgesOut')` — an arborist bug in the
+peer-set resolver triggered by vitest 4.
+
+```bash
+npm install -g npm@11        # Node 22.9+ accepts npm 11
 ```
 
 ### Update (after `git pull` or editing code)

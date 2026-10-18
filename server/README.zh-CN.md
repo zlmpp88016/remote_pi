@@ -49,7 +49,7 @@ remote-pi-server pair    # 打印 relay 地址 + 配对码（无需先跑 Pi）
 
 ```bash
 cd remote_pi/server
-npm install          # 装依赖（用 pnpm 的话会遵循 pnpm-lock.yaml）
+npm install          # 装依赖
 npm run build        # tsc → dist/
 npm install -g .     # 把这份副本链成全局 remote-pi-server
 
@@ -57,6 +57,14 @@ remote-pi-server set-relay https://relay.example.com
 remote-pi-server create /path/to/workspace --name "项目名"
 remote-pi-server install      # 用户级服务（systemd/launchd/任务计划程序）
 remote-pi-server daemon status
+```
+
+**需要 npm >= 11。** npm 10 会在这棵依赖树上崩：
+`Cannot read properties of null (reading 'edgesOut')` —— 这是 arborist 的
+peer-set 解析 bug，由 vitest 4 触发。
+
+```bash
+npm install -g npm@11        # Node 22.9+ 可以跑 npm 11
 ```
 
 ### 更新（`git pull` 或改完代码之后）

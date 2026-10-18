@@ -58,6 +58,10 @@ Needs Node >= 20.6 and the Pi coding agent installed.
 This repo is not published to npm. Install the CLI from the working copy, which
 npm links rather than copies — so a rebuild is enough to pick up code changes.
 
+**Requires npm >= 11.** npm 10 crashes on this dependency tree with
+`Cannot read properties of null (reading 'edgesOut')` (an arborist bug in the
+peer-set resolver, triggered by vitest 4). Upgrade once with `npm install -g npm@11`.
+
 ```bash
 git clone https://github.com/exampleorg/remote_pi
 cd remote_pi/server
