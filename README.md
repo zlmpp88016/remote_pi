@@ -52,19 +52,27 @@ Verify: `curl https://relay.example.com/health` returns 200.
 Not the VPS. This is the machine you want to reach.
 
 ```bash
-git clone https://github.com/exampleorg/remote_pi
-cd remote_pi
-bash server/install.sh
+# Needs Node >= 20.6 and the Pi coding agent already installed.
+npm install -g remote-pi-server        # puts `remote-pi-server` on PATH
+pi install npm:remote-pi-server        # loads the plugin into Pi itself
 
 remote-pi-server set-relay https://relay.example.com   # http(s), not wss
-remote-pi-server pair                                  # prints address + code
+remote-pi-server pair                                 # prints address + code
 ```
 
-`install.sh` installs Node, Pi, the plugin and the daemon service. No `sudo`.
-Set the relay before pairing: the pairing payload carries the relay URL, so a
-client that pairs first would point at the wrong relay. `set-relay` accepts
-`http://`/`https://` only (the clients convert to `ws(s)://` themselves).
-Skip it to use the community relay `https://relay.880160.xyz`.
+The two installs are separate on purpose: the npm package gives you the CLI, and
+`pi install` is what makes Pi load the extension. For the resident daemon (Pi
+reachable with no interactive session), register and start it:
+
+```bash
+remote-pi-server create /path/to/a/workspace --name "my project"
+remote-pi-server install        # user-level systemd/launchd/Task Scheduler unit
+```
+
+No `sudo` is needed. Set the relay before pairing: the pairing payload carries
+the relay URL, so a client that pairs first would point at the wrong relay.
+`set-relay` accepts `http://`/`https://` only (the clients convert to `ws(s)://`
+themselves). Skip it to use the community relay `https://relay.880160.xyz`.
 
 ### 4. Client — web
 

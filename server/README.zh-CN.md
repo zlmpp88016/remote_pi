@@ -31,7 +31,7 @@ remote-pi-server daemon status
 > **本包不只是 Pi 插件。** 它是「在一台机器上运行和管理 Pi」的软件 —— 常驻 supervisor、
 > 操作 CLI、配对、工作区生命周期、文件系统导航，以及本机智能体 mesh —— 而手机应用、
 > 浏览器客户端和 Cockpit 桌面端都是它的客户端。请**全局安装**
-> （`npm install -g remote-pi-server`），这样 `remote-pi` 和 `pi-supervisord` 才会进 PATH；
+> （`npm install -g remote-pi-server`），这样 `remote-pi-server` 和 `pi-supervisord` 才会进 PATH；
 > `pi install npm:remote-pi-server` 只注册面向 Pi 的那部分插件。
 
 ## 协议与安全
@@ -375,7 +375,7 @@ mesh 地址是不透明的路由值：原样回显，包括带百分号编码字
 | `/remote-pi install` | 把 `pi-supervisord` 装成系统服务 |
 | `/remote-pi uninstall` | 移除系统服务（注册记录保留） |
 
-上面所有命令既可作为 Pi 的 slash 命令（交互式）使用，也可在包全局安装后（`npm install -g remote-pi-server`）作为 shell 层的 `remote-pi <subcommand>` 使用。
+上面所有命令既可作为 Pi 的 slash 命令（交互式）使用，也可在包全局安装后（`npm install -g remote-pi-server`）作为 shell 层的 `remote-pi-server <subcommand>` 使用。
 
 ### 定时提示词（`cron`）
 

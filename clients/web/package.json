@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "sync:install": "node scripts/sync-install-sh.mjs",
-    "build": "node scripts/sync-install-sh.mjs && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "verify:web": "node scripts/run-web-checks.mjs",

@@ -35,7 +35,7 @@ when you just want the current Pi session reachable.
 > manages Pi on a machine — the resident supervisor, the operator CLI, pairing,
 > workspace lifecycle, filesystem navigation, and the local agent mesh — with the
 > mobile app, browser client, and Cockpit desktop app as its clients. Install the
-> package **globally** (`npm install -g remote-pi-server`) to get the `remote-pi` and
+> package **globally** (`npm install -g remote-pi-server`) to get the `remote-pi-server` and
 > `pi-supervisord` binaries on your PATH; `pi install npm:remote-pi-server` only
 > registers the Pi-facing extension.
 

@@ -87,20 +87,11 @@ const CLIENT_MOVES = [
 const DEPTH_FIXES = [
   // arquivo (pós-move) : [antes, depois]
   //
-  // Exatamente UMA entrada por alvo: uma segunda entrada genérica para
-  // `../../server/` voltaria a casar dentro de `../../../server/` (que a contém
-  // como substring) e corromperia o caminho. `sync-install-sh.mjs` vive em
-  // `site/scripts/`, então `../../` chega à raiz; em `clients/web/scripts/`
-  // passa a ser preciso `../../../`.
-  //
-  // IDEMPOTÊNCIA: a checagem usa a forma EXATA (com barra final). Sem isso, uma
-  // segunda execução prepende mais um `../` a cada rodada — foi o que produziu
-  // `../../../../../../server/` (6 níveis) numa re-execução.
-  {
-    file: "clients/web/scripts/sync-install-sh.mjs",
-    from: '"../../server/install.sh"',
-    to: '"../../../server/install.sh"',
-  },
+  // NOTE: a entrada de `clients/web/scripts/sync-install-sh.mjs` foi removida
+  // junto com esse script e com `server/install.sh` — o instalador por
+  // `curl | bash` não existe mais; a instalação passa por npm + `pi install`.
+  // A lista abaixo está vazia de propósito, não por esquecimento: o único
+  // arquivo que precisava de reescrita de caminho relativo era aquele.
 ];
 
 // ── infra ────────────────────────────────────────────────────────────────
