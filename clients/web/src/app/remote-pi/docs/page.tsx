@@ -162,10 +162,12 @@ export default function DocsPage() {
         <p>
           Requirements: Node 20+ and Pi (the host coding agent). Remote Pi
           installs as a Pi plugin with{" "}
-          <InlineCode>pi install npm:remote-pi-server</InlineCode>, which self-registers
-          the <InlineCode>/remote-pi</InlineCode> slash command and deploys the
-          agent-network skill. The complete setup — wizard, pairing, first
-          command — is in the tutorial.
+          <InlineCode>pi install ./path/to/remote_pi/server</InlineCode>, which
+          self-registers the <InlineCode>/remote-pi</InlineCode> slash command and
+          deploys the agent-network skill. Note this is the <em>interactive</em>
+          entry point only: the resident daemon loads the extension directly and
+          never needs <InlineCode>pi install</InlineCode>. The complete setup —
+          wizard, pairing, first command — is in the tutorial.
         </p>
         <p>
           →{" "}

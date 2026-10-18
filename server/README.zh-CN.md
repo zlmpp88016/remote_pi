@@ -32,7 +32,7 @@ remote-pi-server daemon status
 > 操作 CLI、配对、工作区生命周期、文件系统导航，以及本机智能体 mesh —— 而手机应用、
 > 浏览器客户端和 Cockpit 桌面端都是它的客户端。请**全局安装**
 > （`npm install -g remote-pi-server`），这样 `remote-pi-server` 和 `pi-supervisord` 才会进 PATH；
-> `pi install npm:remote-pi-server` 只注册面向 Pi 的那部分插件。
+> `pi install ./path/to/repo/server` 只注册面向 Pi 的那部分插件。
 
 ## 协议与安全
 
@@ -42,23 +42,45 @@ remote-pi-server daemon status
 
 ## 快速开始
 
-### Pi 侧（这是扩阶层）
+两种用法，先选你要哪一种。
 
-装扩展（一次性）：
+**A. 让这台机器常驻可达**（手机 / 浏览器 / Cockpit 随时连进来）
 
 ```bash
-pi install npm:remote-pi-server
+npm install -g remote-pi-server     # 或者从本地仓库装，见「守护进程模式」
+remote-pi-server install            # 用户级服务：登录自启
+remote-pi-server pair               # 打印地址 + 配对码，无需先跑 Pi
 ```
 
-然后在任意 Pi 终端里：
+**这条路径不需要 `pi install`。** 守护进程用 `-e dist/index.js` 直接加载扩展，
+不经过 Pi 的包注册表。
+
+**B. 只想让当前这个 Pi 会话可达**（交互式，不装常驻服务）
+
+在 Pi 终端里敲 `/remote-pi` 即可。但前提是 Pi 能加载到这个扩展，两种方式：
+
+```bash
+pi install ./本仓库/server         # 本地路径（包还没发到 npm）
+```
+
+或直接带载：
+
+```bash
+pi -e ./本仓库/server/dist/index.js
+```
+
+然后在 Pi 里：
 
 ```text
 /remote-pi
 ```
 
-首次运行会弹出一个简短的交互式向导（智能体名、默认会话、是否自动启动中继）。之后每次运行，`/remote-pi` 都会自动加入本地智能体会话并启动中继 —— 不用再输入任何东西。
+首次运行会弹一个简短向导（智能体名、默认会话、是否自动启动中继）。之后每次运行，
+`/remote-pi` 都会自动加入本地智能体会话并启动中继。
 
-> 要走**主机守护进程**这条路 —— 用手机 / 浏览器 / 桌面端与这台机器配对，并在任意目录启动 Pi、无需先跑 Pi —— 请全局安装后直接看[守护进程模式](#守护进程模式)。
+> **为什么 A 不需要 `pi install`**：`pi install` 注册的是 Pi 的**斜杠命令**（`/remote-pi …`），
+> 这些只在 Pi 交互会话里存在。`remote-pi-server` 这个 shell CLI 和它无关——两者是同一份
+> 代码的两个入口，装哪个取决于你想怎么用。
 
 ### 30 秒试一下智能体网络
 
@@ -169,7 +191,7 @@ npm install -g remote-pi-server
 **面向 Pi 的扩展**（自行注册 `/remote-pi` slash 命令，并部署一个智能体 skill，教 LLM 怎么用 `list_peers`、`agent_send`，以及事件驱动的收件箱 / 回复流程）按项目安装：
 
 ```bash
-pi install npm:remote-pi-server
+pi install ./本仓库/server
 ```
 
 光跑 `pi install` **不会**把 CLI 二进制放进 PATH —— 完整安装见[守护进程模式](#守护进程模式)。
@@ -417,7 +439,7 @@ mesh 地址是不透明的路由值：原样回显，包括带百分号编码字
 
 ```bash
 # 全局安装这个包，`remote-pi` 和 `pi-supervisord` 才会进 PATH
-#（单跑 `pi install npm:remote-pi-server` 只是让 Pi 扩展可用，并**不会**
+#（单跑 `pi install ./path/to/repo/server` 只是让 Pi 扩展可用，并**不会**
 # 暴露 CLI 二进制文件 —— 见
 # https://docs.npmjs.com/cli/v10/configuring-npm/package-json#bin）。
 npm install -g remote-pi-server

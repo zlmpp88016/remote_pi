@@ -36,7 +36,7 @@ when you just want the current Pi session reachable.
 > workspace lifecycle, filesystem navigation, and the local agent mesh — with the
 > mobile app, browser client, and Cockpit desktop app as its clients. Install the
 > package **globally** (`npm install -g remote-pi-server`) to get the `remote-pi-server` and
-> `pi-supervisord` binaries on your PATH; `pi install npm:remote-pi-server` only
+> `pi-supervisord` binaries on your PATH; `pi install ./path/to/repo/server` only
 > registers the Pi-facing extension.
 
 ## Protocol & Security
@@ -50,15 +50,37 @@ document — this README only covers user-facing setup.
 
 ## Quick start
 
-### Pi-side (this is the extension layer)
+Two ways to use this. Pick what you actually want.
 
-Install the extension (one-time):
+**A. Make this machine reachable at all times** (phone / browser / Cockpit can
+connect whenever)
 
 ```bash
-pi install npm:remote-pi-server
+npm install -g remote-pi-server     # or install from a local checkout — see Daemon mode
+remote-pi-server install            # user-level service, starts on login
+remote-pi-server pair               # prints address + code, no Pi needed
 ```
 
-Then in any Pi terminal:
+**This path does not need `pi install`.** The daemon loads the extension with an
+explicit `-e dist/index.js`; it never consults Pi's package registry.
+
+**B. Make only the current Pi session reachable** (interactive, no resident
+service)
+
+Type `/remote-pi` in a Pi terminal. For that to work Pi has to be able to load
+the extension — either way below does it:
+
+```bash
+pi install ./path/to/this/repo/server    # local path (the package is not on npm)
+```
+
+or load it directly:
+
+```bash
+pi -e ./path/to/this/repo/server/dist/index.js
+```
+
+Then, inside Pi:
 
 ```text
 /remote-pi
@@ -68,9 +90,10 @@ The first run shows a short interactive wizard (agent name, default session,
 whether to auto-start the relay). On every following run, `/remote-pi` joins
 the local agent session and starts the relay automatically — no extra typing.
 
-> For the **host daemon** path — pair a phone/browser/desktop with the machine
-> and start Pi in any directory, with no Pi running first — install globally and
-> jump to [Daemon mode](#daemon-mode).
+> **Why A does not need `pi install`**: `pi install` registers Pi's *slash
+> commands* (`/remote-pi …`), which exist only inside an interactive Pi session.
+> The `remote-pi-server` shell CLI is unrelated to that. Both are entry points
+> into the same code; which one you set up depends on how you want to use it.
 
 ### Try the agent network in 30 seconds
 
@@ -237,7 +260,7 @@ deploys an agent skill that teaches the LLM how to use `list_peers`,
 `agent_send`, and the event-driven inbox/reply flow) is installed per project:
 
 ```bash
-pi install npm:remote-pi-server
+pi install ./path/to/repo/server
 ```
 
 `pi install` alone does **not** put the CLI binaries on your PATH — see
@@ -565,7 +588,7 @@ See [`docs/daemon.md`](./docs/daemon.md) for troubleshooting.
 
 ```bash
 # Install the package globally so `remote-pi` and `pi-supervisord`
-# are on your PATH (`pi install npm:remote-pi-server` alone makes the Pi
+# are on your PATH (`pi install ./path/to/repo/server` alone makes the Pi
 # extension available but does NOT expose the CLI binaries — see
 # https://docs.npmjs.com/cli/v10/configuring-npm/package-json#bin).
 npm install -g remote-pi-server
