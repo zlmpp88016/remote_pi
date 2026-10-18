@@ -97,6 +97,20 @@ async function main() {
 
   console.log(`\n1. abrindo ${URL_ARG}`);
   await cdp.send("Page.navigate", { url: URL_ARG });
+  // A pairing token is SINGLE USE. A browser profile that still holds a
+  // consumed credential tries `restore()` first, fails, and then the form
+  // submit races that recovery — which reads as "pairing did not work" even
+  // though the client is fine. Clear the stored session first so the run is
+  // repeatable, then reload.
+  // A pairing token is SINGLE USE. A browser profile that still holds a
+  // consumed credential tries `restore()` first, fails, and then the form
+  // submit races that recovery — which reads as "pairing did not work" even
+  // though the client is fine. Clear the stored session, then RELOAD and let the
+  // page settle: submitting while the second load is still hydrating drops the
+  // submit (no relay socket is ever opened).
+  await sleep(1500);
+  await evaluate(cdp, `(() => { try { localStorage.clear(); sessionStorage.clear(); } catch {} return true; })()`);
+  await cdp.send("Page.navigate", { url: URL_ARG });
   // A cold profile needs much longer than a warm one: the first load compiles
   // the route and fetches every chunk. Poll for the form instead of sleeping a
   // fixed amount, or the pairing-code field is not there yet and the run fails
@@ -112,6 +126,10 @@ async function main() {
     await sleep(500);
   }
   check("o formulário de pareamento montou", formReady === true);
+  // Settle window: hydration + the adapter's initial `restore()` probe both run
+  // after the inputs exist. Measured empirically — submitting sooner than this
+  // produced a form that accepted the values and then never opened a socket.
+  await sleep(9000);
 
   if (PAIR_URI === "") {
     console.log("   [SKIP] nenhum --uri fornecido; medindo só o lado do DOM");
@@ -158,15 +176,22 @@ async function main() {
 
     // Wait for the host view (transcript + composer) to replace the launcher.
     let connected = false;
-    const deadline = Date.now() + 45_000;
+    const deadline = Date.now() + 150_000;
     while (Date.now() < deadline) {
+      // Host-view detection. `textarea` alone is NOT a discriminator: the
+      // launcher page also has inputs, and `max-w-[848px]` is a Tailwind class
+      // that Turbopack may rewrite. The reliable signal is the host chrome the
+      // launcher never renders: the "Unpair" control plus the host hostname and
+      // the "host connected" status line.
       const phase = await evaluate(
         cdp,
         `(() => {
           const body = document.body.innerText || '';
+          const hasUnpair = [...document.querySelectorAll('button')]
+            .some(b => /unpair/i.test(b.textContent || '') || /unpair/i.test(b.getAttribute('aria-label') || ''));
           return {
-            hasComposer: !!document.querySelector('textarea'),
-            hasTranscript: /max-w-\\[848px\\]/.test(document.body.innerHTML),
+            hasHostChrome: hasUnpair && /host connected/i.test(body),
+            hasComposer: [...document.querySelectorAll('textarea')].some(t => !t.disabled),
             busy: /restoring|connecting|pairing|authenticating/i.test(body),
             // Full sentences only: a bare /failed/ also matches the still-present
             // launcher copy, which produced dozens of bogus "error" notes.
@@ -174,7 +199,10 @@ async function main() {
           };
         })()`,
       );
-      if (phase.hasComposer && phase.hasTranscript) { connected = true; break; }
+      // Connected = the host chrome is up. The composer stays disabled until a
+      // workspace is selected, which is the NEXT step, so it cannot be required
+      // here.
+      if (phase.hasHostChrome) { connected = true; break; }
       if (phase.err) { notes.push(`launcher: ${phase.err.trim()}`); }
       await sleep(500);
     }

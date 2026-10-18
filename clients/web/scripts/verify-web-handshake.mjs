@@ -24,10 +24,6 @@
  */
 
 import { RemotePiAdapter } from "../src/lib/remote-pi/adapter.ts";
-import {
-  encodeCt,
-  decodeCt,
-} from "../src/lib/remote-pi/protocol.ts";
 
 const HOST_EPK = Buffer.alloc(32, 9).toString("base64");
 const ROOM = "host";
@@ -60,7 +56,7 @@ function check(label, ok) {
  * Every `request`-style method returns a promise that the test settles by hand,
  * so "were two requests in flight at once?" is answered by observation.
  */
-function createRecordingTransport(options = {}) {
+function createRecordingTransport() {
   const log = [];
   let inFlight = 0;
   let maxInFlight = 0;
@@ -110,32 +106,15 @@ function createRecordingTransport(options = {}) {
       log.push({ name: "connect", phase: "resolve", inFlight });
     },
     pair: () => begin("pair"),
-    helloHost: (peer, room) => {
-      if (options.failHello) {
-        // Fail synchronously-ish so the OTHER read is still in flight.
-        const promise = begin("hello");
-        queueMicrotask(() => pending.get("hello")?.reject(new Error("hello_failed")));
-        return promise;
-      }
-      return begin("hello");
-    },
-    listWorkspaces: () => {
-      if (options.failList) {
-        const promise = begin("list");
-        queueMicrotask(() => pending.get("list")?.reject(new Error("list_failed")));
-        return promise;
-      }
-      return begin("list");
-    },
+    helloHost: () => begin("hello"),
+    listWorkspaces: () => begin("list"),
     close: () => {},
     dispose: () => {},
   };
 
-  // Resolve helpers so the test can drive the flow deterministically.
+  // Resolve helper so the test can drive the flow deterministically.
   transport.resolveAll = () => {
     pending.get("pair")?.resolve({ ok: true });
-    // The two reads are only requested after pair resolves, so they don't exist
-    // yet on the first call; the caller re-invokes after a tick.
   };
   return transport;
 }
@@ -148,14 +127,6 @@ const fakeStorage = () => {
     removeItem: (k) => void map.delete(k),
   };
 };
-
-/** A stored session that `restore()` accepts (so the flow reaches the reads). */
-function seedStored(storage) {
-  // The adapter validates the record through `loadStoredSession`, so the shape
-  // must match what `writeStored` produces. Rather than reverse-engineer it
-  // here, drive an explicit `pair()` and let the adapter persist it.
-  void storage;
-}
 
 /** Waits until `predicate()` is true (bounded), yielding to the event loop. */
 async function until(predicate, label, budgetMs = 2000) {

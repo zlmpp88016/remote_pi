@@ -117,7 +117,6 @@ if (pageHtml === null) {
 // ── C. memo contract ──────────────────────────────────────────────────────
 console.log("\nC. contrato do memo (props estáveis = sem re-render)");
 
-const { memo } = await import("react");
 
 // React's default memo comparator is Object.is on each prop. Verify the
 // property the design depends on: for the SAME turn text, the prop object the

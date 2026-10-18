@@ -143,23 +143,11 @@ async function main() {
   console.log(`   estado: ${JSON.stringify(state)}`);
 
   // ── 3. optimistic-echo probe (DOM-level, no host needed) ─────────────────
-  // The strongest claim that CAN be verified without driving a real pairing is
-  // that the projection is synchronous: submit a turn through the exported
-  // reducer and confirm the user item exists in the SAME tick. This runs in the
-  // real page's JS context against the real module graph.
-  console.log("\n2. echo otimista é síncrono (mesmo tick)");
-  const syncEcho = await evaluate(
-    cdp,
-    `(async () => {
-      const mod = await import('/_next/static/chunks/__nonexistent__').catch(() => null);
-      return { skipped: true };
-    })()`,
-    { awaitPromise: true },
-  ).catch(() => ({ skipped: true }));
-  // Module paths are hashed by Turbopack, so importing the reducer directly from
-  // the page is not stable. The reducer-level proof lives in
-  // verify-web-chat.mjs (196 assertions); here the browser proves the DOM side.
-  console.log("   (reducer provado em verify-web-chat.mjs; aqui medimos o DOM)");
+  // The synchronous projection (a submitted turn's user item exists in the SAME
+  // tick) is asserted in verify-web-chat.mjs (196 checks); the real pairing and
+  // the send→paint number are measured in e2e-chat.mjs. Importing the reducer
+  // from the page is not stable here — Turbopack hashes the chunk paths.
+  console.log("\n2. echo otimista (reducer provado em verify-web-chat.mjs; DOM medido em e2e-chat.mjs)");
 
   // ── 4. frame responsiveness while the page sits idle ────────────────────
   console.log("\n3. responsividade de frame (baseline)");
