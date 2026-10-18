@@ -13,26 +13,100 @@
 
 ## 启动
 
+这个仓库**没有发布到 npm**。下面一切都是从本地工作副本安装——`npm install -g remote-pi-server`
+会直接 404。
+
 ```bash
-npm install -g remote-pi-server
-remote-pi-server install   # 常驻服务：登录自启
-remote-pi-server pair      # 打印 relay 地址 + 配对码（无需先跑 Pi）
-remote-pi-server daemon start
-remote-pi-server daemon status
+git clone https://github.com/exampleorg/remote_pi
+cd remote_pi/server
+npm install              # 装依赖
+npm run build            # tsc → dist/
+npm install -g .         # 把这份副本链到 PATH 上
+
+remote-pi-server install # 常驻服务：登录自启
+remote-pi-server pair    # 打印 relay 地址 + 配对码（无需先跑 Pi）
 ```
 
-把地址 + 配对码粘贴到浏览器客户端 `/server/connect`。两端 relay 必须一致
-（用 `/remote-pi config` 核对）。完整安装见[守护进程模式](#守护进程模式)。
+装完就这些。重新构建 / 升级 / 卸载见[安装・更新・卸载](#安装更新卸载)，
+日常运维细节见[守护进程模式](#守护进程模式)。
 
-本包提供**守护进程与控制平面**（`pi-supervisord` + `remote-pi` CLI），以及把它们全部接通
-的 `/remote-pi` Pi 命令。守护进程才是规范的连接入口；`/remote-pi` 则是日常入口 ——
+本包提供**守护进程与控制平面**（`pi-supervisord` + `remote-pi-server` CLI），以及把它们
+全部接通的 `/remote-pi` Pi 命令。守护进程才是规范的连接入口；`/remote-pi` 则是日常入口 ——
 只想着让当前这个 Pi 会话可达时用它。
 
 > **本包不只是 Pi 插件。** 它是「在一台机器上运行和管理 Pi」的软件 —— 常驻 supervisor、
 > 操作 CLI、配对、工作区生命周期、文件系统导航，以及本机智能体 mesh —— 而手机应用、
-> 浏览器客户端和 Cockpit 桌面端都是它的客户端。请**全局安装**
-> （`npm install -g remote-pi-server`），这样 `remote-pi-server` 和 `pi-supervisord` 才会进 PATH；
-> `pi install ./path/to/repo/server` 只注册面向 Pi 的那部分插件。
+> 浏览器客户端和 Cockpit 桌面端都是它的客户端。从本地副本**全局安装**之后，
+> `remote-pi-server` 和 `pi-supervisord` 才会进 PATH；`pi install ./本仓库/server` 只注册
+> 面向 Pi 的那部分插件，是可选的（见下）。
+
+## 安装・更新・卸载
+
+四个动作全走本地副本。`npm install -g .` 建的是指向该副本的**软链**，不是拷贝 ——
+正因为如此，下面的更新流程才这么短。
+
+### 安装（首次）
+
+```bash
+cd remote_pi/server
+npm install          # 装依赖（用 pnpm 的话会遵循 pnpm-lock.yaml）
+npm run build        # tsc → dist/
+npm install -g .     # 把这份副本链成全局 remote-pi-server
+
+remote-pi-server set-relay https://relay.example.com
+remote-pi-server create /path/to/workspace --name "项目名"
+remote-pi-server install      # 用户级服务（systemd/launchd/任务计划程序）
+remote-pi-server daemon status
+```
+
+### 更新（`git pull` 或改完代码之后）
+
+```bash
+cd remote_pi && git pull
+cd server
+npm install          # 只有依赖变了才需要
+npm run build        # 重新生成 dist/
+remote-pi-server daemon restart   # 用新的 dist/ 重启
+```
+
+**不需要**重跑 `npm install -g .`：全局入口是软链，重新 build 就地生效。只有当你把仓库
+整体挪到别的路径时，才需要重跑一次。
+
+### 卸载
+
+```bash
+remote-pi-server uninstall        # 停掉并移除用户级服务
+npm uninstall -g remote-pi-server # 把 CLI 从 PATH 摘掉
+```
+
+`uninstall` 只删服务单元/LaunchAgent/计划任务，**保留**工作区注册表和配对状态
+（`~/.pi/remote/`）。只有当你连配对关系和工作区都想忘掉时，才删那个目录。
+
+Windows：第一次 `install` 会弹一次 UAC（因为写的是机器级的计划任务存储），
+`uninstall` 也一样（从那里删）。其余操作都不提权。
+
+### 从旧包名迁移
+
+如果你在改名之前装过，npm 不会清理旧包留下的可执行文件 —— 手动清一次：
+
+```bash
+npm uninstall -g remote-pi
+npm install -g .                  # 在 remote_pi/server 里，先 npm run build
+```
+
+如果报 `EEXIST ... pi-supervisord.cmd`，把 `$(npm prefix -g)/` 下残留的
+`pi-supervisord*` 和 `remote-pi*` 删掉再重试。
+
+### 可选：Pi 斜杠命令
+
+`remote-pi-server` 和 `/remote-pi …` 是同一份代码的两个入口。CLI 完全不需要 Pi；
+斜杠命令只在交互式 Pi 会话里存在。
+
+```bash
+pi install ./本仓库/server      # 注册 /remote-pi …
+# 或者不注册，直接带载：
+pi -e ./本仓库/server/dist/index.js
+```
 
 ## 协议与安全
 
@@ -47,7 +121,7 @@ remote-pi-server daemon status
 **A. 让这台机器常驻可达**（手机 / 浏览器 / Cockpit 随时连进来）
 
 ```bash
-npm install -g remote-pi-server     # 或者从本地仓库装，见「守护进程模式」
+cd remote_pi/server && npm install && npm run build && npm install -g .
 remote-pi-server install            # 用户级服务：登录自启
 remote-pi-server pair               # 打印地址 + 配对码，无需先跑 Pi
 ```
@@ -182,10 +256,11 @@ app 可以给一条消息附上**一张图片**（相机或相册）。它在设
 
 要求：Node 20+、Pi（宿主 coding agent）。
 
-**操作 CLI 和守护进程**（`remote-pi` + `pi-supervisord`）来自**全局**安装：
+**操作 CLI 和守护进程**（`remote-pi-server` + `pi-supervisord`）来自**全局**安装。
+这个包没有发布到 npm，所以从本地副本装：
 
 ```bash
-npm install -g remote-pi-server
+cd remote_pi/server && npm install && npm run build && npm install -g .
 ```
 
 **面向 Pi 的扩展**（自行注册 `/remote-pi` slash 命令，并部署一个智能体 skill，教 LLM 怎么用 `list_peers`、`agent_send`，以及事件驱动的收件箱 / 回复流程）按项目安装：
@@ -397,7 +472,7 @@ mesh 地址是不透明的路由值：原样回显，包括带百分号编码字
 | `/remote-pi install` | 把 `pi-supervisord` 装成系统服务 |
 | `/remote-pi uninstall` | 移除系统服务（注册记录保留） |
 
-上面所有命令既可作为 Pi 的 slash 命令（交互式）使用，也可在包全局安装后（`npm install -g remote-pi-server`）作为 shell 层的 `remote-pi-server <subcommand>` 使用。
+上面所有命令既可作为 Pi 的 slash 命令（交互式）使用，也可在 `server/` 里用 `npm install -g .` 全局装好 CLI 之后，作为 shell 层的 `remote-pi-server <subcommand>` 使用。
 
 ### 定时提示词（`cron`）
 
@@ -442,7 +517,8 @@ mesh 地址是不透明的路由值：原样回显，包括带百分号编码字
 #（单跑 `pi install ./path/to/repo/server` 只是让 Pi 扩展可用，并**不会**
 # 暴露 CLI 二进制文件 —— 见
 # https://docs.npmjs.com/cli/v10/configuring-npm/package-json#bin）。
-npm install -g remote-pi-server
+# 这个包不在 npm 上 —— 从本地副本装：
+npm install -g .
 
 # 把 supervisor 装成用户级系统服务。Linux 用 systemd --user；
 # macOS 用 launchd LaunchAgent。两者都会在登录时自启，

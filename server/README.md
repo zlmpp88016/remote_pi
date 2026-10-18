@@ -14,30 +14,109 @@
 
 ## Start
 
+This repo is **not published to npm**. Everything below installs from a local
+checkout — `npm install -g remote-pi-server` would 404.
+
 ```bash
-npm install -g remote-pi-server
-remote-pi-server install   # resident service: auto-start at login
-remote-pi-server pair      # prints relay address + pairing code (no Pi needed)
-remote-pi-server daemon start
-remote-pi-server daemon status
+git clone https://github.com/exampleorg/remote_pi
+cd remote_pi/server
+npm install              # dependencies
+npm run build            # tsc → dist/
+npm install -g .         # links this checkout onto your PATH
+
+remote-pi-server install # resident service: auto-start at login
+remote-pi-server pair    # prints relay address + pairing code (no Pi needed)
 ```
 
-Paste the address + code into the browser client at `/server/connect`.
-Keep both ends on the same relay (`/remote-pi config` to verify). Full setup
-lives in [Daemon mode](#daemon-mode).
+That is the whole install. See [Install, update, uninstall](#install-update-uninstall)
+for rebuild/upgrade/removal, and [Daemon mode](#daemon-mode) for the operational
+details.
 
 The package ships the **daemon and control plane** (`pi-supervisord` + the
-`remote-pi` CLI) plus the `/remote-pi` Pi command that wires everything up. The
-daemon is the canonical connection: `/remote-pi` is the everyday entry point
-when you just want the current Pi session reachable.
+`remote-pi-server` CLI) plus the `/remote-pi` Pi command that wires everything
+up. The daemon is the canonical connection; `/remote-pi` is the everyday entry
+point when you just want the current Pi session reachable.
 
 > **This package is more than a Pi extension.** It is the software that runs and
 > manages Pi on a machine — the resident supervisor, the operator CLI, pairing,
 > workspace lifecycle, filesystem navigation, and the local agent mesh — with the
-> mobile app, browser client, and Cockpit desktop app as its clients. Install the
-> package **globally** (`npm install -g remote-pi-server`) to get the `remote-pi-server` and
-> `pi-supervisord` binaries on your PATH; `pi install ./path/to/repo/server` only
-> registers the Pi-facing extension.
+> mobile app, browser client, and Cockpit desktop app as its clients. Installing
+> it **globally** from the checkout puts `remote-pi-server` and `pi-supervisord`
+> on your PATH; `pi install ./path/to/repo/server` only registers the Pi-facing
+> extension and is optional (see below).
+
+## Install, update, uninstall
+
+All four flows are local-checkout flows. `npm install -g .` creates a **symlink**
+to the checkout, not a copy — that is what makes the update flow below short.
+
+### Install (first time)
+
+```bash
+cd remote_pi/server
+npm install          # dependencies (honours pnpm-lock.yaml if you use pnpm)
+npm run build        # tsc → dist/
+npm install -g .     # symlink this checkout as the global remote-pi-server
+
+remote-pi-server set-relay https://relay.example.com
+remote-pi-server create /path/to/workspace --name "my project"
+remote-pi-server install      # user-level service (systemd/launchd/Task Scheduler)
+remote-pi-server daemon status
+```
+
+### Update (after `git pull` or editing code)
+
+```bash
+cd remote_pi && git pull
+cd server
+npm install          # only needed when dependencies changed
+npm run build        # regenerate dist/
+remote-pi-server daemon restart   # respawn with the new dist/
+```
+
+`npm install -g .` does **not** need to be repeated: the global entry is a
+symlink, so a rebuild is picked up in place. Re-run it only if you move the
+checkout to a different path.
+
+### Uninstall
+
+```bash
+remote-pi-server uninstall        # stop + remove the user-level service
+npm uninstall -g remote-pi-server # remove the CLI from PATH
+```
+
+`uninstall` removes the unit/LaunchAgent/scheduled task but **keeps** your
+workspace registry and pairing state (`~/.pi/remote/`). Delete that directory
+only if you also want to forget pairings and registered workspaces.
+
+Windows: the first `install` raises one UAC prompt (it writes to the machine-wide
+scheduled-task store); `uninstall` does too (it deletes from it). Everything else
+runs un-elevated.
+
+### Migration from the pre-rename package
+
+If you installed this project under its old name, npm will not remove the
+binaries it left behind — remove them by hand once:
+
+```bash
+npm uninstall -g remote-pi
+npm install -g .                  # from remote_pi/server, after npm run build
+```
+
+If it fails with `EEXIST ... pi-supervisord.cmd`, delete the leftover shims in
+`$(npm prefix -g)/` (`pi-supervisord*`, `remote-pi*`) and retry.
+
+### Optional: the Pi slash commands
+
+`remote-pi-server` and `/remote-pi …` are two entry points into the same code.
+The CLI needs no Pi at all; the slash commands exist only inside an interactive
+Pi session.
+
+```bash
+pi install ./path/to/remote_pi/server      # registers /remote-pi …
+# or, without registering:
+pi -e ./path/to/remote_pi/server/dist/index.js
+```
 
 ## Protocol & Security
 
@@ -56,7 +135,7 @@ Two ways to use this. Pick what you actually want.
 connect whenever)
 
 ```bash
-npm install -g remote-pi-server     # or install from a local checkout — see Daemon mode
+cd remote_pi/server && npm install && npm run build && npm install -g .
 remote-pi-server install            # user-level service, starts on login
 remote-pi-server pair               # prints address + code, no Pi needed
 ```
@@ -249,10 +328,10 @@ messages are unaffected.
 Requirements: Node 20+, Pi (the host coding agent).
 
 **The operator CLI and daemon** (`remote-pi` + `pi-supervisord`) come from a
-**global** install:
+**global** install, from a local checkout (the package is not on npm):
 
 ```bash
-npm install -g remote-pi-server
+cd remote_pi/server && npm install && npm run build && npm install -g .
 ```
 
 **The Pi-facing extension** (self-registers the `/remote-pi` slash command and
@@ -529,8 +608,8 @@ real name to the peer.
 | `/remote-pi uninstall` | Remove the system service (registry preserved) |
 
 All commands above work both as Pi slash commands (interactive) and as
-shell-level `remote-pi-server <subcommand>` when the package is installed
-globally (`npm install -g remote-pi-server`).
+shell-level `remote-pi-server <subcommand>` once the CLI is installed
+globally with `npm install -g .` from `server/`.
 
 ### Scheduled prompts (`cron`)
 
@@ -591,7 +670,8 @@ See [`docs/daemon.md`](./docs/daemon.md) for troubleshooting.
 # are on your PATH (`pi install ./path/to/repo/server` alone makes the Pi
 # extension available but does NOT expose the CLI binaries — see
 # https://docs.npmjs.com/cli/v10/configuring-npm/package-json#bin).
-npm install -g remote-pi-server
+# The package is NOT on npm — install from the checkout:
+npm install -g .
 
 # Install the supervisor as a user-level system service. Linux uses
 # systemd --user; macOS uses launchd LaunchAgent. Both auto-start at

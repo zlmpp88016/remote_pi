@@ -502,7 +502,7 @@ docker compose -f docker-compose.relay.yml up -d`}
           Every command works as a Pi slash command (interactive) and as a
           shell-level <InlineCode>remote-pi &lt;subcommand&gt;</InlineCode>{" "}
           when the package is installed globally (
-          <InlineCode>npm install -g remote-pi-server</InlineCode>).
+          <InlineCode>npm install -g .</InlineCode> from the <InlineCode>server/</InlineCode> checkout, after <InlineCode>npm run build</InlineCode>).
         </p>
 
         <DocsSubsection

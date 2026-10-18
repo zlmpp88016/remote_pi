@@ -260,11 +260,10 @@ Full security trade-offs and the self-hosting guide live in
 
 ### 1. Run the host daemon
 
-Install the package globally so the `remote-pi` CLI and the `pi-supervisord`
-daemon are on your PATH:
+Install the CLI globally from a local checkout (the package is not on npm):
 
 ```bash
-npm install -g remote-pi-server
+cd remote_pi/server && npm install && npm run build && npm install -g .
 ```
 
 Install the daemon as a user-level system service (Linux `systemd --user`, macOS
