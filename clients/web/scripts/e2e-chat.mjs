@@ -4,7 +4,7 @@
  * This is the measurement the goal actually asks for: pair for real, send a
  * real message, and time how long until the user's own bubble is on screen.
  *
- * The pairing code is read from the host (`remote-pi pair` prints it as a
+ * The pairing code is read from the host (`remote-pi-server pair` prints it as a
  * `remotepi://pair?...` URI) and pasted into the real form, exactly like a user
  * would. The pending turn is then submitted and the DOM is polled.
  *

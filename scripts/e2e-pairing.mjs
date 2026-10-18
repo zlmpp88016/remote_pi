@@ -1,7 +1,7 @@
 // E2E: Pi <-> relay <-> App na camada de protocolo, contra o relay REAL.
 // Diagnostico de pareamento ponta-a-ponta (Pi <-> relay <-> App) na camada de
 // protocolo. Roda contra um relay REAL usando a propria implementacao de
-// transporte da extensao instalada (npm:remote-pi), para nao duplicar protocolo.
+// transporte da extensao instalada (npm:remote-pi-server), para nao duplicar protocolo.
 //
 // Uso:
 //   node scripts/e2e-pairing.mjs

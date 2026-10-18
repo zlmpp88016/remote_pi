@@ -81,7 +81,7 @@ export function ConnectionLauncher({
         </h1>
         <p className="mb-6 text-[14.5px] leading-relaxed break-words [overflow-wrap:anywhere] text-[#a3a3a3]">
           Paste the relay address and the pairing code printed by{" "}
-          <code className="font-mono text-[12.5px] text-[#d4d4d4]">remote-pi pair</code> on the
+          <code className="font-mono text-[12.5px] text-[#d4d4d4]">remote-pi-server pair</code> on the
           machine you want to drive. No Pi has to be running.
         </p>
 

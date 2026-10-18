@@ -60,7 +60,7 @@ export interface PairingOps {
 const _PAIR_ERROR_MESSAGES: Record<Exclude<HostTokenStatus, "ok">, { code: PairErrorCode; message: string }> = {
   expired: {
     code: "token_expired",
-    message: "Ephemeral token expired. Generate a new code with `remote-pi pair`.",
+    message: "Ephemeral token expired. Generate a new code with `remote-pi-server pair`.",
   },
   consumed: {
     code: "token_consumed",

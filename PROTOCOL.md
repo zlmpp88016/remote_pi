@@ -521,7 +521,7 @@ relay; restart perde o estado.
 
 ## Pareamento
 
-O código de pareamento é um **endereço colável** (`remotepi://pair?…`) mostrado pelo Pi **ou pelo daemon residente** (`remote-pi pair` sem Pi rodando, `rm=host`) — não há mais QR nem escaneamento (plan/68). O app recebe a string por colagem e o formato do payload é um contrato congelado:
+O código de pareamento é um **endereço colável** (`remotepi://pair?…`) mostrado pelo Pi **ou pelo daemon residente** (`remote-pi-server pair` sem Pi rodando, `rm=host`) — não há mais QR nem escaneamento (plan/68). O app recebe a string por colagem e o formato do payload é um contrato congelado:
 
 ```
 remotepi://pair?t=<token>&epk=<base64url>&n=<nome>[&rm=<roomId>][&r=<relayUrl>]
@@ -529,7 +529,7 @@ remotepi://pair?t=<token>&epk=<base64url>&n=<nome>[&rm=<roomId>][&r=<relayUrl>]
 
 | Param | Conteúdo |
 |---|---|
-| `t` | Bearer token do host. **Persistente por padrão** quando emitido pelo daemon (`remote-pi pair` — código "predefinido no host"): **reutilizável** por vários pareamentos, invalidado só com `--rotate`. Efêmero e **single-use** com TTL padrão de 60s quando emitido por um Pi interativo ou com `--ephemeral` — 60s é o default, não um TTL fixo para toda emissão: o TTL vem da emissão (clamp 10s–600s). É uma credencial: quem o vê pode parear |
+| `t` | Bearer token do host. **Persistente por padrão** quando emitido pelo daemon (`remote-pi-server pair` — código "predefinido no host"): **reutilizável** por vários pareamentos, invalidado só com `--rotate`. Efêmero e **single-use** com TTL padrão de 60s quando emitido por um Pi interativo ou com `--ephemeral` — 60s é o default, não um TTL fixo para toda emissão: o TTL vem da emissão (clamp 10s–600s). É uma credencial: quem o vê pode parear |
 | `epk` | Pi-key Ed25519 do host (base64url) — identidade do peer |
 | `n` | Nome da sessão/workspace, para preview antes do `pair_ok` |
 | `rm` | Room id do workspace default (opcional) |
@@ -615,7 +615,7 @@ Curto prazo:
 - Wave E3: detecção de clone server-side (alerta quando 2 WS mesma Pi-pubkey de IPs diferentes)
 
 Médio prazo:
-- **Wrappers de harness** (`remote-pi claude`, `remote-pi opencode`): outros agentes coding plugam no broker UDS local via wrapper, ganham mesh sem reimplementar protocolo
+- **Wrappers de harness** (`remote-pi-server claude`, `remote-pi-server opencode`): outros agentes coding plugam no broker UDS local via wrapper, ganham mesh sem reimplementar protocolo
 - E2E cifragem do payload (Curve25519 + ChaCha20-Poly1305 entre App ↔ Pi; opcional cross-PC)
 
 Longo prazo:

@@ -187,7 +187,7 @@ function parseGetStateResponse(line: string): { id?: string; isStreaming?: boole
  * `--name <sessionName>`, when given, pins the session's display name to the
  * daemon's identity (its `agent_name`) so every restart shows up under the
  * same stable name in the picker/app instead of an auto-generated one. The
- * daemon's name is set at registration (`remote-pi create <cwd> --name "…"`).
+ * daemon's name is set at registration (`remote-pi-server create <cwd> --name "…"`).
  * Omitted when no name resolves, so the arg list stays minimal.
  *
  * `--approve` is mandatory for a daemon (pi ≥0.79 project trust): RPC mode is

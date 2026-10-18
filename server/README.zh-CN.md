@@ -14,11 +14,11 @@
 ## 启动
 
 ```bash
-npm install -g remote-pi
-remote-pi install   # 常驻服务：登录自启
-remote-pi pair      # 打印 relay 地址 + 配对码（无需先跑 Pi）
-remote-pi daemon start
-remote-pi daemon status
+npm install -g remote-pi-server
+remote-pi-server install   # 常驻服务：登录自启
+remote-pi-server pair      # 打印 relay 地址 + 配对码（无需先跑 Pi）
+remote-pi-server daemon start
+remote-pi-server daemon status
 ```
 
 把地址 + 配对码粘贴到浏览器客户端 `/server/connect`。两端 relay 必须一致
@@ -31,8 +31,8 @@ remote-pi daemon status
 > **本包不只是 Pi 插件。** 它是「在一台机器上运行和管理 Pi」的软件 —— 常驻 supervisor、
 > 操作 CLI、配对、工作区生命周期、文件系统导航，以及本机智能体 mesh —— 而手机应用、
 > 浏览器客户端和 Cockpit 桌面端都是它的客户端。请**全局安装**
-> （`npm install -g remote-pi`），这样 `remote-pi` 和 `pi-supervisord` 才会进 PATH；
-> `pi install npm:remote-pi` 只注册面向 Pi 的那部分插件。
+> （`npm install -g remote-pi-server`），这样 `remote-pi` 和 `pi-supervisord` 才会进 PATH；
+> `pi install npm:remote-pi-server` 只注册面向 Pi 的那部分插件。
 
 ## 协议与安全
 
@@ -47,7 +47,7 @@ remote-pi daemon status
 装扩展（一次性）：
 
 ```bash
-pi install npm:remote-pi
+pi install npm:remote-pi-server
 ```
 
 然后在任意 Pi 终端里：
@@ -96,7 +96,7 @@ Remote Pi 是 Pi 的管理层。在目标机器上，**常驻的主机守护进�
 
 ### 1) 主机控制（大门）
 
-守护进程自己接受配对 —— **无需 Pi 进程**（`remote-pi pair` 打印地址 + 配对码）。
+守护进程自己接受配对 —— **无需 Pi 进程**（`remote-pi-server pair` 打印地址 + 配对码）。
 配对完成后，客户端可以：
 
 - 浏览主机文件系统并注册一个工作目录
@@ -163,13 +163,13 @@ app 可以给一条消息附上**一张图片**（相机或相册）。它在设
 **操作 CLI 和守护进程**（`remote-pi` + `pi-supervisord`）来自**全局**安装：
 
 ```bash
-npm install -g remote-pi
+npm install -g remote-pi-server
 ```
 
 **面向 Pi 的扩展**（自行注册 `/remote-pi` slash 命令，并部署一个智能体 skill，教 LLM 怎么用 `list_peers`、`agent_send`，以及事件驱动的收件箱 / 回复流程）按项目安装：
 
 ```bash
-pi install npm:remote-pi
+pi install npm:remote-pi-server
 ```
 
 光跑 `pi install` **不会**把 CLI 二进制放进 PATH —— 完整安装见[守护进程模式](#守护进程模式)。
@@ -375,21 +375,21 @@ mesh 地址是不透明的路由值：原样回显，包括带百分号编码字
 | `/remote-pi install` | 把 `pi-supervisord` 装成系统服务 |
 | `/remote-pi uninstall` | 移除系统服务（注册记录保留） |
 
-上面所有命令既可作为 Pi 的 slash 命令（交互式）使用，也可在包全局安装后（`npm install -g remote-pi`）作为 shell 层的 `remote-pi <subcommand>` 使用。
+上面所有命令既可作为 Pi 的 slash 命令（交互式）使用，也可在包全局安装后（`npm install -g remote-pi-server`）作为 shell 层的 `remote-pi <subcommand>` 使用。
 
 ### 定时提示词（`cron`）
 
-`remote-pi cron` 通过 supervisor 给守护进程安排**周期性提示词** —— 比如每天「总结一下新的 PR」。输出像任何提示词一样发后不管地流向 mesh / app；cron 层只负责审计这次派发。
+`remote-pi-server cron` 通过 supervisor 给守护进程安排**周期性提示词** —— 比如每天「总结一下新的 PR」。输出像任何提示词一样发后不管地流向 mesh / app；cron 层只负责审计这次派发。
 
 - **计划**是一个 cron 表达式（croner 语法；支持可选的第 6 个*秒*字段），可通过 `--tz` 指定 IANA 时区：
 
   ```sh
-  remote-pi cron add a1b2c3d4 "0 9 * * *" "Summarise new PRs" --tz America/Sao_Paulo
+  remote-pi-server cron add a1b2c3d4 "0 9 * * *" "Summarise new PRs" --tz America/Sao_Paulo
   ```
 
 - **最小间隔是 60 秒** —— 更频繁的计划会被拒绝（防止 token 成本和任务堆积）。**当守护进程正在处理一个回合时，这次触发会被跳过**（用 `--no-skip-busy` 覆盖）；`--wake` 会先启动已停止的守护进程；`--catchup` 会在上次运行被错过时、于 supervisor 启动时补跑一次。
-- **前提**：supervisor 必须作为服务运行（`remote-pi install`）。没有它就没有调度器，`cron` 命令会如实说明，而不是默默假装已安排。
-- **审计**：每次触发**和**每次跳过都会往 `~/.pi/remote/cron.jsonl` 追加一行，带一个 `result` 值 —— `delivered`、`woke_and_delivered`、`deliver_failed`、`skipped_busy`、`skipped_down` 或 `skipped_disabled` —— 用 `remote-pi cron log` 读它。
+- **前提**：supervisor 必须作为服务运行（`remote-pi-server install`）。没有它就没有调度器，`cron` 命令会如实说明，而不是默默假装已安排。
+- **审计**：每次触发**和**每次跳过都会往 `~/.pi/remote/cron.jsonl` 追加一行，带一个 `result` 值 —— `delivered`、`woke_and_delivered`、`deliver_failed`、`skipped_busy`、`skipped_down` 或 `skipped_disabled` —— 用 `remote-pi-server cron log` 读它。
 
 分步演练：[守护进程教程](https://remote-pi.example.invalid/tutorials/daemon)。
 
@@ -417,15 +417,15 @@ mesh 地址是不透明的路由值：原样回显，包括带百分号编码字
 
 ```bash
 # 全局安装这个包，`remote-pi` 和 `pi-supervisord` 才会进 PATH
-#（单跑 `pi install npm:remote-pi` 只是让 Pi 扩展可用，并**不会**
+#（单跑 `pi install npm:remote-pi-server` 只是让 Pi 扩展可用，并**不会**
 # 暴露 CLI 二进制文件 —— 见
 # https://docs.npmjs.com/cli/v10/configuring-npm/package-json#bin）。
-npm install -g remote-pi
+npm install -g remote-pi-server
 
 # 把 supervisor 装成用户级系统服务。Linux 用 systemd --user；
 # macOS 用 launchd LaunchAgent。两者都会在登录时自启，
 # 并能扛过重启。
-remote-pi install
+remote-pi-server install
 ```
 
 `install` 命令会：
@@ -444,21 +444,21 @@ pi                                 # /remote-pi → setup wizard, /remote-pi pai
 
 # 2. 提升为守护进程。id 由 cwd 推导而来
 #    (sha256(realpath)[:8])，跨机器稳定。
-remote-pi create ~/Movies --name "Video Editor"
+remote-pi-server create ~/Movies --name "Video Editor"
 # → Daemon registered: id=4e39152d name="Video Editor" cwd=/Users/x/Movies
 
 # 3. 启动它（supervisor 会为该目录拉起 `pi --mode rpc`）。
-remote-pi daemon start
+remote-pi-server daemon start
 ```
 
 现在你可以：
 
 ```bash
-remote-pi daemons                  # list + state
-remote-pi daemon status            # uptime, pid, restart count
-remote-pi daemon send 4e39152d "Cut the first 30 seconds of latest clip"
-remote-pi daemon stop              # stop all
-remote-pi daemon restart           # restart all
+remote-pi-server daemons                  # list + state
+remote-pi-server daemon status            # uptime, pid, restart count
+remote-pi-server daemon send 4e39152d "Cut the first 30 seconds of latest clip"
+remote-pi-server daemon stop              # stop all
+remote-pi-server daemon restart           # restart all
 ```
 
 智能体收到的提示词就像用户亲手敲的一样；它的响应经由你在交互式设置里配置好的中继 / mesh 流回来 —— 移动端 app 实时看到，同一台机器上的其他智能体也能通过本地 UDS mesh 看到。
@@ -466,8 +466,8 @@ remote-pi daemon restart           # restart all
 ### 移除或卸载
 
 ```bash
-remote-pi remove <id>              # unregister one daemon (config preserved)
-remote-pi uninstall                # remove the supervisor service (registry kept)
+remote-pi-server remove <id>              # unregister one daemon (config preserved)
+remote-pi-server uninstall                # remove the supervisor service (registry kept)
 ```
 
 `uninstall` 是可逆的 —— 以后重新跑 `install` 就能把所有已注册的守护进程带回来。要彻底抹掉注册记录，`rm ~/.pi/remote/daemons.json`。
@@ -523,7 +523,7 @@ pi-supervisord --log full
 pi-supervisord --log full --log-file /tmp/relay.log
 ```
 
-守护进程子进程自动继承级别 —— 由 supervisor 拉起时，它们的帧同样会出现。`remote-pi` 的一次性命令接受同样的 flag（`remote-pi pair --log summary`）。
+守护进程子进程自动继承级别 —— 由 supervisor 拉起时，它们的帧同样会出现。`remote-pi` 的一次性命令接受同样的 flag（`remote-pi-server pair --log summary`）。
 
 `REMOTE_PI_LOG` / `REMOTE_PI_LOG_FILE` 是等价的环境变量写法（flag 优先）；需要级别在服务重启后依然生效时（`systemd Environment=`）用它。
 

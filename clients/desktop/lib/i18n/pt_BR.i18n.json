@@ -893,12 +893,12 @@
     },
     "connect": {
       "title": "Conectar a um host Remote Pi",
-      "subtitle": "Cole o código de pareamento gerado na máquina host com `remote-pi pair`. O daemon é residente (tipo sshd): nenhum processo Pi precisa estar rodando, e um Pi morto nunca derruba a conexão.",
+      "subtitle": "Cole o código de pareamento gerado na máquina host com `remote-pi-server pair`. O daemon é residente (tipo sshd): nenhum processo Pi precisa estar rodando, e um Pi morto nunca derruba a conexão.",
       "relayPlaceholder": "Endereço do relay (wss://…)",
       "codePlaceholder": "Código de pareamento (remotepi://pair?…)",
       "submit": "Conectar",
       "connecting": "Conectando…",
-      "hint": "Na máquina host, rode `remote-pi pair` (sem Pi nenhum) e cole a URI aqui. O código é persistente até ser rotacionado com `remote-pi pair --rotate`; `--ephemeral` emite um código de uso único com 60 segundos de validade."
+      "hint": "Na máquina host, rode `remote-pi-server pair` (sem Pi nenhum) e cole a URI aqui. O código é persistente até ser rotacionado com `remote-pi-server pair --rotate`; `--ephemeral` emite um código de uso único com 60 segundos de validade."
     },
     "daemon": {
       "unknown": "daemon desconhecido"

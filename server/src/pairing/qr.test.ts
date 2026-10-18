@@ -68,7 +68,7 @@ describe("QRSession.issueToken — ttl", () => {
 /**
  * Plan/69 W1 — frozen payload regression.
  *
- * The daemon-issued host code (`remote-pi pair`, rm=host) and the Pi-issued
+ * The daemon-issued host code (`remote-pi-server pair`, rm=host) and the Pi-issued
  * code (`/remote-pi pair`) share ONE payload format — the app parses both
  * with the same paste step. Any edit to buildQRUri that changes the bytes
  * must fail here first.

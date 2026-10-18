@@ -78,7 +78,7 @@ export class SupervisorAlreadyRunningError extends Error {
   constructor(public readonly sockPath: string) {
     super(
       `Another pi-supervisord is already running (UDS held at ${sockPath}). ` +
-      "Refusing to start a second instance. Use `remote-pi daemon …` to control it, " +
+      "Refusing to start a second instance. Use `remote-pi-server daemon …` to control it, " +
       "or stop the running one first.",
     );
     this.name = "SupervisorAlreadyRunningError";
@@ -154,7 +154,7 @@ export class Supervisor {
   /** Plan/67 — always-on relay room `host`. */
   private host: HostBridge | null = null;
   /** Plan/69 — the daemon-side pairing token (`~/.pi/remote/pairing.json`).
-   *  Owned by the supervisor (NOT by any Pi process) so `remote-pi pair`
+   *  Owned by the supervisor (NOT by any Pi process) so `remote-pi-server pair`
    *  works with zero Pi running; shared with the HostBridge, which consumes
    *  it on the host room. */
   private readonly pairing: HostPairingSession;

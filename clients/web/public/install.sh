@@ -11,10 +11,10 @@
 #   2. Pi        — installs the Pi coding agent (npm package
 #                  @earendil-works/pi-coding-agent) into a user-space prefix
 #                  (~/.local) so `pi` lands on ~/.local/bin without root.
-#   3. remote-pi — installs this plugin into Pi (`pi install npm:remote-pi`).
+#   3. remote-pi — installs this plugin into Pi (`pi install npm:remote-pi-server`).
 #   4. CLI link  — symlinks the `remote-pi` CLI into ~/.local/bin.
 #   5. Supervisor— installs the per-user service (launchd GUI agent on macOS,
-#                  `systemd --user` on Linux) via `remote-pi install`.
+#                  `systemd --user` on Linux) via `remote-pi-server install`.
 #   6. Stops.    — does NOT pair. Prints the next step (pair your phone).
 #
 # OS support: macOS and native Linux. Windows is asked to use WSL and exits
@@ -30,12 +30,12 @@ set -euo pipefail
 MIN_NODE="20.6.0"               # Pi requires Node >= 20.6.0
 NODE_LTS="22"                   # what we install via nvm when Node is missing
 PI_PKG="@earendil-works/pi-coding-agent"
-PLUGIN_SPEC="npm:remote-pi"
-PLUGIN_NAME="remote-pi"
+PLUGIN_SPEC="npm:remote-pi-server"
+PLUGIN_NAME="remote-pi-server"
 USER_PREFIX="$HOME/.local"      # user-space npm global prefix (sudo-free)
 LOCAL_BIN="$USER_PREFIX/bin"
 
-# Resolved at runtime by ensure_plugin() — `pi install npm:remote-pi` runs
+# Resolved at runtime by ensure_plugin() — `pi install npm:remote-pi-server` runs
 # `npm install -g`, so the plugin lands under `npm root -g`, NOT in
 # ~/.pi/agent/npm. We can't hardcode it: it depends on the effective npm
 # prefix (nvm dir, ~/.local, a user .npmrc, …). Always ask `npm root -g`.
@@ -277,9 +277,9 @@ ensure_pi() {
 # We check both, current-behavior first, and use whichever exists. Sets the
 # global PLUGIN_DIST. Returns 1 if neither is found.
 plugin_dist_candidates() {
-  printf '%s\n' "$HOME/.pi/agent/npm/node_modules/remote-pi/dist/index.js"
+  printf '%s\n' "$HOME/.pi/agent/npm/node_modules/remote-pi-server/dist/index.js"
   local root; root="$(npm_global_root)"
-  [ -n "$root" ] && printf '%s\n' "$root/remote-pi/dist/index.js"
+  [ -n "$root" ] && printf '%s\n' "$root/remote-pi-server/dist/index.js"
 }
 
 resolve_plugin_dist() {
@@ -292,7 +292,7 @@ resolve_plugin_dist() {
 }
 
 ensure_plugin() {
-  step "Installing the remote-pi plugin into Pi"
+  step "Installing the remote-pi-server plugin into Pi"
 
   if resolve_plugin_dist; then
     ok "plugin already installed ($(dirname "$(dirname "$PLUGIN_DIST")")) — skipping"
@@ -306,21 +306,21 @@ ensure_plugin() {
   # Pi may install into ~/.pi/agent/npm (>= 0.78) or `npm root -g` (0.73).
   # resolve_plugin_dist() checks both — never a single hardcoded path.
   if ! resolve_plugin_dist; then
-    die "plugin install ran but remote-pi/dist/index.js was not found.
+    die "plugin install ran but remote-pi-server/dist/index.js was not found.
     Looked in:
-      $HOME/.pi/agent/npm/node_modules/remote-pi/dist/index.js
-      $(npm_global_root)/remote-pi/dist/index.js
+      $HOME/.pi/agent/npm/node_modules/remote-pi-server/dist/index.js
+      $(npm_global_root)/remote-pi-server/dist/index.js
     Check the 'pi install $PLUGIN_SPEC' output above."
   fi
   local pkg_json; pkg_json="$(dirname "$(dirname "$PLUGIN_DIST")")/package.json"
   local v; v="$(node -p "require('$pkg_json').version" 2>/dev/null || true)"
-  ok "installed remote-pi plugin${v:+ v$v} → $PLUGIN_DIST"
+  ok "installed remote-pi-server plugin${v:+ v$v} → $PLUGIN_DIST"
   record "Plugin:     remote-pi${v:+ v$v}"
 }
 
 # ── 4. Link the remote-pi CLI into ~/.local/bin ──────────────────────────────
 #
-# `pi install npm:remote-pi` makes the slash command available inside Pi, but it
+# `pi install npm:remote-pi-server` makes the slash command available inside Pi, but it
 # does NOT put the `remote-pi` CLI on $PATH. We symlink it ourselves (the same
 # thing `/remote-pi install` does from inside Pi's TUI, which we can't run from a
 # headless installer).
@@ -344,20 +344,20 @@ link_cli() {
 
 # ── 5. Supervisor (per-user service) ─────────────────────────────────────────
 #
-# `remote-pi install` writes a launchd GUI agent (macOS) or `systemd --user`
+# `remote-pi-server install` writes a launchd GUI agent (macOS) or `systemd --user`
 # unit (Linux) and activates it. It's idempotent (re-running refreshes the
 # unit) and never asks for sudo — it only touches per-user paths.
 
 install_supervisor() {
   step "Installing the user supervisor service ($OS)"
   # Run via the CLI we just linked. PATH already includes ~/.local/bin.
-  if remote-pi install; then
+  if remote-pi-server install; then
     ok "supervisor installed and activated"
     record "Supervisor: installed (${OS})"
   else
     warn "supervisor install reported an error — see the output above"
-    warn "you can re-run it any time with:  remote-pi install"
-    record "Supervisor: FAILED — re-run 'remote-pi install'"
+    warn "you can re-run it any time with:  remote-pi-server install"
+    record "Supervisor: FAILED — re-run 'remote-pi-server install'"
   fi
 }
 

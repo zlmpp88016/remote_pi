@@ -6,7 +6,7 @@
  *
  * Plan/69 W1 — this bridge is also the daemon-side pairing endpoint: it
  * answers `pair_request` on the host room (validating the token persisted
- * in `~/.pi/remote/pairing.json`), so `remote-pi pair` works with zero Pi
+ * in `~/.pi/remote/pairing.json`), so `remote-pi-server pair` works with zero Pi
  * processes running.
  *
  * Plan/69 W2 — the bridge is also the host_forward/host_message PROXY

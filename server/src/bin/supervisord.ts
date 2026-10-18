@@ -14,7 +14,7 @@
  *   - Listens on `~/.pi/remote/supervisor.sock` for CLI control requests
  *   - Restarts crashed children with exponential backoff
  *
- * Exits cleanly on SIGTERM/SIGINT (used by `remote-pi uninstall`).
+ * Exits cleanly on SIGTERM/SIGINT (used by `remote-pi-server uninstall`).
  */
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -30,8 +30,8 @@ Runs the long-lived supervisor: reads ~/.pi/remote/daemons.json, spawns one
 for control requests from the \`remote-pi\` CLI.
 
 Manage the fleet with:
-  remote-pi daemon start | stop | restart | status
-  remote-pi daemons
+  remote-pi-server daemon start | stop | restart | status
+  remote-pi-server daemons
 
 Options:
   --log <off|summary|full>   Log relay traffic to stderr (default: off).
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     return;
   }
   if (args.includes("-v") || args.includes("--version")) {
-    process.stdout.write("pi-supervisord (remote-pi)\n");
+    process.stdout.write("pi-supervisord (remote-pi-server)\n");
     return;
   }
 

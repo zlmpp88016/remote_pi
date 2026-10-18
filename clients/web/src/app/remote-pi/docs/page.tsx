@@ -162,7 +162,7 @@ export default function DocsPage() {
         <p>
           Requirements: Node 20+ and Pi (the host coding agent). Remote Pi
           installs as a Pi plugin with{" "}
-          <InlineCode>pi install npm:remote-pi</InlineCode>, which self-registers
+          <InlineCode>pi install npm:remote-pi-server</InlineCode>, which self-registers
           the <InlineCode>/remote-pi</InlineCode> slash command and deploys the
           agent-network skill. The complete setup — wizard, pairing, first
           command — is in the tutorial.
@@ -286,7 +286,7 @@ export default function DocsPage() {
           <InlineCode>/remote-pi install</InlineCode> once per machine to install
           the supervisor (launchd on macOS,{" "}
           <InlineCode>systemd --user</InlineCode> on Linux) and link the CLI,
-          then <InlineCode>remote-pi create &lt;folder&gt; --name &quot;…&quot;</InlineCode>{" "}
+          then <InlineCode>remote-pi-server create &lt;folder&gt; --name &quot;…&quot;</InlineCode>{" "}
           to register and start a daemon. One supervisor per machine, N daemons
           under it. Every command is in the{" "}
           <a href="#commands" className="text-accent underline">
@@ -500,7 +500,7 @@ docker compose -f docker-compose.relay.yml up -d`}
           Every command works as a Pi slash command (interactive) and as a
           shell-level <InlineCode>remote-pi &lt;subcommand&gt;</InlineCode>{" "}
           when the package is installed globally (
-          <InlineCode>npm install -g remote-pi</InlineCode>).
+          <InlineCode>npm install -g remote-pi-server</InlineCode>).
         </p>
 
         <DocsSubsection

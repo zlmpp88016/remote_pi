@@ -893,12 +893,12 @@
     },
     "connect": {
       "title": "Connect to a Remote Pi host",
-      "subtitle": "Paste the pairing code generated on the host machine with `remote-pi pair`. The daemon stays resident (like sshd): no Pi process needs to be running, and a dead Pi never drops the connection.",
+      "subtitle": "Paste the pairing code generated on the host machine with `remote-pi-server pair`. The daemon stays resident (like sshd): no Pi process needs to be running, and a dead Pi never drops the connection.",
       "relayPlaceholder": "Relay address (wss://…)",
       "codePlaceholder": "Pairing code (remotepi://pair?…)",
       "submit": "Connect",
       "connecting": "Connecting…",
-      "hint": "On the host machine, run `remote-pi pair` (no Pi required) and paste the URI here. The code is persistent until rotated with `remote-pi pair --rotate`; `--ephemeral` issues a 60-second one-shot code instead."
+      "hint": "On the host machine, run `remote-pi-server pair` (no Pi required) and paste the URI here. The code is persistent until rotated with `remote-pi-server pair --rotate`; `--ephemeral` issues a 60-second one-shot code instead."
     },
     "daemon": {
       "unknown": "unknown daemon"

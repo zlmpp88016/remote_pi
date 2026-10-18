@@ -15,11 +15,11 @@
 ## Start
 
 ```bash
-npm install -g remote-pi
-remote-pi install   # resident service: auto-start at login
-remote-pi pair      # prints relay address + pairing code (no Pi needed)
-remote-pi daemon start
-remote-pi daemon status
+npm install -g remote-pi-server
+remote-pi-server install   # resident service: auto-start at login
+remote-pi-server pair      # prints relay address + pairing code (no Pi needed)
+remote-pi-server daemon start
+remote-pi-server daemon status
 ```
 
 Paste the address + code into the browser client at `/server/connect`.
@@ -35,8 +35,8 @@ when you just want the current Pi session reachable.
 > manages Pi on a machine — the resident supervisor, the operator CLI, pairing,
 > workspace lifecycle, filesystem navigation, and the local agent mesh — with the
 > mobile app, browser client, and Cockpit desktop app as its clients. Install the
-> package **globally** (`npm install -g remote-pi`) to get the `remote-pi` and
-> `pi-supervisord` binaries on your PATH; `pi install npm:remote-pi` only
+> package **globally** (`npm install -g remote-pi-server`) to get the `remote-pi` and
+> `pi-supervisord` binaries on your PATH; `pi install npm:remote-pi-server` only
 > registers the Pi-facing extension.
 
 ## Protocol & Security
@@ -55,7 +55,7 @@ document — this README only covers user-facing setup.
 Install the extension (one-time):
 
 ```bash
-pi install npm:remote-pi
+pi install npm:remote-pi-server
 ```
 
 Then in any Pi terminal:
@@ -117,7 +117,7 @@ combination:
 
 ### 1) Host control (the front door)
 
-The daemon accepts pairing itself — **no Pi process required** (`remote-pi pair`
+The daemon accepts pairing itself — **no Pi process required** (`remote-pi-server pair`
 prints the address + code). Once paired, a client can:
 
 - browse the host filesystem and register a working directory
@@ -229,7 +229,7 @@ Requirements: Node 20+, Pi (the host coding agent).
 **global** install:
 
 ```bash
-npm install -g remote-pi
+npm install -g remote-pi-server
 ```
 
 **The Pi-facing extension** (self-registers the `/remote-pi` slash command and
@@ -237,7 +237,7 @@ deploys an agent skill that teaches the LLM how to use `list_peers`,
 `agent_send`, and the event-driven inbox/reply flow) is installed per project:
 
 ```bash
-pi install npm:remote-pi
+pi install npm:remote-pi-server
 ```
 
 `pi install` alone does **not** put the CLI binaries on your PATH — see
@@ -506,12 +506,12 @@ real name to the peer.
 | `/remote-pi uninstall` | Remove the system service (registry preserved) |
 
 All commands above work both as Pi slash commands (interactive) and as
-shell-level `remote-pi <subcommand>` when the package is installed
-globally (`npm install -g remote-pi`).
+shell-level `remote-pi-server <subcommand>` when the package is installed
+globally (`npm install -g remote-pi-server`).
 
 ### Scheduled prompts (`cron`)
 
-`remote-pi cron` schedules **recurring prompts** to daemons through the
+`remote-pi-server cron` schedules **recurring prompts** to daemons through the
 supervisor — e.g. a daily "summarise new PRs". Output flows fire-and-forget to
 the mesh/app like any prompt; the cron layer only audits the dispatch.
 
@@ -519,20 +519,20 @@ the mesh/app like any prompt; the cron layer only audits the dispatch.
   field is supported), with an optional IANA timezone via `--tz`:
 
   ```sh
-  remote-pi cron add a1b2c3d4 "0 9 * * *" "Summarise new PRs" --tz America/Sao_Paulo
+  remote-pi-server cron add a1b2c3d4 "0 9 * * *" "Summarise new PRs" --tz America/Sao_Paulo
   ```
 
 - **Minimum interval is 60s** — more frequent schedules are rejected (guards
   token cost + pileup). A fire is **skipped when the daemon is mid-turn**
   (`--no-skip-busy` to override); `--wake` starts a stopped daemon first;
   `--catchup` runs once on supervisor start if the previous run was missed.
-- **Prerequisite**: the supervisor must run as a service (`remote-pi install`).
+- **Prerequisite**: the supervisor must run as a service (`remote-pi-server install`).
   Without it there is no scheduler, and `cron` commands say so instead of
   silently pretending to schedule.
 - **Audit**: every fire **and** every skip appends one line to
   `~/.pi/remote/cron.jsonl` with a `result` of `delivered`,
   `woke_and_delivered`, `deliver_failed`, `skipped_busy`, `skipped_down`, or
-  `skipped_disabled` — read it with `remote-pi cron log`.
+  `skipped_disabled` — read it with `remote-pi-server cron log`.
 
 Step-by-step walkthrough: the [daemon tutorial](https://remote-pi.example.invalid/tutorials/daemon).
 
@@ -565,15 +565,15 @@ See [`docs/daemon.md`](./docs/daemon.md) for troubleshooting.
 
 ```bash
 # Install the package globally so `remote-pi` and `pi-supervisord`
-# are on your PATH (`pi install npm:remote-pi` alone makes the Pi
+# are on your PATH (`pi install npm:remote-pi-server` alone makes the Pi
 # extension available but does NOT expose the CLI binaries — see
 # https://docs.npmjs.com/cli/v10/configuring-npm/package-json#bin).
-npm install -g remote-pi
+npm install -g remote-pi-server
 
 # Install the supervisor as a user-level system service. Linux uses
 # systemd --user; macOS uses launchd LaunchAgent. Both auto-start at
 # login and survive reboots.
-remote-pi install
+remote-pi-server install
 ```
 
 The `install` command:
@@ -593,21 +593,21 @@ pi                                 # /remote-pi → setup wizard, /remote-pi pai
 
 # 2. Promote to a daemon. The id is derived from the cwd
 #    (sha256(realpath)[:8]), stable across machines.
-remote-pi create ~/Movies --name "Video Editor"
+remote-pi-server create ~/Movies --name "Video Editor"
 # → Daemon registered: id=4e39152d name="Video Editor" cwd=/Users/x/Movies
 
 # 3. Start it (supervisor spawns `pi --mode rpc` for this folder).
-remote-pi daemon start
+remote-pi-server daemon start
 ```
 
 Now you can:
 
 ```bash
-remote-pi daemons                  # list + state
-remote-pi daemon status            # uptime, pid, restart count
-remote-pi daemon send 4e39152d "Cut the first 30 seconds of latest clip"
-remote-pi daemon stop              # stop all
-remote-pi daemon restart           # restart all
+remote-pi-server daemons                  # list + state
+remote-pi-server daemon status            # uptime, pid, restart count
+remote-pi-server daemon send 4e39152d "Cut the first 30 seconds of latest clip"
+remote-pi-server daemon stop              # stop all
+remote-pi-server daemon restart           # restart all
 ```
 
 The agent receives the prompt as if a user typed it; its response flows
@@ -618,8 +618,8 @@ via the local UDS mesh.
 ### Removing or uninstalling
 
 ```bash
-remote-pi remove <id>              # unregister one daemon (config preserved)
-remote-pi uninstall                # remove the supervisor service (registry kept)
+remote-pi-server remove <id>              # unregister one daemon (config preserved)
+remote-pi-server uninstall                # remove the supervisor service (registry kept)
 ```
 
 `uninstall` is reversible — re-running `install` later brings every
@@ -687,7 +687,7 @@ pi-supervisord --log full --log-file /tmp/relay.log
 
 Daemon children inherit the level automatically — spawn them from the
 supervisor and their frames show up too. The `remote-pi` one-shots accept the
-same flags (`remote-pi pair --log summary`).
+same flags (`remote-pi-server pair --log summary`).
 
 `REMOTE_PI_LOG` / `REMOTE_PI_LOG_FILE` are the env equivalents (flags win);
 use them when you need the level to survive a service restart

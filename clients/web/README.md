@@ -36,7 +36,7 @@ commands). pnpm drops `run`: `pnpm dev`, `pnpm build`, `pnpm start`, `pnpm lint`
 
 Open <http://localhost:3000/remote-pi/connect> — or click **Open web client** in
 the `/remote-pi` nav — then paste the relay address + `remotepi://pair?...` code
-printed by `remote-pi pair` on the host machine. The dev server and the relay
+printed by `remote-pi-server pair` on the host machine. The dev server and the relay
 both default to port 3000 — run one of them on another port when they share a
 machine (`npx next dev -p 3167`).
 

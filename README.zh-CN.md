@@ -95,13 +95,13 @@ wss://relay.880160.xyz
 全局安装，让 `remote-pi` CLI 和 `pi-supervisord` 守护进程进 PATH：
 
 ```bash
-npm install -g remote-pi
+npm install -g remote-pi-server
 ```
 
 把守护进程装成用户级系统服务（Linux `systemd --user`、macOS launchd、Windows 任务计划程序）。登录即自启，重启也不丢：
 
 ```bash
-remote-pi install
+remote-pi-server install
 ```
 
 守护进程随即起来、连上中继，让这台机器保持在线 —— **无需任何 Pi 在跑**。
@@ -111,7 +111,7 @@ remote-pi install
 直接从守护进程配对（不需要 Pi）：
 
 ```bash
-remote-pi pair        # 打印地址 + 一次性/持久配对码
+remote-pi-server pair        # 打印地址 + 一次性/持久配对码
 ```
 
 把地址和配对码填进手机应用、浏览器客户端或 Cockpit。配对完成后，客户端即可浏览主机文件系统、

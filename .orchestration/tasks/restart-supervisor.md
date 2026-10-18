@@ -1,9 +1,9 @@
-# Task: comando CLI `remote-pi restart-supervisor`
+# Task: comando CLI `remote-pi-server restart-supervisor`
 
 ## Contexto
 
 O **Cockpit** (app desktop) ganhou um botão **"Reiniciar supervisor"** na aba
-"Daemon Agents". Ele faz shell-out `remote-pi restart-supervisor`.
+"Daemon Agents". Ele faz shell-out `remote-pi-server restart-supervisor`.
 
 Por que isso é necessário: o `pi-supervisord` é um processo Node long-running e
 **não faz hot-reload**. Toda vez que o `dist` do pi-extension é rebuildado, o
@@ -54,12 +54,12 @@ remote-pi, exposta como um comando de CLI.
 
 ## Como o Cockpit chama
 
-`remote-pi restart-supervisor` (sem args). O Cockpit resolve o binário em
+`remote-pi-server restart-supervisor` (sem args). O Cockpit resolve o binário em
 `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` ou no PATH.
 
 ## Aceite
 
-- `remote-pi restart-supervisor` reinicia o `pi-supervisord` no macOS (e Linux),
+- `remote-pi-server restart-supervisor` reinicia o `pi-supervisord` no macOS (e Linux),
   sai `0` no sucesso / ≠0 na falha, aparece no help, e o `dist` foi rebuildado.
-- Validável: rodar o comando e ver o supervisor voltar (ex.: `remote-pi daemons`
+- Validável: rodar o comando e ver o supervisor voltar (ex.: `remote-pi-server daemons`
   mostra os daemons com uptime resetado).

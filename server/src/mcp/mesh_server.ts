@@ -9,7 +9,7 @@
  * and (as leader) bring up its own cross-PC relay bridge with its own
  * Pi-key. As a follower it rides the existing leader's bridge.
  *
- * Launched by `remote-pi claude` (registers this in Claude's local MCP
+ * Launched by `remote-pi-server claude` (registers this in Claude's local MCP
  * scope). Args: [--cwd <path>] [--name <agentName>] [--no-bridge]
  * Env: REMOTE_PI_MCP_CWD, REMOTE_PI_MCP_NAME
  */
@@ -32,7 +32,7 @@ const _argv = process.argv.slice(2);
 // Claude sets as this subprocess's `process.cwd()`. We deliberately do NOT use
 // CLAUDE_PROJECT_DIR: that's the git repo root, which would collapse every
 // monorepo subproject (clients/mobile/, relay/, …) into one identity + one lock. The
-// `remote-pi claude` launcher therefore registers us WITHOUT a baked `--cwd`,
+// `remote-pi-server claude` launcher therefore registers us WITHOUT a baked `--cwd`,
 // so one shared local-scope entry self-identifies per session. `--cwd` and
 // REMOTE_PI_MCP_CWD remain as explicit overrides (tests / manual launches).
 let _cwd = process.env["REMOTE_PI_MCP_CWD"] ?? process.cwd();
@@ -249,7 +249,7 @@ async function main(): Promise<void> {
   await mcp.connect(transport);
 
   // Only join the mesh if this folder is an actual remote-pi agent — i.e. it
-  // has a local config (written by the `remote-pi claude` wizard) or an
+  // has a local config (written by the `remote-pi-server claude` wizard) or an
   // explicit name override. `-s local` MCP registrations are inherited by
   // EVERY claude session in the git repo, so without this gate a plain claude
   // opened in any subfolder would auto-grab that folder's lock and join as a
@@ -261,7 +261,7 @@ async function main(): Promise<void> {
     void tryJoinMesh();
   } else {
     degradedReason =
-      `this folder is not a remote-pi agent (no config). Run "remote-pi claude" ` +
+      `this folder is not a remote-pi agent (no config). Run "remote-pi-server claude" ` +
       `here to make it one. Mesh tools are idle.`;
   }
 }
@@ -321,7 +321,7 @@ function _failLoud(reason: string): never {
     `FATAL: ${reason}. Exiting so the failure is visible. cwd=${_cwd}. ` +
     `Most likely you launched claude in the WRONG FOLDER, or this folder ` +
     `already has a running remote-pi agent (a duplicate session). ` +
-    `Launch one agent per folder via "remote-pi claude" from the project dir.`,
+    `Launch one agent per folder via "remote-pi-server claude" from the project dir.`,
   );
   process.exit(1);
 }

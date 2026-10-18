@@ -6,17 +6,17 @@ likely causes and how to fix.
 
 ---
 
-## 1. `remote-pi install` fails
+## 1. `remote-pi-server install` fails
 
 ### "supervisor script not found"
 
 ```
-[remote-pi] install failed: Error: supervisor script not found at
+[remote-pi-server] install failed: Error: supervisor script not found at
 /Users/x/dist/bin/supervisord.js. Run `pnpm build` (dev) or
-`npm install -g remote-pi` (prod) first.
+`npm install -g remote-pi-server` (prod) first.
 ```
 
-You're running `remote-pi install` from a dev clone where `dist/` doesn't
+You're running `remote-pi-server install` from a dev clone where `dist/` doesn't
 exist yet, or from a partial install.
 
 ```bash
@@ -24,9 +24,9 @@ exist yet, or from a partial install.
 cd server && pnpm build
 
 # Production install:
-npm install -g remote-pi      # or pnpm install -g remote-pi
+npm install -g remote-pi-server      # or pnpm install -g remote-pi-server
 which pi-supervisord          # confirm bin is on PATH
-remote-pi install
+remote-pi-server install
 ```
 
 ### "launchctl: bootstrap … already running"
@@ -39,7 +39,7 @@ the new one. If it still fails:
 launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/dev.remotepi.supervisord.plist
 launchctl unload ~/Library/LaunchAgents/dev.remotepi.supervisord.plist 2>/dev/null
 rm ~/Library/LaunchAgents/dev.remotepi.supervisord.plist
-remote-pi install
+remote-pi-server install
 ```
 
 ### "systemctl --user … No such file or directory"
@@ -51,7 +51,7 @@ the unit survives logout:
 ```bash
 loginctl enable-linger $USER
 systemctl --user daemon-reload
-remote-pi install
+remote-pi-server install
 ```
 
 ---
@@ -73,16 +73,16 @@ tail -100 ~/.pi/remote/supervisord.log
 ### Common failures
 
 - **`pi: command not found`** in the log — Pi's binary isn't on the
-  PATH that the unit inherited. `remote-pi install` captures
+  PATH that the unit inherited. `remote-pi-server install` captures
   `process.env.PATH` at install time; if you installed Pi *after*
-  running install, re-run `remote-pi install` to refresh.
+  running install, re-run `remote-pi-server install` to refresh.
 - **`Cannot find module …`** — the path baked into the unit doesn't
   match where `dist/bin/supervisord.js` actually lives. Happens if you
   uninstalled then reinstalled the package to a different location.
-  Fix: `remote-pi uninstall && remote-pi install`.
+  Fix: `remote-pi-server uninstall && remote-pi-server install`.
 - **Permission denied on UDS** — `~/.pi/remote/` exists with wrong
   perms (rare; only happens if you ran `pi` as `sudo` once). Delete
-  the dir and let it re-create: `rm -rf ~/.pi/remote && remote-pi install`.
+  the dir and let it re-create: `rm -rf ~/.pi/remote && remote-pi-server install`.
 
 ### Run the supervisor in the foreground for debugging
 
@@ -95,13 +95,13 @@ pi-supervisord
 ```
 
 Ctrl-C to stop. If that works but the service doesn't, the problem is
-in the unit/plist environment (PATH, HOME) — re-run `remote-pi install`.
+in the unit/plist environment (PATH, HOME) — re-run `remote-pi-server install`.
 
 ---
 
 ## 3. A specific daemon stays `crashed`
 
-`remote-pi daemon status` shows one row with `state=crashed` and a
+`remote-pi-server daemon status` shows one row with `state=crashed` and a
 restart count near 4 (the supervisor gives up after exponential
 backoff: 1s, 5s, 30s, 5min).
 
@@ -130,7 +130,7 @@ Common reasons a daemon won't start:
 
 - **Local config missing.** `cd` into the daemon's folder and check
   `.pi/server/config.json` exists with `auto_start_relay: true`.
-  Recreate via `remote-pi create <cwd>` (it provisions a default config
+  Recreate via `remote-pi-server create <cwd>` (it provisions a default config
   when missing).
 - **Pi extension config drift.** Pi's own settings (model, API keys)
   reset → daemon fails to authenticate to the provider. Run
@@ -144,7 +144,7 @@ Common reasons a daemon won't start:
 After fixing the underlying problem, kick the supervisor:
 
 ```bash
-remote-pi daemon restart      # bounces every daemon
+remote-pi-server daemon restart      # bounces every daemon
 ```
 
 ---
@@ -156,14 +156,14 @@ Most common cause: the daemon never started OR it crashed past the
 retry budget.
 
 ```bash
-remote-pi daemon status       # is state running?
-remote-pi daemon start        # spawn any that aren't running
+remote-pi-server daemon status       # is state running?
+remote-pi-server daemon start        # spawn any that aren't running
 # Then retry send.
 ```
 
 If `daemon start` shows `started=0, already_running=N`, the supervisor
 isn't actually spawning. Possible reasons:
-- Registry empty: `remote-pi daemons` to verify.
+- Registry empty: `remote-pi-server daemons` to verify.
 - Child crashes faster than the status check: `daemon status` immediately
   after start may still show `running` for a few seconds before the
   exit event marks it crashed. Re-check 2-3 seconds later.
@@ -184,7 +184,7 @@ cd <daemon-cwd>
 pi
 > /remote-pi devices         # confirm the device is listed
 > /remote-pi stop            # stop interactive session — daemon takes over
-remote-pi daemon restart
+remote-pi-server daemon restart
 ```
 
 ### Confirm the relay URL matches
@@ -202,15 +202,15 @@ The relay line should match what the mobile app is connecting to. If
 not, update the relay URL and bounce the daemon:
 
 ```bash
-remote-pi set-relay https://relay.example.tld
-remote-pi daemon restart
+remote-pi-server set-relay https://relay.example.tld
+remote-pi-server daemon restart
 ```
 
 ---
 
 ## 6. Registry corrupted / partial
 
-Symptom: `remote-pi daemons` errors out or shows nothing despite
+Symptom: `remote-pi-server daemons` errors out or shows nothing despite
 having created entries.
 
 ```bash
@@ -233,9 +233,9 @@ and re-create:
 
 ```bash
 rm ~/.pi/remote/daemons.json
-remote-pi create ~/Movies --name "Video Editor"
-remote-pi create ~/Projects/backend --name "Backend"
-remote-pi daemon restart
+remote-pi-server create ~/Movies --name "Video Editor"
+remote-pi-server create ~/Projects/backend --name "Backend"
+remote-pi-server daemon restart
 ```
 
 ---
@@ -245,11 +245,11 @@ remote-pi daemon restart
 When you suspect everything is misconfigured:
 
 ```bash
-remote-pi uninstall              # removes service, keeps registry
+remote-pi-server uninstall              # removes service, keeps registry
 rm -rf ~/.pi/remote               # nukes registry + paired devices + keys
 npm uninstall -g remote-pi
-npm install -g remote-pi
-remote-pi install
+npm install -g remote-pi-server
+remote-pi-server install
 # Then re-pair + re-create daemons from scratch.
 ```
 
@@ -278,12 +278,12 @@ ls ~/.pi/remote/locks/
 cat ~/.pi/remote/peers.json
 
 # What Pi binary is the supervisor about to spawn?
-remote-pi install --dry-run      # (not implemented; check ~/Library/LaunchAgents or systemd unit manually)
+remote-pi-server install --dry-run      # (not implemented; check ~/Library/LaunchAgents or systemd unit manually)
 
 # Quick liveness check
-remote-pi daemon status
+remote-pi-server daemon status
 ```
 
 If after walking the list you're still stuck, file an issue with the
-output of `remote-pi daemon status`, the recent supervisor log, and
+output of `remote-pi-server daemon status`, the recent supervisor log, and
 the contents of `~/.pi/remote/daemons.json`.

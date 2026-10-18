@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
  * Uninstall reverses both. Idempotent — re-running install over an existing
  * unit refreshes it (paths could have changed if user moved node_modules).
  *
- * **What does NOT happen here**: the actual `npm install -g remote-pi` step.
+ * **What does NOT happen here**: the actual `npm install -g remote-pi-server` step.
  * The user has to make the supervisor bin reachable on disk before install
  * can wire up the service. The `findSupervisorScript` resolver detects
  * common cases (npm global, pnpm global, local dev clone) and yields a
@@ -61,9 +61,9 @@ export function findSupervisorScript(): string {
 
 /**
  * Absolute path to the extension's CLI entry (`dist/index.js`). This is
- * the file we symlink to `~/.local/bin/remote-pi` so the user can run
- * `remote-pi <subcommand>` from any shell after installing the extension
- * through Pi (`pi install npm:remote-pi`).
+ * the file we symlink to `~/.local/bin/remote-pi-server` so the user can run
+ * `remote-pi-server <subcommand>` from any shell after installing the extension
+ * through Pi (`pi install npm:remote-pi-server`).
  *
  * Same resolution strategy as `findSupervisorScript`: from
  * `dist/daemon/install.js` → `dist/index.js`.
@@ -78,7 +78,7 @@ export function findRemotePiScript(): string {
 export function findNodeBinary(): string {
   // `process.execPath` is always absolute and points at the current Node
   // binary. Embedding it in the service unit means the user gets the
-  // exact same Node version they invoked `remote-pi install` with — no
+  // exact same Node version they invoked `remote-pi-server install` with — no
   // PATH ambiguity at boot time.
   return process.execPath;
 }
@@ -208,7 +208,7 @@ export function installService(vars: RenderVars = defaultRenderVars()): InstallR
   if (!existsSync(vars.supervisor)) {
     throw new Error(
       `supervisor script not found at ${vars.supervisor}. ` +
-      "Run `pnpm build` (dev) or `npm install -g remote-pi` (prod) first.",
+      "Run `pnpm build` (dev) or `npm install -g remote-pi-server` (prod) first.",
     );
   }
 
@@ -259,7 +259,7 @@ export function installService(vars: RenderVars = defaultRenderVars()): InstallR
     // Only `schtasks /Create` modifies the root task store → that single op
     // needs admin (elevate it via UAC). `/End` (stop a prior instance) and
     // `/Run` (start it) act on a task we already own and work un-elevated — the
-    // very ops `remote-pi restart-supervisor` runs without elevation. Keeping
+    // very ops `remote-pi-server restart-supervisor` runs without elevation. Keeping
     // them un-elevated narrows the admin surface to the one operation that
     // truly requires it.
     _tryExec("schtasks", ["/End", "/TN", WINDOWS_TASK_NAME], log);
@@ -426,10 +426,10 @@ function _execElevatedWindows(lines: string[], log: string[]): void {
 
 // ── CLI bin linking (plan/27) ─────────────────────────────────────────────────
 //
-// When the user installs Remote Pi through Pi (`pi install npm:remote-pi`),
+// When the user installs Remote Pi through Pi (`pi install npm:remote-pi-server`),
 // the extension's `bin` entries in package.json never reach `$PATH` — Pi's
-// installer ignores them. Without `npm install -g remote-pi` a second time,
-// the user can't run `remote-pi daemon …` from a shell.
+// installer ignores them. Without `npm install -g remote-pi-server` a second time,
+// the user can't run `remote-pi-server daemon …` from a shell.
 //
 // `linkCliBinaries` writes two symlinks into `~/.local/bin/`:
 //   - `remote-pi`     → `<extensionRoot>/dist/index.js`
@@ -441,8 +441,8 @@ function _execElevatedWindows(lines: string[], log: string[]): void {
 //
 // This step is opt-in and runs ONLY when the slash-command path triggers
 // `_cmdInstall` — i.e., the user is inside Pi's TUI. The CLI-mode path
-// (`remote-pi install` invoked from a shell because the user did
-// `npm install -g remote-pi`) MUST NOT symlink — the user already has
+// (`remote-pi-server install` invoked from a shell because the user did
+// `npm install -g remote-pi-server`) MUST NOT symlink — the user already has
 // working bins from npm-global, and stomping them with our symlinks
 // would point them at the *Pi-extension copy* instead of the npm-global
 // copy, which is a different file tree and would diverge on upgrades.
@@ -473,7 +473,7 @@ export function isOnPath(dir: string, envPath: string = process.env["PATH"] ?? "
 }
 
 /**
- * Create (or refresh) the `remote-pi` + `pi-supervisord` symlinks in
+ * Create (or refresh) the `remote-pi-server` + `pi-supervisord` symlinks in
  * `~/.local/bin/`. Idempotent — replaces stale links pointing at old
  * extension paths (Pi can reinstall the extension to a different hash dir
  * on upgrades, so this MUST overwrite).
@@ -490,7 +490,7 @@ export function linkCliBinaries(
   const binDir = userLocalBinDir(home);
 
   // Windows (plan/40): no POSIX symlinks. Installing via Pi (`pi install
-  // npm:remote-pi`) never reaches PATH, so write real `.cmd` shims into
+  // npm:remote-pi-server`) never reaches PATH, so write real `.cmd` shims into
   // `~/.local/bin` and add that dir to the user's PATH (HKCU — no admin).
   if (platform() === "win32") {
     return _linkCliBinariesWindows(home, binDir, paths, opts);
@@ -505,7 +505,7 @@ export function linkCliBinaries(
   const supervisord = paths.supervisord ?? findSupervisorScript();
   if (!existsSync(remotePi)) {
     throw new Error(
-      `remote-pi script not found at ${remotePi}. ` +
+      `remote-pi-server script not found at ${remotePi}. ` +
       "Run `pnpm build` (dev) or reinstall the extension.",
     );
   }
@@ -524,7 +524,7 @@ export function linkCliBinaries(
   try { chmodSync(supervisord, 0o755); } catch { /* best-effort */ }
 
   const links: LinkBinariesResult["links"] = [
-    { name: "remote-pi",     path: join(binDir, "remote-pi"),      target: remotePi },
+    { name: "remote-pi-server", path: join(binDir, "remote-pi-server"), target: remotePi },
     { name: "pi-supervisord", path: join(binDir, "pi-supervisord"), target: supervisord },
   ];
   for (const link of links) {
@@ -544,7 +544,7 @@ export function linkCliBinaries(
 }
 
 /**
- * Windows variant of `linkCliBinaries`: writes `remote-pi.cmd` +
+ * Windows variant of `linkCliBinaries`: writes `remote-pi-server.cmd` +
  * `pi-supervisord.cmd` shims into `~/.local/bin` and ensures that dir is on the
  * user's PATH (User scope — no admin). `opts.node` overrides the node binary
  * (tests); `opts.mutatePath === false` skips the real PATH mutation (tests).
@@ -565,7 +565,7 @@ function _linkCliBinariesWindows(
   const supervisord = paths.supervisord ?? findSupervisorScript();
   if (!existsSync(remotePi)) {
     throw new Error(
-      `remote-pi script not found at ${remotePi}. ` +
+      `remote-pi-server script not found at ${remotePi}. ` +
       "Run `pnpm build` (dev) or reinstall the extension.",
     );
   }
@@ -577,7 +577,7 @@ function _linkCliBinariesWindows(
   }
 
   const links: LinkBinariesResult["links"] = [
-    { name: "remote-pi.cmd",      path: join(binDir, "remote-pi.cmd"),      target: remotePi },
+    { name: "remote-pi-server.cmd", path: join(binDir, "remote-pi-server.cmd"), target: remotePi },
     { name: "pi-supervisord.cmd", path: join(binDir, "pi-supervisord.cmd"), target: supervisord },
   ];
   for (const link of links) {
@@ -643,8 +643,8 @@ export function unlinkCliBinaries(home: string = homedir()): UnlinkBinariesResul
   // Windows shims are `.cmd` files (linkCliBinaries writes those); POSIX uses
   // extensionless symlinks. Match what was actually created on this platform.
   const names = platform() === "win32"
-    ? ["remote-pi.cmd", "pi-supervisord.cmd"]
-    : ["remote-pi", "pi-supervisord"];
+    ? ["remote-pi-server.cmd", "pi-supervisord.cmd"]
+    : ["remote-pi-server", "pi-supervisord"];
   const removed: UnlinkBinariesResult["removed"] = [];
 
   for (const name of names) {

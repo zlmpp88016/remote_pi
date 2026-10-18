@@ -10,13 +10,13 @@ import { TOKEN_TTL_MS } from "./qr.js";
  *
  * Where `QRSession` (qr.ts) keeps the single active token in the RAM of one
  * Pi process, this store persists it to `~/.pi/remote/pairing.json` so
- * `remote-pi pair` works with ZERO Pi processes running and the code
+ * `remote-pi-server pair` works with ZERO Pi processes running and the code
  * survives a supervisor reboot.
  *
  * Two modes:
  *  - **persistent** (default): the code is "predefined on the host" — it
  *    stays valid across restarts and may pair any number of devices until
- *    it is explicitly rotated (`remote-pi pair --rotate`).
+ *    it is explicitly rotated (`remote-pi-server pair --rotate`).
  *  - **ephemeral** (`--ephemeral`): short TTL and single-use, reusing the
  *    `QRSession` semantics for callers who prefer them.
  *

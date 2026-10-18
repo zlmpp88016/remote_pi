@@ -233,7 +233,7 @@ describe("plan/69 — HostBridge pair_request (daemon-side pairing)", () => {
         type: "pair_error",
         in_reply_to: "req-1",
         code: "token_expired",
-        message: "Ephemeral token expired. Generate a new code with `remote-pi pair`.",
+        message: "Ephemeral token expired. Generate a new code with `remote-pi-server pair`.",
       });
       expect(await storage.listPeers()).toHaveLength(0);
     } finally {

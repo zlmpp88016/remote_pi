@@ -39,7 +39,7 @@ chmod +x /usr/local/bin/cloudflared
 
 cloudflared tunnel login
 cloudflared tunnel create remote-pi
-cloudflared tunnel route dns remote-pi relay.example.com
+cloudflared tunnel route dns remote-pi-server relay.example.com
 
 # 127.0.0.1:3001 is the port the relay is published on (step 1)
 cloudflared tunnel run --url http://127.0.0.1:3001 remote-pi
@@ -56,8 +56,8 @@ git clone https://github.com/exampleorg/remote_pi
 cd remote_pi
 bash server/install.sh
 
-remote-pi set-relay https://relay.example.com   # http(s), not wss
-remote-pi pair                                  # prints address + code
+remote-pi-server set-relay https://relay.example.com   # http(s), not wss
+remote-pi-server pair                                  # prints address + code
 ```
 
 `install.sh` installs Node, Pi, the plugin and the daemon service. No `sudo`.
@@ -84,7 +84,7 @@ typed into the page (and stored in the browser afterwards).
 [App Store](https://apps.apple.com/app/remote-pi-coding-agent/id6773499691) ·
 [APK](https://github.com/exampleorg/remote_pi/releases)
 
-Scan the QR printed by `remote-pi pair`, or enter the same address + code.
+Scan the QR printed by `remote-pi-server pair`, or enter the same address + code.
 
 
 ## Links
@@ -183,14 +183,14 @@ Install the package globally so the `remote-pi` CLI and the `pi-supervisord`
 daemon are on your PATH:
 
 ```bash
-npm install -g remote-pi
+npm install -g remote-pi-server
 ```
 
 Install the daemon as a user-level system service (Linux `systemd --user`, macOS
 launchd, Windows Task Scheduler). It auto-starts at login and survives reboots:
 
 ```bash
-remote-pi install
+remote-pi-server install
 ```
 
 The daemon comes up, connects to the relay, and holds the machine online — with
@@ -201,7 +201,7 @@ The daemon comes up, connects to the relay, and holds the machine online — wit
 Pair from the daemon itself (no Pi needed):
 
 ```bash
-remote-pi pair        # prints the address + one-time/persistent code
+remote-pi-server pair        # prints the address + one-time/persistent code
 ```
 
 Enter that address and code in the mobile app, the browser client, or Cockpit.

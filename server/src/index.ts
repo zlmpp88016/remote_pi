@@ -560,7 +560,7 @@ async function _collectReceivedImagePreviews(msg: ClientUserMessage): Promise<Re
     const mime = typeof image?.mime === "string" ? image.mime : "unknown";
 
     if (!image || typeof image.data !== "string") {
-      console.error(`[remote-pi] malformed image in message ${msg.id} index=${i}`);
+      console.error(`[remote-pi-server] malformed image in message ${msg.id} index=${i}`);
       previews.push({
         messageId: msg.id,
         index: i,
@@ -574,7 +574,7 @@ async function _collectReceivedImagePreviews(msg: ClientUserMessage): Promise<Re
 
     const decoded = _decodeImagePayload(image.data, image.mime);
     if (!decoded.ok) {
-      console.error(`[remote-pi] skipped image id=${msg.id} index=${i}: ${decoded.reason}`);
+      console.error(`[remote-pi-server] skipped image id=${msg.id} index=${i}: ${decoded.reason}`);
       previews.push({
         messageId: msg.id,
         index: i,
@@ -588,7 +588,7 @@ async function _collectReceivedImagePreviews(msg: ClientUserMessage): Promise<Re
 
     const ext = _imageExtension(image.mime);
     if (!ext) {
-      console.error(`[remote-pi] unsupported image mime in message ${msg.id} index=${i}: ${image.mime}`);
+      console.error(`[remote-pi-server] unsupported image mime in message ${msg.id} index=${i}: ${image.mime}`);
       previews.push({
         messageId: msg.id,
         index: i,
@@ -627,7 +627,7 @@ async function _collectReceivedImagePreviews(msg: ClientUserMessage): Promise<Re
       });
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      console.error(`[remote-pi] failed saving image id=${msg.id} index=${i}: ${detail}`);
+      console.error(`[remote-pi-server] failed saving image id=${msg.id} index=${i}: ${detail}`);
       previews.push({
         messageId: msg.id,
         index: i,
@@ -783,7 +783,7 @@ async function _deliverImageUserMessage(
       await _emitReceivedImagePreviews(msg, previewDelivery);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      console.error(`[remote-pi] failed emitting image preview id=${msg.id}: ${detail}`);
+      console.error(`[remote-pi-server] failed emitting image preview id=${msg.id}: ${detail}`);
     }
   };
   if (previewDelivery === "immediate") {
@@ -1123,7 +1123,7 @@ export function _resetCwdLockForTest(): void {
 
 /**
  * Test-only: relay-only startup, no UDS mesh join. Replaces the old
- * `remote-pi relay start` handler that some tests captured to bring up
+ * `remote-pi-server relay start` handler that some tests captured to bring up
  * the relay in isolation (e.g. ping/pong tests that don't care about the
  * agent-network broker).
  */
@@ -1466,7 +1466,7 @@ function _runtimeOwnerFingerprint(runtimeKey: string): string {
 function _inspectPeerRecord(record: unknown): InspectedPeerRecord | null {
   if (!record || typeof record !== "object") {
     const fingerprint = _rawOwnerFingerprint(record);
-    console.warn(`[remote-pi] event=invalid_owner_record owner_fp=${fingerprint}`);
+    console.warn(`[remote-pi-server] event=invalid_owner_record owner_fp=${fingerprint}`);
     return null;
   }
 
@@ -1474,7 +1474,7 @@ function _inspectPeerRecord(record: unknown): InspectedPeerRecord | null {
   const rawHandle = candidate.remote_epk;
   if (typeof rawHandle !== "string") {
     const fingerprint = _rawOwnerFingerprint(rawHandle);
-    console.warn(`[remote-pi] event=invalid_owner_record owner_fp=${fingerprint}`);
+    console.warn(`[remote-pi-server] event=invalid_owner_record owner_fp=${fingerprint}`);
     return null;
   }
 
@@ -1491,7 +1491,7 @@ function _inspectPeerRecord(record: unknown): InspectedPeerRecord | null {
     return { record: safeRecord, rawHandle, runtimeKey };
   } catch {
     const fingerprint = _rawOwnerFingerprint(rawHandle);
-    console.warn(`[remote-pi] event=invalid_owner_record owner_fp=${fingerprint}`);
+    console.warn(`[remote-pi-server] event=invalid_owner_record owner_fp=${fingerprint}`);
     return { record: safeRecord, rawHandle, runtimeKey: null };
   }
 }
@@ -1887,7 +1887,7 @@ async function _renameAgent(newName: string): Promise<void> {
   try {
     assigned = await _meshNode.rename(newName);  // broker soft rejoin
   } catch (err) {
-    ctx.ui.notify(`[remote-pi] rename failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] rename failed: ${String(err)}`, "error");
   }
 
   if (wasStarted && !_disposed) await _cmdStart(ctx);  // relay back up → roomIdFor(cwd, assigned)
@@ -1931,7 +1931,7 @@ export function _onPeerDisconnect(appPeerId?: string): void {
   // starts cleanly.
   _currentTurnId = null;
   _refreshFooter();
-  _safeNotify("[remote-pi] All app peers disconnected, listening for reconnect", "info");
+  _safeNotify("[remote-pi-server] All app peers disconnected, listening for reconnect", "info");
   // Auto-listener stays up — same listener catches the reconnect on any peer.
 }
 
@@ -1970,7 +1970,7 @@ function _attachOwner(
   _refreshFooter();
 
   _safeNotify(
-    `[remote-pi] Owner attached: peer=${peerShort}, name=${peerName} ` +
+    `[remote-pi-server] Owner attached: peer=${peerShort}, name=${peerName} ` +
     `(${_activePeers.size} active)`,
     "info",
   );
@@ -2854,7 +2854,7 @@ function _cmdStatus(ctx: Pick<ExtensionContext, "ui">): void {
       : `🟡 Relay: on, waiting for first pairing (${relayUrl})`;
   }
 
-  ctx.ui.notify(`[remote-pi]\n  ${meshLine}\n  ${relayLine}`, "info");
+  ctx.ui.notify(`[remote-pi-server]\n  ${meshLine}\n  ${relayLine}`, "info");
 }
 
 /**
@@ -2867,7 +2867,7 @@ function _cmdStatus(ctx: Pick<ExtensionContext, "ui">): void {
  */
 async function _cmdPeers(ctx: Pick<ExtensionContext, "ui">): Promise<void> {
   if (!_meshNode) {
-    ctx.ui.notify("[remote-pi] Not on the local mesh. Run /remote-pi to join.", "warning");
+    ctx.ui.notify("[remote-pi-server] Not on the local mesh. Run /remote-pi to join.", "warning");
     return;
   }
   let peers: string[];
@@ -2875,13 +2875,13 @@ async function _cmdPeers(ctx: Pick<ExtensionContext, "ui">): Promise<void> {
     const reply = await _meshNode.request("broker", { type: "list_peers" }, 2000);
     peers = (reply.body as { peers?: string[] } | null)?.peers ?? [];
   } catch (err) {
-    ctx.ui.notify(`[remote-pi] peers list failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] peers list failed: ${String(err)}`, "error");
     return;
   }
   // Exclude self from the printed list — `list_peers` returns every peer
   // registered with the broker including the caller, which is noise here.
   const selfName = _meshNode.name();
-  ctx.ui.notify(`[remote-pi] peers:\n${formatPeerInventory(peers, selfName)}`, "info");
+  ctx.ui.notify(`[remote-pi-server] peers:\n${formatPeerInventory(peers, selfName)}`, "info");
 }
 
 /**
@@ -2964,8 +2964,8 @@ async function _cmdRootInner(
       if (!_isCurrentRootLifecycle(rootLifecycleGeneration)) return;
       ctx.ui.notify(
         process.env["REMOTE_PI_DAEMON"] === "1"
-          ? `[remote-pi] Daemon not started: another live agent already owns "${requestedName}" in this folder. Stop the old Pi process, then restart the daemon.`
-          : `[remote-pi] Could not start: too many agents named "${requestedName}" already running in this folder.`,
+          ? `[remote-pi-server] Daemon not started: another live agent already owns "${requestedName}" in this folder. Stop the old Pi process, then restart the daemon.`
+          : `[remote-pi-server] Could not start: too many agents named "${requestedName}" already running in this folder.`,
         "warning",
       );
       return;
@@ -2986,12 +2986,12 @@ async function _cmdRootInner(
     });
     if (!_isCurrentRootLifecycle(rootLifecycleGeneration)) return;
     if (!newConfig) {
-      ctx.ui.notify("[remote-pi] Setup cancelled.", "info");
+      ctx.ui.notify("[remote-pi-server] Setup cancelled.", "info");
       return;
     }
     saveLocalConfig(cwd, newConfig);
     ctx.ui.notify(
-      `[remote-pi] Config saved to ${cwd}/.pi/server/config.json`,
+      `[remote-pi-server] Config saved to ${cwd}/.pi/server/config.json`,
       "info",
     );
     if (!_isCurrentRootLifecycle(rootLifecycleGeneration)) return;
@@ -3027,7 +3027,7 @@ async function _cmdSetup(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<voi
   const cwd = "cwd" in ctx ? (ctx as ExtensionCommandContext).cwd : process.cwd();
   const ui = ctx.ui as unknown as WizardUI;
   if (typeof ui.select !== "function") {
-    ctx.ui.notify("[remote-pi] Setup requires an interactive UI.", "warning");
+    ctx.ui.notify("[remote-pi-server] Setup requires an interactive UI.", "warning");
     return;
   }
   const current = loadLocalConfig(cwd);
@@ -3037,19 +3037,19 @@ async function _cmdSetup(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<voi
     use_relay: effectiveAutoStartRelay(current),
   });
   if (!newConfig) {
-    ctx.ui.notify("[remote-pi] Setup cancelled.", "info");
+    ctx.ui.notify("[remote-pi-server] Setup cancelled.", "info");
     return;
   }
   saveLocalConfig(cwd, newConfig);
   ctx.ui.notify(
-    "[remote-pi] Config updated. Run /remote-pi to apply now.",
+    "[remote-pi-server] Config updated. Run /remote-pi to apply now.",
     "info",
   );
 }
 
 async function _cmdStart(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<void> {
   if (_state !== "idle") {
-    ctx.ui.notify("[remote-pi] Already started.", "warning");
+    ctx.ui.notify("[remote-pi-server] Already started.", "warning");
     return;
   }
   const lifecycleGeneration = ++_relayLifecycleGeneration;
@@ -3075,7 +3075,7 @@ async function _cmdStart(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<voi
       // abort cleanly with an actionable message instead of crashing or
       // re-pairing. Unlocking the keychain and re-running fixes it.
       ctx.ui.notify(
-        "[remote-pi] Could not read this machine's identity: the system " +
+        "[remote-pi-server] Could not read this machine's identity: the system " +
         "keychain is locked or access was denied. Unlock it (open the app / " +
         "log in) and run /remote-pi again. Your pairing is NOT lost. " +
         "(Set REMOTE_PI_ALLOW_FILE_IDENTITY=1 only for headless hosts.)",
@@ -3090,7 +3090,7 @@ async function _cmdStart(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<voi
       // wipe peers.json seconds later and take the phone offline, so storage
       // refuses. Surface the actionable fix instead of failing silently.
       ctx.ui.notify(
-        "[remote-pi] Could not read this machine's identity, but devices are " +
+        "[remote-pi-server] Could not read this machine's identity, but devices are " +
         "already paired — refusing to generate a new one (that would revoke " +
         "them). This process likely cannot reach the same keyring as the " +
         "session that paired (e.g. a systemd --user daemon). Give the service " +
@@ -3179,7 +3179,7 @@ async function _cmdStart(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<voi
   // entry that surfaces in the app as a phantom legacy session.
   _myRoomMeta = roomMeta;
 
-  ctx.ui.notify(`[remote-pi] Connecting to relay ${relayUrl} (source: ${source}, room: ${roomId})…`, "info");
+  ctx.ui.notify(`[remote-pi-server] Connecting to relay ${relayUrl} (source: ${source}, room: ${roomId})…`, "info");
 
   // Transport opens WebSocket; convert the canonical http(s):// stored
   // form to ws(s):// at this boundary. The relayUrl variable keeps the
@@ -3197,12 +3197,12 @@ async function _cmdStart(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<voi
     if (!isCurrentCandidate()) return;
     if (err instanceof RoomAlreadyOpenError) {
       ctx.ui.notify(
-        "[remote-pi] Already running in this cwd. Stop the other terminal first.",
+        "[remote-pi-server] Already running in this cwd. Stop the other terminal first.",
         "error",
       );
       return;
     }
-    ctx.ui.notify(`[remote-pi] relay connect failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] relay connect failed: ${String(err)}`, "error");
     return;
   }
 
@@ -3318,7 +3318,7 @@ async function _cmdStart(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<voi
   if (!createdProducer) _attachBridgeIfReady();
 
   _emitRelayState();  // → connected
-  ctx.ui.notify(`[remote-pi] state: started (peer=${myShort}) — Connected to relay ${relayUrl}`, "info");
+  ctx.ui.notify(`[remote-pi-server] state: started (peer=${myShort}) — Connected to relay ${relayUrl}`, "info");
 }
 
 /**
@@ -3345,12 +3345,12 @@ async function _cmdPair(ctx: Pick<ExtensionContext, "ui" | "cwd">, args = ""): P
   if (_state === "idle") {
     if (!localConfigExists(cwd)) {
       ctx.ui.notify(
-        "[remote-pi] First-time setup needed. Run /remote-pi to configure, then /remote-pi pair.",
+        "[remote-pi-server] First-time setup needed. Run /remote-pi to configure, then /remote-pi pair.",
         "warning",
       );
       return;
     }
-    ctx.ui.notify("[remote-pi] Starting mesh + relay before pairing…", "info");
+    ctx.ui.notify("[remote-pi-server] Starting mesh + relay before pairing…", "info");
     if (!_meshNode) await _cmdJoin(ctx);
     if (_state === "idle") await _cmdStart(ctx);
   }
@@ -3359,7 +3359,7 @@ async function _cmdPair(ctx: Pick<ExtensionContext, "ui" | "cwd">, args = ""): P
   // the relay. Without a live WS there's nothing for the scan to land on.
   if (_state === "idle" || !_relay) {
     ctx.ui.notify(
-      "[remote-pi] Pair requires the relay to be connected. " +
+      "[remote-pi-server] Pair requires the relay to be connected. " +
       "Run /remote-pi to start it (or fix your relay URL via /remote-pi set-relay).",
       "warning",
     );
@@ -3402,7 +3402,7 @@ async function _cmdPair(ctx: Pick<ExtensionContext, "ui" | "cwd">, args = ""): P
   }
 
   ctx.ui.notify(
-    `[remote-pi] Pairing code ready — valid until ${new Date(expiresAt).toLocaleTimeString()}. ` +
+    `[remote-pi-server] Pairing code ready — valid until ${new Date(expiresAt).toLocaleTimeString()}. ` +
     `Copy it and paste it into the app.`,
     "info",
   );
@@ -3423,7 +3423,7 @@ async function _cmdStop(ctx: Pick<ExtensionContext, "ui">): Promise<void> {
   const relayUp = _state !== "idle";
   if (!meshUp && !relayUp) {
     _relayLifecycleGeneration += 1;
-    ctx.ui.notify("[remote-pi] Already stopped — nothing to do.", "info");
+    ctx.ui.notify("[remote-pi-server] Already stopped — nothing to do.", "info");
     return;
   }
 
@@ -3444,13 +3444,13 @@ async function _cmdStop(ctx: Pick<ExtensionContext, "ui">): Promise<void> {
   try { meshClose = meshNode?.close() ?? null; } catch { /* best-effort */ }
   try { await meshClose; } catch { /* best-effort */ }
 
-  ctx.ui.notify("[remote-pi] Stopped (mesh + relay disconnected).", "info");
+  ctx.ui.notify("[remote-pi-server] Stopped (mesh + relay disconnected).", "info");
   _refreshFooter(ctx);
 }
 
 async function _cmdList(ctx: Pick<ExtensionContext, "ui">): Promise<void> {
   const peers = await listPeers();
-  if (peers.length === 0) { ctx.ui.notify("[remote-pi] No paired devices.", "info"); return; }
+  if (peers.length === 0) { ctx.ui.notify("[remote-pi-server] No paired devices.", "info"); return; }
   // Multi-channel (W2D): each peer is either `online` (channel attached
   // right now) or `offline` (in peers.json but not connected). Replaces
   // the singleton " (active)" marker that only ever marked one peer.
@@ -3462,14 +3462,14 @@ async function _cmdList(ctx: Pick<ExtensionContext, "ui">): Promise<void> {
       : " ⚪ offline";
     return `• ${inspected.rawHandle.slice(0, 8)} — ${inspected.record.name}${tag}`;
   }).join("\n");
-  ctx.ui.notify(`[remote-pi] Paired devices:\n${lines}`, "info");
+  ctx.ui.notify(`[remote-pi-server] Paired devices:\n${lines}`, "info");
 }
 
 async function _cmdRevoke(arg: string, ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<void> {
   const shortid = arg.trim();
   if (!shortid) {
     ctx.ui.notify(
-      "[remote-pi] Usage: /remote-pi revoke <shortid>. Run /remote-pi list to see shortids.",
+      "[remote-pi-server] Usage: /remote-pi revoke <shortid>. Run /remote-pi list to see shortids.",
       "warning",
     );
     return;
@@ -3482,18 +3482,18 @@ async function _cmdRevoke(arg: string, ctx: Pick<ExtensionContext, "ui" | "cwd">
   if (_state === "idle") {
     if (!localConfigExists(cwd)) {
       ctx.ui.notify(
-        "[remote-pi] First-time setup needed. Run /remote-pi to configure, then /remote-pi revoke.",
+        "[remote-pi-server] First-time setup needed. Run /remote-pi to configure, then /remote-pi revoke.",
         "warning",
       );
       return;
     }
-    ctx.ui.notify("[remote-pi] Starting mesh + relay before revoking…", "info");
+    ctx.ui.notify("[remote-pi-server] Starting mesh + relay before revoking…", "info");
     if (!_meshNode) await _cmdJoin(ctx);
     if (_state === "idle") await _cmdStart(ctx);
   }
   if (_state === "idle" || !_relay) {
     ctx.ui.notify(
-      "[remote-pi] Revoke requires the relay to be connected. " +
+      "[remote-pi-server] Revoke requires the relay to be connected. " +
       "Run /remote-pi to start it (or fix your relay URL via /remote-pi set-relay).",
       "warning",
     );
@@ -3507,7 +3507,7 @@ async function _cmdRevoke(arg: string, ctx: Pick<ExtensionContext, "ui" | "cwd">
 
   if (matches.length === 0) {
     ctx.ui.notify(
-      "[remote-pi] No peer matching that shortid. Run /remote-pi devices to see shortids.",
+      "[remote-pi-server] No peer matching that shortid. Run /remote-pi devices to see shortids.",
       "warning",
     );
     return;
@@ -3516,7 +3516,7 @@ async function _cmdRevoke(arg: string, ctx: Pick<ExtensionContext, "ui" | "cwd">
   if (matches.length > 1) {
     const collisions = matches.map((peer) => peer.rawHandle.slice(0, 8)).join(", ");
     ctx.ui.notify(
-      `[remote-pi] Ambiguous shortid — ${matches.length} matches: ${collisions}. Use mais chars.`,
+      `[remote-pi-server] Ambiguous shortid — ${matches.length} matches: ${collisions}. Use mais chars.`,
       "warning",
     );
     return;
@@ -3536,7 +3536,7 @@ async function _cmdRevoke(arg: string, ctx: Pick<ExtensionContext, "ui" | "cwd">
   }
 
   ctx.ui.notify(
-    `[remote-pi] Revoked: ${peer.record.name} (${peer.rawHandle.slice(0, 8)}…)`,
+    `[remote-pi-server] Revoked: ${peer.record.name} (${peer.rawHandle.slice(0, 8)}…)`,
     "info",
   );
 }
@@ -3564,28 +3564,28 @@ function _cmdSetRelay(arg: string, ctx: Pick<ExtensionContext, "ui">): void {
   const raw = arg.trim();
   if (!raw) {
     ctx.ui.notify(
-      "[remote-pi] Usage: /remote-pi set-relay <http:// or https:// url>",
+      "[remote-pi-server] Usage: /remote-pi set-relay <http:// or https:// url>",
       "warning",
     );
     return;
   }
   if (isWebSocketScheme(raw)) {
     ctx.ui.notify(
-      `[remote-pi] Use http:// or https://. The extension converts to WebSocket automatically.`,
+      `[remote-pi-server] Use http:// or https://. The extension converts to WebSocket automatically.`,
       "error",
     );
     return;
   }
   if (!isValidRelayUrl(raw)) {
     ctx.ui.notify(
-      `[remote-pi] Invalid URL: ${raw}. Must start with http:// or https://`,
+      `[remote-pi-server] Invalid URL: ${raw}. Must start with http:// or https://`,
       "error",
     );
     return;
   }
   saveConfig({ relay: raw });
   ctx.ui.notify(
-    `[remote-pi] Relay set to ${raw}. Run /remote-pi relay stop then /remote-pi relay start to apply.`,
+    `[remote-pi-server] Relay set to ${raw}. Run /remote-pi relay stop then /remote-pi relay start to apply.`,
     "info",
   );
 }
@@ -3608,7 +3608,7 @@ function _cmdConfig(ctx: Pick<ExtensionContext, "ui">): void {
   const live = _relayUrl && _relayUrl !== url
     ? `\n  ⚠ Live connection still on ${_relayUrl} — run /remote-pi relay stop then /remote-pi relay start to apply.`
     : "";
-  ctx.ui.notify(`[remote-pi]\n  Relay URL: ${url}\n  Source: ${source} — ${origin}${live}`, "info");
+  ctx.ui.notify(`[remote-pi-server]\n  Relay URL: ${url}\n  Source: ${source} — ${origin}${live}`, "info");
 }
 
 /**
@@ -3635,22 +3635,22 @@ async function _cmdRelay(arg: string, ctx: ExtensionContext): Promise<void> {
     case "":
     case "toggle":
       await _handleControl("relay:toggle");
-      ctx.ui.notify(`[remote-pi] Relay ${_relayStatus()}.`, "info");
+      ctx.ui.notify(`[remote-pi-server] Relay ${_relayStatus()}.`, "info");
       _refreshFooter(ctx);
       return;
     case "start":
     case "on":
       if (_getState() === "idle") await _cmdStart(ctx);
-      else ctx.ui.notify(`[remote-pi] Relay already ${_relayStatus()}.`, "info");
+      else ctx.ui.notify(`[remote-pi-server] Relay already ${_relayStatus()}.`, "info");
       _emitRelayState(true);
       return;
     case "stop":
     case "off":
       if (_getState() === "idle") {
-        ctx.ui.notify("[remote-pi] Relay already disconnected.", "info");
+        ctx.ui.notify("[remote-pi-server] Relay already disconnected.", "info");
       } else {
         _goIdle("peer_stop");
-        ctx.ui.notify("[remote-pi] Relay disconnected (local mesh untouched).", "info");
+        ctx.ui.notify("[remote-pi-server] Relay disconnected (local mesh untouched).", "info");
       }
       _emitRelayState(true);
       _refreshFooter(ctx);
@@ -3666,7 +3666,7 @@ async function _cmdRelay(arg: string, ctx: ExtensionContext): Promise<void> {
       return;
     default:
       ctx.ui.notify(
-        "[remote-pi] Usage: /remote-pi relay [start|stop|status|url <http(s) url>]",
+        "[remote-pi-server] Usage: /remote-pi relay [start|stop|status|url <http(s) url>]",
         "warning",
       );
       return;
@@ -3700,7 +3700,7 @@ async function _cmdCreate(arg: string, ctx: Pick<ExtensionContext, "ui">): Promi
   const cwdRaw = arg.replace(/--name\s+"[^"]+"|--name\s+\S+/, "").trim();
   if (!cwdRaw) {
     ctx.ui.notify(
-      "[remote-pi] Usage: /remote-pi create <absolute-or-relative-cwd> [--name \"Display name\"]",
+      "[remote-pi-server] Usage: /remote-pi create <absolute-or-relative-cwd> [--name \"Display name\"]",
       "warning",
     );
     return;
@@ -3710,7 +3710,7 @@ async function _cmdCreate(arg: string, ctx: Pick<ExtensionContext, "ui">): Promi
   try {
     result = addDaemon(cwdRaw, name);
   } catch (err) {
-    ctx.ui.notify(`[remote-pi] create failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] create failed: ${String(err)}`, "error");
     return;
   }
 
@@ -3720,7 +3720,7 @@ async function _cmdCreate(arg: string, ctx: Pick<ExtensionContext, "ui">): Promi
   // daemon. The cwd needs no init folder.
 
   ctx.ui.notify(
-    `[remote-pi] Daemon registered: id=${result.id} name="${result.name}" cwd=${result.cwd}`,
+    `[remote-pi-server] Daemon registered: id=${result.id} name="${result.name}" cwd=${result.cwd}`,
     "info",
   );
 
@@ -3732,17 +3732,17 @@ async function _cmdCreate(arg: string, ctx: Pick<ExtensionContext, "ui">): Promi
   // registration and tell the user it'll boot on the next supervisor start.
   try {
     await callSupervisor({ op: "start", id: result.id });
-    ctx.ui.notify(`[remote-pi] Daemon started: id=${result.id}`, "info");
+    ctx.ui.notify(`[remote-pi-server] Daemon started: id=${result.id}`, "info");
   } catch (err) {
     if (err instanceof SupervisorOfflineError) {
       ctx.ui.notify(
-        `[remote-pi] Registered, but the supervisor is offline — not running yet. ` +
-        `Run \`remote-pi install\` (or start \`pi-supervisord\`); it auto-starts on the next supervisor boot.`,
+        `[remote-pi-server] Registered, but the supervisor is offline — not running yet. ` +
+        `Run \`remote-pi-server install\` (or start \`pi-supervisord\`); it auto-starts on the next supervisor boot.`,
         "warning",
       );
       return;
     }
-    ctx.ui.notify(`[remote-pi] Registered, but auto-start failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] Registered, but auto-start failed: ${String(err)}`, "error");
   }
 }
 
@@ -3758,7 +3758,7 @@ async function _cmdRemove(arg: string, ctx: Pick<ExtensionContext, "ui">): Promi
   const id = arg.trim();
   if (!id) {
     ctx.ui.notify(
-      "[remote-pi] Usage: /remote-pi remove <id>. Run /remote-pi daemons to see ids.",
+      "[remote-pi-server] Usage: /remote-pi remove <id>. Run /remote-pi daemons to see ids.",
       "warning",
     );
     return;
@@ -3773,18 +3773,18 @@ async function _cmdRemove(arg: string, ctx: Pick<ExtensionContext, "ui">): Promi
     const data = await callSupervisor({ op: "unregister", id });
     if (!data.removed) {
       const known = listDaemons().map((d) => d.id).join(", ") || "(none)";
-      ctx.ui.notify(`[remote-pi] No daemon with id "${id}". Known ids: ${known}`, "warning");
+      ctx.ui.notify(`[remote-pi-server] No daemon with id "${id}". Known ids: ${known}`, "warning");
       return;
     }
     ctx.ui.notify(
-      `[remote-pi] Daemon removed + process stopped: id=${id} cwd=${data.cwd}. ` +
+      `[remote-pi-server] Daemon removed + process stopped: id=${id} cwd=${data.cwd}. ` +
       `Local config at ${data.cwd}/.pi/server/config.json was kept.`,
       "info",
     );
     return;
   } catch (err) {
     if (!(err instanceof SupervisorOfflineError)) {
-      ctx.ui.notify(`[remote-pi] remove failed: ${String(err)}`, "error");
+      ctx.ui.notify(`[remote-pi-server] remove failed: ${String(err)}`, "error");
       return;
     }
     // Supervisor offline — fall through to registry-only removal below.
@@ -3794,18 +3794,18 @@ async function _cmdRemove(arg: string, ctx: Pick<ExtensionContext, "ui">): Promi
   try {
     result = removeDaemon(id);
   } catch (err) {
-    ctx.ui.notify(`[remote-pi] remove failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] remove failed: ${String(err)}`, "error");
     return;
   }
 
   if (!result.removed) {
     const known = listDaemons().map((d) => d.id).join(", ") || "(none)";
-    ctx.ui.notify(`[remote-pi] No daemon with id "${id}". Known ids: ${known}`, "warning");
+    ctx.ui.notify(`[remote-pi-server] No daemon with id "${id}". Known ids: ${known}`, "warning");
     return;
   }
 
   ctx.ui.notify(
-    `[remote-pi] Daemon removed from registry: id=${id} cwd=${result.cwd}. ` +
+    `[remote-pi-server] Daemon removed from registry: id=${id} cwd=${result.cwd}. ` +
     `Supervisor was offline, so any running process was NOT stopped. Local config kept.`,
     "warning",
   );
@@ -3818,7 +3818,7 @@ async function _cmdRemove(arg: string, ctx: Pick<ExtensionContext, "ui">): Promi
 // the raw error, so the user can't get stuck on "what's wrong?".
 
 function _notifyOffline(ctx: Pick<ExtensionContext, "ui">, err: SupervisorOfflineError): void {
-  ctx.ui.notify(`[remote-pi] ${err.message}`, "warning");
+  ctx.ui.notify(`[remote-pi-server] ${err.message}`, "warning");
 }
 
 function _formatDaemonTable(daemons: DaemonInfo[]): string {
@@ -3842,7 +3842,7 @@ async function _cmdDaemonsList(ctx: Pick<ExtensionContext, "ui">): Promise<void>
   if (!(await supervisorOnline())) {
     const registry = listDaemons();
     if (registry.length === 0) {
-      ctx.ui.notify("[remote-pi] No daemons registered. Run /remote-pi create <cwd>.", "info");
+      ctx.ui.notify("[remote-pi-server] No daemons registered. Run /remote-pi create <cwd>.", "info");
       return;
     }
     const rows = registry.map((d) => {
@@ -3850,25 +3850,25 @@ async function _cmdDaemonsList(ctx: Pick<ExtensionContext, "ui">): Promise<void>
       const name = cfg.agent_name ?? defaultAgentName(d.cwd);
       return `  ${d.id}  ${name}  ${d.cwd}  (supervisor offline)`;
     }).join("\n");
-    ctx.ui.notify(`[remote-pi] Daemons (registry only — run install to bring supervisor up):\n${rows}`, "info");
+    ctx.ui.notify(`[remote-pi-server] Daemons (registry only — run install to bring supervisor up):\n${rows}`, "info");
     return;
   }
   try {
     const data = await callSupervisor({ op: "list" });
-    ctx.ui.notify(`[remote-pi] Daemons:\n${_formatDaemonTable(data.daemons)}`, "info");
+    ctx.ui.notify(`[remote-pi-server] Daemons:\n${_formatDaemonTable(data.daemons)}`, "info");
   } catch (err) {
     if (err instanceof SupervisorOfflineError) { _notifyOffline(ctx, err); return; }
-    ctx.ui.notify(`[remote-pi] daemons failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] daemons failed: ${String(err)}`, "error");
   }
 }
 
 async function _cmdDaemonStatus(ctx: Pick<ExtensionContext, "ui">): Promise<void> {
   try {
     const data = await callSupervisor({ op: "status" });
-    ctx.ui.notify(`[remote-pi] Fleet status:\n${_formatDaemonTable(data.daemons)}`, "info");
+    ctx.ui.notify(`[remote-pi-server] Fleet status:\n${_formatDaemonTable(data.daemons)}`, "info");
   } catch (err) {
     if (err instanceof SupervisorOfflineError) { _notifyOffline(ctx, err); return; }
-    ctx.ui.notify(`[remote-pi] status failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] status failed: ${String(err)}`, "error");
   }
 }
 
@@ -3878,21 +3878,21 @@ async function _cmdDaemonStart(ctx: Pick<ExtensionContext, "ui">, id?: string): 
       const data = await callSupervisor({ op: "start", id });
       ctx.ui.notify(
         data.started
-          ? `[remote-pi] Started daemon ${id} (${data.state}).`
-          : `[remote-pi] Daemon ${id} already ${data.state}.`,
+          ? `[remote-pi-server] Started daemon ${id} (${data.state}).`
+          : `[remote-pi-server] Daemon ${id} already ${data.state}.`,
         "info",
       );
       return;
     }
     const data = await callSupervisor({ op: "start_all" });
     ctx.ui.notify(
-      `[remote-pi] Started ${data.started.length} daemon(s), ` +
+      `[remote-pi-server] Started ${data.started.length} daemon(s), ` +
       `${data.already_running.length} already running.`,
       "info",
     );
   } catch (err) {
     if (err instanceof SupervisorOfflineError) { _notifyOffline(ctx, err); return; }
-    ctx.ui.notify(`[remote-pi] start failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] start failed: ${String(err)}`, "error");
   }
 }
 
@@ -3902,21 +3902,21 @@ async function _cmdDaemonStop(ctx: Pick<ExtensionContext, "ui">, id?: string): P
       const data = await callSupervisor({ op: "stop", id });
       ctx.ui.notify(
         data.stopped
-          ? `[remote-pi] Stopped daemon ${id}.`
-          : `[remote-pi] Daemon ${id} already ${data.state}.`,
+          ? `[remote-pi-server] Stopped daemon ${id}.`
+          : `[remote-pi-server] Daemon ${id} already ${data.state}.`,
         "info",
       );
       return;
     }
     const data = await callSupervisor({ op: "stop_all" });
     ctx.ui.notify(
-      `[remote-pi] Stopped ${data.stopped.length} daemon(s), ` +
+      `[remote-pi-server] Stopped ${data.stopped.length} daemon(s), ` +
       `${data.already_stopped.length} already stopped.`,
       "info",
     );
   } catch (err) {
     if (err instanceof SupervisorOfflineError) { _notifyOffline(ctx, err); return; }
-    ctx.ui.notify(`[remote-pi] stop failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] stop failed: ${String(err)}`, "error");
   }
 }
 
@@ -3924,14 +3924,14 @@ async function _cmdDaemonRestart(ctx: Pick<ExtensionContext, "ui">, id?: string)
   try {
     if (id) {
       const data = await callSupervisor({ op: "restart", id });
-      ctx.ui.notify(`[remote-pi] Restarted daemon ${id} (${data.state}).`, "info");
+      ctx.ui.notify(`[remote-pi-server] Restarted daemon ${id} (${data.state}).`, "info");
       return;
     }
     const data = await callSupervisor({ op: "restart_all" });
-    ctx.ui.notify(`[remote-pi] Restarted ${data.restarted.length} daemon(s).`, "info");
+    ctx.ui.notify(`[remote-pi-server] Restarted ${data.restarted.length} daemon(s).`, "info");
   } catch (err) {
     if (err instanceof SupervisorOfflineError) { _notifyOffline(ctx, err); return; }
-    ctx.ui.notify(`[remote-pi] restart failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] restart failed: ${String(err)}`, "error");
   }
 }
 
@@ -3949,7 +3949,7 @@ async function _cmdDaemonSend(arg: string, ctx: Pick<ExtensionContext, "ui">): P
   const m = arg.match(/^(\S+)\s+(?:"([^"]*)"|(.*))$/);
   if (!m) {
     ctx.ui.notify(
-      "[remote-pi] Usage: /remote-pi daemon send <id> \"<prompt text>\"",
+      "[remote-pi-server] Usage: /remote-pi daemon send <id> \"<prompt text>\"",
       "warning",
     );
     return;
@@ -3957,19 +3957,19 @@ async function _cmdDaemonSend(arg: string, ctx: Pick<ExtensionContext, "ui">): P
   const id = m[1]!;
   const text = (m[2] ?? m[3] ?? "").trim();
   if (!text) {
-    ctx.ui.notify("[remote-pi] daemon send: prompt text is empty.", "warning");
+    ctx.ui.notify("[remote-pi-server] daemon send: prompt text is empty.", "warning");
     return;
   }
   try {
     const data = await callSupervisor({ op: "send", id, text });
     if (data.delivered) {
-      ctx.ui.notify(`[remote-pi] Sent to ${id}: ${text.slice(0, 60)}${text.length > 60 ? "…" : ""}`, "info");
+      ctx.ui.notify(`[remote-pi-server] Sent to ${id}: ${text.slice(0, 60)}${text.length > 60 ? "…" : ""}`, "info");
     } else {
-      ctx.ui.notify(`[remote-pi] daemon ${id} did not accept the prompt (not running?)`, "warning");
+      ctx.ui.notify(`[remote-pi-server] daemon ${id} did not accept the prompt (not running?)`, "warning");
     }
   } catch (err) {
     if (err instanceof SupervisorOfflineError) { _notifyOffline(ctx, err); return; }
-    ctx.ui.notify(`[remote-pi] daemon send failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] daemon send failed: ${String(err)}`, "error");
   }
 }
 
@@ -4006,18 +4006,18 @@ async function _cmdCron(arg: string, ctx: Pick<ExtensionContext, "ui">): Promise
       case "run":     return await _cronRun(rest.trim(), ctx);
       case "log":     return await _cronLog(rest, ctx);
       default:
-        ctx.ui.notify("[remote-pi] Usage: /remote-pi cron <add|list|remove|enable|disable|run|log>", "warning");
+        ctx.ui.notify("[remote-pi-server] Usage: /remote-pi cron <add|list|remove|enable|disable|run|log>", "warning");
     }
   } catch (err) {
     if (err instanceof SupervisorOfflineError) {
       ctx.ui.notify(
-        "[remote-pi] Cron needs the supervisor running. Run `remote-pi install` " +
+        "[remote-pi-server] Cron needs the supervisor running. Run `remote-pi-server install` " +
         "(or start `pi-supervisord`).",
         "warning",
       );
       return;
     }
-    ctx.ui.notify(`[remote-pi] cron ${sub || "list"} failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] cron ${sub || "list"} failed: ${String(err)}`, "error");
   }
 }
 
@@ -4039,7 +4039,7 @@ async function _cronAdd(rest: string, ctx: Pick<ExtensionContext, "ui">): Promis
   const [daemonId, schedule, prompt] = pos;
   if (!daemonId || !schedule || !prompt) {
     ctx.ui.notify(
-      '[remote-pi] Usage: /remote-pi cron add <daemonId> "<cron-expr>" "<prompt>" ' +
+      '[remote-pi-server] Usage: /remote-pi cron add <daemonId> "<cron-expr>" "<prompt>" ' +
       "[--tz Area/City] [--wake] [--no-skip-busy] [--catchup]",
       "warning",
     );
@@ -4054,7 +4054,7 @@ async function _cronAdd(rest: string, ctx: Pick<ExtensionContext, "ui">): Promis
   if (catchup) req.catchup = true;
   const data = await callSupervisor(req);
   ctx.ui.notify(
-    `[remote-pi] Cron ${data.job.id} added → daemon ${daemonId}: "${schedule}"` +
+    `[remote-pi-server] Cron ${data.job.id} added → daemon ${daemonId}: "${schedule}"` +
     `${tz ? ` (${tz})` : ""}. Next run: ${data.job.next_run ?? "?"}`,
     "info",
   );
@@ -4063,14 +4063,14 @@ async function _cronAdd(rest: string, ctx: Pick<ExtensionContext, "ui">): Promis
 async function _cronList(ctx: Pick<ExtensionContext, "ui">): Promise<void> {
   const data = await callSupervisor({ op: "cron_list" });
   if (data.jobs.length === 0) {
-    ctx.ui.notify("[remote-pi] No cron jobs.", "info");
+    ctx.ui.notify("[remote-pi-server] No cron jobs.", "info");
     return;
   }
   const lines = data.jobs.map((j) =>
     `${j.enabled ? "✓" : "✗"} ${j.id}  "${j.schedule}"${j.tz ? ` (${j.tz})` : ""}  → ${j.daemon_id}  ` +
     `next:${j.next_run ?? "?"}  last:${j.last_status ?? "—"}${j.last_run ? `@${j.last_run}` : ""}`,
   );
-  ctx.ui.notify(`[remote-pi] Cron jobs (${data.jobs.length}):\n${lines.join("\n")}`, "info");
+  ctx.ui.notify(`[remote-pi-server] Cron jobs (${data.jobs.length}):\n${lines.join("\n")}`, "info");
 }
 
 async function _cronMutate(
@@ -4079,16 +4079,16 @@ async function _cronMutate(
   ctx: Pick<ExtensionContext, "ui">,
 ): Promise<void> {
   if (!jobId) {
-    ctx.ui.notify(`[remote-pi] Usage: /remote-pi cron ${req.op === "cron_remove" ? "remove" : "enable|disable"} <jobId>`, "warning");
+    ctx.ui.notify(`[remote-pi-server] Usage: /remote-pi cron ${req.op === "cron_remove" ? "remove" : "enable|disable"} <jobId>`, "warning");
     return;
   }
   if (req.op === "cron_remove") {
     const data = await callSupervisor(req);
-    ctx.ui.notify(data.removed ? `[remote-pi] Cron ${jobId} removed.` : `[remote-pi] No cron job ${jobId}.`, data.removed ? "info" : "warning");
+    ctx.ui.notify(data.removed ? `[remote-pi-server] Cron ${jobId} removed.` : `[remote-pi-server] No cron job ${jobId}.`, data.removed ? "info" : "warning");
   } else {
     const data = await callSupervisor(req);
     ctx.ui.notify(
-      data.updated ? `[remote-pi] Cron ${jobId} ${data.enabled ? "enabled" : "disabled"}.` : `[remote-pi] No cron job ${jobId}.`,
+      data.updated ? `[remote-pi-server] Cron ${jobId} ${data.enabled ? "enabled" : "disabled"}.` : `[remote-pi-server] No cron job ${jobId}.`,
       data.updated ? "info" : "warning",
     );
   }
@@ -4096,11 +4096,11 @@ async function _cronMutate(
 
 async function _cronRun(jobId: string, ctx: Pick<ExtensionContext, "ui">): Promise<void> {
   if (!jobId) {
-    ctx.ui.notify("[remote-pi] Usage: /remote-pi cron run <jobId>", "warning");
+    ctx.ui.notify("[remote-pi-server] Usage: /remote-pi cron run <jobId>", "warning");
     return;
   }
   const data = await callSupervisor({ op: "cron_run", job_id: jobId });
-  ctx.ui.notify(`[remote-pi] Cron ${jobId} fired now → ${data.result}`, "info");
+  ctx.ui.notify(`[remote-pi-server] Cron ${jobId} fired now → ${data.result}`, "info");
 }
 
 async function _cronLog(rest: string, ctx: Pick<ExtensionContext, "ui">): Promise<void> {
@@ -4116,13 +4116,13 @@ async function _cronLog(rest: string, ctx: Pick<ExtensionContext, "ui">): Promis
   if (jobId) req.job_id = jobId;
   const data = await callSupervisor(req);
   if (data.entries.length === 0) {
-    ctx.ui.notify("[remote-pi] No cron log entries.", "info");
+    ctx.ui.notify("[remote-pi-server] No cron log entries.", "info");
     return;
   }
   const lines = data.entries.map((e) =>
     `${new Date(e.ts).toISOString()}  ${e.fired ? "▶" : "∅"} ${e.result}  ${e.job_id} → ${e.daemon_id}  ${e.prompt_preview}`,
   );
-  ctx.ui.notify(`[remote-pi] Cron log (last ${data.entries.length}):\n${lines.join("\n")}`, "info");
+  ctx.ui.notify(`[remote-pi-server] Cron log (last ${data.entries.length}):\n${lines.join("\n")}`, "info");
 }
 
 // ── Install/uninstall the supervisor service (plan/26 W3) ────────────────────
@@ -4130,7 +4130,7 @@ async function _cronLog(rest: string, ctx: Pick<ExtensionContext, "ui">): Promis
 // Installs `pi-supervisord` as a user-level system service (systemd
 // `--user` unit on Linux, launchd LaunchAgent on macOS). Once installed:
 //   - Supervisor starts at login + survives reboots.
-//   - `remote-pi daemon start/stop/send/...` work without manually
+//   - `remote-pi-server daemon start/stop/send/...` work without manually
 //     spawning the supervisor.
 // Uninstall is the inverse — leaves the registry (`daemons.json`) intact,
 // so re-installing later picks up where you left off.
@@ -4138,10 +4138,10 @@ async function _cronLog(rest: string, ctx: Pick<ExtensionContext, "ui">): Promis
 /**
  * `linkCli` controls whether we symlink `remote-pi` + `pi-supervisord`
  * into `~/.local/bin/`. The slash-command path passes `true` (user is
- * inside Pi's TUI — they installed via `pi install npm:remote-pi` and
+ * inside Pi's TUI — they installed via `pi install npm:remote-pi-server` and
  * need us to expose the CLI for them). The standalone-CLI path passes
  * `false` because the user is already running our binary from PATH (they
- * did `npm install -g remote-pi`), so re-linking would point their
+ * did `npm install -g remote-pi-server`), so re-linking would point their
  * `remote-pi` at the Pi-extension copy and diverge on upgrades.
  */
 /** Returns true on success, false when install failed (so the standalone CLI
@@ -4153,7 +4153,7 @@ function _cmdInstall(ctx: Pick<ExtensionContext, "ui">, opts: { linkCli?: boolea
   try {
     const result = installService();
     const sections = [
-      `[remote-pi] Supervisor service installed (${result.platform}).`,
+      `[remote-pi-server] Supervisor service installed (${result.platform}).`,
       `  Unit: ${result.unitPath}`,
       `  Steps:\n${result.log.map((l) => "    " + l).join("\n")}`,
     ];
@@ -4168,13 +4168,13 @@ function _cmdInstall(ctx: Pick<ExtensionContext, "ui">, opts: { linkCli?: boolea
         if (process.platform === "win32") {
           sections.push(
             `  ⚠ ${link.binDir} was just added to your user PATH (it wasn't there yet).`,
-            `    Open a NEW terminal and run \`remote-pi daemons\` to verify.`,
+            `    Open a NEW terminal and run \`remote-pi-server daemons\` to verify.`,
           );
         } else {
           sections.push(
             `  ⚠ ${link.binDir} is not on $PATH yet. Add this line to ~/.zshrc / ~/.bashrc:`,
             `      export PATH="$HOME/.local/bin:$PATH"`,
-            `    Then open a new terminal and run \`remote-pi daemons\` to verify.`,
+            `    Then open a new terminal and run \`remote-pi-server daemons\` to verify.`,
           );
         }
       }
@@ -4182,7 +4182,7 @@ function _cmdInstall(ctx: Pick<ExtensionContext, "ui">, opts: { linkCli?: boolea
     ctx.ui.notify(sections.join("\n"), "info");
     return true;
   } catch (err) {
-    ctx.ui.notify(`[remote-pi] install failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] install failed: ${String(err)}`, "error");
     return false;
   }
 }
@@ -4192,7 +4192,7 @@ function _cmdUninstall(ctx: Pick<ExtensionContext, "ui">, opts: { linkCli?: bool
   try {
     const result = uninstallService();
     const sections = [
-      `[remote-pi] Supervisor service uninstalled (${result.platform}).`,
+      `[remote-pi-server] Supervisor service uninstalled (${result.platform}).`,
       `  Unit: ${result.unitPath} (${result.removed ? "removed" : "not present"})`,
       `  Steps:\n${result.log.map((l) => "    " + l).join("\n")}`,
       `  Note: daemons registry (~/.pi/remote/daemons.json) kept — re-install restores everything.`,
@@ -4208,7 +4208,7 @@ function _cmdUninstall(ctx: Pick<ExtensionContext, "ui">, opts: { linkCli?: bool
     }
     ctx.ui.notify(sections.join("\n"), "info");
   } catch (err) {
-    ctx.ui.notify(`[remote-pi] uninstall failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] uninstall failed: ${String(err)}`, "error");
   }
 }
 
@@ -4288,7 +4288,7 @@ function _wakeAgent(
 ): WakeAgentResult {
   if (!_pi) {
     const detail = "agent session not bound yet";
-    console.error(`[remote-pi] ${label}: ${detail} — message dropped`);
+    console.error(`[remote-pi-server] ${label}: ${detail} — message dropped`);
     return { ok: false, detail };
   }
   try {
@@ -4299,8 +4299,8 @@ function _wakeAgent(
     return { ok: true };
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    console.error(`[remote-pi] ${label}: agent rejected incoming message: ${detail}`);
-    _safeNotify(`[remote-pi] failed to process incoming message: ${detail}`, "error");
+    console.error(`[remote-pi-server] ${label}: agent rejected incoming message: ${detail}`);
+    _safeNotify(`[remote-pi-server] failed to process incoming message: ${detail}`, "error");
     return { ok: false, detail };
   }
 }
@@ -4361,8 +4361,8 @@ function _scheduleMeshMessageDrain(): void {
       _agentRunActive = false;
       _pendingMeshMessages = [...batch.slice(delivered), ..._pendingMeshMessages];
       const detail = err instanceof Error ? err.message : String(err);
-      console.error(`[remote-pi] queued mesh delivery failed: ${detail}`);
-      _safeNotify(`[remote-pi] failed to process queued mesh messages: ${detail}`, "error");
+      console.error(`[remote-pi-server] queued mesh delivery failed: ${detail}`);
+      _safeNotify(`[remote-pi-server] failed to process queued mesh messages: ${detail}`, "error");
     }
   });
 }
@@ -4381,7 +4381,7 @@ function _deliverMeshMessageToAgent(env: MeshEnvelope): void {
   _broadcastToActive({ type: "tool_result", tool_call_id: toolCallId, result: { from: env.from, message: bodyText } });
 
   if (!_pi) {
-    console.error(`[remote-pi] agent-network message from "${env.from}": agent session not bound yet — message dropped`);
+    console.error(`[remote-pi-server] agent-network message from "${env.from}": agent session not bound yet — message dropped`);
     return;
   }
   _pendingMeshMessages.push(env);
@@ -4413,7 +4413,7 @@ async function _cmdJoin(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<void
   const agentName = _lockedName ?? requestedName;
 
   if (_meshNode) {
-    ctx.ui.notify("[remote-pi] Already on the local mesh.", "warning");
+    ctx.ui.notify("[remote-pi-server] Already on the local mesh.", "warning");
     return;
   }
   const joinGeneration = ++_meshJoinGeneration;
@@ -4536,7 +4536,7 @@ async function _cmdJoin(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<void
       display: false,
     });
     ctx.ui.notify(
-      `[remote-pi] Joined local mesh as "${assigned}" (${peer.currentRole()})`,
+      `[remote-pi-server] Joined local mesh as "${assigned}" (${peer.currentRole()})`,
       "info",
     );
     _refreshFooter(ctx);
@@ -4551,7 +4551,7 @@ async function _cmdJoin(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<void
       try { await peer.close(); } catch { /* best-effort */ }
       return;
     }
-    ctx.ui.notify(`[remote-pi] join failed: ${String(err)}`, "error");
+    ctx.ui.notify(`[remote-pi-server] join failed: ${String(err)}`, "error");
   }
 }
 
@@ -4675,7 +4675,7 @@ export function _routeClientMessageFrom(
       if (msg.images && msg.images.length > 0) {
         void _deliverImageUserMessage(sender, msg, shouldSteer).catch((error) => {
           const detail = error instanceof Error ? error.message : String(error);
-          console.error(`[remote-pi] failed delivering image message id=${msg.id}: ${detail}`);
+          console.error(`[remote-pi-server] failed delivering image message id=${msg.id}: ${detail}`);
         });
         break;
       }
@@ -5581,7 +5581,7 @@ export function _mapAgentMessagesToEvents(
 // ── Standalone CLI ────────────────────────────────────────────────────────────
 
 /**
- * `remote-pi restart-supervisor` — restarts the `pi-supervisord` PROCESS
+ * `remote-pi-server restart-supervisor` — restarts the `pi-supervisord` PROCESS
  * (not the daemons). The supervisor is a long-running Node process with no
  * hot-reload, so after a `dist` rebuild the old code keeps running until the
  * process is restarted. The Cockpit "Restart supervisor" button shells out to
@@ -5615,7 +5615,7 @@ function _restartSupervisor(): void {
   const steps = _restartSupervisorCommand(process.platform, uid);
   if (!steps) {
     console.error(
-      `[remote-pi] restart-supervisor is not supported on '${process.platform}' yet. ` +
+      `[remote-pi-server] restart-supervisor is not supported on '${process.platform}' yet. ` +
       "Restart pi-supervisord manually.",
     );
     process.exit(1);
@@ -5624,16 +5624,16 @@ function _restartSupervisor(): void {
     const r = spawnSync(step.cmd, step.args, { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" });
     if (r.error) {
       if (step.ignoreFailure) continue;
-      console.error(`[remote-pi] restart-supervisor failed: ${step.cmd} not runnable (${r.error.message}). Is the service installed? Run \`remote-pi install\`.`);
+      console.error(`[remote-pi-server] restart-supervisor failed: ${step.cmd} not runnable (${r.error.message}). Is the service installed? Run \`remote-pi-server install\`.`);
       process.exit(1);
     }
     if (r.status !== 0 && !step.ignoreFailure) {
       const detail = (r.stderr || r.stdout || "").trim();
-      console.error(`[remote-pi] restart-supervisor failed (${step.cmd} exited ${r.status})${detail ? `: ${detail}` : ""}.`);
+      console.error(`[remote-pi-server] restart-supervisor failed (${step.cmd} exited ${r.status})${detail ? `: ${detail}` : ""}.`);
       process.exit(r.status === null ? 1 : r.status);
     }
   }
-  console.log("[remote-pi] Supervisor restarted.");
+  console.log("[remote-pi-server] Supervisor restarted.");
 }
 
 function _isDirectRun(): boolean {
@@ -5717,7 +5717,7 @@ if (_isDirectRun()) {
     const peers = (await listPeers())
       .map(_inspectPeerRecord)
       .filter((peer): peer is InspectedPeerRecord => peer !== null);
-    if (peers.length === 0) { console.log("[remote-pi] No peers"); }
+    if (peers.length === 0) { console.log("[remote-pi-server] No peers"); }
     else {
       for (const peer of peers) {
         console.log(`• ${peer.rawHandle.slice(0, 8)} — ${peer.record.name}`);
@@ -5754,14 +5754,14 @@ if (_isDirectRun()) {
         ? await callSupervisor({ op: "pair_rotate", ephemeral })
         : await callSupervisor({ op: "pair_show", ephemeral });
       const validity = data.persistent
-        ? "persistent — valid until `remote-pi pair --rotate`"
+        ? "persistent — valid until `remote-pi-server pair --rotate`"
         : `ephemeral — expires ${new Date(data.expires_at ?? Date.now()).toLocaleTimeString()}`;
-      console.log(`[remote-pi] Pairing code (room ${data.room_id}, ${validity}):\n${data.uri}`);
+      console.log(`[remote-pi-server] Pairing code (room ${data.room_id}, ${validity}):\n${data.uri}`);
     } catch (err) {
       if (err instanceof SupervisorOfflineError) {
-        console.error(`[remote-pi] ${err.message}`);
+        console.error(`[remote-pi-server] ${err.message}`);
       } else {
-        console.error(`[remote-pi] pair failed: ${String(err)}`);
+        console.error(`[remote-pi-server] pair failed: ${String(err)}`);
       }
       process.exit(1);
     }
@@ -5778,7 +5778,7 @@ if (_isDirectRun()) {
       console.log(`Relay set to ${raw}`);
     }
   } else if (subcmd === "create") {
-    // Standalone: `remote-pi create <cwd> [--name "X"]`. The shell already
+    // Standalone: `remote-pi-server create <cwd> [--name "X"]`. The shell already
     // split the args and stripped the outer quotes, so an arg like
     // `Tmp Agent` arrives as a single element with embedded space. Re-add
     // quotes around any arg containing whitespace so the regex-based
@@ -5799,7 +5799,7 @@ if (_isDirectRun()) {
     const stubCtx = { ui: { notify: (msg: string) => console.log(msg) } as unknown as ExtensionContext["ui"] };
     await _cmdDaemonsList(stubCtx);
   } else if (subcmd === "daemon") {
-    // `remote-pi daemon <op> [args]`. Reuse the fleet-ops handlers — they
+    // `remote-pi-server daemon <op> [args]`. Reuse the fleet-ops handlers — they
     // already accept a minimal ctx with `notify`.
     const op = cliArgs[0] ?? "";
     const rest = cliArgs.slice(1).map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(" ");
@@ -5810,7 +5810,7 @@ if (_isDirectRun()) {
     else if (op === "status")  { await _cmdDaemonStatus(stubCtx); }
     else if (op === "send")    { await _cmdDaemonSend(rest, stubCtx); }
     else {
-      console.log("Usage: remote-pi daemon <start|stop|restart [<id>]|status|send <id> \"<text>\">");
+      console.log("Usage: remote-pi-server daemon <start|stop|restart [<id>]|status|send <id> \"<text>\">");
     }
   } else if (subcmd === "cron") {
     // `remote-pi cron <op> [args]`. Re-quote args with spaces so the shared
@@ -5826,14 +5826,14 @@ if (_isDirectRun()) {
     // Broker._tryObserverProbe). Null = no broker reachable on this machine.
     const peers = await probeListPeers(sessionSockPath(LOCAL_SESSION_NAME));
     if (peers === null) {
-      console.log("[remote-pi] Mesh offline — no agent is running on this machine.");
+      console.log("[remote-pi-server] Mesh offline — no agent is running on this machine.");
     } else {
-      console.log(`[remote-pi] peers:\n${formatPeerInventory(peers)}`);
+      console.log(`[remote-pi-server] peers:\n${formatPeerInventory(peers)}`);
     }
   } else if (subcmd === "claude") {
     await _cmdClaudeCli(cliArgs);
   } else if (subcmd === "install") {
-    // CLI mode = user installed via `npm install -g remote-pi`, so the
+    // CLI mode = user installed via `npm install -g remote-pi-server`, so the
     // `remote-pi` / `pi-supervisord` bins are already on $PATH via npm's
     // global prefix. Explicit `linkCli: false` so we never stomp those
     // with symlinks pointing at a parallel Pi-extension install.
@@ -5849,13 +5849,13 @@ if (_isDirectRun()) {
     // npm-global bins live in a different prefix and are never touched. So a
     // user who installed via the TUI (`/remote-pi install`, which links) and
     // uninstalls from a shell still gets the links cleaned up — the asymmetry
-    // that left an orphaned `~/.local/bin/remote-pi` behind.
+    // that left an orphaned `~/.local/bin/remote-pi-server` behind.
     _cmdUninstall(stubCtx, { linkCli: true });
   } else if (subcmd === "restart-supervisor") {
     _restartSupervisor();
   } else {
     console.log([
-      "Usage: remote-pi <command>",
+      "Usage: remote-pi-server <command>",
       "",
       "Daemon registry:",
       "  create <cwd> [--name \"Name\"]   Register a folder as a daemon",
@@ -5897,7 +5897,7 @@ if (_isDirectRun()) {
   }
 }
 
-// ── `remote-pi claude` — launch Claude Code connected to the mesh ─────────────
+// ── `remote-pi-server claude` — launch Claude Code connected to the mesh ─────────────
 
 /**
  * Resolve the packaged agent-network skill path
@@ -5914,7 +5914,7 @@ function _agentNetworkSkillPath(): string | null {
 }
 
 async function _cmdClaudeCli(args: string[]): Promise<void> {
-  // Contract: `remote-pi claude [cwd] [claude-flags...]`. The optional cwd is
+  // Contract: `remote-pi-server claude [cwd] [claude-flags...]`. The optional cwd is
   // ONLY the leading positional (first token, not a flag); everything after it
   // is forwarded verbatim to the `claude` binary (e.g. `--resume`, `-c`,
   // `-p "prompt"`). Restricting cwd to the leading token avoids mistaking a
@@ -5926,7 +5926,7 @@ async function _cmdClaudeCli(args: string[]): Promise<void> {
   // Wizard when no local config exists
   if (!localConfigExists(targetCwd)) {
     const suggested = defaultAgentName(targetCwd);
-    process.stdout.write(`\n[remote-pi] No config found for ${targetCwd}\n`);
+    process.stdout.write(`\n[remote-pi-server] No config found for ${targetCwd}\n`);
     process.stdout.write("Let's set up this agent.\n\n");
 
     const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -5935,7 +5935,7 @@ async function _cmdClaudeCli(args: string[]): Promise<void> {
     );
 
     saveLocalConfig(targetCwd, { agent_name: agentName, auto_start_relay: true });
-    process.stdout.write(`[remote-pi] Config saved: agent="${agentName}"\n\n`);
+    process.stdout.write(`[remote-pi-server] Config saved: agent="${agentName}"\n\n`);
   }
 
   // Resolve mesh server script path (dist/mcp/mesh_server.js)
@@ -5944,14 +5944,14 @@ async function _cmdClaudeCli(args: string[]): Promise<void> {
   const meshServerPath = resolve(distRoot, "mcp/mesh_server.js");
 
   if (!existsSync(meshServerPath)) {
-    console.log(`[remote-pi] mesh server not found at ${meshServerPath}. Run pnpm build first.`);
+    console.log(`[remote-pi-server] mesh server not found at ${meshServerPath}. Run pnpm build first.`);
     process.exit(1);
   }
 
   const absCwd = resolve(targetCwd);
   const SERVER_NAME = "remote-pi-mesh";
 
-  // The mesh MCP must be visible ONLY inside a `remote-pi claude` session — a
+  // The mesh MCP must be visible ONLY inside a `remote-pi-server claude` session — a
   // plain `claude` in the same repo must NOT inherit it (otherwise every
   // ordinary session silently joins the mesh as a stray agent).
   //
@@ -5977,7 +5977,7 @@ async function _cmdClaudeCli(args: string[]): Promise<void> {
   // empirically — NOT the git root, NOT CLAUDE_PROJECT_DIR). We spawn claude
   // with `cwd: absCwd`, the MCP child inherits it, so the server self-identifies
   // as the right agent without leaking that path to any other session.
-  // Unique per pid so concurrent `remote-pi claude` launches don't collide.
+  // Unique per pid so concurrent `remote-pi-server claude` launches don't collide.
   const mcpConfigPath = join(tmpdir(), `remote-pi-mesh-mcp-${process.pid}.json`);
   writeFileSync(mcpConfigPath, JSON.stringify({
     mcpServers: {
@@ -5986,7 +5986,7 @@ async function _cmdClaudeCli(args: string[]): Promise<void> {
   }));
 
   // Inject the agent-network protocol as a system prompt instead of deploying a
-  // skill file into ~/.claude. Anyone running `remote-pi claude` is here to use
+  // skill file into ~/.claude. Anyone running `remote-pi-server claude` is here to use
   // the mesh, so load the protocol unconditionally — no lazy skill gating, no
   // global skills-dir pollution, and the packaged file is the single source of
   // truth shared with the Pi runtime. Skipped only if the file is missing.

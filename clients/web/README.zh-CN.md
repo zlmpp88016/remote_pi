@@ -31,7 +31,7 @@ npm start       # 跑生产构建
 `run`：`pnpm dev`、`pnpm build`、`pnpm start`、`pnpm lint`。
 
 打开 <http://localhost:3000/remote-pi/connect> —— 或点 `/remote-pi` 导航里的
-**Open web client** —— 然后粘贴被控机器上 `remote-pi pair` 打印的 relay 地址
+**Open web client** —— 然后粘贴被控机器上 `remote-pi-server pair` 打印的 relay 地址
 + `remotepi://pair?...` 配对码。开发服务器和 relay 默认都是 3000 端口，同机运行时
 请错开其中一个（`npx next dev -p 3167`）。
 

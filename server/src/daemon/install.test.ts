@@ -295,7 +295,7 @@ describe.skipIf(posixOnly)("linkCliBinaries / unlinkCliBinaries", () => {
     expect(result.links).toHaveLength(2);
 
     const names = result.links.map((l) => l.name).sort();
-    expect(names).toEqual(["pi-supervisord", "remote-pi"]);
+    expect(names).toEqual(["pi-supervisord", "remote-pi-server"]);
 
     for (const link of result.links) {
       expect(lstatSync(link.path).isSymbolicLink()).toBe(true);
@@ -317,13 +317,13 @@ describe.skipIf(posixOnly)("linkCliBinaries / unlinkCliBinaries", () => {
     const binDir = join(tmpHome, ".local", "bin");
     mkdirSync(binDir, { recursive: true });
     // Write a fake stale symlink first
-    const stale = join(binDir, "remote-pi");
+    const stale = join(binDir, "remote-pi-server");
     writeFileSync(join(tmpHome, "fake-old.js"), "// old\n");
     require("node:fs").symlinkSync(join(tmpHome, "fake-old.js"), stale);
     expect(readlinkSync(stale)).toBe(join(tmpHome, "fake-old.js"));
 
     const result = linkCliBinaries(tmpHome, fakePaths);
-    const pi = result.links.find((l) => l.name === "remote-pi")!;
+    const pi = result.links.find((l) => l.name === "remote-pi-server")!;
     expect(readlinkSync(pi.path)).toBe(pi.target);
     expect(readlinkSync(pi.path)).not.toBe(join(tmpHome, "fake-old.js"));
   });
@@ -386,11 +386,11 @@ describe.skipIf(!posixOnly)("linkCliBinaries / unlinkCliBinaries (Windows .cmd s
     rmSync(tmpHome, { recursive: true, force: true });
   });
 
-  test("link writes remote-pi.cmd + pi-supervisord.cmd pointing at node + targets", () => {
+  test("link writes remote-pi-server.cmd + pi-supervisord.cmd pointing at node + targets", () => {
     const result = linkCliBinaries(tmpHome, fakePaths, { node, mutatePath: false });
     expect(result.binDir).toBe(join(tmpHome, ".local", "bin"));
     const names = result.links.map((l) => l.name).sort();
-    expect(names).toEqual(["pi-supervisord.cmd", "remote-pi.cmd"]);
+    expect(names).toEqual(["pi-supervisord.cmd", "remote-pi-server.cmd"]);
     for (const link of result.links) {
       expect(existsSync(link.path)).toBe(true);
       const content = readFileSync(link.path, "utf8");
