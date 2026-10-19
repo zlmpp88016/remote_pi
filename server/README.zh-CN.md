@@ -63,8 +63,17 @@ remote-pi-server daemon status
 `Cannot read properties of null (reading 'edgesOut')` —— 这是 arborist 的
 peer-set 解析 bug，由 vitest 4 触发。
 
+用 nvm 管 Node 的话，升级 npm 会改写 `npm-cli.js`，nvm 的完整性校验随即拒绝执行
+（`NVM4306: delegated script changed since it was trusted`）。重新 shim 一次即可，
+之后一直有效：
+
+```bash
+nvm reshim
+```
+
 ```bash
 npm install -g npm@11        # Node 22.9+ 可以跑 npm 11
+nvm reshim                   # nvm 用户必跑，见上
 ```
 
 ### 更新（`git pull` 或改完代码之后）

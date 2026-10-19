@@ -62,6 +62,14 @@ npm links rather than copies — so a rebuild is enough to pick up code changes.
 `Cannot read properties of null (reading 'edgesOut')` (an arborist bug in the
 peer-set resolver, triggered by vitest 4). Upgrade once with `npm install -g npm@11`.
 
+Under nvm, that upgrade rewrites `npm-cli.js` and nvm's integrity check then blocks
+every npm call (`NVM4306: delegated script changed since it was trusted`). Re-shim
+once after upgrading:
+
+```bash
+nvm reshim
+```
+
 ```bash
 git clone https://github.com/exampleorg/remote_pi
 cd remote_pi/server
