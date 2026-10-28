@@ -30,7 +30,9 @@ import type {
   SessionHistoryEvent,
   WireModel,
   ActionName,
+  ThinkingLevel,
 } from "../protocol/types.js";
+import { THINKING_LEVELS } from "../session/runtime_status.js";
 
 /**
  * Structural subset of the SDK's `Model<Api>` interface (defined in
@@ -49,6 +51,14 @@ export interface SdkModelLike {
    *  `("text" | "image")[]`; we read `includes("image")` for the `vision`
    *  flag. Optional here so tests can omit it (treated as text-only). */
   input?: ("text" | "image")[];
+  /**
+   * Per-model thinking support, straight from the SDK.
+   *
+   * A level mapped to a provider value is supported; `null` marks it unsupported.
+   * Optional because test fakes omit it — an absent map means "honours every
+   * level", which is the SDK's own pass-through behaviour.
+   */
+  thinkingLevelMap?: Partial<Record<ThinkingLevel, string | null>>;
 }
 // `Model` is the alias used throughout the file. Real SDK models structurally
 // satisfy this — `pi.setModel(model)` accepts them because TypeScript
@@ -125,6 +135,7 @@ export interface ActionModelRegistry {
 /** Project a SDK `Model<Api>` onto the wire schema. Shared by list_models
  *  and the `current` echo, so both stay in lockstep. */
 export function wireFromModel(model: Model<any>): WireModel {
+  const thinking = thinkingLevelsOf(model);
   return {
     id: model.id,
     name: model.name,
@@ -135,7 +146,43 @@ export function wireFromModel(model: Model<any>): WireModel {
     // `("text" | "image")[]` at runtime (confirmed against pi-ai). `?.` guards
     // a fake/partial model in tests → treated as text-only.
     vision: model.input?.includes("image") ?? false,
+    ...(thinking === undefined ? {} : { thinking_levels: thinking }),
   };
+}
+
+/**
+ * The thinking levels a model actually honours, in picker order.
+ *
+ * Mirrors the SDK's own `getSupportedThinkingLevels` (in `pi-ai`, a transitive dep
+ * that is not re-exported by the coding-agent entry point, so it cannot be imported
+ * here). The rule is NOT "a level is supported when the map names it":
+ *
+ *   - `off` is always available to a reasoning model;
+ *   - a level mapped to `null` is excluded;
+ *   - a level ABSENT from the map stays available — the map narrows, it does not
+ *     enumerate;
+ *   - `xhigh` and `max` are the two exceptions that need an explicit mapping.
+ *
+ * Getting this wrong in either direction is a silent lie. Deriving it from "declared
+ * entries only" hid `off` on every model; treating an absent map as "everything"
+ * invented `xhigh`/`max`; and omitting `max` entirely — because an older bundled
+ * SDK lacked it — dropped the very level `my-newapi/deepseek-flash` is configured
+ * for. `thinking_levels.test.ts` pins the behaviour against the real catalogue.
+ *
+ * @param model - the SDK model (or a test fake).
+ * @returns supported levels in UI order, or `undefined` for a non-reasoning model
+ *          (which is how the picker tells "no thinking surface" from "`off` only").
+ */
+export function thinkingLevelsOf(model: Model<any>): ThinkingLevel[] | undefined {
+  if (model.reasoning !== true) return undefined;
+  const map = model.thinkingLevelMap;
+  return THINKING_LEVELS.filter((level) => {
+    const mapped = map?.[level];
+    if (mapped === null) return false;
+    /* The two levels the SDK refuses without an explicit mapping. */
+    if (level === "xhigh" || level === "max") return mapped !== undefined;
+    return true;
+  });
 }
 
 // ── ack helpers ────────────────────────────────────────────────────────────
@@ -339,13 +386,40 @@ export function handleListModels(
 }
 
 /** Plan/67 — list AgentSessions for the workspace cwd. */
+/**
+ * The workspace cwd for a session action, or undefined when it cannot be known.
+ *
+ * In a daemon child `ctx` is captured from a command or a live event, so a
+ * freshly respawned process that has not run a turn yet has NEITHER. Answering
+ * "cwd unavailable" there disabled the session panel — list AND read — until the
+ * user happened to run something, which is exactly when they would reach for it.
+ *
+ * A daemon child is spawned with the workspace as its working directory
+ * (`rpc_child.ts`: `spawn(..., { cwd: this.opts.cwd })`), so `process.cwd()` IS
+ * that workspace. The fallback is daemon-only: an interactive session must keep
+ * using its ctx.
+ */
+function resolveActionCwd(ctx: ActionCtx | null): string | undefined {
+  const ctxCwd = ctx?.cwd;
+  if (ctxCwd !== undefined && ctxCwd !== "") return ctxCwd;
+  if (process.env["REMOTE_PI_DAEMON"] === "1") return process.cwd();
+  return undefined;
+}
+
 export async function handleSessionList(
   ctx: ActionCtx | null,
   sender: ActionReplySender,
   msg: SessionListMsg,
   listSessions: ListSessionsFn,
 ): Promise<void> {
-  const cwd = ctx?.cwd;
+  /*
+   * In a daemon child `ctx` is captured from a command or a live event, so a
+   * freshly respawned process that has not run a turn yet has NEITHER — and
+   * answering "cwd unavailable" here disabled the session panel entirely until
+   * the user happened to run something. The list is the entry point for Resume,
+   * so the panel was dead right when a user would reach for it.
+   */
+  const cwd = resolveActionCwd(ctx);
   if (!cwd) {
     sender.send({
       type: "action_error",
@@ -357,11 +431,22 @@ export async function handleSessionList(
   }
   try {
     const listed = await listSessions(cwd);
-    const currentId = ctx.getSessionId?.() ?? null;
+    const currentId = ctx?.getSessionId?.() ?? null;
     sender.send({
       type: "session_list_ok",
       in_reply_to: msg.id,
       current_id: currentId,
+      /*
+       * Stated with the listing so the client can render an honest control.
+       *
+       * `switchSession` needs a command-capable ctx, which an RPC-mode daemon
+       * never captures — but the daemon can still switch by respawning its Pi
+       * pointed at the chosen session file (`--session`). So the capability is:
+       * in-process switch, OR the daemon respawn path.
+       */
+      can_switch:
+        typeof ctx?.switchSession === "function" || process.env["REMOTE_PI_DAEMON"] === "1",
+      can_new: typeof ctx?.newSession === "function" || process.env["REMOTE_PI_DAEMON"] === "1",
       sessions: listed.map((s) => ({
         id: s.id,
         name: s.name,
@@ -397,7 +482,7 @@ export async function handleSessionRead(
   readPage: ReadSessionPageFn,
   defaultLimit: number,
 ): Promise<void> {
-  const cwd = ctx?.cwd;
+  const cwd = resolveActionCwd(ctx);
   if (!cwd) {
     sender.send({
       type: "action_error",

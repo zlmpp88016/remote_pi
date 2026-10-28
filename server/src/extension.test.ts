@@ -230,6 +230,7 @@ const {
   _getActivePeerCountForTest,
   _checkSelfRevokeForTest,
   _restartSupervisorCommand,
+  _waitForProcessGone,
   _setDisposedForTest,
   _resetAutoInitedForTest,
   _setAutoInitedForTest,
@@ -364,13 +365,84 @@ describe("extension default export", () => {
     expect(_restartSupervisorCommand("linux", 1000)).toEqual([
       { cmd: "systemctl", args: ["--user", "restart", "remote-pi-supervisord.service"] },
     ]);
-    // Windows (plan/40): End (ignorable) then Run, via Task Scheduler.
+    // Windows (plan/40): End (ignorable), THEN a blocking check that the old
+    // process actually died, then Run. Without the middle step `/Run` deferred
+    // to the still-living process and the command silently did nothing.
     expect(_restartSupervisorCommand("win32", 0)).toEqual([
       { cmd: "schtasks", args: ["/End", "/TN", "RemotePiSupervisor"], ignoreFailure: true },
+      {
+        cmd: "schtasks",
+        args: ["/Query", "/TN", "RemotePiSupervisor"],
+        ignoreFailure: true,
+        waitUntilGone: {
+          pattern: "supervisord.js",
+          timeoutMs: 3_000,
+          killCommand: {
+            cmd: "powershell",
+            args: [
+              "-NoProfile",
+              "-NonInteractive",
+              "-Command",
+              "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -like '*supervisord.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }",
+            ],
+          },
+          killTimeoutMs: 5_000,
+        },
+      },
       { cmd: "schtasks", args: ["/Run", "/TN", "RemotePiSupervisor"] },
     ]);
     // Truly unsupported platform → null (caller exits non-zero).
     expect(_restartSupervisorCommand("aix", 0)).toBeNull();
+  });
+
+  test("_waitForProcessGone: só reporta \"gone\" quando o processo realmente sumiu", () => {
+    // The whole point of this helper: \"still running\" must NEVER be reported as
+    // a successful restart. That silent no-op is what made Windows
+    // `restart-supervisor` claim success while the old code kept serving.
+
+    // Exits on the 3rd poll.
+    let polls = 0;
+    const goneEventually = _waitForProcessGone("supervisord.js", 10_000, {
+      now: () => polls * 200,
+      sleep: () => {},
+      isRunning: () => {
+        polls += 1;
+        return polls < 3;
+      },
+    });
+    expect(goneEventually).toBe("gone");
+    expect(polls).toBe(3);
+
+    // Never exits → must report "running" once the budget is spent.
+    let clock = 0;
+    const neverExits = _waitForProcessGone("supervisord.js", 1_000, {
+      now: () => clock,
+      sleep: () => {
+        clock += 200;
+      },
+      isRunning: () => true,
+    });
+    expect(neverExits).toBe("running");
+
+    // The query itself failing is NOT evidence the process died.
+    const unknown = _waitForProcessGone("supervisord.js", 1_000, {
+      now: () => 0,
+      sleep: () => {},
+      isRunning: () => null,
+    });
+    expect(unknown).toBe("unknown");
+
+    // Already gone → succeeds without waiting.
+    let slept = false;
+    const alreadyGone = _waitForProcessGone("supervisord.js", 1_000, {
+      now: () => 0,
+      sleep: () => {
+        slept = true;
+      },
+      isRunning: () => false,
+    });
+    expect(alreadyGone).toBe("gone");
+    expect(slept).toBe(false);
   });
 
   test("no deprecated or removed commands leak back into the surface", () => {

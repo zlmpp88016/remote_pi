@@ -17,9 +17,9 @@
 import { RemotePiAdapter } from "../src/lib/remote-pi/adapter.ts";
 import {
   ModelCatalogueCache,
+  CATALOGUE_STORAGE_PREFIX,
   catalogueKey,
   catalogueScope,
-  MODEL_CACHE_TTL_MS,
 } from "../src/lib/remote-pi/model-cache.ts";
 
 const HOST_ROOM = "host";
@@ -169,9 +169,8 @@ const target = (over = {}) => ({ token: TOKEN, hostEpk: HOST_EPK, name: "host", 
 // ── 1. pure cache ───────────────────────────────────────────────────────────
 
 function pureCache() {
-  console.log("\n== 1. cache puro: TTL, evicção e invalidação ==");
-  let clock = 0;
-  const cache = new ModelCatalogueCache(1000, () => clock);
+  console.log("\n== 1. cache puro: validade por CONEXÃO, invalidação por chave e clear ==");
+  const cache = new ModelCatalogueCache();
   const key = catalogueKey(catalogueScope(RELAY, HOST_EPK), ROOM_A);
 
   check("cache vazio devolve null", cache.get(key) === null);
@@ -179,15 +178,15 @@ function pureCache() {
   check("set → get devolve a entrada", cache.get(key)?.models.length === 1);
   check("tamanho conta a entrada", cache.size === 1);
 
-  clock = 999;
-  check("dentro do TTL ainda vale", cache.get(key) !== null);
-  clock = 1000;
-  check("no limite do TTL expira", cache.get(key) === null);
-  check("entrada expirada é EVICTADA na leitura", cache.size === 0, `size=${cache.size}`);
+  // CONNECTION-SCOPED validity: an entry never expires on its own. Time passing
+  // is not a reason to re-ask the host — only a new connection is. This is the
+  // designed replacement for the old wall-clock TTL, which turned a stable
+  // answer into a periodic round trip.
+  check("a entrada NÃO expira com o tempo", cache.get(key) !== null);
+  check("e continua contada depois de lida", cache.size === 1);
 
-  clock = 2000;
   cache.set(key, { models: [{ id: "m2" }], current: undefined });
-  check("set depois da expiração grava fresco", cache.get(key)?.models[0].id === "m2");
+  check("set sobrescreve a mesma chave", cache.get(key)?.models[0].id === "m2");
 
   cache.invalidate(key);
   check("invalidate remove só aquela chave", cache.get(key) === null && cache.size === 0);
@@ -207,7 +206,70 @@ function pureCache() {
   const sameRoomOtherHost = catalogueKey(catalogueScope(RELAY, OTHER_EPK), ROOM_A);
   check("mesma room em outro host é outra chave", sameRoomOtherHost !== keyA);
   check("outro relay é outra chave", catalogueKey(catalogueScope("ws://other.test", HOST_EPK), ROOM_A) !== keyA);
-  check("TTL exportado é positivo", MODEL_CACHE_TTL_MS > 0);
+}
+
+// ── 1b. persistence across a page reload ────────────────────────────────────
+
+function persistedCache() {
+  console.log("\n== 1b. cache persistido: um F5 nao pode perder o catalogo ==");
+
+  // A minimal Web Storage double. The real adapter passes localStorage.
+  class FakeStorage {
+    constructor() { this.map = new Map(); }
+    get length() { return this.map.size; }
+    key(i) { return [...this.map.keys()][i] ?? null; }
+    getItem(k) { return this.map.has(k) ? this.map.get(k) : null; }
+    setItem(k, v) { this.map.set(k, String(v)); }
+    removeItem(k) { this.map.delete(k); }
+  }
+
+  const storage = new FakeStorage();
+  const key = catalogueKey(catalogueScope(RELAY, HOST_EPK), ROOM_A);
+
+  // "First page load": answer a catalogue and let it be remembered.
+  const first = new ModelCatalogueCache(storage);
+  first.set(key, { models: [{ id: "m1" }, { id: "m2" }], current: { id: "m1" } });
+  check("a escrita vai para o storage", storage.length === 1);
+
+  // "After F5": a brand-new cache over the SAME storage — the in-memory map is
+  // empty, exactly like a fresh page. This is the regression that made the
+  // picker spin forever after a reload.
+  const afterReload = new ModelCatalogueCache(storage);
+  const restored = afterReload.get(key);
+  check("F5 restaura o catálogo", restored !== null);
+  check("restaura TODOS os modelos", restored?.models.length === 2);
+  check("restaura o current reportado", restored?.current?.id === "m1");
+
+  // Corrupt / foreign rows must never poison the picker.
+  storage.setItem(CATALOGUE_STORAGE_PREFIX + key, "{not json");
+  const corrupt = new ModelCatalogueCache(storage);
+  check("entrada corrompida devolve null (não lança)", corrupt.get(key) === null);
+
+  storage.setItem(CATALOGUE_STORAGE_PREFIX + key, JSON.stringify({ current: null }));
+  const shapeDrift = new ModelCatalogueCache(storage);
+  check("entrada sem array de models é ignorada", shapeDrift.get(key) === null);
+
+  // clear() must purge the persisted rows too, not only the map.
+  const purged = new ModelCatalogueCache(storage);
+  purged.set(key, { models: [{ id: "x" }], current: undefined });
+  purged.clear();
+  check("clear() apaga também o que está no storage", storage.length === 0);
+  check("e uma cache nova não ressuscita a entrada", new ModelCatalogueCache(storage).get(key) === null);
+
+  // A store that throws must degrade to memory-only, never to an error.
+  const hostile = {
+    getItem() { throw new Error("denied"); },
+    setItem() { throw new Error("quota"); },
+    removeItem() { throw new Error("denied"); },
+  };
+  const resilient = new ModelCatalogueCache(hostile);
+  resilient.set(key, { models: [{ id: "mem" }], current: undefined });
+  check("storage que lança não impede o uso em memória", resilient.get(key)?.models[0].id === "mem");
+
+  // No storage at all (unit tests / storage disabled) keeps working.
+  const memoryOnly = new ModelCatalogueCache(null);
+  memoryOnly.set(key, { models: [{ id: "only" }], current: undefined });
+  check("sem storage a cache funciona em memória", memoryOnly.get(key)?.models[0].id === "only");
 }
 
 // ── 2. adapter wiring ───────────────────────────────────────────────────────
@@ -349,10 +411,65 @@ async function identityChange() {
   adapterD.close();
 }
 
+// ── 4. prefetch semantics (the picker must never be the trigger) ─────────────
+
+async function prefetchSemantics() {
+  console.log("\n== 4. prefetch: o picker nunca dispara o fio ==");
+  const wire = fakeWire();
+  const adapter = newAdapter({ transportFactory: wire.factory });
+  await adapter.pair(target());
+  const transport = wire.list[0];
+
+  // A catalogue that is already remembered is NEVER re-asked. This is the core
+  // guarantee behind the design: a connection-scoped entry is served locally for
+  // as long as the connection lives, so opening the picker is a cache read and
+  // never a round trip.
+  check("conexão nova começa sem catálogo", adapter.readCachedModels(ROOM_A) === null);
+
+  adapter.listModels(ROOM_A);
+  transport.replyModels(1, ROOM_A, catalogue(1));
+  const callsAfterWarm = transport.listModelsCalls.length;
+  check("após aquecer, a room tem catálogo", adapter.readCachedModels(ROOM_A) !== null);
+
+  // Simulate N picker opens: each is a readCachedModels call, never a request.
+  for (let i = 0; i < 5; i += 1) adapter.readCachedModels(ROOM_A);
+  check(
+    "abrir o picker 5x não gera nenhum list_models",
+    transport.listModelsCalls.length === callsAfterWarm,
+    "calls=" + transport.listModelsCalls.length,
+  );
+
+  // Time is NOT a reason to re-ask: with no TTL the entry survives arbitrarily
+  // long within the same connection.
+  check(
+    "a entrada sobrevive sem expirar",
+    adapter.readCachedModels(ROOM_A)?.models[0].id === "model-1",
+  );
+  check(
+    "e ainda sem tráfego novo",
+    transport.listModelsCalls.length === callsAfterWarm,
+    "calls=" + transport.listModelsCalls.length,
+  );
+
+  // A model switch is the ONE thing that legitimately corrects a cached entry,
+  // and it does so IN PLACE — no re-list is needed to stay accurate.
+  adapter.confirmCachedModel(ROOM_A, "prov", "model-1-b");
+  check(
+    "model_set confirmado corrige o cache sem relistar",
+    adapter.readCachedModels(ROOM_A)?.current?.id === "model-1-b" &&
+      transport.listModelsCalls.length === callsAfterWarm,
+    "current=" + adapter.readCachedModels(ROOM_A)?.current?.id,
+  );
+
+  adapter.close();
+}
+
 // ── run ─────────────────────────────────────────────────────────────────────
 
 pureCache();
+persistedCache();
 await adapterWiring();
+await prefetchSemantics();
 await identityChange();
 
 for (const adapter of adapters) {

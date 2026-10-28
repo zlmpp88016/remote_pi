@@ -1,0 +1,328 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+
+  /*
+   * State primitives — spinner, loading, empty, error and status pill.
+   *
+   * These were Tailwind utilities in the component. They are plain CSS now, one
+   * named rule per thing the markup actually draws, which is what lets the
+   * component read as markup instead of as a class list.
+   *
+   * The declarations are byte-identical to Tailwind's — extracted from the last
+   * Tailwind build rather than retyped, because a retyped truncate or sr-only
+   * looks right and is subtly wrong.
+   *
+   * The tone modifiers at the end only ever changed two colours, so they are
+   * modifiers on the shared pill rule rather than a second full recipe.
+   */
+  .spinner {
+  }
+
+  @layer utilities {
+    .spinner {
+      display: inline-block;
+      flex-shrink: 0;
+      animation: var(--animate-spin);
+      border-radius: 3.40282e38px;
+      border-style: var(--tw-border-style);
+      border-width: 1.6px;
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+      border-top-color: var(--accent);
+    }
+  }
+
+  @layer utilities @supports (color:color-mix(in lab,red,red)) {
+    .spinner {
+      border-color: var(--dsw-alias-border-l3);
+    }
+  }
+
+  .loadingBoxed {
+  }
+
+  @layer utilities {
+    .loadingBoxed {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: calc(var(--spacing) * 3);
+      padding-inline: calc(var(--spacing) * 6);
+      padding-block: calc(var(--spacing) * 14);
+      text-align: center;
+    }
+  }
+
+  .loadingInline {
+  }
+
+  @layer utilities {
+    .loadingInline {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 2);
+    }
+  }
+
+  .loadingLabel {
+  }
+
+  @layer utilities {
+    .loadingLabel {
+      font-size: 13px;
+      color: var(--muted);
+    }
+  }
+
+  .loadingDetail {
+  }
+
+  @layer utilities {
+    .loadingDetail {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: var(--muted);
+    }
+  }
+
+  .emptyCompact {
+  }
+
+  @layer utilities {
+    .emptyCompact {
+      padding-inline: calc(var(--spacing) * 2);
+      padding-block: calc(var(--spacing) * 3);
+      font-size: 12.5px;
+      --tw-leading: var(--leading-relaxed);
+      line-height: var(--leading-relaxed);
+      color: var(--muted);
+    }
+  }
+
+  .emptyCompactDetail {
+  }
+
+  @layer utilities {
+    .emptyCompactDetail {
+      margin-top: var(--spacing);
+      display: block;
+    }
+  }
+
+  .emptyBox {
+  }
+
+  @layer utilities {
+    .emptyBox {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: calc(var(--spacing) * 3);
+      padding-inline: calc(var(--spacing) * 6);
+      padding-block: calc(var(--spacing) * 12);
+      text-align: center;
+    }
+  }
+
+  .emptyIcon {
+  }
+
+  @layer utilities {
+    .emptyIcon {
+      display: grid;
+      width: calc(var(--spacing) * 11);
+      height: calc(var(--spacing) * 11);
+      place-items: center;
+      border-radius: 15px;
+      border-style: var(--tw-border-style);
+      border-width: 1px;
+      border-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 30%, transparent);
+      background-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 13%, transparent);
+      color: var(--accent);
+    }
+  }
+
+  .emptyTitle {
+  }
+
+  @layer utilities {
+    .emptyTitle {
+      font-size: 16px;
+      --tw-font-weight: var(--font-weight-semibold);
+      font-weight: var(--font-weight-semibold);
+      --tw-tracking: -.01em;
+      letter-spacing: -.01em;
+      /*
+       * Was `var(--color-white)`, which is white-on-white now that light is the
+       * default theme: the empty-state heading rendered as a blank gap. Uses the
+       * primary label token so it tracks the theme instead of a literal.
+       */
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  .emptyDetail {
+  }
+
+  @layer utilities {
+    .emptyDetail {
+      max-width: 46ch;
+      /* 14px to match the reference's body size (measured 14px there); this is
+         the sentence users actually read, not a caption. */
+      font-size: 14px;
+      --tw-leading: var(--leading-relaxed);
+      line-height: var(--leading-relaxed);
+      /* label-secondary (5.8:1) instead of the legacy --muted (2.7:1, below AA). */
+      color: var(--dsw-alias-label-secondary);
+    }
+  }
+
+  .errorBox {
+  }
+
+  @layer utilities {
+    .errorBox {
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--spacing) * 2);
+      border-radius: 10px;
+      border-style: var(--tw-border-style);
+      border-width: 1px;
+      border-color: #f25a5a59;
+      background-color: #f25a5a14;
+      padding-inline: calc(var(--spacing) * 3);
+      padding-block: calc(var(--spacing) * 2.5);
+    }
+  }
+
+  .errorHead {
+  }
+
+  @layer utilities {
+    .errorHead {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 2);
+      font-size: 12.5px;
+      --tw-font-weight: var(--font-weight-medium);
+      font-weight: var(--font-weight-medium);
+      color: var(--danger);
+    }
+  }
+
+  .errorCode {
+  }
+
+  @layer utilities {
+    .errorCode {
+      font-family: var(--ff-mono);
+      font-size: 11px;
+      color: var(--danger);
+    }
+  }
+
+  @layer utilities @supports (color:color-mix(in lab,red,red)) {
+    .errorCode {
+      color: color-mix(in oklab,var(--danger) 80%,transparent);
+    }
+  }
+
+  .errorDetail {
+  }
+
+  @layer utilities {
+    .errorDetail {
+      white-space: pre-wrap;
+      font-size: 12.5px;
+      --tw-leading: var(--leading-relaxed);
+      line-height: var(--leading-relaxed);
+      color: var(--muted);
+    }
+  }
+
+  .pill {
+  }
+
+  @layer utilities {
+    .pill {
+      display: inline-flex;
+      height: calc(var(--spacing) * 6);
+      align-items: center;
+      gap: calc(var(--spacing) * 1.5);
+      white-space: nowrap;
+      border-radius: 3.40282e38px;
+      border-style: var(--tw-border-style);
+      border-width: 1px;
+      border-color: var(--dsw-alias-border-l2);
+      background-color: var(--dsw-alias-bg-layer-2);
+      padding-inline: calc(var(--spacing) * 2.5);
+      font-family: var(--ff-mono);
+      font-size: 11px;
+    }
+  }
+
+  @layer utilities @supports (color:color-mix(in lab,red,red)) {
+    .pill {
+      border-color: var(--dsw-alias-border-l2);
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  .pillDot {
+  }
+
+  @layer utilities {
+    .pillDot {
+      width: calc(var(--spacing) * 1.5);
+      height: calc(var(--spacing) * 1.5);
+      flex-shrink: 0;
+      border-radius: 3.40282e38px;
+    }
+  }
+
+  .pillDotOk {
+    background-color: var(--ok);
+  }
+
+  .pillDotWarn {
+    background-color: var(--warn);
+  }
+
+  .pillDotError {
+    background-color: var(--danger);
+  }
+
+  .pillDotBusy {
+    background-color: var(--accent);
+  }
+
+  .pillDotIdle {
+    background-color: var(--ink-neutral);
+  }
+
+  .pillTextError {
+    color: var(--danger);
+  }
+
+  .pillTextWarn {
+    color: var(--warn-text);
+  }
+
+  .pillTextOk {
+    color: var(--ink-soft);
+  }
+
+  .pillTextIdle {
+    color: var(--muted);
+  }
+}

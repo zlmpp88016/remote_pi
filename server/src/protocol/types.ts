@@ -298,7 +298,26 @@ export interface WireImage {
   mime: string;
 }
 
-export type Usage = { input_tokens: number; output_tokens: number };
+/**
+ * Token accounting for one assistant message, mirroring the SDK's `Usage`.
+ *
+ * The SDK reports `{input, output, cacheRead, cacheWrite, reasoning, totalTokens,
+ * cost}` on every assistant message (verified against real session files). Only
+ * the first two used to be forwarded, so the cache and reasoning shares were
+ * dropped before they could ever be displayed.
+ */
+export type Usage = {
+  input_tokens: number;
+  output_tokens: number;
+  /** Prompt tokens served from the provider's cache (`cacheRead` in the SDK). */
+  cache_read_tokens?: number;
+  /** Prompt tokens written INTO the cache (`cacheWrite` in the SDK). */
+  cache_write_tokens?: number;
+  /** Reasoning tokens, a subset of `output_tokens` on models that report them. */
+  reasoning_tokens?: number;
+  /** SDK `totalTokens` when the provider reports it. */
+  total_tokens?: number;
+};
 
 export type KnownErrorCode =
   | "tool_approval_required"
@@ -447,6 +466,18 @@ export type ServerMessage =
       in_reply_to: string;
       current_id: string | null;
       sessions: WireSessionInfo[];
+      /**
+       * Whether this host can act on the listed sessions.
+       *
+       * `switchSession` and `newSession` only exist on a command-capable
+       * context, which an RPC-mode daemon never captures — so `session_switch`
+       * answers `no_sdk` there and `session_new` answers `action_error`. The
+       * client cannot infer that from anything else, and a control that fails
+       * only after being clicked is worse than one that explains itself, so the
+       * host states the capability up front with the listing.
+       */
+      can_switch: boolean;
+      can_new: boolean;
     }
   | {
       type: "session_switch_ok";
@@ -703,14 +734,14 @@ export interface PiSurfacePackageWire {
  * protocol owns its own enum and we don't leak SDK-internal types onto
  * the app's network surface.
  *
- * Note: `"xhigh"` is only honored by select model families — the SDK uses
- * each `Model.thinkingLevelMap` to decide if the requested level is
- * supported, falling back to a sensible neighbour when not. The app
- * surfaces all 6 buttons but can grey out unsupported ones using the
- * model's metadata if the picker fetches it later.
+ * Note: `"xhigh"` and `"max"` are only honored by select model families — the SDK
+ * uses each `Model.thinkingLevelMap` to decide if the requested level is
+ * supported, falling back to a sensible neighbour when not. The app surfaces
+ * exactly the levels the model reports (`thinking_levels`), so an unsupported one
+ * is never offered.
  */
 export type ThinkingLevel =
-  | "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
+  | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 /**
  * Plan/28 — Wire shape for one model entry in the app's model picker.
@@ -737,6 +768,21 @@ export interface WireModel {
    *  includes `"image"`). The app uses it to enable/disable the attach
    *  button — a text-only model greys out image attachments. */
   vision: boolean;
+  /**
+   * Thinking levels THIS model actually accepts, in picker order.
+   *
+   * Derived from the SDK's `Model.thinkingLevelMap`: a level is supported when the
+   * model maps it to a provider value, and unsupported when the map holds `null`.
+   *
+   * It travels on the wire because the alternative — one hard-coded six-item list —
+   * showed every model the same levels, so a model supporting only `high`/`max`
+   * still offered `low`/`medium`/`xhigh`, and picking one silently fell back to a
+   * neighbour. The picker now renders exactly what the model honours.
+   *
+   * Omitted (rather than empty) when the model is not a reasoning model, so the
+   * client can tell "no thinking surface" apart from "supports nothing".
+   */
+  thinking_levels?: ThinkingLevel[];
 }
 
 export type ByeReason = "peer_stop" | "session_replaced" | "shutdown";

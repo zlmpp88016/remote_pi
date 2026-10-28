@@ -1,8 +1,19 @@
-import { afterEach, describe, expect, test } from "vitest";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RpcChild, busyTransition, resolvePiBin, resolvePiSpawn, _npmShimTarget, rpcSpawnArgs, type RpcChildExitEvent } from "./rpc_child.js";
+import {
+  RpcChild,
+  busyTransition,
+  resolvePiBin,
+  resolvePiSpawn,
+  _npmShimTarget,
+  rpcSpawnArgs,
+  stagePendingSwitchTarget,
+  takePendingSwitchTarget,
+  PENDING_SWITCH_FILE,
+  type RpcChildExitEvent,
+} from "./rpc_child.js";
 
 /**
  * Regression for the orphaned-daemon bug: a deliberate `stop()` kills the
@@ -35,6 +46,56 @@ describe("rpcSpawnArgs", () => {
   test("always passes --approve (pi >=0.79 project trust; RPC is non-interactive)", () => {
     expect(rpcSpawnArgs("/path/to/dist/index.js")).toContain("--approve");
     expect(rpcSpawnArgs("/path/to/dist/index.js", "PC", false)).toContain("--approve");
+  });
+
+  /*
+   * A daemon `session_switch` cannot run in-process: `switchSession` lives on
+   * `ExtensionCommandContext`, which RPC mode never captures. The supervisor
+   * reopens the target instead, via the CLI's `--session <path|id>`.
+   */
+  test("--session points the next spawn at a specific session file", () => {
+    expect(rpcSpawnArgs("/p/index.js", "PC", true, "/sessions/abc.jsonl")).toEqual([
+      "--mode", "rpc", "--approve",
+      "--session", "/sessions/abc.jsonl",
+      "--name", "PC", "-e", "/p/index.js",
+    ]);
+  });
+
+  test("--session REPLACES --continue (both answer the same question)", () => {
+    const args = rpcSpawnArgs("/p/index.js", undefined, true, "/sessions/abc.jsonl");
+    expect(args).toContain("--session");
+    expect(args).not.toContain("--continue");
+  });
+});
+
+describe("pending session_switch target", () => {
+  let home: string;
+
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), "pi-switch-"));
+    process.env["REMOTE_PI_HOME"] = home;
+  });
+
+  afterEach(() => {
+    delete process.env["REMOTE_PI_HOME"];
+    try { rmSync(home, { recursive: true, force: true }); } catch { /* best-effort */ }
+  });
+
+  test("a staged target is returned once and then consumed", () => {
+    stagePendingSwitchTarget("/sessions/target.jsonl");
+    expect(takePendingSwitchTarget()).toBe("/sessions/target.jsonl");
+    // A leftover file must never steer a LATER, unrelated restart.
+    expect(takePendingSwitchTarget()).toBeUndefined();
+  });
+
+  test("nothing staged → undefined (falls back to a normal --continue)", () => {
+    expect(takePendingSwitchTarget()).toBeUndefined();
+  });
+
+  test("a corrupt file is consumed and reported as absent, not thrown", () => {
+    writeFileSync(join(home, PENDING_SWITCH_FILE), "not json", "utf8");
+    expect(takePendingSwitchTarget()).toBeUndefined();
+    expect(existsSync(join(home, PENDING_SWITCH_FILE))).toBe(false);
   });
 });
 

@@ -50,9 +50,7 @@ export class Ed25519UnavailableError extends Error {
   }
 }
 
-// ── base64 helpers (portable: browser btoa/atob + TextEncoder) ──────────────
-
-const textEncoder = new TextEncoder();
+// ── base64 helpers (portable: browser btoa/atob) ───────────────────────────
 
 export function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";

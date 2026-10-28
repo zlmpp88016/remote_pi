@@ -1,0 +1,38 @@
+/*
+ * Composer statistics pills.
+ *
+ * Copy of DeepSeek Harness' composer dock rhythm: small, quiet, tertiary text on
+ * one line below the input, each reading prefixed by a 13px outline icon. The
+ * pills are inert readings, not buttons, so they carry no hover affordance.
+ */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  padding: 0 2px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  user-select: none;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /*
+   * Tabular digits keep the reading from shifting sideways as tokens stream in;
+   * proportional figures made the whole row twitch on every update.
+   */
+  font-variant-numeric: tabular-nums;
+}

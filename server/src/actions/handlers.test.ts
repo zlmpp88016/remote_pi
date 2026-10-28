@@ -300,6 +300,8 @@ describe("handleListModels", () => {
         reasoning: true,
         context_window: 200_000,
         vision: false,
+        /* Reasoning model without a `thinkingLevelMap` honours every level. */
+        thinking_levels: ["off", "minimal", "low", "medium", "high"],
       },
     ]);
     expect(reply.current).toEqual(reply.models[0]);
@@ -371,6 +373,11 @@ describe("wireFromModel", () => {
       reasoning: true,
       context_window: 200_000,
       vision: false,  // sampleModel has no `input` → text-only
+      /*
+       * A reasoning model with no `thinkingLevelMap` honours whatever is requested,
+       * so it reports every level rather than none.
+       */
+      thinking_levels: ["off", "minimal", "low", "medium", "high"],
     });
   });
 

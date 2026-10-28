@@ -83,8 +83,15 @@ cd remote_pi && git pull
 cd server
 npm install          # 只有依赖变了才需要
 npm run build        # 重新生成 dist/
-remote-pi-server daemon restart   # 用新的 dist/ 重启
+remote-pi-server restart-supervisor   # 重载 server 代码
 ```
+
+`restart-supervisor` 是必需的，不是可选的：supervisor 是常驻 Node 进程、没有热重载，
+会一直跑着启动时加载的那份代码。`daemon restart` 只重新拉起工作区的 `pi` 子进程，
+supervisor（`host_bridge`、relay 客户端、action 路由都在里面）仍跑旧代码。
+
+`restart-supervisor` 会顺带重启所有工作区 daemon，所以之后**不需要**再跑 `daemon restart`。
+用 `remote-pi-server daemon status` 确认：supervisor 的 PID 必须变了。
 
 **不需要**重跑 `npm install -g .`：全局入口是软链，重新 build 就地生效。只有当你把仓库
 整体挪到别的路径时，才需要重跑一次。

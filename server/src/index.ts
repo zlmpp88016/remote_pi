@@ -90,6 +90,7 @@ import type {
   ServerMessage,
   SessionHistoryEvent,
   ThinkingLevel,
+  Usage,
   TreeSnapshotWire,
   WireImage,
   QueuedMessageItem,
@@ -139,7 +140,11 @@ import { acquireCwdLock, type AcquiredLock } from "./session/cwd_lock.js";
 import { addDaemon, listDaemons, removeDaemon } from "./daemon/registry.js";
 import { callSupervisor, supervisorOnline, SupervisorOfflineError } from "./daemon/client.js";
 import type { ControlRequest, DaemonInfo } from "./daemon/control_protocol.js";
-import { EXIT_DAEMON_FRESH_SESSION } from "./daemon/rpc_child.js";
+import {
+  EXIT_DAEMON_FRESH_SESSION,
+  EXIT_DAEMON_SWITCH_SESSION,
+  stagePendingSwitchTarget,
+} from "./daemon/rpc_child.js";
 import { installService, uninstallService, linkCliBinaries, unlinkCliBinaries, LAUNCHD_LABEL, SYSTEMD_UNIT, WINDOWS_TASK_NAME } from "./daemon/install.js";
 import {
   defaultAgentName,
@@ -1206,6 +1211,15 @@ type ClientUserMessage = Extract<ClientMessage, { type: "user_message" }>;
 
 // Per-turn messaging state
 let _currentTurnId: string | null = null;
+/**
+ * Usage of the LAST assistant message of the current turn.
+ *
+ * `agent_end` is where `agent_done` is emitted, but the usage arrives earlier on
+ * `message_end` and is out of scope by then. Caching it here is what lets the
+ * live path carry real token accounting; without it only the history REPLAY had
+ * usage and a streaming turn showed nothing until the next re-read.
+ */
+let _lastTurnUsage: Usage | null = null;
 
 // Module-level pi reference
 let _pi: ExtensionAPI | null = null;
@@ -2445,6 +2459,27 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
     if (m.role === "user" || m.role === "assistant" || m.role === "toolResult") {
       _messageBuffer.push(m as unknown as BufferMsg);
     }
+    /*
+     * Remember this turn's usage while the message is still in scope.
+     *
+     * Only a settled assistant message carries a valid `usage` (an aborted or
+     * errored one does not), which is exactly the same rule the SDK documents for
+     * its own accounting.
+     */
+    if (m.role === "assistant" && m.stopReason !== "aborted" && m.stopReason !== "error") {
+      const u = (m as { usage?: Record<string, unknown> }).usage;
+      if (u !== undefined && typeof u === "object") {
+        const num = (v: unknown): number | undefined => (typeof v === "number" ? v : undefined);
+        _lastTurnUsage = {
+          input_tokens: num(u.input) ?? 0,
+          output_tokens: num(u.output) ?? 0,
+          ...(num(u.cacheRead) !== undefined ? { cache_read_tokens: num(u.cacheRead) } : {}),
+          ...(num(u.cacheWrite) !== undefined ? { cache_write_tokens: num(u.cacheWrite) } : {}),
+          ...(num(u.reasoning) !== undefined ? { reasoning_tokens: num(u.reasoning) } : {}),
+          ...(num(u.totalTokens) !== undefined ? { total_tokens: num(u.totalTokens) } : {}),
+        };
+      }
+    }
     // Forward a failed turn to connected owners. Without this the app just
     // hangs with no response when the provider errors (e.g. the TUI's
     // "Provider finish_reason: error"): the SDK surfaces the failure as an
@@ -2468,9 +2503,14 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
     // Buffer is fed by `message_end`; here we only finalize the outbound
     // turn signal to every connected owner. No buffer mutation.
     if (_anyPeerActive() && _currentTurnId) {
-      _broadcastToActive({ type: "agent_done", in_reply_to: _currentTurnId });
+      _broadcastToActive({
+        type: "agent_done",
+        in_reply_to: _currentTurnId,
+        ...(_lastTurnUsage !== null ? { usage: _lastTurnUsage } : {}),
+      });
       _currentTurnId = null;
     }
+    _lastTurnUsage = null;
     _flushPendingReceivedImagePreviews();
     _lastConsumedSteerText = null;
     _maybeDrainQueuedItem();
@@ -4633,7 +4673,21 @@ export function _routeClientMessageFrom(
     _extensionUiBridge?.respond(msg);
     return;
   }
-  if (!_pi) return;
+  // Typed actions below all need the Pi runtime. Answering with a typed error
+  // instead of returning keeps the client from waiting forever on a request
+  // that will never be served — the same silent-failure shape that makes a
+  // `session_read` look like a dead button.
+  if (!_pi) {
+    if (typeof (msg as { id?: unknown }).id === "string") {
+      sender.send({
+        type: "error",
+        code: "internal_error",
+        in_reply_to: (msg as { id: string }).id,
+        message: "Pi runtime is not available in this process.",
+      });
+    }
+    return;
+  }
   switch (msg.type) {
     case "queued_message_set": {
       const text = msg.text.trim();
@@ -4837,8 +4891,65 @@ export function _routeClientMessageFrom(
       break;
     }
     case "session_switch": {
-      const actionCtx = _asActionCtx(_lastCtx);
+      /*
+       * Same ctx fallback as `session_read`: in a daemon child `_lastCtx` may be
+       * unset (nothing ever runs the `/remote-pi` command there) while
+       * `_lastEventCtx` still carries the live session's cwd.
+       */
+      const actionCtx = _asActionCtx(_lastCtx ?? _lastEventCtx);
       void (async () => {
+        /*
+         * Daemon fallback. `switchSession` lives on `ExtensionCommandContext`
+         * only (SDK types.d.ts:276) and an RPC-mode daemon never captures one —
+         * that is the documented reason this used to answer `no_sdk`.
+         *
+         * The supervisor CAN reopen a chosen session though: the CLI accepts
+         * `--session <path|id>`. So instead of refusing, stage the resolved
+         * path, acknowledge, and exit with a private code; the supervisor
+         * respawns the Pi pointed at that file. Resolving the id here (rather
+         * than trusting a client-supplied path) keeps the arbitrary-file-read
+         * boundary intact — only ids this host itself listed can be targeted.
+         */
+        if (actionCtx?.switchSession === undefined && process.env["REMOTE_PI_DAEMON"] === "1") {
+          const cwd = actionCtx?.cwd;
+          if (!cwd) {
+            sender.send({
+              type: "session_switch_error",
+              in_reply_to: msg.id,
+              code: "unknown",
+              message: "cwd unavailable",
+            });
+            return;
+          }
+          let target: { path: string } | undefined;
+          try {
+            const listed = await listWorkspaceSessions(cwd);
+            const hit = listed.find((s) => s.id === msg.session_id);
+            if (hit) target = { path: hit.path };
+          } catch {
+            target = undefined;
+          }
+          if (target === undefined) {
+            sender.send({
+              type: "session_switch_error",
+              in_reply_to: msg.id,
+              code: "unknown",
+              message: "session id not in this workspace listing",
+            });
+            return;
+          }
+          stagePendingSwitchTarget(target.path);
+          sender.send({
+            type: "session_switch_ok",
+            in_reply_to: msg.id,
+            session_id: msg.session_id,
+            session_started_at: Date.now(),
+          });
+          // Let the ack flush before the process dies.
+          setTimeout(() => process.exit(EXIT_DAEMON_SWITCH_SESSION), 150);
+          return;
+        }
+
         const switched = await handleSessionSwitch(
           actionCtx,
           sender,
@@ -5175,7 +5286,18 @@ function _readTranscriptPage(
   limit: number,
 ): { events: SessionHistoryEvent[]; olderCursor: string | null; hasOlder: boolean } | null {
   try {
-    const leafId = _leafIdFromCtx();
+    /*
+     * `_leafIdFromCtx()` is the leaf of the LIVE session. It is only meaningful
+     * when the file being read IS that session's file.
+     *
+     * Applying it to any other session made the read-only viewer show nothing:
+     * the live leaf does not exist in another session's file, so branch
+     * filtering returned zero entries, `entries.length === 0` turned into
+     * `null`, and the viewer rendered an empty transcript with no error. Every
+     * older session in the list was unreadable while claiming to be loading.
+     */
+    const liveFile = _sessionFileFromCtx();
+    const leafId = liveFile !== null && liveFile === sessionFile ? _leafIdFromCtx() : null;
     // Filtering to the active branch keeps abandoned-branch messages out of the
     // transcript; when the branch cannot be resolved we read linearly rather
     // than serve nothing.
@@ -5536,8 +5658,34 @@ export function _mapAgentMessagesToEvents(
       events.push(ev);
     } else if (m.role === "assistant") {
       const content = Array.isArray(m.content) ? m.content : [];
-      const usage = m.usage
-        ? { input_tokens: m.usage.input ?? 0, output_tokens: m.usage.output ?? 0 }
+      /*
+       * Forward the SDK's FULL usage, not just the input/output pair.
+       *
+       * The SDK's `Usage` carries `input/output/cacheRead/cacheWrite/reasoning/
+       * totalTokens`, but the type visible here narrows it to `{input?, output?}`
+       * (this message union does not re-export the full `Usage`). The runtime
+       * values are complete — verified against real session files — so the extra
+       * fields are read through a widened view rather than dropped.
+       */
+      const rawUsage = m.usage as
+        | {
+            input?: number;
+            output?: number;
+            cacheRead?: number;
+            cacheWrite?: number;
+            reasoning?: number;
+            totalTokens?: number;
+          }
+        | undefined;
+      const usage = rawUsage
+        ? {
+            input_tokens: rawUsage.input ?? 0,
+            output_tokens: rawUsage.output ?? 0,
+            ...(typeof rawUsage.cacheRead === "number" ? { cache_read_tokens: rawUsage.cacheRead } : {}),
+            ...(typeof rawUsage.cacheWrite === "number" ? { cache_write_tokens: rawUsage.cacheWrite } : {}),
+            ...(typeof rawUsage.reasoning === "number" ? { reasoning_tokens: rawUsage.reasoning } : {}),
+            ...(typeof rawUsage.totalTokens === "number" ? { total_tokens: rawUsage.totalTokens } : {}),
+          }
         : undefined;
       for (const raw of content) {
         if (!raw || typeof raw !== "object") continue;
@@ -5592,7 +5740,32 @@ export function _mapAgentMessagesToEvents(
  */
 /** One step of a restart sequence. `ignoreFailure` steps (e.g. `schtasks /End`
  *  when the task isn't running) don't abort the sequence. */
-export interface RestartStep { cmd: string; args: string[]; ignoreFailure?: boolean }
+export interface RestartStep {
+  cmd: string;
+  args: string[];
+  ignoreFailure?: boolean;
+  /**
+   * Wait until no process whose command line matches this pattern is left.
+   *
+   * Why this exists: on Windows `schtasks /End` only ASKS the task to stop, and
+   * `pi-supervisord` is a resident Node process that does not exit on request.
+   * The old code ran `/End` then immediately `/Run`, so Task Scheduler started a
+   * SECOND instance which found the first still alive, deferred to it, and the
+   * command still exited 0 — "Supervisor restarted." was printed while the OLD
+   * code kept running. That silent no-op is worse than a failure: it makes a
+   * rebuild look deployed when it is not. Waiting for the process to actually
+   * disappear (and force-killing it if it overstays) is what makes the restart
+   * real.
+   */
+  waitUntilGone?: {
+    pattern: string;
+    timeoutMs: number;
+    /** Run when the process refuses to exit within `timeoutMs`. */
+    killCommand?: { cmd: string; args: string[] };
+    /** Budget for the process to die after the kill command. */
+    killTimeoutMs?: number;
+  };
+}
 
 /** Pure: the OS command sequence that restarts the supervisor service, or null
  *  when the platform isn't supported. Most platforms are 1 step; Windows is 2
@@ -5605,6 +5778,9 @@ export function _restartSupervisorCommand(
   if (platform === "linux") return [{ cmd: "systemctl", args: ["--user", "restart", SYSTEMD_UNIT] }];
   if (platform === "win32") return [
     { cmd: "schtasks", args: ["/End", "/TN", WINDOWS_TASK_NAME], ignoreFailure: true },
+    // `/End` is only a request. Block until the old supervisor is really gone so
+    // `/Run` starts a NEW process instead of deferring to the living one.
+    { cmd: "schtasks", args: ["/Query", "/TN", WINDOWS_TASK_NAME], ignoreFailure: true, waitUntilGone: { pattern: "supervisord.js", timeoutMs: 3_000, killCommand: { cmd: "powershell", args: ["-NoProfile", "-NonInteractive", "-Command", "Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -like '*supervisord.js*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"] }, killTimeoutMs: 5_000 } },
     { cmd: "schtasks", args: ["/Run", "/TN", WINDOWS_TASK_NAME] },
   ];
   return null;
@@ -5632,8 +5808,109 @@ function _restartSupervisor(): void {
       console.error(`[remote-pi-server] restart-supervisor failed (${step.cmd} exited ${r.status})${detail ? `: ${detail}` : ""}.`);
       process.exit(r.status === null ? 1 : r.status);
     }
+    if (step.waitUntilGone) {
+      const target = step.waitUntilGone;
+      let outcome = _waitForProcessGone(target.pattern, target.timeoutMs);
+      if (outcome === "running" && target.killCommand) {
+        // Task Scheduler's `/End` reports success while the node process keeps
+        // running (it is a resident process, not a scheduled job that honours a
+        // stop request). Without this fallback the restart could never succeed
+        // on Windows — it would only ever fail loudly.
+        _runKillCommand(target.killCommand);
+        outcome = _waitForProcessGone(target.pattern, target.killTimeoutMs ?? 5_000);
+      }
+      if (outcome !== "gone") {
+        // A supervisor that outlives the stop request would make `/Run` a
+        // silent no-op, so this is a FAILURE, not a warning: reporting success
+        // here is what made `restart-supervisor` lie about deploying a rebuild.
+        console.error(
+          outcome === "running"
+            ? `[remote-pi-server] restart-supervisor failed: pi-supervisord (${target.pattern}) was still running after ${target.timeoutMs}ms, and the forced stop did not take. Stop it manually (taskkill /F /PID <pid>), then retry.`
+            : `[remote-pi-server] restart-supervisor failed: could not determine whether pi-supervisord stopped.`,
+        );
+        process.exit(1);
+      }
+    }
   }
   console.log("[remote-pi-server] Supervisor restarted.");
+}
+
+/**
+ * Polls until no process command line matches `pattern`.
+ *
+ * Windows has no `/proc`, so the snapshot comes from PowerShell's CIM query (the
+ * same one used elsewhere in this repo for diagnostics). Returns:
+ *   "gone"      — nothing matches any more;
+ *   "running"   — still alive after the timeout (the caller must fail);
+ *   "unknown"   — the query itself failed, so nothing can be asserted.
+ * Exported for tests.
+ */
+export function _waitForProcessGone(
+  pattern: string,
+  timeoutMs: number,
+  deps: {
+    now?: () => number;
+    sleep?: (ms: number) => void;
+    isRunning?: (pattern: string) => boolean | null;
+  } = {},
+): "gone" | "running" | "unknown" {
+  const now = deps.now ?? Date.now;
+  const sleep =
+    deps.sleep ??
+    ((ms: number) => {
+      // Atomics.wait is the only synchronous sleep available without spawning.
+      const shared = new SharedArrayBuffer(4);
+      Atomics.wait(new Int32Array(shared), 0, 0, ms);
+    });
+  const isRunning = deps.isRunning ?? _isSupervisordRunning;
+
+  const deadline = now() + timeoutMs;
+  // Poll rather than sleeping the whole budget: a supervisor normally exits in
+  // well under a second, and restart latency is user-visible.
+  for (;;) {
+    const running = isRunning(pattern);
+    if (running === null) return "unknown";
+    if (!running) return "gone";
+    if (now() >= deadline) return "running";
+    sleep(200);
+  }
+}
+
+/** Runs a best-effort stop command. Its own exit status is NOT trusted — the
+ *  caller re-checks the process table, which is the only authority on whether
+ *  the process actually died. */
+function _runKillCommand(kill: { cmd: string; args: string[] }): void {
+  try {
+    spawnSync(kill.cmd, kill.args, {
+      stdio: ["ignore", "ignore", "ignore"],
+      encoding: "utf8",
+      timeout: 15_000,
+    });
+  } catch {
+    // Swallowed on purpose: `_waitForProcessGone` re-checks the truth below.
+  }
+}
+
+/** True when a process whose command line contains `pattern` exists. */
+function _isSupervisordRunning(pattern: string): boolean | null {
+  try {
+    const script =
+      "$p = Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | Where-Object { $_.CommandLine -like '*" +
+      pattern.replace(/'/g, "''") +
+      "*' }; if ($p) { 'yes' } else { 'no' }";
+    const r = spawnSync("powershell", ["-NoProfile", "-NonInteractive", "-Command", script], {
+      stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf8",
+      timeout: 10_000,
+    });
+    if (r.error || r.status !== 0) return null;
+    const out = (r.stdout ?? "").trim().toLowerCase();
+    if (out === "yes") return true;
+    if (out === "no") return false;
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function _isDirectRun(): boolean {
@@ -5712,6 +5989,22 @@ if (_isDirectRun()) {
     process.exit(2);
   }
   configureRelayLog({ level: logFlags.level, file: logFlags.file });
+
+  // `--direct` is owned by `pi-supervisord`, not by this CLI: the supervisor is
+  // the long-lived process that holds the HostBridge (and therefore the relay
+  // connection) and that spawns the daemon children. Starting a relay HERE
+  // would bind a port, print a pairing code, and then close the port when this
+  // short-lived command exits — a code pointing at nothing. Reject it loudly
+  // instead of half-supporting it.
+  if (logFlags.rest.includes("--direct")) {
+    console.error(
+      "[remote-pi-server] --direct belongs to `pi-supervisord --direct`, which is the\n" +
+      "long-lived process that owns the relay connection. Start that instead;\n" +
+      "`remote-pi-server pair` then reports the local address automatically.",
+    );
+    process.exit(2);
+  }
+
   const [subcmd, ...cliArgs] = logFlags.rest;
   if (subcmd === "devices" || subcmd === "list") {
     const peers = (await listPeers())

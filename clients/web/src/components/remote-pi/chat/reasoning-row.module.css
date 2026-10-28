@@ -1,0 +1,121 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+  .root {
+    /* The scroll container's padding must not clip a sticky child, and sticky
+       needs a positioned scroll ancestor — the transcript pane supplies one. */
+    position: relative;
+  }
+
+  /*
+   * STICKY, WITH AN OPAQUE BACKGROUND. `background: transparent` here is the
+   * classic bug: the streaming text scrolls visibly underneath the pinned
+   * header. `--dsw-alias-bg-base` is the canvas colour, so the header blends
+   * into the page while still hiding what passes behind it.
+   */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background-color: var(--dsw-alias-bg-base);
+    padding-block: 6px;
+    border-radius: var(--dsw-radius-sm);
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--dsw-alias-label-tertiary);
+    cursor: pointer;
+    text-align: left;
+    transition-property: color, background-color;
+    transition-timing-function: var(--dsw-ease-in-out);
+    transition-duration: var(--dsw-transition-duration-fast);
+  }
+
+  @media (hover: hover) {
+    .header:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-secondary);
+    }
+  }
+
+  .header:focus-visible {
+    outline: var(--dsw-focus-outline);
+    outline-offset: var(--dsw-focus-outline-offset);
+  }
+
+  .icon {
+    flex-shrink: 0;
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  .label {
+    flex-shrink: 0;
+    font-weight: 500;
+  }
+
+  /* DSH's 2px separator dot between the label and the preview. */
+  .dot {
+    flex-shrink: 0;
+    width: 2px;
+    height: 2px;
+    border-radius: 999px;
+    background-color: var(--dsw-alias-label-tertiary);
+  }
+
+  /*
+   * One line, ellipsised. `min-width: 0` is what lets the ellipsis actually
+   * appear inside a flex row — without it the flex item refuses to shrink
+   * below its content and the summary pushes the chevron off the row.
+   */
+  .preview {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chevron {
+    flex-shrink: 0;
+    margin-left: auto;
+    transition-property: transform;
+    transition-timing-function: var(--dsw-ease-in-out);
+    transition-duration: var(--dsw-transition-duration-fast);
+  }
+
+  .chevronOpen {
+    transform: rotate(180deg);
+  }
+
+  /* Indented 22px, one step down in size and in the ink ramp. */
+  .body {
+    padding-block: 6px;
+    padding-left: 22px;
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--dsw-alias-label-tertiary);
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+  }
+}
+
+@layer utilities {
+  @media (prefers-reduced-motion: reduce) {
+    .chevron {
+      transition: none;
+    }
+  }
+}

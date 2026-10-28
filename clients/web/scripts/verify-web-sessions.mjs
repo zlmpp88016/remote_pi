@@ -32,6 +32,7 @@ import {
 import {
   previewText,
   relativeTime,
+  sessionActionErrorText,
   sessionLabel,
   shortSessionId,
   sortSessions,
@@ -338,8 +339,26 @@ function helpers() {
   check("shortSessionId sem hífen devolve o id", shortSessionId("abc") === "abc");
 
   check("sessionLabel usa o name", sessionLabel(row({ name: "meu" })) === "meu");
-  check("sessionLabel sem name cai no id curto", sessionLabel(row({ name: undefined })) === "01a0fb75");
-  check("sessionLabel com só espaços cai no id curto", sessionLabel(row({ name: "   " })) === "01a0fb75");
+  // The host fills `name` with the WORKSPACE FOLDER NAME, so all rows in one
+  // folder arrived identical. The folder name must never become the title.
+  check(
+    "sessionLabel recusa o nome da pasta",
+    sessionLabel(row({ name: "proj" })) === "um problema de doces",
+  );
+  // Without a usable name the first message is the only distinguishing text.
+  check(
+    "sessionLabel sem name usa a primeira mensagem",
+    sessionLabel(row({ name: undefined })) === "um problema de doces",
+  );
+  check(
+    "sessionLabel com só espaços usa a primeira mensagem",
+    sessionLabel(row({ name: "   " })) === "um problema de doces",
+  );
+  // The id prefix is the LAST resort: only when there is no usable text at all.
+  check(
+    "sessionLabel sem texto nenhum cai no id curto",
+    sessionLabel(row({ name: undefined, preview: "" })) === "01a0fb75",
+  );
 
   const now = 1_760_000_000_000;
   check("just now", relativeTime(now, now) === "just now");
@@ -366,6 +385,26 @@ function helpers() {
     "os três textos são distintos entre si",
     new Set(["locked", "unknown", "no_sdk"].map(switchErrorText)).size === 3,
   );
+
+  // REGRESSION (invisible session_read failure): the host refuses a session
+  // request with the same generic `action_error` frame it uses for everything
+  // else. The client used to handle only the `_ok` replies, so a refused read
+  // never settled: `sessionReadLoading` stayed true and clicking a session row
+  // produced no visible change at all. Each session action must therefore map to
+  // its OWN fixed sentence, and every non-session action must map to null so an
+  // unrelated failure falls through to its own handling instead of being
+  // rewritten as a session error.
+  console.log("\n  -- action_error: cada ação de sessão tem sentença própria --");
+  for (const action of ["session_read", "session_switch", "session_list"]) {
+    check(`${action} tem sentença própria`, (sessionActionErrorText(action) ?? "").length > 0);
+  }
+  check(
+    "as três sentenças de sessão são distintas",
+    new Set(["session_read", "session_switch", "session_list"].map(sessionActionErrorText)).size === 3,
+  );
+  check("ação de sessão desconhecida é null", sessionActionErrorText("session_fork") === null);
+  check("ação não-sessão é null", sessionActionErrorText("workspace_add") === null);
+  check("string vazia é null", sessionActionErrorText("") === null);
 }
 
 // ── run ─────────────────────────────────────────────────────────────────────

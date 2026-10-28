@@ -1,6 +1,7 @@
 import { ChildProcess, execFileSync, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { DaemonState } from "./control_protocol.js";
 import { defaultAgentName, loadLocalConfig, type LocalConfig } from "../session/local_config.js";
@@ -58,6 +59,58 @@ export interface RpcChildExitEvent {
 }
 
 export const EXIT_DAEMON_FRESH_SESSION = 42;
+
+/**
+ * Daemon app-action `session_switch`: the child could not switch in-process
+ * (no command-capable ctx in RPC mode, see `_setLastCtxForTest`), so it exits
+ * with this code and the supervisor respawns it pointed at a SPECIFIC session
+ * file instead of `--continue`.
+ *
+ * The exit code cannot carry the path, so the child stages it in
+ * {@link PENDING_SWITCH_FILE} first. The supervisor reads that file on this
+ * exit, spawns with `--session <path>`, and deletes it — a stale file must
+ * never steer a later, unrelated restart.
+ */
+export const EXIT_DAEMON_SWITCH_SESSION = 43;
+
+/** Name of the staged switch target inside `REMOTE_PI_HOME`. */
+export const PENDING_SWITCH_FILE = "pending-session-switch.json";
+
+/**
+ * Staged target of a daemon `session_switch`, or null when none is pending.
+ *
+ * Written by the child Pi BEFORE it exits (the exit code is a number and cannot
+ * carry a path), read and deleted by the supervisor when it respawns. A
+ * malformed or unreadable file is treated as "no pending switch": falling back
+ * to a normal `--continue` restart is better than failing to spawn at all.
+ */
+function pendingSwitchLocation(): string {
+  const root = process.env["REMOTE_PI_HOME"] || homedir();
+  return join(root, PENDING_SWITCH_FILE);
+}
+
+/** Persist the session file a daemon `session_switch` wants to reopen. */
+export function stagePendingSwitchTarget(sessionPath: string): void {
+  const file = pendingSwitchLocation();
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify({ sessionPath }), "utf8");
+}
+
+/** Read + consume the staged target. Returns undefined when absent/invalid. */
+export function takePendingSwitchTarget(): string | undefined {
+  const file = pendingSwitchLocation();
+  try {
+    const raw = readFileSync(file, "utf8");
+    rmSync(file, { force: true });
+    const parsed = JSON.parse(raw) as { sessionPath?: unknown };
+    return typeof parsed.sessionPath === "string" && parsed.sessionPath !== ""
+      ? parsed.sessionPath
+      : undefined;
+  } catch {
+    /* Absent, unreadable, or not JSON: no pending switch. */
+    return undefined;
+  }
+}
 
 /** Windows extensions `spawn` (without `shell`) can actually launch, in
  *  preference order: native `.exe` first, then the `.cmd`/`.bat` shims (run via
@@ -205,11 +258,23 @@ export function rpcSpawnArgs(
   extensionPath: string,
   sessionName?: string,
   useContinue = true,
+  /**
+   * Concrete session file to open (`--session`). Set by a daemon
+   * `session_switch`: the child cannot switch in-process, so the supervisor
+   * respawns pointed straight at the target. Takes precedence over
+   * `useContinue` — `--continue` and `--session` answer the same question and
+   * passing both is at best ambiguous.
+   */
+  sessionPath?: string,
 ): string[] {
   return [
     "--mode", "rpc",
     "--approve",
-    ...(useContinue ? ["--continue"] : []),
+    ...(sessionPath !== undefined
+      ? ["--session", sessionPath]
+      : useContinue
+        ? ["--continue"]
+        : []),
     ...(sessionName ? ["--name", sessionName] : []),
     "-e", extensionPath,
   ];
@@ -220,6 +285,10 @@ export class RpcChild extends EventEmitter {
   private _state: DaemonState = "stopped";
   private _startedAt: number | null = null;
   private _restartCount = 0;
+  /** Deliberate recycles (app-triggered `/new` and `session_switch`). These
+   *  are normal user actions, not failures, so they must not inflate the
+   *  crash-shaped `restartCount` the UI reports. */
+  private _recycleCount = 0;
   /** True while a deliberate `stop()` is in flight. The process dies by
    *  signal (SIGTERM/SIGKILL), which would otherwise look like a crash and
    *  trip the supervisor's auto-restart — re-spawning a daemon the operator
@@ -246,6 +315,9 @@ export class RpcChild extends EventEmitter {
   get isBusy(): boolean { return this._busy; }
   get pid(): number | undefined { return this.child?.pid; }
   get restartCount(): number { return this._restartCount; }
+  /** App-triggered recycles. Reported separately so "restarted 38 times"
+   *  cannot be produced by ordinary switching. */
+  get recycleCount(): number { return this._recycleCount; }
   get uptimeMs(): number | undefined {
     return this._startedAt !== null ? Date.now() - this._startedAt : undefined;
   }
@@ -268,9 +340,20 @@ export class RpcChild extends EventEmitter {
     const sessionName = cfg.agent_name ?? defaultAgentName(this.opts.cwd);
     const useContinue = !this.forceFreshSessionOnNextSpawn;
     this.forceFreshSessionOnNextSpawn = false;
+    /*
+     * A staged `session_switch` target: the previous child could not switch
+     * in-process (RPC mode never captures a command-capable ctx) so it exited
+     * with `EXIT_DAEMON_SWITCH_SESSION` after writing this file. Read ONCE and
+     * delete it immediately: a leftover file must never steer a later,
+     * unrelated restart toward an old session.
+     */
+    const switchPath = takePendingSwitchTarget();
     // On Windows `prefixArgs` carries pi's cli.js (we spawn node directly); on
     // POSIX it's empty and `command` is `pi` itself.
-    const args = [...piTarget.prefixArgs, ...rpcSpawnArgs(this.opts.extensionPath, sessionName, useContinue)];
+    const args = [
+      ...piTarget.prefixArgs,
+      ...rpcSpawnArgs(this.opts.extensionPath, sessionName, useContinue, switchPath),
+    ];
     const env: NodeJS.ProcessEnv = {
       ...process.env,
       ...this.opts.env,
@@ -415,6 +498,13 @@ export class RpcChild extends EventEmitter {
     // restarts it, and the next spawn omits --continue once to create a fresh
     // session. Later restarts go back to --continue.
     if (code === EXIT_DAEMON_FRESH_SESSION) this.forceFreshSessionOnNextSpawn = true;
+    /*
+     * A daemon `session_switch` exit carries no in-memory state: the target is
+     * staged on disk and `spawn()` consumes it. It still arrives as
+     * `isCrash:true` (non-zero code), which is what makes the supervisor
+     * restart at all — it special-cases this code before the crash backoff,
+     * exactly like the fresh-session recycle above.
+     */
     // A deliberate stop() kills by signal — not a crash, so the supervisor
     // must NOT auto-restart it. Only an UNexpected exit counts as a crash.
     const isCrash = !this._stopping && (code !== 0 || signal !== null);
@@ -430,9 +520,16 @@ export class RpcChild extends EventEmitter {
     this.emit("exit", { code, signal, isCrash } satisfies RpcChildExitEvent);
   }
 
-  /** Bumps the restart counter — called by the supervisor when it
+  /** Bumps the CRASH counter — called by the supervisor when it
    *  decides to re-spawn after a crash. Exposed so tests can drive it. */
   noteRestart(): void {
     this._restartCount += 1;
+  }
+
+  /** Bumps the RECYCLE counter — a deliberate app-triggered respawn
+   *  (`/new`, `session_switch`). Kept apart from crashes so the number the
+   *  user sees means what it says. */
+  noteRecycle(): void {
+    this._recycleCount += 1;
   }
 }

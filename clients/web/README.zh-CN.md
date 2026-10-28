@@ -20,71 +20,83 @@ Web 客户端路由 `/remote-pi/connect` 是一等客户端（与手机 app、Co
 都保持开启。
 
 ```bash
-npm install     # 或：pnpm install
+npm install     # 安装依赖
 
-npm run dev     # 开发服务器，http://localhost:3000
-npm run build   # 生产构建
-npm start       # 跑生产构建
+npm run dev     # Vite dev server，http://localhost:3010
+npm run build   # 先类型检查，再生产构建 → dist/
+npm run preview # 本地预览生产构建
+npm run lint    # ESLint（要求 0 error；阈值说明见 eslint.config.mjs）
 ```
 
-用 npm 时**必须带 `run`**（`npm build`、`npm dev` 都不是有效命令）。pnpm 去掉
-`run`：`pnpm dev`、`pnpm build`、`pnpm start`、`pnpm lint`。
+用 npm 时**必须带 `run`**（`npm build`、`npm dev` 都不是有效命令）。
 
-打开 <http://localhost:3000/remote-pi/connect> —— 或点 `/remote-pi` 导航里的
+打开 <http://localhost:3010/remote-pi/connect> —— 或点 `/remote-pi` 导航里的
 **Open web client** —— 然后粘贴被控机器上 `remote-pi-server pair` 打印的 relay 地址
 + `remotepi://pair?...` 配对码。开发服务器和 relay 默认都是 3000 端口，同机运行时
-请错开其中一个（`npx next dev -p 3167`）。
+请错开其中一个（`npx vite --port 3167`）。
 
 ## 技术栈
 
-- Next.js 16（App Router）+ React 19
-- TypeScript 5（strict）
-- Tailwind 4（走 `@tailwindcss/postcss`）
+- Vite 6 + React 18（纯客户端渲染 —— 没有 SSR，也没有服务端）
+- TypeScript 6（strict）
+- CSS Modules + 全局 token 样式表（不使用 utility 框架）
 - ESLint 9
-- 包管理器：**pnpm**
+- 包管理器：**npm**
 
 只有暗色主题；视觉规范放在 `../../branding/`。
 
 ## 命令
 
 ```bash
-npm install     # 装依赖（或：pnpm install）
-npm run dev     # 开发服务器，http://localhost:3000
-npm run build   # 生产构建（SSG）
-npm start       # 跑生产构建
-npm run lint    # ESLint
+npm install     # 安装依赖
+npm run dev     # Vite dev server，http://localhost:3010
+npm run build   # 生产构建 → dist/
+npm run preview # 本地预览生产构建
 ```
 
-pnpm 等价写法去掉 `run`：`pnpm dev`、`pnpm build`、`pnpm start`、`pnpm lint`。
+验证（都在本目录执行）：
+
+```bash
+node scripts/verify-stack-parity.mjs   # 技术栈本身：依赖版本、无 next/* import
+npm run lint                           # ESLint：0 error（94 个已知 warning）
+npx tsc --noEmit                       # 类型
+node scripts/run-web-checks.mjs        # 14 个聚焦 runner
+node scripts/_e2e-verify-rows.mjs      # 真实浏览器 + 真实 relay，11 个会话行
+node scripts/verify-visual-parity.mjs   # DSH design-platform parity (tokens + components)
+```
 
 ## 目录结构
 
 ```
 src/
-├── clients/mobile/
-│   ├── layout.tsx              # 根布局：页头 + 主体 + 页脚，全局 metadata
-│   ├── page.tsx                # 落地页
-│   ├── icon.svg                # Favicon（对外是 /icon.svg）
-│   ├── opengraph-image.tsx     # 生成的 OG 图（next/og）
-│   ├── globals.css             # Tailwind + 设计 token
-│   ├── terms/page.tsx
-│   └── privacy/page.tsx
-└── components/
-    ├── header.tsx              # Logo + 导航
-    ├── footer.tsx              # 条款 / 隐私 / GitHub + 版权
-    ├── hero.tsx                # 落地页主视觉
-    ├── feature-card.tsx        # 可复用卡片
-    ├── code-block.tsx          # 代码片段块
-    └── legal-shell.tsx         # 法律页共用外壳
+├── main.tsx                    # 入口：先做初始重定向，再 createRoot
+├── router.tsx                  # 手写 3 路由（不用框架）
+├── app-shell.tsx               # header + main + footer
+├── pages/                      # 每条路由一个 .tsx + 一个 *.module.css
+│   ├── connect-page.tsx        #   / 与 /remote-pi/connect
+│   ├── docs-page.tsx           #   /remote-pi/docs
+│   └── not-found-page.tsx
+├── client/                     # Remote Pi 客户端本体
+├── components/
+│   ├── landing/                # 营销页组件
+│   └── remote-pi/              # chat、sessions、layout、primitives
+├── lib/remote-pi/              # 协议、会话工具
+└── styles/                     # global.css、tokens、preflight、fonts
 ```
+
+有样式的组件都在旁边带一个 `*.module.css`，没有共享的 utility 样式表。
+`src/styles/properties.css` 保存 `--tw-*` 初值与组件按名引用的设计 token 值，
+所以它不能跟着「没人用的组件类」一起删掉。
 
 ## 约定
 
-- **默认用服务端组件** —— 只有需要状态、事件或 hook 时才加 `"use client"`。
+- **没有服务端** —— 一切都在浏览器里渲染，不存在 SSR / RSC / API 层。
 - MVP 阶段**没有后端和 API 路由**。站点纯展示。
 - **不做数据分析，不埋点，也不用追踪 cookie。** 与本项目的隐私立场保持一致。
 - MVP 阶段**只有英文**。如果确有需求，PT-BR 另开计划。
 
 ## 部署
 
-预期目标是 Vercel（对 Next.js 零配置）。域名绑定在本仓库之外处理。
+任意静态托管都可以：`npm run build` 产出自包含的 `dist/`，里面是单个
+`index.html` 加 `assets/` 下的哈希资源。托管方需要对未知路径回落
+`index.html`（SPA 兜底），客户端路由才能解析。域名绑定在本仓库之外处理。

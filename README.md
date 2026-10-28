@@ -86,8 +86,13 @@ remote-pi-server pair                                 # prints address + code
 
 ```bash
 git pull && cd server && npm install && npm run build
-remote-pi-server daemon restart        # picks up the new dist/
+remote-pi-server restart-supervisor   # supervisor has no hot-reload
 ```
+
+`restart-supervisor` is the only command that reloads the server code: the
+supervisor is a long-running Node process, and `daemon restart` respawns the
+workspace `pi` children without touching it (see
+[Server changes](#server-changes--rebuild-then-restart-the-supervisor)).
 
 The daemon is launched with an explicit `-e dist/index.js`, so it does not go
 through `pi install`. Use `pi install "$PWD"` only if you also want the extension
@@ -132,17 +137,57 @@ on macOS, a Task Scheduler entry on Windows. It does not need root.
 
 Windows is the one exception: the very first `install` has to create the
 scheduled task, which lives in the machine-wide store, so it raises one UAC
-prompt. Everything after that — `daemon restart`, `restart-supervisor`,
-`uninstall` — runs un-elevated.
+prompt. `uninstall` needs one too — `schtasks /Delete` modifies that same store.
+`restart-supervisor` and `daemon restart` never elevate.
 
 #### Restart / stop
 
 ```bash
-remote-pi-server daemon restart       # after a rebuild; keeps the workspaces
-remote-pi-server daemon start|stop    # start or stop the supervisor
+remote-pi-server restart-supervisor   # reload the SERVER code (after a rebuild)
+remote-pi-server daemon restart       # only respawn the workspace `pi` processes
+remote-pi-server daemon start|stop    # start or stop the resident supervisor
 remote-pi-server daemon status        # pid, uptime, restart count per workspace
 remote-pi-server daemons              # list registered workspaces
 remote-pi-server uninstall            # remove the service (workspaces kept)
+```
+
+Which restart you want depends on **what you changed**:
+
+| You changed | Use | Why |
+|---|---|---|
+| `server/` code (`host_bridge`, `index`, CLI, `/remote-pi`) | `restart-supervisor` | The code runs *inside* the supervisor process, which never hot-reloads. |
+| A workspace's Pi state (stuck child, model, auth) | `daemon restart` | Respawning the child is enough; the supervisor keeps its loaded code. |
+| Only `clients/web/` | neither | The dev server hot-reloads; just refresh the page. |
+
+`restart-supervisor` re-spawns every workspace daemon as a side effect, so you
+never need `daemon restart` after it.
+
+#### Uninstall
+
+```bash
+remote-pi-server uninstall
+```
+
+What it does, and what it deliberately keeps:
+
+| | Effect |
+|---|---|
+| Stops the service | `launchctl bootout` (macOS), `systemctl --user disable --now` (Linux), `schtasks /End` (Windows) |
+| Removes the unit | Deletes the LaunchAgent plist / systemd unit / Task Scheduler XML + its `wscript` launcher |
+| Removes CLI shims | Deletes the `remote-pi-server` / `pi-supervisord` links under `~/.local/bin` only. **npm-global bins are never touched** — those live in a different prefix. |
+| Keeps `~/.pi/remote/daemons.json` | The workspace registry survives, so `remote-pi-server install` brings everything back without re-registering. |
+| Keeps `~/.pi/remote/peers.json`, `identity.json`, `pairing.json` | Pairings stay valid; clients reconnect after a re-install. |
+
+On Windows the first `install` needs one UAC prompt (creating the scheduled task
+touches the machine-wide store). `uninstall` also needs it, because
+`schtasks /Delete` is what modifies that store. `restart-supervisor` and
+`daemon restart` never elevate.
+
+To remove the CLI entirely as well:
+
+```bash
+remote-pi-server uninstall
+npm uninstall -g remote-pi-server     # drop the npm link
 ```
 
 #### Relay choice
@@ -324,6 +369,108 @@ questions with options, multi-select, and previews) render natively in the
 mobile app — answer from your phone and the flow resolves on the desktop.
 Without it, the agent simply asks in plain chat text (also answerable from the
 phone, just unstructured). Remote Pi works either way; pi-ask is optional.
+
+## Developing (after you changed code)
+
+This is the part that trips people up once the daemon is installed as a
+**service**: the service keeps running the code it loaded at start, so editing
+files changes nothing until you deliberately reload the right piece.
+
+There are **two independent processes**, and they reload differently:
+
+| You changed | Runs as | How the change takes effect |
+|---|---|---|
+| `server/` (daemon, CLI, `/remote-pi` command) | `pi-supervisord` service | rebuild **and** restart the supervisor |
+| `clients/web/` (the browser UI) | `next` (dev server or Docker) | dev server hot-reloads; just refresh the page |
+| `clients/mobile/`, `clients/desktop/` | your own build/run | rebuild that client |
+
+### Server changes — rebuild, then restart the supervisor
+
+`daemon restart` is **not** enough. It respawns the workspace Pi processes, but
+the supervisor itself keeps the code it already loaded (`pi-supervisord` is a
+long-running Node process with no hot-reload). Use `restart-supervisor`:
+
+```bash
+cd server
+npm run build                     # tsc → dist/
+remote-pi-server restart-supervisor   # respawns pi-supervisord on the new dist/
+```
+
+`restart-supervisor` re-spawns every workspace daemon as a side effect, so you do
+not need `daemon restart` afterwards. Check it came back:
+
+```bash
+remote-pi-server daemon status        # pid, uptime, restart count per workspace
+```
+
+**Verify the restart actually happened.** Comparing the supervisor's PID before
+and after is the only proof — the command exiting 0 is not enough (see the
+Windows note below):
+
+```powershell
+# Windows
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+  Where-Object { $_.CommandLine -like '*supervisord.js*' } |
+  Select-Object ProcessId, CreationDate
+```
+
+```bash
+# Linux / macOS
+pgrep -af supervisord.js
+```
+
+The `CreationDate` must be *after* your `npm run build`. If it is older, the old
+code is still serving.
+
+> **Windows:** Task Scheduler's `schtasks /End` reports success while the node
+> process keeps running, so a naive `End` + `Run` pair silently does nothing.
+> `restart-supervisor` therefore waits for the old `supervisord.js` to disappear
+> and force-stops it if it overstays, failing loudly (non-zero exit) rather than
+> claiming success. If it still reports the process as running, stop it by hand:
+>
+> ```powershell
+> Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+>   Where-Object { $_.CommandLine -like '*supervisord.js*' } |
+>   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+> remote-pi-server restart-supervisor
+> ```
+
+Both commands are un-elevated on every platform (Windows included) — only the
+very first `install` needs elevation.
+
+> **Why not just restart the OS service yourself?** You can (`systemctl --user
+> restart <unit>` on Linux, `launchctl kickstart -k` on macOS, `schtasks /End &&
+> schtasks /Run` on Windows). `restart-supervisor` is exactly that, wrapped so it
+> works the same everywhere.
+
+If you are **not** running the service (plain `pi` session, no supervisor), skip
+all of this: restart your Pi session and it picks up the new `dist/`.
+
+### Web changes — refresh the page
+
+With the dev server running, edits hot-reload:
+
+```bash
+cd clients/web
+npm run dev                       # http://localhost:3000/remote-pi/connect
+```
+
+A hard refresh (**Ctrl/Cmd+Shift+R**) is usually still needed after a change to
+connection/state code, because the browser keeps an open WebSocket to the relay
+and the old client code with it. Reloading also re-pairs from the stored
+credential, which is what re-runs the connect-time prefetch.
+
+Production/web-service deployments use the Docker image instead — see
+[Client — web](#4-client--web); rebuild and restart the container after a change.
+
+### Verifying a web change
+
+```bash
+cd clients/web
+npm run verify:web                # all Node runners (no browser needed)
+npm run lint && npx tsc --noEmit  # static checks
+npm run build                     # production build still compiles
+```
 
 ## Status
 

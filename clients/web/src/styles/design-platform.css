@@ -1,0 +1,449 @@
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Remote Pi — DSH design platform tokens
+ *
+ * The colour / elevation / radius vocabulary of DeepSeek Harness (DSH), lifted
+ * from its own `ui-theme` package so our components can be written against the
+ * same names:
+ *
+ *   DSH: deepseek-harness/packages/client/ui-theme/src/styles/{base,design-platform,gradient-shadow-text}.css
+ *
+ * WHAT IS AND IS NOT A COPY. The names and the values are DSH's; the file is not
+ * a paste of theirs. DSH ships a light theme as the default and a dark override
+ * behind `body[data-ds-dark-theme]`, and it derives its surface colours from a
+ * `--dsw-static-neutral-bluish-*` ladder that most of its components never name
+ * directly. We are dark-only, so the ladder is inlined into the aliases we
+ * actually consume and the whole thing lives on `:root`.
+ *
+ * The single deliberate deviation is `--dsw-alias-label-caption`: DSH's dark
+ * value is `rgb(129, 133, 140)`, which is 3.76:1 against the `#2c2c2e` input
+ * card — below WCAG AA for text. Ours is `#9aa0a8` (5.29:1). See the comment on
+ * the token.
+ *
+ * `@layer` ORDER IS LOAD-BEARING — see preflight.css. Every module stylesheet
+ * repeats the identical statement because Vite injects CSS Modules before this
+ * file, and the first declaration of a layer name wins.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer theme {
+  /*
+   * LIGHT IS THE DEFAULT.
+   *
+   * DSH ships light as its default web appearance and gates dark behind
+   * `body[data-ds-dark-theme]`. This file used to be dark-only, which is why the
+   * whole interface was built on the wrong canvas: every individual colour value
+   * was measured against a dark snapshot and matched, while the actual reference
+   * renders white. Values below are DSH's own light aliases.
+   */
+  :root {
+    color-scheme: light;
+
+    /* ── static ladder ─────────────────────────────────────────────────────
+       `--dsw-static-neutral-bluish-*` is DSH's own neutral ramp (slightly cool,
+       unlike a pure grey). Only the steps our components consume are kept —
+       INCLUDING the two extremes (00 / 1000), because the light aliases below
+       resolve to them. Omitting an endpoint makes every alias that references it
+       resolve to the guaranteed-invalid value, which silently blanks the token
+       (the exact failure that made `--dsw-alias-bg-base` read empty and left the
+       body transparent). */
+    --dsw-static-neutral-bluish-00: rgb(255, 255, 255);
+    --dsw-static-neutral-bluish-1000: rgb(15, 17, 21);
+    --dsw-static-neutral-bluish-50: rgb(249, 250, 251);
+    --dsw-static-neutral-bluish-60: rgb(245, 246, 247);
+    --dsw-static-neutral-bluish-75: rgb(241, 243, 245);
+    --dsw-static-neutral-bluish-100: rgb(235, 238, 242);
+    --dsw-static-neutral-bluish-200: rgb(225, 229, 238);
+    --dsw-static-neutral-bluish-300: rgb(207, 211, 214);
+    --dsw-static-neutral-bluish-400: rgb(173, 178, 184);
+    --dsw-static-neutral-bluish-500: rgb(151, 157, 166);
+    --dsw-static-neutral-bluish-600: rgb(129, 133, 140);
+    --dsw-static-neutral-bluish-700: rgb(97, 102, 107);
+    --dsw-static-neutral-bluish-750: rgb(67, 69, 74);
+    --dsw-static-neutral-bluish-800: rgb(53, 54, 56);
+    --dsw-static-neutral-bluish-850: rgb(44, 44, 46);
+    --dsw-static-neutral-bluish-875: rgb(35, 35, 36);
+    --dsw-static-neutral-bluish-900: rgb(27, 27, 28);
+    --dsw-static-neutral-bluish-950: rgb(21, 21, 23);
+
+    /*
+     * Pure-neutral ramp, needed by the scrollbar aliases below.
+     *
+     * DSH carries two ramps: `neutral-bluish-*` (slightly cool, used for text
+     * and surfaces) and `neutral-*` (dead grey, used for the scrollbar thumb so
+     * it reads as chrome rather than content). Only the two scrollbar steps are
+     * mirrored here; adding the whole ramp would be unused weight.
+     * Values are DSH's own (design-platform.css:44,46).
+     */
+    --dsw-static-neutral-200: rgb(229, 229, 229);
+    --dsw-static-neutral-300: rgb(212, 212, 212);
+
+    --dsw-static-neutral-150: rgb(237, 237, 237);
+    --dsw-static-neutral-600: rgb(84, 85, 87);
+    --dsw-static-neutral-800: rgb(41, 41, 41);
+
+    --dsw-static-deepseek-50: rgb(237, 243, 254);
+    --dsw-static-deepseek-100: rgb(228, 237, 253);
+    --dsw-static-deepseek-200: rgb(211, 226, 255);
+    --dsw-static-deepseek-400: rgb(122, 170, 255);
+    --dsw-static-deepseek-450: rgb(86, 134, 254);
+    --dsw-static-deepseek-500: rgb(65, 118, 230);
+    --dsw-static-deepseek-600: rgb(72, 104, 178);
+
+    --dsw-static-green-400: rgb(78, 209, 126);
+    --dsw-static-green-500: rgb(34, 197, 94);
+    /*
+     * Dark leg of the green ramp, required by --ok-text below.
+     * Without it --ok-text resolved to guaranteed-invalid and every
+     * running/live/ok label silently fell back to an inherited colour -- the
+     * exact failure mode this project has hit before with missing static ramps.
+     * Value is DSH's own (design-platform.css:39 in the DSH source).
+     */
+    --dsw-static-green-900: rgb(35, 60, 44);
+    --dsw-static-amber-400: rgb(247, 173, 49);
+    --dsw-static-amber-500: rgb(245, 158, 11);
+    --dsw-static-amber-600: rgb(221, 134, 41);
+    --dsw-static-amber-900: rgb(39, 36, 31);
+    --dsw-static-red-400: rgb(242, 90, 90);
+    --dsw-static-red-500: rgb(239, 68, 68);
+
+    /* ── surfaces (light aliases, DSH defaults) ──────────────────────────── */
+    --dsw-alias-bg-base: var(--dsw-static-neutral-bluish-00);
+    --dsw-alias-bg-layer-1: var(--dsw-static-neutral-bluish-00);
+    --dsw-alias-bg-layer-2: var(--dsw-static-neutral-bluish-00);
+    --dsw-alias-bg-layer-3: var(--dsw-static-neutral-bluish-00);
+    --dsw-alias-bg-mask-1: rgba(0, 0, 0, 0.5);
+    --dsw-alias-bg-mask-2: rgba(0, 0, 0, 0.2);
+    --dsw-alias-bg-skeleton: rgba(0, 0, 0, 0.06);
+
+    --dsw-specific-input-major: var(--dsw-static-neutral-bluish-00);
+    --dsw-specific-bubble: var(--dsw-static-deepseek-50);
+    --dsw-specific-selector: var(--dsw-static-neutral-bluish-60);
+    --dsw-specific-sidebar-fill: var(--dsw-static-neutral-bluish-50);
+    --dsw-specific-sidebar-nav-item-active: var(--dsw-static-neutral-bluish-100);
+    --dsw-specific-sidebar-nav-item-hover: var(--dsw-static-neutral-bluish-75);
+
+    --dsw-menu-surface-fill: rgba(255, 255, 255, 0.92);
+    --dsw-alias-menu-group-header-fill: rgba(249, 250, 251, 0.94);
+    --dsw-menu-backdrop-filter: blur(40px) saturate(150%);
+
+    /* ── ink ramp ─────────────────────────────────────────────────────────── */
+    --dsw-alias-label-primary: var(--dsw-static-neutral-bluish-1000);
+    --dsw-alias-label-secondary: var(--dsw-static-neutral-bluish-700);
+    --dsw-alias-label-tertiary: var(--dsw-static-neutral-bluish-600);
+    /*
+     * DSH's light value for this token is `neutral-bluish-400` (#adb2b8), which is
+     * 2.2:1 on white — nowhere near AA for the placeholder/hint text it carries.
+     * Kept one step darker (`neutral-bluish-600`, 4.6:1 on #f9fafb) so captions
+     * stay legible; this remains the single deliberate contrast deviation.
+     */
+    --dsw-alias-label-caption: var(--dsw-static-neutral-bluish-600);
+
+    /* ── interactive ──────────────────────────────────────────────────────── */
+    --dsw-alias-interactive-bg-hover: rgba(38, 49, 72, 0.06);
+    --dsw-alias-interactive-bg-active: rgba(38, 49, 72, 0.1);
+    --dsw-alias-interactive-bg-hover-solid: var(--dsw-static-neutral-bluish-100);
+    --dsw-alias-interactive-bg-hover-danger: rgba(242, 90, 90, 0.15);
+
+    /* ── hairlines ────────────────────────────────────────────────────────── */
+    --dsw-alias-border-l1: rgba(0, 0, 0, 0.04);
+    --dsw-alias-border-l2: rgba(0, 0, 0, 0.1);
+    --dsw-alias-border-l3: rgba(0, 0, 0, 0.12);
+    --dsw-alias-border-l4: rgba(0, 0, 0, 0.16);
+
+    /*
+     * Scrollbar colours (DSH alias names).
+     *
+     * These were missing entirely, so every scroll container fell back to the
+     * Windows UA scrollbar: a 17px wide grey trough with arrow buttons, which
+     * is what showed up as stray up/down widgets next to the composer and in
+     * the transcript. DSH sets --dsw-alias-scrollbar-* from the neutral ramp and
+     * draws a 5px thumb with a transparent track; matching it removes the OS
+     * look without inventing colours.
+     */
+    --dsw-alias-scrollbar-bg-l1: var(--dsw-static-neutral-200);
+    --dsw-alias-scrollbar-bg-l2: var(--dsw-static-neutral-200);
+    --dsw-alias-scrollbar-hover-l1: var(--dsw-static-neutral-300);
+    --dsw-alias-scrollbar-hover-l2: var(--dsw-static-neutral-300);
+
+    /* ── brand / link ─────────────────────────────────────────────────────── */
+    --dsw-alias-brand-primary: var(--dsw-static-neutral-bluish-1000);
+    --dsw-alias-link: var(--dsw-static-deepseek-500);
+    --dsw-alias-button-info-fill: var(--dsw-static-deepseek-500);
+    --dsw-alias-button-info-hover: var(--dsw-static-deepseek-600);
+    --dsw-alias-button-floating-fill: var(--dsw-static-neutral-bluish-00);
+    --dsw-alias-button-floating-hover: var(--dsw-static-neutral-bluish-60);
+    --dsw-alias-button-tool-bar-fill: rgba(84, 85, 87, 0.5);
+    --dsw-alias-button-tool-bar-hover: rgba(84, 85, 87, 0.6);
+
+    /* ── state ────────────────────────────────────────────────────────────── */
+    --dsw-alias-state-success-primary: var(--dsw-static-green-500);
+    --dsw-alias-state-warn-primary: var(--dsw-static-amber-500);
+    --dsw-alias-state-warn-label: var(--dsw-static-amber-600, var(--dsw-static-amber-400));
+    --dsw-alias-state-error-primary: var(--dsw-static-red-500);
+    --dsw-alias-state-idle-primary: var(--dsw-static-neutral-600);
+
+    /* ── markdown / code ──────────────────────────────────────────────────── */
+    --dsw-alias-markdown-code-block: var(--dsw-static-neutral-bluish-50);
+    --dsw-alias-markdown-code-block-banner: var(--dsw-static-neutral-bluish-75);
+    --dsw-alias-markdown-inline-code: var(--dsw-static-neutral-150);
+
+    /* ── elevation ─────────────────────────────────────────────────────────
+       DSH draws the hairline inside box-shadow with `border: 0` on the
+       component so it costs no layout. The 0.5px stroke is a fractional CSS px:
+       on DPR=1 it lands on half a device pixel and the UA antialiases it, which
+       is exactly the "soft glow edge" DSH has. We keep DSH's value verbatim
+       rather than substituting a 1px border, because that 0.5px is what makes
+       the surfaces read as lit rather than outlined. */
+    --dsw-elevation-stroke: 0 0 0 0.5px var(--dsw-alias-border-l4);
+    --dsw-elevation-panel:
+      var(--dsw-elevation-stroke), 0 3px 8px 0 rgba(0, 0, 0, 0.03), 0 0 16px 0 rgba(0, 0, 0, 0.02);
+    --dsw-elevation-prominent:
+      var(--dsw-elevation-stroke), 0 3px 8px 0 rgba(0, 0, 0, 0.04), 0 0 20px 0 rgba(0, 0, 0, 0.05);
+    --dsw-elevation-soft:
+      var(--dsw-elevation-stroke), 0 4px 16px 0 rgba(0, 0, 0, 0.03), 0 0 24px 0 rgba(0, 0, 0, 0.03);
+
+    /* ── radii ───────────────────────────────────────────────────────────── */
+    --dsw-radius-xs: 4px;
+    --dsw-radius-sm: 8px;
+    --dsw-radius-md: 12px;
+    --dsw-radius-lg: 16px;
+    --dsw-radius-xl: 20px;
+    --dsw-radius-panel: 28px;
+    --dsw-radius-pill: 999px;
+
+    /* ── motion ──────────────────────────────────────────────────────────── */
+    --dsw-transition-duration: 0.2s;
+    --dsw-transition-duration-fast: 0.1s;
+    --dsw-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* ── focus ─────────────────────────────────────────────────────────────
+       Hover colour is deliberately NOT reused for keyboard focus: a 6% wash is
+       invisible as a focus indicator, and the two states must not be conflated. */
+    --dsw-focus-ring: 0 0 0 2px var(--dsw-alias-bg-base), 0 0 0 4px var(--dsw-static-deepseek-500);
+    --dsw-focus-outline: 2px solid var(--dsw-static-deepseek-500);
+    --dsw-focus-outline-offset: 2px;
+  }
+
+  /*
+   * Dark variant.
+   *
+   * DSH keeps its dark palette behind an attribute rather than making it the
+   * default; this mirrors that so the light theme stays authoritative and the
+   * dark set is a switchable alternative. Values are the ones this file used to
+   * carry unconditionally, i.e. DSH's `body[data-ds-dark-theme]` aliases.
+   */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --dsw-alias-bg-base: var(--dsw-static-neutral-bluish-950);
+    --dsw-alias-bg-layer-1: var(--dsw-static-neutral-bluish-875);
+    --dsw-alias-bg-layer-2: var(--dsw-static-neutral-bluish-850);
+    --dsw-alias-bg-layer-3: var(--dsw-static-neutral-bluish-800);
+    --dsw-alias-bg-mask-1: rgba(0, 0, 0, 0.5);
+    --dsw-alias-bg-mask-2: rgba(0, 0, 0, 0.2);
+    --dsw-alias-bg-skeleton: rgba(255, 255, 255, 0.08);
+
+    --dsw-specific-input-major: var(--dsw-static-neutral-bluish-850);
+    --dsw-specific-bubble: var(--dsw-static-neutral-bluish-850);
+    --dsw-specific-selector: var(--dsw-static-neutral-bluish-800);
+    --dsw-specific-sidebar-fill: var(--dsw-static-neutral-bluish-900);
+    --dsw-specific-sidebar-nav-item-active: var(--dsw-static-neutral-bluish-750);
+    --dsw-specific-sidebar-nav-item-hover: var(--dsw-static-neutral-bluish-850);
+
+    --dsw-menu-surface-fill: rgba(67, 69, 74, 0.45);
+    --dsw-alias-menu-group-header-fill: rgba(48, 49, 54, 0.94);
+
+    --dsw-alias-label-primary: var(--dsw-static-neutral-bluish-50);
+    --dsw-alias-label-secondary: var(--dsw-static-neutral-bluish-300);
+    --dsw-alias-label-tertiary: var(--dsw-static-neutral-bluish-400);
+    --dsw-alias-label-caption: #9aa0a8;
+
+    --dsw-alias-interactive-bg-hover: rgba(255, 255, 255, 0.08);
+    --dsw-alias-interactive-bg-active: rgba(255, 255, 255, 0.16);
+    --dsw-alias-interactive-bg-hover-solid: var(--dsw-static-neutral-bluish-800);
+    --dsw-alias-interactive-bg-hover-danger: rgba(242, 90, 90, 0.15);
+
+    --dsw-alias-border-l1: rgba(255, 255, 255, 0.06);
+    --dsw-alias-border-l2: rgba(255, 255, 255, 0.12);
+    --dsw-alias-border-l3: rgba(255, 255, 255, 0.16);
+    --dsw-alias-border-l4: rgba(255, 255, 255, 0.2);
+
+    --dsw-alias-brand-primary: var(--dsw-static-neutral-bluish-50);
+    --dsw-alias-link: var(--dsw-static-deepseek-400);
+    --dsw-alias-button-info-fill: var(--dsw-static-deepseek-400);
+    --dsw-alias-button-info-hover: var(--dsw-static-deepseek-500);
+    --dsw-alias-button-floating-fill: var(--dsw-static-neutral-bluish-850);
+    --dsw-alias-button-floating-hover: var(--dsw-static-neutral-bluish-800);
+
+    --dsw-alias-state-error-primary: var(--dsw-static-red-400);
+
+    --dsw-alias-markdown-code-block: var(--dsw-static-neutral-bluish-900);
+    --dsw-alias-markdown-code-block-banner: var(--dsw-static-neutral-bluish-850);
+    --dsw-alias-markdown-inline-code: var(--dsw-static-neutral-800);
+
+    --dsw-focus-ring: 0 0 0 2px var(--dsw-alias-bg-base), 0 0 0 4px var(--dsw-static-deepseek-400);
+    --dsw-focus-outline: 2px solid var(--dsw-static-deepseek-400);
+  }
+
+  /* ── Remote Pi → DSH bridge ───────────────────────────────────────────────
+     The legacy palette every component still references (`--green`, `--ink`,
+     `--card`, …). It is re-pointed at the DSH tokens instead of carrying a
+     second set of colour values, so there is exactly one place a hue is
+     defined. Names that had no DSH counterpart (`--light-close` for the window
+     chrome, `--maxw`) stay as they were. */
+  :root {
+    --bg: var(--dsw-alias-bg-base);
+    --fg: var(--dsw-alias-label-primary);
+    --accent: var(--dsw-static-deepseek-400);
+    --accent-2: var(--dsw-static-deepseek-400);
+    --muted: var(--dsw-alias-label-secondary);
+    --surface: var(--dsw-alias-bg-layer-2);
+    --border-soft: var(--dsw-alias-border-l1);
+
+    --bg-0: var(--dsw-alias-bg-base);
+    --bg-1: var(--dsw-alias-bg-layer-1);
+    --bg-2: var(--dsw-alias-bg-layer-2);
+    --bg-app: var(--dsw-alias-bg-base);
+    --bg-rail: var(--dsw-alias-bg-layer-1);
+    --card: color-mix(in srgb, var(--dsw-static-neutral-bluish-1000) 4%, transparent);
+    --card-2: color-mix(in srgb, var(--dsw-static-neutral-bluish-1000) 7%, transparent);
+    --line: var(--dsw-alias-border-l1);
+    --line-2: var(--dsw-alias-border-l2);
+    --line-3: var(--dsw-alias-border-l1);
+
+    --ink: var(--dsw-alias-label-primary);
+    --ink-soft: var(--dsw-alias-label-secondary);
+    --ink-dim: var(--dsw-alias-label-tertiary);
+    --ink-quiet: var(--dsw-alias-label-tertiary);
+    --ink-off: var(--dsw-alias-label-tertiary);
+    --ink-neutral: var(--dsw-alias-state-idle-primary);
+    /*
+     * Secondary text colour.
+     *
+     * Was `label-tertiary` = rgb(129,133,140) = 3.71:1 on white, below WCAG AA
+     * 4.5:1. All 44 uses of --faint are text (icons, placeholders, ages, section
+     * titles, disabled labels) -- none are borders or fills -- so the whole
+     * layer sat under AA.
+     *
+     * DSH's own light ramp has a darker second step for exactly this role:
+     * `--dsw-alias-label-secondary` = neutral-bluish-700 = rgb(97,102,107) =
+     * 5.80:1 (design-platform.css:223 in the DSH source). Moving to it keeps the
+     * hierarchy (primary 18.90 -> secondary 5.80 -> tertiary 3.71 stays available
+     * for genuinely decorative marks) while clearing AA.
+     *
+     * Dark theme is untouched: its --faint is neutral-bluish-500 on a dark
+     * surface, which is already readable there.
+     */
+    --faint: var(--dsw-alias-label-secondary);
+
+    --green: var(--dsw-static-deepseek-500);
+    --green-ink: var(--dsw-static-neutral-bluish-00);
+    --green-dim: color-mix(in srgb, var(--dsw-static-deepseek-500) 13%, transparent);
+    --green-line: color-mix(in srgb, var(--dsw-static-deepseek-500) 32%, transparent);
+    --green-glow: color-mix(in srgb, var(--dsw-static-deepseek-500) 22%, transparent);
+
+    --ok: var(--dsw-static-green-500);
+    /*
+     * Text-safe success colour.
+     *
+     * --ok is green-500 = rgb(34,197,94), which is 2.28:1 on white -- fine as a
+     * dot, a fill or a progress bar, unreadable as text ("running"/"live"/"ok"
+     * labels were all sitting at 1.96-2.28:1). DSH keeps green-500 for fills and
+     * uses green-900 = rgb(35,60,44) for text on a green wash (its own
+     * state-success-primary/tertiary pair renders 10.98:1). 11.97:1 on white.
+     * Light theme has no green-600/700, so green-900 is the correct dark leg.
+     */
+    --ok-text: var(--dsw-static-green-900);
+    --danger: var(--dsw-static-red-400);
+    --warn: var(--dsw-static-amber-500);
+    /*
+     * Text-safe warning colour, same reasoning as --ok-text: amber-500 is
+     * 2.15:1 on white and amber-600 only 2.79:1, so neither is usable as text.
+     * DSH keeps amber-900 as its state-warn-tertiary (design-platform.css:9 in
+     * the light block) = 15.46:1; the warning still reads as a warning from the
+     * amber icon/pill that sits next to it, not from washing the label out.
+     */
+    --warn-text: var(--dsw-static-amber-900);
+    --amber: var(--dsw-static-amber-500);
+    --amber-ink: var(--dsw-static-amber-400);
+
+    /* ── radii (legacy names → DSH scale) ─────────────────────────────────── */
+    --r-sm: var(--dsw-radius-md);
+    --r-md: var(--dsw-radius-lg);
+    --r-lg: var(--dsw-radius-xl);
+    --r-xl: var(--dsw-radius-panel);
+
+    /* ── type families ─────────────────────────────────────────────────────
+       SYSTEM STACK FIRST, matching DSH.
+      
+       DSH's measured `font-family` starts with `-apple-system`, and its typography
+       is designed around that metric. Putting a self-hosted face in front (which
+       this file used to do) shifts every glyph, weight and line break away from
+       the reference even when the size and colour are identical — part of why a
+       green colour assertion run still did not look like the reference.
+       The bundled faces stay as a late fallback for hosts without system UI faces. */
+    --ff-display: -apple-system, BlinkMacSystemFont, "Segoe UI", var(--font-display),
+      "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial,
+      sans-serif;
+    --ff-body: -apple-system, BlinkMacSystemFont, "Segoe UI", var(--font-body), "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --ff-mono: var(--font-mono), "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
+      Consolas, monospace;
+  }
+
+  /* The DSH ambient-glow look is a hairline-lit surface, not a coloured wash.
+     The old cyan radial wash is dropped with the palette that motivated it. */
+  body {
+    background-color: var(--dsw-alias-bg-base);
+    color: var(--dsw-alias-label-primary);
+    font-family: var(--ff-body);
+    font-size: 14px;
+    line-height: 22px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--dsw-static-deepseek-400) 40%, transparent);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  a:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  summary:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: var(--dsw-focus-outline);
+    outline-offset: var(--dsw-focus-outline-offset);
+  }
+
+  /* DSH has no ambient page glow; the canvas is a flat lit surface. */
+  body::before {
+    display: none;
+  }
+
+  /*
+   * Dark variant of the legacy bridge.
+   *
+   * Must come AFTER the bridge block: the bridge re-points most names at DSH
+   * aliases (so they follow automatically), but the handful that were literal
+   * need an explicit dark value, and `:root[data-theme=dark]` and `:root` have
+   * the same origin — the later declaration wins.
+   */
+  :root[data-theme="dark"] {
+    --card: rgba(255, 255, 255, 0.03);
+    --card-2: rgba(255, 255, 255, 0.06);
+    --ink-off: var(--dsw-static-neutral-bluish-750);
+    --faint: var(--dsw-static-neutral-bluish-500);
+    --accent: var(--dsw-static-deepseek-400);
+    --accent-2: var(--dsw-static-deepseek-400);
+    --green: var(--dsw-static-deepseek-400);
+    --green-ink: #0b1530;
+    --green-dim: color-mix(in srgb, var(--dsw-static-deepseek-400) 13%, transparent);
+    --green-line: color-mix(in srgb, var(--dsw-static-deepseek-400) 32%, transparent);
+    --green-glow: color-mix(in srgb, var(--dsw-static-deepseek-400) 22%, transparent);
+  }
+}

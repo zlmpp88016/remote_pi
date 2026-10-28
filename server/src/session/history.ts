@@ -14,7 +14,7 @@
  * de-duplication works across a reconnect.
  */
 
-import type { SessionHistoryEvent, WireImage } from "../protocol/types.js";
+import type { SessionHistoryEvent, Usage, WireImage } from "../protocol/types.js";
 import { recentTranscriptWindow, olderTranscriptPage, type TranscriptEntry } from "./transcript.js";
 
 /** Content/tool formatting shared with the live broadcast path. */
@@ -150,11 +150,38 @@ export function entriesToEvents(entries: TranscriptEntry[], formatting: HistoryF
   return events;
 }
 
-function readUsage(value: unknown): { input_tokens: number; output_tokens: number } | undefined {
+/**
+ * Read the SDK's per-message `Usage` into the wire shape.
+ *
+ * The SDK reports `input/output/cacheRead/cacheWrite/reasoning/totalTokens`; this
+ * mapper used to keep only the first two, so the cache share was gone before any
+ * client could display it. Every field is optional on the wire so an older host
+ * still round-trips.
+ *
+ * @param value - the raw `usage` member of a session message.
+ * @returns the wire usage, or `undefined` when the value is not an object.
+ */
+function readUsage(value: unknown): Usage | undefined {
   if (!value || typeof value !== "object") return undefined;
-  const usage = value as { input?: unknown; output?: unknown };
+  const usage = value as {
+    input?: unknown;
+    output?: unknown;
+    cacheRead?: unknown;
+    cacheWrite?: unknown;
+    reasoning?: unknown;
+    totalTokens?: unknown;
+  };
+  const num = (v: unknown): number | undefined => (typeof v === "number" ? v : undefined);
+  const cacheRead = num(usage.cacheRead);
+  const cacheWrite = num(usage.cacheWrite);
+  const reasoning = num(usage.reasoning);
+  const total = num(usage.totalTokens);
   return {
-    input_tokens: typeof usage.input === "number" ? usage.input : 0,
-    output_tokens: typeof usage.output === "number" ? usage.output : 0,
+    input_tokens: num(usage.input) ?? 0,
+    output_tokens: num(usage.output) ?? 0,
+    ...(cacheRead !== undefined ? { cache_read_tokens: cacheRead } : {}),
+    ...(cacheWrite !== undefined ? { cache_write_tokens: cacheWrite } : {}),
+    ...(reasoning !== undefined ? { reasoning_tokens: reasoning } : {}),
+    ...(total !== undefined ? { total_tokens: total } : {}),
   };
 }

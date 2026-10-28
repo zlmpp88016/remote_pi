@@ -1,0 +1,86 @@
+/*
+ * Self-hosted fonts.
+ *
+ * The @font-face sources use a BARE package specifier on purpose: Vite resolves
+ * it from node_modules and rewrites it to the emitted asset URL, in both the site
+ * build and the shell build. A relative path ("../node_modules/...") breaks the
+ * moment the import moves; a CDN link breaks the desktop shell, which has no
+ * network beyond the relay.
+ *
+ * latin-ONLY subsets: the upstream packages also ship cyrillic/greek/vietnamese,
+ * which would roughly quadruple the payload for glyphs nothing selects.
+ *
+ * THE THREE VARIABLES ARE THE CONTRACT. Every rule in global.css resolves
+ * --ff-display -> var(--font-display), so these names must match what next/font
+ * used to inject; renaming them silently falls every element back to system-ui.
+ */
+
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url("@fontsource/space-grotesk/files/space-grotesk-latin-700-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("@fontsource/hanken-grotesk/files/hanken-grotesk-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("@fontsource/hanken-grotesk/files/hanken-grotesk-latin-500-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url("@fontsource/hanken-grotesk/files/hanken-grotesk-latin-600-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url("@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url("@fontsource/jetbrains-mono/files/jetbrains-mono-latin-500-normal.woff2") format("woff2");
+}
+
+:root {
+  --font-display: "Space Grotesk";
+  --font-body: "Hanken Grotesk";
+  --font-mono: "JetBrains Mono";
+}

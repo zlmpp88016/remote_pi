@@ -89,8 +89,18 @@ cd remote_pi && git pull
 cd server
 npm install          # only needed when dependencies changed
 npm run build        # regenerate dist/
-remote-pi-server daemon restart   # respawn with the new dist/
+remote-pi-server restart-supervisor   # reload the server code
 ```
+
+`restart-supervisor` is required, not optional: the supervisor is a resident Node
+process with no hot-reload, so it keeps running whatever code it loaded at start.
+`daemon restart` only respawns the workspace `pi` children and leaves the
+supervisor (where `host_bridge`, the relay client and the action routing live) on
+its old code.
+
+`restart-supervisor` re-spawns every workspace daemon as a side effect, so you do
+not need `daemon restart` afterwards. Verify with `remote-pi-server daemon status`:
+the supervisor PID must have changed.
 
 `npm install -g .` does **not** need to be repeated: the global entry is a
 symlink, so a rebuild is picked up in place. Re-run it only if you move the

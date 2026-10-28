@@ -538,6 +538,21 @@ function _serializePeerMutation<T>(mutation: () => Promise<T>): Promise<T> {
   return result;
 }
 
+/**
+ * Upper bound on how many pairings one machine keeps.
+ *
+ * The web client mints a fresh ephemeral App-key on EVERY connect (see
+ * `clients/web/src/lib/remote-pi/ed25519.ts`), so each browser reload paired a
+ * new `remote_epk` and `peers.json` grew without bound. That file is also the
+ * host bridge's fan-out set, so N stale records meant N WebSocket writes per
+ * proxied reply — observed at 246 records, which starved the reply to a single
+ * `session_read` and made history sessions appear unopenable.
+ *
+ * The oldest records are evicted first, so genuinely recent devices (the ones
+ * still connecting) always survive.
+ */
+export const MAX_PEERS = 32;
+
 export function addPeer(record: PeerRecord): Promise<void> {
   return _serializePeerMutation(async () => {
     const peers = await listPeers() as unknown[];
@@ -547,10 +562,11 @@ export function addPeer(record: PeerRecord): Promise<void> {
       (peer as { remote_epk?: unknown }).remote_epk === record.remote_epk,
     );
     if (idx >= 0) {
-      peers[idx] = record; // idempotent re-pair
-    } else {
-      peers.push(record);
+      peers.splice(idx, 1); // drop the old position so ordering stays by recency
     }
+    peers.push(record);
+    // Evict oldest beyond the cap, keeping the newest `MAX_PEERS` entries.
+    while (peers.length > MAX_PEERS) peers.shift();
     await mkdir(dirname(PEERS_PATH), { recursive: true });
     await writeFile(PEERS_PATH, JSON.stringify({ peers }, null, 2));
     // A successful re-pair is a new storage provenance event even when the

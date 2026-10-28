@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "dev": "tsx src/index.ts",
     "test": "vitest run",
-    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build",
+    "verify:supervision": "tsx scripts/verify-host-supervision.mts"
   },
   "keywords": [
     "pi",

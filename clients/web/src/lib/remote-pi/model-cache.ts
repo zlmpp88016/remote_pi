@@ -1,26 +1,56 @@
 /**
  * `list_models` catalogue cache.
  *
- * Rationale: a host's model catalogue barely changes, but the picker used to
- * re-run a full round trip through the relay to the workspace Pi on EVERY
- * open. The catalogue is therefore remembered per (relay, host, room) — the
- * identity triple that makes two entries the same source — so reopening the
- * picker is instant.
+ * Rationale: a host's model catalogue is a property of the machine, not of a
+ * moment in time. Re-running a full round trip through the relay to the
+ * workspace Pi to answer a question whose answer cannot change mid-connection
+ * is pure latency. The catalogue is therefore remembered per
+ * (relay, host, room) and stays valid for the WHOLE connection.
  *
- * Two limits keep the shortcut honest:
+ * Two rules keep the shortcut honest, and deliberately replace the earlier
+ * wall-clock TTL:
  *
- *   1. An entry EXPIRES (`ttlMs`). This web client does not consume the relay's
- *      `room_meta` stream, so an external change — another paired device, or
- *      the TUI's own `/model` — cannot be observed here. The TTL bounds how
- *      long a stale `current` can be shown; it is not a cache-only nicety.
- *   2. An entry is dropped EXPLICITLY when this client changes the model itself
- *      (`model_set`), and the whole cache is cleared when the pairing identity
- *      changes (another relay/host, or an explicit forget), so a catalogue can
- *      never be attributed to a host that did not report it.
+ *   1. The cache is bound to a CONNECTION SCOPE (`catalogueScope`) and dropped
+ *      whole whenever that scope changes — another relay, another host, an
+ *      explicit forget, or a reconnect with a new identity. A reconnect is
+ *      exactly the moment a catalogue is re-read, because it is the moment the
+ *      machine may have changed.
+ *   2. An entry is corrected IN PLACE when this client switches the model
+ *      itself (`confirmCachedModel`, after the host's `action_ok`), so the
+ *      remembered `current` never goes stale from our own action.
  *
- * Pure and dependency-free (no wire, no DOM, no React) with an injectable
- * clock, so the expiry and invalidation rules are directly verifiable in Node.
+ * Why no TTL: a timed expiry turned a stable answer into a periodic network
+ * round trip. It also could not do its job properly — this web client does not
+ * consume the relay's `room_meta` stream, so an external change (another
+ * paired device, the TUI's own `/model`) is invisible here either way; the TTL
+ * only bounded how OFTEN the client re-asked, which is a latency cost, not a
+ * correctness guarantee. Connection scope gives the same freshness guarantee at
+ * a bound the user can reason about: the catalogue is re-read when they
+ * reconnect, and when they ask for it explicitly.
+ *
+ * Persistence: an in-memory Map dies on every page load, so a plain F5 sent the
+ * picker back to "asking the host…" even though nothing about the machine had
+ * changed — the exact regression this file now guards against. Entries are
+ * therefore mirrored into a `StorageLike` (localStorage in the browser) under
+ * the same scope key, and the in-memory map is only a fast layer in front of
+ * it. Storage is optional: a throwing or absent store degrades to in-memory,
+ * never to an error.
+ *
+ * Pure and dependency-free (no wire, no DOM, no React), so the invalidation
+ * rules are directly verifiable in Node.
  */
+
+/** The slice of the Web Storage API this cache needs. Structurally compatible
+ *  with `localStorage`, so the adapter can pass what it already has. */
+export interface CatalogueStorage {
+  getItem(key: string): string | null;
+  setItem(key: string, value: string): void;
+  removeItem(key: string): void;
+}
+
+/** Namespace for every persisted catalogue entry. Versioned so a future shape
+ *  change can abandon old rows instead of misreading them. */
+export const CATALOGUE_STORAGE_PREFIX = "remote-pi:catalogue:v1:";
 
 export interface CatalogueEntry<TModel, TCurrent> {
   readonly models: readonly TModel[];
@@ -30,6 +60,8 @@ export interface CatalogueEntry<TModel, TCurrent> {
 }
 
 interface StoredEntry<TModel, TCurrent> extends CatalogueEntry<TModel, TCurrent> {
+  /** When the entry was written. Diagnostic only: validity is the connection's,
+   *  not the clock's. */
   readonly at: number;
 }
 
@@ -52,47 +84,122 @@ export function catalogueKey(scope: string, roomId: string): string {
 
 export class ModelCatalogueCache<TModel, TCurrent> {
   private readonly entries = new Map<string, StoredEntry<TModel, TCurrent>>();
-  private readonly ttlMs: number;
-  private readonly now: () => number;
+  private readonly storage: CatalogueStorage | null;
 
-  constructor(ttlMs: number, now: () => number = Date.now) {
-    this.ttlMs = ttlMs;
-    this.now = now;
+  /** `storage` is optional: without it the cache is memory-only (unit tests,
+   *  a browser with storage disabled). */
+  constructor(storage: CatalogueStorage | null = null) {
+    this.storage = storage;
   }
 
-  /** A fresh entry, or null. An expired entry is EVICTED on read, so a later
-   *  `set` for the same key cannot resurrect stale bytes. */
+  /** A remembered entry, or null. Memory first, then the persisted layer — so a
+   *  fresh page load (empty map) still answers without a relay round trip.
+   *  Entries do NOT expire on their own: validity is the connection's, which
+   *  `clear()` expresses. */
   get(key: string): CatalogueEntry<TModel, TCurrent> | null {
     const entry = this.entries.get(key);
-    if (entry === undefined) return null;
-    if (this.now() - entry.at >= this.ttlMs) {
-      this.entries.delete(key);
-      return null;
-    }
-    return { models: entry.models, current: entry.current };
+    if (entry !== undefined) return { models: entry.models, current: entry.current };
+    const restored = this._readPersisted(key);
+    if (restored === null) return null;
+    // Warm the memory layer so repeated reads stay allocation-free.
+    this.entries.set(key, restored);
+    return { models: restored.models, current: restored.current };
   }
 
   set(key: string, entry: CatalogueEntry<TModel, TCurrent>): void {
-    this.entries.set(key, { models: entry.models, current: entry.current, at: this.now() });
+    const stored: StoredEntry<TModel, TCurrent> = {
+      models: entry.models,
+      current: entry.current,
+      at: Date.now(),
+    };
+    this.entries.set(key, stored);
+    this._writePersisted(key, stored);
   }
 
   /** Drops ONE room (this client switched its own model there). */
   invalidate(key: string): void {
     this.entries.delete(key);
+    this._removePersisted(key);
   }
 
-  /** Drops EVERY entry: the pairing identity changed, so nothing remembered
-   *  belongs to the connection that follows. */
+  /** Drops EVERY entry: the connection scope changed, so nothing remembered
+   *  belongs to the connection that follows. This is the ONLY expiry. */
   clear(): void {
     this.entries.clear();
+    this._clearPersisted();
   }
 
-  /** Entry count — including an entry that expired but was not read yet. */
+  /** Entry count (memory layer only; the persisted layer is not enumerated). */
   get size(): number {
     return this.entries.size;
   }
-}
 
-/** Ten minutes: long enough that reopening the picker is free, short enough
- *  that a model switched from another device is not shown as current for long. */
-export const MODEL_CACHE_TTL_MS = 10 * 60 * 1000;
+  // ── persistence ───────────────────────────────────────────────────────────
+
+  private _readPersisted(key: string): StoredEntry<TModel, TCurrent> | null {
+    if (this.storage === null) return null;
+    let raw: string | null;
+    try {
+      raw = this.storage.getItem(CATALOGUE_STORAGE_PREFIX + key);
+    } catch {
+      return null; // storage disabled / quota — memory still works
+    }
+    if (raw === null) return null;
+    try {
+      const parsed = JSON.parse(raw) as StoredEntry<TModel, TCurrent>;
+      // A malformed or version-drifted row must never poison the picker.
+      if (!Array.isArray(parsed.models)) return null;
+      return {
+        models: parsed.models,
+        current: parsed.current,
+        at: typeof parsed.at === "number" ? parsed.at : 0,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private _writePersisted(key: string, entry: StoredEntry<TModel, TCurrent>): void {
+    if (this.storage === null) return;
+    try {
+      this.storage.setItem(CATALOGUE_STORAGE_PREFIX + key, JSON.stringify(entry));
+    } catch {
+      // Quota exceeded / storage disabled: the memory layer already has it, so
+      // the current page still works. Losing the cross-load shortcut is not
+      // worth failing a model read over.
+    }
+  }
+
+  private _removePersisted(key: string): void {
+    if (this.storage === null) return;
+    try {
+      this.storage.removeItem(CATALOGUE_STORAGE_PREFIX + key);
+    } catch {
+      /* best effort */
+    }
+  }
+
+  /** Removes every row this cache owns, leaving other apps' keys alone. */
+  private _clearPersisted(): void {
+    if (this.storage === null) return;
+    const doomed: string[] = [];
+    try {
+      const store = this.storage as CatalogueStorage & { key?(i: number): string | null; length?: number };
+      if (typeof store.length === "number" && typeof store.key === "function") {
+        for (let i = 0; i < store.length; i += 1) {
+          const k = store.key(i);
+          if (k !== null && k.startsWith(CATALOGUE_STORAGE_PREFIX)) doomed.push(k);
+        }
+      }
+    } catch {
+      return;
+    }
+    for (const k of doomed) {
+      try {
+        this.storage.removeItem(k);
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+}

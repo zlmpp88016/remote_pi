@@ -1,0 +1,343 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+
+  .page {
+    display: grid;
+    min-height: 100%;
+    place-items: center;
+    padding-inline: calc(var(--spacing) * 4);
+    padding-block: calc(var(--spacing) * 12);
+  }
+
+  .column {
+    width: 100%;
+    min-width: 0;
+    max-width: 462px;
+  }
+
+  .brandRow {
+    margin-bottom: calc(var(--spacing) * 7);
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 3);
+  }
+
+  .brandMark {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border-radius: 11px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 30%, transparent);
+    background-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 13%, transparent);
+    color: var(--accent);
+  }
+
+  .brandName {
+    font-size: 18px;
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    --tw-tracking: -.01em;
+    letter-spacing: -.01em;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .eyebrow {
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    --tw-tracking: .08em;
+    letter-spacing: .08em;
+    color: var(--faint);
+  }
+
+  .lede {
+    margin-bottom: calc(var(--spacing) * 2);
+    font-size: 30px;
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    --tw-leading: 1.14;
+    line-height: 1.14;
+    --tw-tracking: -.02em;
+    letter-spacing: -.02em;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .body {
+    margin-bottom: calc(var(--spacing) * 6);
+    font-size: 14.5px;
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    overflow-wrap: break-word;
+    color: var(--muted);
+  }
+
+  .inlineCode {
+    font-family: var(--ff-mono);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+
+  .form {
+    display: grid;
+    gap: calc(var(--spacing) * 3.5);
+  }
+
+  .fieldGroup {
+    display: grid;
+    gap: 7px;
+  }
+
+  .fieldLabel {
+    font-size: 12.5px;
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+    color: var(--muted);
+  }
+
+  .fieldTall {
+    height: calc(var(--spacing) * 10);
+  }
+
+  .pairField {
+    min-height: 74px;
+    resize: vertical;
+    padding-block: calc(var(--spacing) * 2.5);
+    font-family: var(--ff-mono);
+    font-size: 12.5px;
+    --tw-leading: calc(var(--spacing) * 6);
+    line-height: calc(var(--spacing) * 6);
+  }
+
+  .errorLine {
+    overflow-wrap: break-word;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .submit {
+    display: inline-flex;
+    height: calc(var(--spacing) * 10);
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--spacing) * 2);
+    border-radius: 10px;
+    background-color: var(--accent);
+    padding-inline: calc(var(--spacing) * 4);
+    font-size: 14px;
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    color: var(--green-ink);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .submit:hover {
+      background-color: var(--accent-2);
+    }
+  }
+
+  .submit:disabled {
+    cursor: not-allowed;
+    opacity: .45;
+  }
+
+  .disclosures {
+    margin-top: calc(var(--spacing) * 6);
+  }
+
+  .storedBox {
+    margin-top: calc(var(--spacing) * 6);
+    display: grid;
+    gap: calc(var(--spacing) * 1.5);
+    border-top-style: var(--tw-border-style);
+    border-top-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    padding-top: calc(var(--spacing) * 4);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .storedBox {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  .storedTitle {
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    --tw-tracking: .1em;
+    letter-spacing: .1em;
+    color: var(--faint);
+  }
+
+  .storedRow {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2.5);
+    border-radius: 10px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    padding-inline: calc(var(--spacing) * 2.5);
+    padding-block: calc(var(--spacing) * 2);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .storedRow {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  .storedDot {
+    width: 7px;
+    height: 7px;
+    flex-shrink: 0;
+    border-radius: 3.40282e38px;
+    background-color: var(--ok);
+  }
+
+  .storedText {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .storedName {
+    display: block;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-size: 13.5px;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .storedMeta {
+    display: block;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    color: var(--faint);
+  }
+
+  .unpairButton {
+    display: inline-flex;
+    height: 30px;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    border-radius: var(--radius-lg);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l3);
+    padding-inline: calc(var(--spacing) * 2.5);
+    font-size: 12.5px;
+    color: var(--muted);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .unpairButton {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+    }
+  }
+
+  @media(hover:hover) {
+    .unpairButton:hover {
+      background-color: var(--dsw-alias-bg-layer-2);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .unpairButton:hover {
+        background-color: var(--dsw-alias-bg-layer-2);
+      }
+    }
+  }
+
+  .storedNote {
+    overflow-wrap: break-word;
+    font-size: 11.5px;
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    color: var(--muted);
+  }
+}
+
+/* Shared text-input shell for this screen's two pairing fields.
+ * Named in capitals because it is a RECIPE, not a state: it is applied to two
+ * different inputs and extended by a local class (`fieldTall` / `pairField`)
+ * rather than being one of the screen's own named elements. */
+@layer utilities {
+  .FIELD {
+    width: 100%;
+    border-radius: 10px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l3);
+    background-color: var(--dsw-alias-bg-layer-2);
+    padding-inline: calc(var(--spacing) * 3);
+    font-size: 14px;
+    color: var(--dsw-alias-label-primary);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+    --tw-outline-style: none;
+    outline-style: none;
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .FIELD {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  .FIELD::placeholder {
+    color: var(--faint);
+  }
+
+  @media(hover:hover) {
+    .FIELD:hover {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .FIELD:hover {
+        border-color: var(--dsw-alias-border-l3);
+      }
+    }
+  }
+
+  .FIELD:focus {
+    border-color: var(--accent);
+    background-color: var(--dsw-alias-bg-layer-2);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .FIELD:focus {
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+}

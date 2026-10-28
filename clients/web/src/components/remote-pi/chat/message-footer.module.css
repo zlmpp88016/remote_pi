@@ -1,0 +1,55 @@
+/*
+ * Assistant message footer: quiet, single line, right-of-content alignment.
+ *
+ * Tertiary text at 12px matches the composer readings so the whole transcript
+ * speaks with one voice about numbers.
+ */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 100ms ease, background-color 100ms ease;
+}
+
+/* Reveal on hover of the enclosing turn, and always when keyboard-focused. */
+.row:hover .copy,
+.copy:focus-visible,
+.copy[data-copied] {
+  opacity: 1;
+}
+
+.copy:hover {
+  background: var(--dsw-alias-bg-l2);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.copy[data-copied] {
+  color: var(--dsw-alias-label-secondary);
+}

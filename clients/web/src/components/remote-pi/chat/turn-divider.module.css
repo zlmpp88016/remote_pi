@@ -1,0 +1,73 @@
+/*
+ * Per-turn divider.
+ *
+ * The rule is 0.5px, matching DeepSeek Harness' `TurnProcessNodeView.module.css`
+ * (`border-bottom: 0.5px solid var(--dsw-alias-border-l2)`). Heights and the
+ * color transition are copied from the same file so a turn marker reads the same
+ * in both products.
+ */
+
+.turn {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.root {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  height: 33px;
+  padding: 0 0 8px;
+  border: none;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: color 100ms ease;
+}
+
+.root[data-static] {
+  cursor: default;
+}
+
+.root:hover:not([data-static]) {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: inherit;
+  line-height: 24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chevron {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 4px;
+  color: inherit;
+  transition: transform 100ms ease;
+}
+
+.chevron[data-open] {
+  transform: rotate(180deg);
+}
+
+.process {
+  padding: 8px 0 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+}

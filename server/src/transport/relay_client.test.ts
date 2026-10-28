@@ -8,6 +8,11 @@ import { generateEd25519Keypair } from "../pairing/crypto.js";
 // Shared reference: set by the MockWS constructor so tests can access it.
 const wsRef: { current: MockWS | null } = { current: null };
 
+/** A WS double that can be swapped in to simulate a socket which accepts the
+ *  TCP connection but never emits `open`, `error` or `close` — the exact shape
+ *  that used to hang `connect()` forever. */
+const SilentWS: { next: EventEmitter | null } = { next: null };
+
 class MockWS extends EventEmitter {
   static OPEN = 1;
   readyState = MockWS.OPEN;
@@ -15,6 +20,7 @@ class MockWS extends EventEmitter {
 
   constructor(_url: string) {
     super();
+    if (SilentWS.next !== null) return SilentWS.next as unknown as MockWS;
     wsRef.current = this;
     // Defer 'open' so RelayClient has time to attach its handlers first.
     setTimeout(() => this.emit("open"), 0);
@@ -77,6 +83,50 @@ describe("RelayClient", () => {
 
     client.close();
     expect(client.isOpen()).toBe(false);
+  });
+
+  // isAlive is the probe an EXTERNAL supervisor uses. It must disagree with
+  // isOpen for a half-open socket: `readyState` stays OPEN forever when the
+  // peer vanishes, so a supervisor trusting isOpen sees a corpse as healthy.
+  test("isAlive: true right after connect, false once the socket goes silent", async () => {
+    vi.useFakeTimers();
+    try {
+      const client = new RelayClient("ws://localhost:9999", keypair);
+      await connectFake(client);
+
+      // Fresh connection with recent activity.
+      expect(client.isAlive()).toBe(true);
+      expect(client.isOpen()).toBe(true);
+
+      // Let the silence exceed the liveness bound WITHOUT the internal timer
+      // acting (advance just under one check interval past the timeout by
+      // stubbing the timer's own advance is not possible here, so drive the
+      // probe with an explicit `now` instead — that is exactly how the
+      // supervisor calls it).
+      const later = Date.now() + 80_000;
+      expect(client.isAlive(later)).toBe(false);
+      // The socket still CLAIMS to be open: this is the lie isAlive corrects.
+      expect(client.isOpen()).toBe(true);
+
+      client.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("isAlive: a relay ping keeps it alive", async () => {
+    vi.useFakeTimers();
+    try {
+      const client = new RelayClient("ws://localhost:9999", keypair);
+      await connectFake(client);
+      await vi.advanceTimersByTimeAsync(60_000);
+      // Relay keepalive arrives: activity refreshes the clock.
+      currentWs().emit("ping");
+      expect(client.isAlive()).toBe(true);
+      client.close();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   test("connect: sends hello with correct Ed25519 pubkey", async () => {
@@ -195,6 +245,91 @@ describe("RelayClient", () => {
       client.close();
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  // ── connect must ALWAYS settle ──────────────────────────────────────────
+  //
+  // The regression this guards: `ws` reports a refused TCP connection via
+  // `error`, but a socket that is ACCEPTED and then goes silent (transparent
+  // proxy holding it, captive portal, a non-101 upgrade the library swallows)
+  // produces neither `open` nor `error`. `connect()` used to await forever, so
+  // the caller never reached `relay.on("close")` — no liveness watchdog, no
+  // reconnect, and the daemon sat dead while its last log line still said
+  // "online". These tests fail if that silent hang ever comes back.
+
+  test("connect: a socket that never opens must REJECT, not hang", async () => {
+    vi.useFakeTimers();
+    try {
+      // A socket that accepts but never emits open/error/close.
+      const silent = new EventEmitter() as unknown as MockWS;
+      (silent as unknown as { readyState: number }).readyState = 0;
+      (silent as unknown as { sent: string[] }).sent = [];
+      (silent as unknown as { send: (d: string) => void }).send = () => {};
+      (silent as unknown as { close: () => void }).close = () => {};
+      let terminated = false;
+      (silent as unknown as { terminate: () => void }).terminate = () => { terminated = true; };
+
+      SilentWS.next = silent;
+      try {
+        const client = new RelayClient("ws://localhost:9999", keypair);
+        const settled = client.connect();
+        // Attach the rejection handler IMMEDIATELY: the timer may fire before
+        // the assertion below is reached, and an unhandled rejection at that
+        // instant would fail the run even though the behaviour is correct.
+        const outcome = settled.then(
+          () => "resolved" as const,
+          (err: Error) => err,
+        );
+        // Past the connect bound: it must have rejected already.
+        await vi.advanceTimersByTimeAsync(20_000);
+        const result = await outcome;
+        expect(result).toBeInstanceOf(Error);
+        expect((result as Error).message).toMatch(/connect timeout/i);
+        expect(terminated).toBe(true);
+      } finally {
+        SilentWS.next = null;
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("connect: an error before open REJECTS (no hang, no unhandled throw)", async () => {
+    const silent = new EventEmitter() as unknown as MockWS;
+    (silent as unknown as { readyState: number }).readyState = 0;
+    (silent as unknown as { sent: string[] }).sent = [];
+    (silent as unknown as { send: (d: string) => void }).send = () => {};
+    (silent as unknown as { close: () => void }).close = () => {};
+    (silent as unknown as { terminate: () => void }).terminate = () => {};
+
+    SilentWS.next = silent;
+    try {
+      const client = new RelayClient("ws://localhost:9999", keypair);
+      const settled = client.connect();
+      (silent as unknown as EventEmitter).emit("error", new Error("ECONNREFUSED"));
+      await expect(settled).rejects.toThrow(/ECONNREFUSED/);
+    } finally {
+      SilentWS.next = null;
+    }
+  });
+
+  test("connect: a close BEFORE auth rejects instead of hanging", async () => {
+    const silent = new EventEmitter() as unknown as MockWS;
+    (silent as unknown as { readyState: number }).readyState = 0;
+    (silent as unknown as { sent: string[] }).sent = [];
+    (silent as unknown as { send: (d: string) => void }).send = () => {};
+    (silent as unknown as { close: () => void }).close = () => {};
+    (silent as unknown as { terminate: () => void }).terminate = () => {};
+
+    SilentWS.next = silent;
+    try {
+      const client = new RelayClient("ws://localhost:9999", keypair);
+      const settled = client.connect();
+      (silent as unknown as EventEmitter).emit("close");
+      await expect(settled).rejects.toThrow(/closed during connect/i);
+    } finally {
+      SilentWS.next = null;
     }
   });
 });

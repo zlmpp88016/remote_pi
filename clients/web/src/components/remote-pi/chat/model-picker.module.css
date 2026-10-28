@@ -1,0 +1,221 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+
+  .root {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--spacing);
+  }
+
+  .trigger {
+    display: inline-flex;
+    height: calc(var(--spacing) * 7);
+    min-width: 0;
+    max-width: 24ch;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    border-radius: 10px;
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    background-color: #0000;
+    padding-inline: calc(var(--spacing) * 2.5);
+    font-size: 12px;
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  .triggerDisabled {
+    cursor: not-allowed;
+    color: var(--muted);
+  }
+
+  .triggerIdle {
+    color: var(--ink-soft);
+  }
+
+  @media(hover:hover) {
+    .triggerIdle:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .triggerIdle:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .triggerLabel {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  .thinking {
+    display: inline-flex;
+    height: calc(var(--spacing) * 7);
+    flex-shrink: 0;
+    align-items: center;
+    gap: var(--spacing);
+    border-radius: 10px;
+    padding-inline: calc(var(--spacing) * 1.5);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .thinkingSelect {
+    height: calc(var(--spacing) * 6);
+    border-radius: var(--radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l3);
+    background-color: var(--bg-app);
+    padding-inline: var(--spacing);
+    font-size: 11.5px;
+    color: var(--ink-soft);
+    --tw-outline-style: none;
+    outline-style: none;
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .thinkingSelect {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+    }
+  }
+
+/* MenuSurface — same geometry and material as the slash menu's. */
+  .menu {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    z-index: 30;
+    max-height: 320px;
+    width: min(92vw,380px);
+    overflow-y: auto;
+    border-radius: var(--dsw-radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    background-color: var(--dsw-menu-surface-fill);
+    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    backdrop-filter: blur(20px) saturate(150%);
+    padding: calc(var(--spacing) * 1.5);
+    box-shadow: var(--dsw-elevation-prominent);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .menu {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .menu {
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  .note {
+    padding-inline: calc(var(--spacing) * 2.5);
+    padding-block: calc(var(--spacing) * 3);
+    text-align: center;
+    font-size: 12px;
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    color: var(--muted);
+  }
+
+  .row {
+    display: flex;
+    width: 100%;
+    min-height: 34px;
+    align-items: center;
+    gap: calc(var(--spacing) * 2.5);
+    border-radius: var(--dsw-radius-sm);
+    padding-inline: calc(var(--spacing) * 2.5);
+    padding-block: calc(var(--spacing) * 2);
+    text-align: left;
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .row:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .row:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .rowCurrent {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .rowCurrent {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .row:focus-visible {
+    outline: var(--dsw-focus-outline);
+    outline-offset: calc(var(--dsw-focus-outline-offset) * -1);
+  }
+
+  .rowText {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .rowName {
+    display: block;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-size: 13px;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .rowMeta {
+    display: block;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+
+  .rowBadge {
+    flex-shrink: 0;
+    font-family: var(--ff-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    --tw-tracking: .08em;
+    letter-spacing: .08em;
+    color: var(--ok-text);
+  }
+}

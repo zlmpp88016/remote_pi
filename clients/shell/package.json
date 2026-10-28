@@ -1,0 +1,22 @@
+{
+  "name": "@remote-pi/desktop-shell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron shell that hosts the Remote Pi web client as a desktop app",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "export:web": "cd ../web && node scripts/build-shell-web.mjs",
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify": "node scripts/verify-shell.mjs",
+    "start:cdp": "npm run build && electron . --remote-debugging-port=9444"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "typescript": "^5.9.0",
+    "@types/node": "^22.10.0"
+  }
+}

@@ -1,0 +1,979 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+
+/*
+   * Sidebar — DSH's rail is a FLAT #f9fafb surface with a single hairline on its
+   * right edge, measured at 1px rgba(0,0,0,0.12) (DSH's `--dsw-alias-border-l3`,
+   * not l1 — l1 is the 4% wash used for in-surface dividers and reads as no
+   * border at all against the page).
+   */
+  .root {
+    display: grid;
+    min-height: 0;
+    min-width: 0;
+    border-right-style: var(--tw-border-style);
+    border-right-width: 1px;
+    border-color: var(--dsw-alias-border-l3);
+    background-color: var(--dsw-specific-sidebar-fill);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .root {
+      border-color: var(--dsw-alias-border-l3);
+    }
+  }
+
+  .brandRail {
+    display: grid;
+    gap: calc(var(--spacing) * 2.5);
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 2.5);
+  }
+
+  /*
+   * The column's inner padding is DSH's `6px 12px` (its `.root` rules inside the
+   * 280px column). The asymmetric vertical value is deliberate: the brand row
+   * carries its own vertical padding, so 6px here only bleeds the edges.
+   */
+  .brandFull {
+    display: grid;
+    gap: calc(var(--spacing) * 2.5);
+    padding-inline: 12px;
+    padding-block: 6px;
+  }
+
+  .brandRowRail {
+    display: flex;
+    justify-content: center;
+  }
+
+  .brandRowFull {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2.5);
+    padding-inline: calc(var(--spacing) * .5);
+  }
+
+  .mark {
+    display: grid;
+    width: calc(var(--spacing) * 6);
+    height: calc(var(--spacing) * 6);
+    flex-shrink: 0;
+    place-items: center;
+    border-radius: 7px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 30%, transparent);
+    background-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 13%, transparent);
+    color: var(--accent);
+  }
+
+  .brandName {
+    font-size: 18px;
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    --tw-tracking: -.01em;
+    letter-spacing: -.01em;
+    color: var(--dsw-alias-label-primary);
+  }
+
+/* Version badge — DSH's is a quiet chip; keep it small and unfussy. */
+  .versionChip {
+    border-radius: var(--dsw-radius-xs);
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    background-color: var(--dsw-alias-interactive-bg-hover);
+    padding-inline: calc(var(--spacing) * 1.5);
+    padding-block: 1px;
+    font-family: var(--ff-mono);
+    font-size: 10px;
+    line-height: 16px;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .versionChip {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .toggleRail {
+    display: grid;
+    width: calc(var(--spacing) * 6);
+    height: calc(var(--spacing) * 6);
+    place-items: center;
+    border-radius: var(--radius-md);
+    color: var(--faint);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .toggleRail:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .toggleRail:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .toggleFull {
+    margin-left: auto;
+    display: grid;
+    width: calc(var(--spacing) * 6);
+    height: calc(var(--spacing) * 6);
+    place-items: center;
+    border-radius: var(--radius-md);
+    color: var(--faint);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .toggleFull:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .toggleFull:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .searchBox {
+    display: flex;
+    height: calc(var(--spacing) * 8);
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    border-radius: 10px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    background-color: var(--dsw-alias-bg-layer-1);
+    padding-inline: calc(var(--spacing) * 2.5);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  /*
+   * The 38px "New session" row, matching DSH's SidebarRoot `newSession`.
+   * 12px radius, a 4% white wash with a 16% hairline, and the label at 13px.
+   * The disabled state is the in-flight state: `session_new` is answered with
+   * the generic `action_ok`/`action_error`, so there is no streaming progress
+   * to show, only "asked, waiting".
+   */
+  /*
+   * DSH's new-session row: 38px tall, 12px radius, WHITE fill on the #f9fafb
+   * column, 8px/12px padding, 14px label. Measured on the running reference —
+   * the previous values (dark layer-1 fill, 13px) were tuned to the old dark
+   * canvas and read as a secondary button rather than the primary action.
+   */
+  .newSession {
+    display: flex;
+    height: 38px;
+    align-items: center;
+    gap: 6px;
+    border-radius: var(--dsw-radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l3);
+    background-color: var(--dsw-alias-bg-layer-1);
+    padding-inline: 12px;
+    padding-block: 8px;
+    font-size: 14px;
+    color: var(--dsw-alias-label-primary);
+    transition-property: background-color,border-color,color;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  .newSession:disabled {
+    opacity: .55;
+  }
+
+  @media(hover:hover) {
+    .newSession:hover:not(:disabled) {
+      border-color: var(--dsw-alias-border-l4);
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  .newSession:focus-visible {
+    outline: var(--dsw-focus-outline);
+    outline-offset: var(--dsw-focus-outline-offset);
+  }
+
+  .newSessionLabel {
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  /*
+   * The Ctrl+N affordance, matching DSH's `<kbd>` hint.
+   *
+   * Muted and right-aligned so it reads as a hint rather than a second label,
+   * and hidden once the row gets narrow: below that width the shortcut text
+   * would squeeze the actual label into uselessness, and the `title` attribute
+   * still carries it.
+   */
+  .newSessionKbd {
+    margin-inline-start: auto;
+    flex: none;
+    padding-inline: calc(var(--spacing) * 1);
+    border-radius: var(--dsw-radius-sm);
+    font-family: var(--ff-mono);
+    font-size: 10px;
+    line-height: 1.6;
+    color: var(--dsw-alias-label-tertiary);
+    background-color: var(--dsw-alias-bg-layer-2);
+  }
+
+  @container (max-width: 200px) {
+    .newSessionKbd {
+      display: none;
+    }
+  }
+
+  /*
+   * Panel rows (Plugins / Automations) and the "More" foot row.
+   *
+   * DSH: a 4px-gapped stack of 36px rows, each 12px-radius with 7px/8px padding
+   * and a 16px glyph. They carry no fill until hovered, so the column reads as a
+   * flat list rather than a set of cards.
+   */
+  .panelList {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .panelRow,
+  .moreRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    border-radius: var(--dsw-radius-md);
+    padding-inline: 8px;
+    padding-block: 7px;
+    font-size: 14px;
+    color: var(--dsw-alias-label-primary);
+    transition-property: background-color,color;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .panelRow:hover:not(:disabled),
+    .moreRow:hover:not(:disabled) {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .panelGlyph {
+    flex-shrink: 0;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .panelTitle {
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  /* The foot row is the last item of the scrollable column, like DSH's. */
+  .moreRow {
+    margin-block-start: 4px;
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .searchBox {
+      border-color: var(--dsw-alias-border-l2);
+      background-color: var(--dsw-alias-bg-layer-1);
+    }
+  }
+
+  .searchBox:focus-within {
+    border-color: var(--accent);
+  }
+
+  .searchIcon {
+    flex-shrink: 0;
+    color: var(--faint);
+  }
+
+  .searchInput {
+    min-width: 0;
+    flex: 1;
+    background-color: #0000;
+    font-size: 13px;
+    color: var(--dsw-alias-label-primary);
+    --tw-outline-style: none;
+    outline-style: none;
+  }
+
+  .searchInput::placeholder {
+    color: var(--faint);
+  }
+
+  .scroll {
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-inline: calc(var(--spacing) * 2);
+    padding-bottom: calc(var(--spacing) * 3.5);
+  }
+
+  /*
+   * Section header — DSH renders this as a normal-weight 14px row, not a mono
+   * uppercase micro-label. The "WORKSPACES · 6" treatment was a developer-console
+   * cue that DSH never had.
+   */
+  .sectionHead {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-inline: 8px;
+    padding-top: 10px;
+    padding-bottom: 4px;
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: normal;
+    color: var(--dsw-alias-label-primary);
+    text-transform: none;
+  }
+
+  .sectionTitle {
+    flex-shrink: 0;
+  }
+
+  /* The filter sits ON the section header row, like DSH's. */
+  .searchInline {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 4px;
+    border-radius: var(--dsw-radius-sm);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: transparent;
+    padding-inline: 6px;
+    padding-block: 2px;
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  .searchInline:focus-within {
+    border-color: var(--dsw-alias-border-l3);
+    background-color: var(--dsw-alias-bg-layer-1);
+  }
+
+  .refreshSmall {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing);
+    border-radius: var(--radius-md);
+    padding-inline: var(--spacing);
+    padding-block: 1px;
+    --tw-tracking: var(--tracking-normal);
+    letter-spacing: var(--tracking-normal);
+    text-transform: none;
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .refreshSmall:enabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .refreshSmall:enabled:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .refreshSmall:disabled {
+    cursor: not-allowed;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .railCenter {
+    display: grid;
+    justify-items: center;
+    gap: calc(var(--spacing) * 2);
+    padding-inline: var(--spacing);
+    padding-block: calc(var(--spacing) * 2.5);
+  }
+
+  .railButton {
+    display: grid;
+    width: calc(var(--spacing) * 7);
+    height: calc(var(--spacing) * 7);
+    place-items: center;
+    border-radius: var(--radius-md);
+    color: var(--faint);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .railButton:enabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .railButton:enabled:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .railButton:disabled {
+    cursor: not-allowed;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .railError {
+    display: grid;
+    width: calc(var(--spacing) * 7);
+    height: calc(var(--spacing) * 7);
+    place-items: center;
+    border-radius: var(--radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: #f25a5a59;
+    color: var(--danger);
+  }
+
+  .railIdle {
+    display: grid;
+    width: calc(var(--spacing) * 7);
+    height: calc(var(--spacing) * 7);
+    place-items: center;
+    border-radius: var(--radius-md);
+    color: var(--faint);
+  }
+
+  .railPad {
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 3);
+  }
+
+  .errorText {
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 3);
+    font-size: 12.5px;
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    color: var(--danger);
+  }
+
+  .railList {
+    display: grid;
+    gap: 1px;
+  }
+
+  .railItemActive {
+    display: grid;
+    width: 100%;
+    height: calc(var(--spacing) * 9);
+    place-items: center;
+    border-radius: var(--radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    background-color: var(--dsw-alias-interactive-bg-hover);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .railItemActive {
+      border-color: var(--dsw-alias-border-l2);
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .railItemIdle {
+    display: grid;
+    width: 100%;
+    height: calc(var(--spacing) * 9);
+    place-items: center;
+    border-radius: var(--radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: #0000;
+    color: var(--muted);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .railItemIdle:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .railItemIdle:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .listItem {
+    display: grid;
+    gap: calc(var(--spacing) * .5);
+  }
+
+/*
+   * Workspace row — DSH's: 36px tall, 12px radius, NO border, and the active
+   * state is the shared 0.08 wash rather than an outlined+‐filled box. The
+   * left marker bar becomes a 6px dot so the row keeps its full width for the
+   * label (the old bar sat OUTSIDE the row at -6px and was clipped in the rail).
+   */
+  .wsRowActive {
+    position: relative;
+    display: flex;
+    min-height: 36px;
+    width: 100%;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    border-radius: var(--dsw-radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    background-color: var(--dsw-alias-interactive-bg-hover);
+    padding-inline: 8px;
+    padding-block: 7px;
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .wsRowActive {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .wsRowIdle {
+    position: relative;
+    display: flex;
+    min-height: 36px;
+    width: 100%;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    border-radius: var(--dsw-radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    padding-inline: 8px;
+    padding-block: 7px;
+    transition-property: color,background-color;
+    transition-timing-function: var(--dsw-ease-in-out);
+    transition-duration: var(--dsw-transition-duration-fast);
+  }
+
+  @media(hover:hover) {
+    .wsRowIdle:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .activeMarker {
+    width: 6px;
+    height: 6px;
+    flex-shrink: 0;
+    border-radius: var(--dsw-radius-pill);
+    background-color: var(--dsw-alias-state-success-primary);
+  }
+
+  .wsButton {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    text-align: left;
+  }
+
+  .wsToneIcon {
+    display: grid;
+    width: calc(var(--spacing) * 3.5);
+    height: calc(var(--spacing) * 3.5);
+    flex-shrink: 0;
+    place-items: center;
+  }
+
+  .wsTextCol {
+    min-width: 0;
+    flex: 1;
+  }
+
+  /*
+   * Selected workspace name.
+   *
+   * This used to be var(--color-white) while .wsNameIdle used --ink-soft, so
+   * the *unselected* rows were readable and the *selected* row was white on a
+   * near-white sidebar: 1.16:1 -- the one row you are actually looking at was
+   * the one you could not read. Selection is already carried by the row
+   * background wash and the status dot; the name only needs to be the
+   * strongest text level, and the weight contrast keeps it ahead of idle rows.
+   */
+  .wsNameActive {
+    display: block;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-family: var(--ff-mono);
+    font-size: 12.5px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .wsNameIdle {
+    display: block;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-family: var(--ff-mono);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+
+  .wsStatus {
+    flex-shrink: 0;
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+  }
+
+  .wsActions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: calc(var(--spacing) * .5);
+  }
+
+  .startButton {
+    display: grid;
+    width: calc(var(--spacing) * 5);
+    height: calc(var(--spacing) * 5);
+    place-items: center;
+    border-radius: .25rem;
+    color: var(--ok-text);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .startButton:enabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .startButton:enabled:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .startButton:disabled {
+    cursor: not-allowed;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .restartButton {
+    display: grid;
+    width: calc(var(--spacing) * 5);
+    height: calc(var(--spacing) * 5);
+    place-items: center;
+    border-radius: .25rem;
+    color: var(--amber);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .restartButton:enabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .restartButton:enabled:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .restartButton:disabled {
+    cursor: not-allowed;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .wsWarning {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing);
+    padding-inline: calc(var(--spacing) * 2);
+    padding-bottom: calc(var(--spacing) * .5);
+    font-size: 10.5px;
+    --tw-leading: var(--leading-snug);
+    line-height: var(--leading-snug);
+    color: var(--warn-text);
+  }
+
+  .wsWarningIcon {
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+
+  .railHint {
+    padding-inline: calc(var(--spacing) * 2);
+    padding-top: calc(var(--spacing) * 3);
+    font-size: 11.5px;
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    color: var(--faint);
+  }
+
+  .footer {
+    display: grid;
+    gap: calc(var(--spacing) * .5);
+    border-top-style: var(--tw-border-style);
+    border-top-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    padding: calc(var(--spacing) * 2);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .footer {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  .hostRowRail {
+    display: grid;
+    justify-items: center;
+    padding-block: calc(var(--spacing) * 1.5);
+  }
+
+  .hostRowFull {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: calc(var(--spacing) * 2.5);
+    border-radius: 10px;
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 1.5);
+  }
+
+  .hostDot {
+    width: calc(var(--spacing) * 2);
+    height: calc(var(--spacing) * 2);
+    flex-shrink: 0;
+    border-radius: 3.40282e38px;
+    background-color: var(--ok);
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(4px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+    box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);
+    --tw-ring-color: #5fd38a29;
+  }
+
+  .hostText {
+    min-width: 0;
+  }
+
+  .hostName {
+    display: block;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-size: 12.5px;
+    /* Was a literal white — invisible once light became the default. */
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .hostMeta {
+    display: block;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    color: var(--faint);
+  }
+
+  .dockButtonRail {
+    display: grid;
+    width: 100%;
+    justify-items: center;
+    border-radius: 10px;
+    padding-block: calc(var(--spacing) * 1.5);
+    color: var(--muted);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .dockButtonRail:enabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .dockButtonRail:enabled:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .dockButtonRail:disabled {
+    cursor: not-allowed;
+    color: var(--faint);
+  }
+
+  .dockButtonFull {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: calc(var(--spacing) * 2.5);
+    border-radius: 10px;
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 1.5);
+    font-size: 13px;
+    color: var(--muted);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .dockButtonFull:enabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .dockButtonFull:enabled:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .dockButtonFull:disabled {
+    cursor: not-allowed;
+    color: var(--faint);
+  }
+
+  .shortcut {
+    margin-left: auto;
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    color: var(--faint);
+  }
+
+  .settingsButtonRail {
+    display: grid;
+    width: 100%;
+    justify-items: center;
+    border-radius: var(--dsw-radius-md);
+    padding-block: calc(var(--spacing) * 1.5);
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  .settingsButtonRail:disabled {
+    cursor: not-allowed;
+  }
+
+  .settingsButtonFull {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    gap: calc(var(--spacing) * 2.5);
+    border-radius: var(--dsw-radius-md);
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 1.5);
+    font-size: 13px;
+    color: var(--dsw-alias-label-secondary);
+    transition-property: color,background-color;
+    transition-timing-function: var(--dsw-ease-in-out);
+    transition-duration: var(--dsw-transition-duration-fast);
+  }
+
+  @media(hover:hover) {
+    .settingsButtonFull:hover:enabled {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+}
+
+/* Row tone → text colour. One class per tone so the icon and the label can
+ * never disagree, which is exactly why the original used a single map. */
+@layer utilities {
+  .toneOk {
+    color: var(--ok-text);
+  }
+
+  .toneAccent {
+    color: var(--accent);
+  }
+
+  .toneDanger {
+    color: var(--danger);
+  }
+
+  .toneFaint {
+    color: var(--faint);
+  }
+}

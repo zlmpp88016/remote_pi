@@ -1,0 +1,968 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+
+  .userRow {
+    display: flex;
+    justify-content: flex-end;
+    padding-block: calc(var(--spacing) * 2);
+  }
+
+/*
+   * User bubble — DSH's: a #2c2c2e card with a 20px radius, no border, right
+   * aligned, capped at 70.2% of the content column (82% once the column itself
+   * is narrow). The old rule was a 14/14/4 asymmetric corner on a 4.5% white
+   * wash with a 1px hairline — three devices DSH does not use.
+   *
+   * The 70.2% figure is DSH's own (`--dsh-chat-content-width * 0.702`); the
+   * percentage is of the CONTENT COLUMN, not the viewport, which is why the
+   * column width below is pinned to the same 860px as the composer.
+   */
+  .userBubble {
+    max-width: min(calc(860px * 0.702), 82%);
+    border-radius: var(--dsw-radius-xl);
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    background-color: var(--dsw-specific-bubble);
+    padding-inline: 16px;
+    padding-block: 10px;
+    font-size: 14px;
+    --tw-leading: 22px;
+    line-height: 22px;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .userBubble {
+      background-color: var(--dsw-specific-bubble);
+    }
+  }
+
+/*
+   * Assistant turn — DSH renders the reply directly on the canvas: no bubble,
+   * no card. The only framing is the 16px paragraph rhythm, which is what makes
+   * it read as prose rather than as a chat box.
+   */
+  .agentTurn {
+    display: grid;
+    gap: 16px;
+    padding-block: 16px;
+  }
+
+  .agentBody {
+    font-size: 14px;
+    --tw-leading: 24px;
+    line-height: 24px;
+    color: var(--dsw-alias-label-primary);
+    overflow-wrap: break-word;
+  }
+
+  .agentHead {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .agentMark {
+    display: grid;
+    width: calc(var(--spacing) * 5);
+    height: calc(var(--spacing) * 5);
+    place-items: center;
+    border-radius: var(--radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 30%, transparent);
+    background-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 13%, transparent);
+    color: var(--accent);
+  }
+
+  .agentName {
+    font-size: 12px;
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    color: var(--muted);
+  }
+
+  .agentStatus {
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+  }
+
+  .agentBody {
+    min-width: 0;
+    overflow-wrap: break-word;
+  }
+
+  .caret {
+    margin-left: calc(var(--spacing) * .5);
+    display: inline-block;
+    height: 13px;
+    width: 7px;
+    animation: var(--animate-pulse);
+    background-color: var(--dsw-static-deepseek-400);
+    vertical-align: -2px;
+  }
+
+  .minimap {
+    pointer-events: none;
+    position: absolute;
+    inset-block: 0;
+    left: calc(var(--spacing) * 1.5);
+    display: flex;
+    width: calc(var(--spacing) * 11);
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+  }
+
+  .minimapLineActive {
+    height: 3px;
+    width: 23px;
+    border-radius: 3.40282e38px;
+    background-color: var(--ink-soft);
+  }
+
+  .minimapLine {
+    height: 3px;
+    width: 14px;
+    border-radius: 3.40282e38px;
+    background-color: #fff3;
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .minimapLine {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .root {
+    display: grid;
+    min-height: 0;
+    min-width: 0;
+    grid-template-columns: repeat(1,minmax(0,1fr));
+    grid-template-rows: auto minmax(0,1fr) auto auto;
+    background-color: #0000;
+  }
+
+  .header {
+    display: flex;
+    height: calc(var(--spacing) * 12);
+    min-width: 0;
+    align-items: center;
+    gap: calc(var(--spacing) * 2.5);
+    border-bottom-style: var(--tw-border-style);
+    border-bottom-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    padding-inline: calc(var(--spacing) * 3.5);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .header {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  .headerGroup {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: calc(var(--spacing) * 2.5);
+  }
+
+  .sessionName {
+    max-width: 34ch;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-size: 14px;
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    --tw-tracking: -.01em;
+    letter-spacing: -.01em;
+    /* Was a literal white — invisible once light became the default. */
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .sessionMeta {
+    max-width: 22ch;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .headerActions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+  }
+
+  .viewToggle {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: calc(var(--spacing) * .5);
+    border-radius: 3.40282e38px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    background-color: var(--dsw-alias-bg-layer-2);
+    padding: calc(var(--spacing) * .5);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .viewToggle {
+      border-color: var(--dsw-alias-border-l2);
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  .viewTabActive {
+    display: inline-flex;
+    height: calc(var(--spacing) * 6);
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    border-radius: 3.40282e38px;
+    background-color: var(--dsw-alias-interactive-bg-hover);
+    padding-inline: calc(var(--spacing) * 2.5);
+    font-size: 12.5px;
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+    /*
+     * The active tab sits on a faint hover wash (interactive-bg-hover), not on a
+     * solid dark fill, so white text is invisible here. Primary label reads
+     * correctly on both themes and matches the reference's selected-tab contrast.
+     */
+    color: var(--dsw-alias-label-primary);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .viewTabActive {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .viewTabDisabled {
+    display: inline-flex;
+    height: calc(var(--spacing) * 6);
+    cursor: not-allowed;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    border-radius: 3.40282e38px;
+    padding-inline: calc(var(--spacing) * 2.5);
+    font-size: 12.5px;
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+    color: var(--faint);
+  }
+
+  .trajectorySlot {
+    grid-column: span 1/span 1;
+    grid-row: span 3/span 3;
+    min-height: 0;
+  }
+
+  .transcriptArea {
+    position: relative;
+    display: grid;
+    min-height: 0;
+    grid-template-columns: repeat(1,minmax(0,1fr));
+  }
+
+  .transcriptScroll {
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .transcriptScroll[data-chat-following-tail] {
+    overflow-anchor: none;
+  }
+
+  .transcriptInner {
+    margin-inline: auto;
+    display: grid;
+    max-width: 848px;
+    gap: calc(var(--spacing) * .5);
+    padding-inline: 70px;
+    padding-top: calc(var(--spacing) * 5);
+    padding-bottom: calc(var(--spacing) * 8);
+  }
+
+  @media not all and (min-width:1023px) {
+    .transcriptInner {
+      padding-right: calc(var(--spacing) * 6);
+      padding-left: 52px;
+    }
+  }
+
+  @media not all and (min-width:760px) {
+    .transcriptInner {
+      padding-right: calc(var(--spacing) * 4);
+      padding-left: 38px;
+    }
+  }
+
+  .browseButton {
+    display: inline-flex;
+    height: 38px;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    border-radius: 14px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l3);
+    background-color: var(--dsw-alias-bg-layer-2);
+    padding-inline: calc(var(--spacing) * 3.5);
+    font-family: var(--ff-mono);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .browseButton {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  @media(hover:hover) {
+    .browseButton:hover {
+      border-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 30%, transparent);
+    }
+  }
+
+  .browseButton:disabled {
+    cursor: not-allowed;
+    border-color: var(--dsw-alias-border-l2);
+    color: var(--muted);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .browseButton:disabled {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  @media(hover:hover) {
+    .browseButton:disabled:hover {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .browseButton:disabled:hover {
+        border-color: var(--dsw-alias-border-l2);
+      }
+    }
+  }
+
+  .jumpLayer {
+    pointer-events: none;
+    position: absolute;
+    inset-inline: 0;
+    bottom: calc(var(--spacing) * 3);
+    display: flex;
+    justify-content: center;
+  }
+
+  .jumpButton {
+    pointer-events: auto;
+    display: grid;
+    width: calc(var(--spacing) * 8);
+    height: calc(var(--spacing) * 8);
+    place-items: center;
+    border-radius: 3.40282e38px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l3);
+    background-color: var(--bg-app);
+    color: var(--ink-soft);
+    --tw-shadow: 0 10px 15px -3px var(--tw-shadow-color,#0000001a), 0 4px 6px -4px var(--tw-shadow-color,#0000001a);
+    box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);
+    --tw-backdrop-blur: blur(8px);
+    -webkit-backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+    backdrop-filter: var(--tw-backdrop-blur,) var(--tw-backdrop-brightness,) var(--tw-backdrop-contrast,) var(--tw-backdrop-grayscale,) var(--tw-backdrop-hue-rotate,) var(--tw-backdrop-invert,) var(--tw-backdrop-opacity,) var(--tw-backdrop-saturate,) var(--tw-backdrop-sepia,);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .jumpButton {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+      background-color: color-mix(in oklab,var(--bg-app) 90%,transparent);
+    }
+  }
+
+  @media(hover:hover) {
+    .jumpButton:hover {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .jumpButton:hover {
+        border-color: var(--dsw-alias-border-l3);
+      }
+    }
+  }
+
+  .toolWrap {
+    padding-inline: 70px;
+  }
+
+  @media not all and (min-width:1023px) {
+    .toolWrap {
+      padding-right: calc(var(--spacing) * 6);
+      padding-left: 52px;
+    }
+  }
+
+  @media not all and (min-width:760px) {
+    .toolWrap {
+      padding-right: calc(var(--spacing) * 4);
+      padding-left: 38px;
+    }
+  }
+
+  .toolStrip {
+    margin-inline: auto;
+    display: flex;
+    max-width: 848px;
+    flex-wrap: wrap;
+    gap: calc(var(--spacing) * 1.5);
+    padding-bottom: calc(var(--spacing) * 2);
+  }
+
+/* Tool card — DSH's: a 12px card on a 4% wash with NO border (it is inside the
+     canvas, so the wash is what separates it), and a status dot rather than an
+     outlined icon box. */
+  .toolCard {
+    max-width: 100%;
+    min-width: 0;
+    flex: 1;
+    flex-basis: 260px;
+    border-radius: var(--dsw-radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    background-color: var(--dsw-alias-interactive-bg-hover);
+    padding-inline: 12px;
+    padding-block: 10px;
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .toolCard {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .toolSummary {
+    display: flex;
+    cursor: pointer;
+    list-style-type: none;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+
+  .toolIcon {
+    display: grid;
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    place-items: center;
+    color: var(--accent);
+  }
+
+  .toolName {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-family: var(--ff-mono);
+    font-size: 11.5px;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .toolOutcome {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-family: var(--ff-mono);
+    font-size: 10px;
+    --tw-tracking: .06em;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .toolOutcomeIdle {
+    color: var(--muted);
+  }
+
+  .toolOutcomeOk {
+    color: var(--ok-text);
+  }
+
+  .toolOutcomeFail {
+    color: var(--danger);
+  }
+
+  .toolPre {
+    margin-top: calc(var(--spacing) * 1.5);
+    max-height: 160px;
+    overflow: auto;
+    border-radius: var(--radius-md);
+    /*
+     * A themed layer, not "30% black over whatever is behind it".
+     *
+     * The percentage overlay composited against the light page produced a
+     * MID-GREY block (measured rgb(169,169,170)) whose secondary label text sat
+     * at 2.47:1 — unreadable. The defect went unseen because the live transcript
+     * never hydrated, so these tool cards never rendered at all. A real layer
+     * token gives a surface the text tokens were designed against.
+     */
+    background-color: var(--dsw-alias-bg-layer-2);
+    padding: calc(var(--spacing) * 2);
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .toolPreStrong {
+    margin-top: calc(var(--spacing) * 1.5);
+    max-height: 160px;
+    overflow: auto;
+    border-radius: var(--radius-md);
+    background-color: var(--dsw-alias-bg-layer-2);
+    padding: calc(var(--spacing) * 2);
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .composerPad {
+    padding-inline: 70px;
+    padding-bottom: calc(var(--spacing) * 4.5);
+  }
+
+  @media not all and (min-width:1023px) {
+    .composerPad {
+      padding-right: calc(var(--spacing) * 6);
+      padding-left: 52px;
+    }
+  }
+
+  @media not all and (min-width:760px) {
+    .composerPad {
+      padding-right: calc(var(--spacing) * 4);
+      padding-left: 38px;
+    }
+  }
+
+  .noticeBox {
+    margin-inline: auto;
+    margin-bottom: calc(var(--spacing) * 3);
+    display: flex;
+    max-width: 848px;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    border-radius: 14px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l3);
+    background-color: var(--dsw-alias-bg-layer-2);
+    padding-inline: calc(var(--spacing) * 3.5);
+    padding-block: calc(var(--spacing) * 2.5);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .noticeBox {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  .noticeText {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+
+  .noticeActions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+  }
+
+  .retryButton {
+    display: inline-flex;
+    height: 30px;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    border-radius: 10px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l3);
+    background-color: var(--dsw-alias-bg-layer-2);
+    padding-inline: calc(var(--spacing) * 3);
+    font-size: 12.5px;
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    /* Light wash background, so this must be a label colour, not white. */
+    color: var(--dsw-alias-label-primary);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .retryButton {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  @media(hover:hover) {
+    .retryButton:hover {
+      border-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 30%, transparent);
+    }
+  }
+
+  .retryWarning {
+    max-width: 30ch;
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    --tw-leading: var(--leading-snug);
+    line-height: var(--leading-snug);
+    color: var(--ink-soft);
+  }
+
+/*
+   * InputBar capsule — DSH geometry, measured off the running instance:
+   *   card    #2c2c2e, radius 28px, `elevation-soft`, centred, max 860px
+   *   text    transparent, no border, caret #7aaaff, placeholder #9aa0a8
+   *   bar     28px round Add, 28px mode pill, 34px round Send
+   * The old rule was a 20px-radius outlined box on a nearly transparent wash
+   * with a 30px rectangular Send button. DSH has no outline at all: the
+   * surface is separated by its 0.5px hairline inside the shadow.
+   *
+   * `container-type` is what lets the toolbar collapse on ITS OWN width rather
+   * than the viewport's — the transcript column narrows when the dock opens,
+   * and a viewport media query cannot see that.
+   */
+  .composerForm {
+    position: relative;
+    container-type: inline-size;
+    margin-inline: auto;
+    max-width: min(860px, 100%);
+    border-radius: var(--dsw-radius-panel);
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    background-color: var(--dsw-specific-input-major);
+    padding-top: 8px;
+    box-shadow: var(--dsw-elevation-soft);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--dsw-ease-in-out);
+    transition-duration: var(--dsw-transition-duration);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .composerForm {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  .composerForm:focus-within {
+    border-color: var(--dsw-static-deepseek-400);
+  }
+
+  .composerInput {
+    max-height: 240px;
+    min-height: 36px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    resize: none;
+    background-color: #0000;
+    caret-color: var(--dsw-static-deepseek-400);
+    padding-inline: 16px;
+    padding-top: calc(var(--spacing) * 2.5);
+    font-size: 14px;
+    --tw-leading: 24px;
+    line-height: 24px;
+    overflow-wrap: break-word;
+    /*
+     * Hide the scrollbar but keep scrolling.
+     *
+     * max-height makes long input scrollable, and the default UA scrollbar
+     * paints accessible arrows on Windows that read as stray up/down widgets
+     * inside the field. The scroll affordance is still there (wheel, keyboard,
+     * caret), it just stops impersonating a control.
+     */
+    overflow-y: auto;
+    scrollbar-width: none;
+    color: var(--dsw-alias-label-primary);
+    --tw-outline-style: none;
+    outline-style: none;
+  }
+
+  .composerInput::-webkit-scrollbar {
+    display: none;
+  }
+
+  .composerInput::placeholder {
+    color: var(--dsw-alias-label-caption);
+  }
+
+  .composerInput:disabled {
+    cursor: not-allowed;
+    opacity: .6;
+  }
+
+  .composerBar {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding-inline: 8px;
+    padding-top: 2px;
+    padding-bottom: 6px;
+  }
+
+  /*
+   * Narrow-container degradation. The capsule is inside the transcript column,
+   * so its own width — not the viewport's — decides when the toolbar stops
+   * fitting. Below 560px the mode pills drop their text and the gaps tighten,
+   * which keeps the text area above ~180px instead of squeezing it to zero.
+   */
+  @container (max-width: 560px) {
+    .composerBar {
+      gap: 8px;
+    }
+
+    .attachLabel,
+    .slashButton,
+    .toolsButtonDisabled {
+      padding-inline: 6px;
+      font-size: 0;
+    }
+
+    .composerInput {
+      min-width: 180px;
+    }
+  }
+
+/*
+   * Add / attach — DSH's 28px circle on `--dsw-specific-selector` (#353638).
+   * It is a <label> wrapping a real file input, so the box must be the one that
+   * reads as a button; the label text is hidden once the box is circular (a
+   * circle cannot hold a word). The accessible name stays on the label via its
+   * `title` + the sr-only description element, so nothing about the AT contract
+   * changes.
+   */
+  .attachLabel {
+    display: inline-flex;
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--dsw-radius-pill);
+    background-color: var(--dsw-specific-selector);
+    font-size: 0;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .attachDisabled {
+    cursor: not-allowed;
+    color: var(--dsw-alias-label-caption);
+    opacity: 0.5;
+  }
+
+  .attachEnabled {
+    cursor: pointer;
+    transition-property: background-color;
+    transition-timing-function: var(--dsw-ease-in-out);
+    transition-duration: var(--dsw-transition-duration-fast);
+  }
+
+  @media(hover:hover) {
+    .attachEnabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover-solid);
+    }
+  }
+
+  .skillHint {
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    color: var(--ok-text);
+  }
+
+  @media(hover:hover) {
+    .skillHint:hover {
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  .toolsButtonDisabled {
+    display: inline-flex;
+    height: calc(var(--spacing) * 7);
+    cursor: not-allowed;
+    align-items: center;
+    border-radius: 10px;
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    background-color: #0000;
+    padding-inline: calc(var(--spacing) * 2.5);
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .slashButton {
+    display: inline-flex;
+    height: calc(var(--spacing) * 7);
+    align-items: center;
+    border-radius: 10px;
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    background-color: #0000;
+    padding-inline: calc(var(--spacing) * 2.5);
+    font-size: 12px;
+    color: var(--ink-soft);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .slashButton:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .slashButton:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .slashButton:disabled {
+    cursor: not-allowed;
+    color: var(--muted);
+  }
+
+  @media(hover:hover) {
+    .slashButton:disabled:hover {
+      background-color: #0000;
+    }
+  }
+
+/*
+   * Send — DSH's 34px circle, `--dsw-static-deepseek-400` (#7aaaff) with a
+   * white up-arrow. The button still contains the word "Send" in the DOM (and a
+   * matching sr-only string), because that text is its accessible name; the
+   * circle hides it visually instead of removing it.
+   */
+  .sendButton {
+    display: inline-flex;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    border-radius: var(--dsw-radius-pill);
+    background-color: var(--dsw-alias-button-info-fill);
+    font-size: 0;
+    color: #ffffff;
+    transition-property: background-color,opacity;
+    transition-timing-function: var(--dsw-ease-in-out);
+    transition-duration: var(--dsw-transition-duration-fast);
+  }
+
+  @media(hover:hover) {
+    .sendButton:hover {
+      background-color: var(--dsw-alias-button-info-hover);
+    }
+  }
+
+  .sendButton:disabled {
+    cursor: not-allowed;
+    opacity: .4;
+  }
+
+  /*
+   * The statistics dock follows the INPUT's width, not the column's.
+   *
+   * `composerForm` centres itself at `min(860px, 100%)`; a sibling that only
+   * fills `composerPad` would start at the column's left edge, so the readings
+   * drifted away from the input as the window widened. The same max-width plus
+   * the same `margin-inline: auto` keeps the two boxes edge-aligned at every
+   * width.
+   *
+   * NO horizontal padding here: the outer boxes must match. An earlier version
+   * added 16px to line the first pill up with the input's TEXT, which made the
+   * dock 32px narrower than the input and read as a misaligned floating row. The
+   * pills carry their own 2px inset instead (see stats-pills.module.css).
+   */
+  .composerDock {
+    margin-inline: auto;
+    max-width: min(860px, 100%);
+    margin-top: calc(var(--spacing) * 1.5);
+  }
+
+  .composerStatus {
+    margin-inline: auto;
+    margin-top: calc(var(--spacing) * 1.5);
+    max-width: 848px;
+    text-align: center;
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+}

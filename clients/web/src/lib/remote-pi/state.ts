@@ -75,7 +75,14 @@ export type PublicDiagnosticCode =
 const DIAGNOSTIC_MESSAGES: Readonly<Record<PublicDiagnosticCode, string>> = {
   relay_unreachable: "Could not reach the relay.",
   relay_auth_failed: "The relay refused this session key.",
-  host_timeout: "The host did not answer in time.",
+  // `host_timeout` means the relay accepted the frame but the host never
+  // answered: the machine is offline, asleep, or its supervisor lost the
+  // relay connection. The old text ("The host did not answer in time.")
+  // described the symptom without naming the cause or the next action, so a
+  // user with a valid pairing code reasonably concluded the CODE was bad.
+  host_timeout:
+    "The host machine did not answer. Check that it is powered on and that " +
+    "remote-pi-server is running there, then try again.",
   host_refused: "The host refused the connection.",
   pair_rejected: "The host rejected the pairing.",
   storage_unavailable: "Local storage for this session is unavailable.",

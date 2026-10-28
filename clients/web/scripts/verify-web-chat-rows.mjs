@@ -29,6 +29,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { APP_ORIGIN } from "./_cdp.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const siteRoot = join(here, "..");
@@ -45,7 +46,7 @@ function check(label, ok) {
   }
 }
 
-const source = readFileSync(join(siteRoot, "src/components/remote-pi/transcript-panel.tsx"), "utf8");
+const source = readFileSync(join(siteRoot, "src/components/remote-pi/chat/transcript-panel.tsx"), "utf8");
 
 // ── A. structure of the real file ──────────────────────────────────────────
 console.log("\nA. estrutura: linhas memo com key estável");
@@ -78,16 +79,21 @@ check("UserRow recebe só `text`", /function UserRow\(\{ text \}: \{ text: strin
 check("AgentRow recebe só `item`", /function AgentRow\(\{ item \}: \{ item: TranscriptAgentItem \}\)/.test(source));
 
 // ── B. render output of the real components ───────────────────────────────
-console.log("\nB. saída de render real (Next.js, HTTP)");
+console.log("\nB. saída de render real (Vite dev server, HTTP)");
 
 // Node cannot import `.tsx` directly, and rendering the panel in isolation would
 // bypass the real JSX transform anyway. Instead the running dev server is asked
-// for the actual page: that exercises Turbopack + the real components. If no
+// for the actual page: that exercises the Vite transform + the real components. If no
 // server is listening the check is reported as SKIPPED rather than passing
 // silently.
-const DEV_URL = process.env.WEB_DEV_URL ?? "http://localhost:3000";
-const userRowClassMatch = source.match(/const USER_ROW = "([^"]+)"/);
-const userBubbleClassMatch = source.match(/const USER_BUBBLE =\s*\n?\s*"([^"]+)"/);
+const DEV_URL = process.env.WEB_DEV_URL ?? APP_ORIGIN + "";
+// The row classes used to be Tailwind strings. They now come from the component's
+// CSS module (`css.userRow`), so the assertion accepts either form: what matters
+// is that the constant still exists and still carries a class, not that the class
+// is spelled inline. Pinning the old shape would have made a correct translation
+// look like a regression.
+const userRowClassMatch = source.match(/const USER_ROW =\s*\n?\s*(?:"([^"]+)"|css\.([A-Za-z0-9_]+))/);
+const userBubbleClassMatch = source.match(/const USER_BUBBLE =\s*\n?\s*(?:"([^"]+)"|css\.([A-Za-z0-9_]+))/);
 check("USER_ROW existe no arquivo", userRowClassMatch !== null);
 check("USER_BUBBLE existe no arquivo", userBubbleClassMatch !== null);
 
@@ -111,7 +117,7 @@ if (pageHtml === null) {
   check("não há bolha de user no transcript vazio", !pageHtml.includes("rounded-[14px_14px_4px_14px]"));
   // The dev server compiles this file; reaching the page at all proves the
   // extracted memo rows are syntactically and semantically valid JSX.
-  check("o arquivo com os memo rows compila no Turbopack", !pageHtml.includes("Unhandled Runtime Error"));
+  check("o arquivo com os memo rows compila no Vite", !pageHtml.includes("Unhandled Runtime Error"));
 }
 
 // ── C. memo contract ──────────────────────────────────────────────────────

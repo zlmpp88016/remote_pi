@@ -46,8 +46,10 @@ import {
   type TransportDiagnosticCode,
   type TransportTimeouts,
   type WebSocketFactory,
+  type WebSocketLike,
 } from "./client.ts";
 import type { Ed25519Backend, Ed25519Signer } from "./ed25519.ts";
+import { createSseWebSocketFactory } from "./sse-transport.ts";
 import {
   ActionRejectedError,
   HOST_WEB_ROOM_ID,
@@ -88,7 +90,7 @@ import {
   ModelCatalogueCache,
   catalogueKey,
   catalogueScope,
-  MODEL_CACHE_TTL_MS,
+  type CatalogueStorage,
 } from "./model-cache.ts";
 import {
   createConnectionState,
@@ -246,6 +248,10 @@ export interface RemotePiTransport {
   /** Plan/67 + 71 sessions: `session_list` → `session_list_ok`, and
    *  `session_read` → `session_read_ok` (read-only, no switch). */
   sendSessionList(hostEpk: string, roomId: string): string;
+  /** Replays the LIVE session transcript (`session_sync` → `session_history`).
+   *  The host never pushes it unprompted, so this must be called after a
+   *  resume/new to populate the transcript. */
+  sendSessionSync(hostEpk: string, roomId: string): string;
   sendSessionRead(
     hostEpk: string,
     roomId: string,
@@ -253,6 +259,7 @@ export interface RemotePiTransport {
     options?: { limit?: number; before?: string },
   ): string;
   sendSessionSwitch(hostEpk: string, roomId: string, sessionId: string): string;
+  sendSessionNew(hostEpk: string, roomId: string): string;
   onServerMessage(listener: (msg: ServerMessage, room: string) => void): () => void;
   onClose(listener: (code: TransportCloseCode) => void): () => void;
   /** OPTIONAL: the real client has it; a structural double may omit it. The
@@ -260,10 +267,85 @@ export interface RemotePiTransport {
   onDiagnostic?(listener: (code: TransportDiagnosticCode) => void): () => void;
   close(): void;
   readonly connected: boolean;
+  /**
+   * Milliseconds since the last inbound frame, or `null` when none has arrived
+   * yet.
+   *
+   * OPTIONAL so a structural double may omit it. `connected` alone cannot
+   * distinguish "the socket is open" from "the host is answering": a silent
+   * stall reports `connected: true` while every request goes unanswered, and
+   * that is precisely the failure the user could not describe.
+   */
+  lastInboundAgeMs?(): number | null;
   readonly backend: Ed25519Backend;
 }
 
 export type TransportFactory = (relayUrl: string) => RemotePiTransport;
+
+/**
+ * Direct-connection transport selection (plan/76, phase 1).
+ *
+ * `"sse"` swaps the WebSocket for an HTTP + Server-Sent-Events pair. It is
+ * OPT-IN rather than auto-detected on purpose: auto-detecting would silently
+ * change the transport for every existing user, and the two channels have
+ * different failure modes (see `sse-transport.ts`).
+ *
+ * Omitting this field keeps the WebSocket path byte-for-byte unchanged.
+ */
+export type DirectTransportKind = "sse";
+
+/**
+ * Build a socket factory that picks SSE for a same-origin relay and WebSocket
+ * otherwise.
+ *
+ * "Same origin" is the only condition under which the SSE endpoints exist: the
+ * direct server hosts the page AND `/api/events`, so a matching relay URL means the
+ * transport is reachable over plain HTTP. Any other relay — a community host, a
+ * remote machine, the vite dev server — has no such endpoint and keeps the socket.
+ *
+ * @param fallback - the WebSocket factory to use for a non-matching relay.
+ * @returns a factory deciding per URL.
+ */
+function autoDirectSocketFactory(
+  fallback: WebSocketFactory | undefined,
+): WebSocketFactory {
+  /* One SSE factory per origin, so repeated connects share the same base URL. */
+  const cache = new Map<string, WebSocketFactory>();
+
+  return (url: string, protocols: string[]): WebSocketLike => {
+    const origin = originOfSocketUrl(url);
+    const pageOrigin = typeof location === "undefined" ? null : location.origin;
+
+    if (origin === null || pageOrigin === null || origin !== pageOrigin) {
+      /* Not same-origin: the SSE endpoints do not exist there. */
+      if (fallback !== undefined) return fallback(url, protocols);
+      return new WebSocket(url, protocols) as unknown as WebSocketLike;
+    }
+
+    let factory = cache.get(origin);
+    if (factory === undefined) {
+      factory = createSseWebSocketFactory({ baseUrl: origin });
+      cache.set(origin, factory);
+    }
+    return factory(url, protocols);
+  };
+}
+
+/**
+ * Turn a `ws(s)://host:port/...` relay URL into its `http(s)://host:port` origin.
+ *
+ * @param url - the relay URL.
+ * @returns the origin, or `null` when the URL does not parse.
+ */
+function originOfSocketUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const protocol = parsed.protocol === "wss:" ? "https:" : "http:";
+    return `${protocol}//${parsed.host}`;
+  } catch {
+    return null;
+  }
+}
 
 // ── retry policy ───────────────────────────────────────────────────────────
 
@@ -295,6 +377,31 @@ export interface RemotePiAdapterOptions {
   deviceName?: string;
   timeouts?: Partial<TransportTimeouts>;
   webSocketFactory?: WebSocketFactory;
+  /**
+   * Select a non-WebSocket transport for a direct (relay-less) connection.
+   *
+   * `"sse"` builds an SSE factory from `directBaseUrl`. Omitted keeps the
+   * WebSocket path untouched.
+   */
+  directTransport?: DirectTransportKind;
+  /**
+   * Origin that serves both the SSE stream and the POST endpoint when
+   * `directTransport` is set, e.g. `http://127.0.0.1:4124`. Required with
+   * `directTransport`, ignored without it.
+   */
+  directBaseUrl?: string;
+  /**
+   * Use the SSE transport automatically whenever the relay URL is THIS page's own
+   * origin.
+   *
+   * The direct server serves the page, the relay WebSocket and the SSE endpoints on
+   * one port, so a browser loaded from it can talk HTTP instead of opening a socket.
+   * A remote relay, or the vite dev server proxying elsewhere, never matches and
+   * keeps the WebSocket — the decision is per connection, not per adapter.
+   *
+   * Opt-in so the default path is byte-identical to before this option existed.
+   */
+  directAuto?: boolean;
   forceBackend?: Ed25519Backend;
   signerFactory?: () => Promise<Ed25519Signer>;
   /** Injected persistence. `undefined` (default) resolves browser storage
@@ -476,11 +583,11 @@ export class RemotePiAdapter {
   private storedCredential: StoredSession | null = null;
 
   private transport: RemotePiTransport | null = null;
-  /** `list_models` catalogues, keyed per (relay, host, room). Cleared whenever
-   *  the pairing identity changes — see `applyCatalogueCacheScope`. */
-  private readonly modelCache = new ModelCatalogueCache<WireModel, WireModel>(
-    MODEL_CACHE_TTL_MS,
-  );
+  /** `list_models` catalogues, keyed per (relay, host, room). Persisted into
+   *  the same storage the pairing uses, so a page reload does NOT go back to
+   *  "asking the host" for a catalogue the machine already answered. Cleared
+   *  whenever the pairing identity changes — see `applyCatalogueCacheScope`. */
+  private readonly modelCache: ModelCatalogueCache<WireModel, WireModel>;
   /** Identity triple the cache currently belongs to, so a change in ANY of
    *  relay/host/room is detected even when the phase never left `connected`. */
   private cacheScope: string | null = null;
@@ -549,9 +656,39 @@ export class RemotePiAdapter {
     this.now = options.now ?? Date.now;
     this.retryPolicy = { ...DEFAULT_RETRY_POLICY, ...options.retry };
     this.storage = options.storage === undefined ? undefined : options.storage;
+    // Build the catalogue cache over the SAME store the pairing uses, so a
+    // reload can answer `list_models` from disk instead of asking a host that
+    // may well be offline. A throwing storage access degrades to memory-only:
+    // a picker must never fail because storage is unavailable.
+    let catalogueStorage: CatalogueStorage | null = null;
+    try {
+      const store =
+        this.storage === undefined ? browserSessionStorage() : this.storage;
+      if (this.storage === undefined) this.storage = store;
+      catalogueStorage = store === null ? null : (store as unknown as CatalogueStorage);
+    } catch {
+      catalogueStorage = null;
+    }
+    this.modelCache = new ModelCatalogueCache<WireModel, WireModel>(catalogueStorage);
     this.state = createConnectionState({ phase: this.enabled ? "idle" : "disabled", now: this.now() });
 
     const injected = options.transportFactory;
+    /*
+     * Direct mode swaps ONLY the socket factory. Everything the client does
+     * above the socket — addressing, request ids, hydration — is untouched, so
+     * a bug in the transport cannot corrupt protocol state.
+     *
+     * `directAuto` resolves PER URL, because the factory is invoked once per
+     * connection and the same page can pair with a remote relay today and the
+     * local server tomorrow. Only a relay that IS this page's own origin can speak
+     * the SSE transport; anything else keeps the WebSocket.
+     */
+    const socketFactory =
+      options.directTransport === "sse" && options.directBaseUrl !== undefined
+        ? createSseWebSocketFactory({ baseUrl: options.directBaseUrl })
+        : options.directAuto === true
+          ? autoDirectSocketFactory(options.webSocketFactory)
+          : options.webSocketFactory;
     this.transportFactory =
       injected ??
       ((relayUrl) =>
@@ -559,9 +696,9 @@ export class RemotePiAdapter {
           relayUrl,
           ...(options.deviceName === undefined ? {} : { deviceName: options.deviceName }),
           ...(options.timeouts === undefined ? {} : { timeouts: options.timeouts }),
-          ...(options.webSocketFactory === undefined
+          ...(socketFactory === undefined
             ? {}
-            : { webSocketFactory: options.webSocketFactory }),
+            : { webSocketFactory: socketFactory }),
           ...(options.forceBackend === undefined ? {} : { forceBackend: options.forceBackend }),
           ...(options.signerFactory === undefined ? {} : { signerFactory: options.signerFactory }),
         }));
@@ -683,6 +820,11 @@ export class RemotePiAdapter {
     this.storedCredential = stored;
     this.storedPairing =
       stored === null ? null : { name: stored.name, relayUrl: stored.relayUrl };
+    // Bind the catalogue scope NOW, before any connect attempt. The stored
+    // catalogue is persisted, so this is what lets the picker paint instantly
+    // on reload instead of waiting for a handshake that may never complete
+    // (offline host).
+    if (stored !== null) this.applyCatalogueCacheScope(stored.relayUrl, stored.hostEpk);
 
     if (stored === null) {
       this.notify();
@@ -706,6 +848,13 @@ export class RemotePiAdapter {
   /** Terminal explicit FORGET/UNPAIR: cancels everything, clears the stored
    *  credential (memory first, then disk) before any listener runs, then
    *  emits `closing → closed`. Never reconnects. */
+  /** Forwarded from the transport: how long since the host last spoke. */
+  lastInboundAgeMs(): number | null {
+    const t = this.transport;
+    if (t === null || t.lastInboundAgeMs === undefined) return null;
+    return t.lastInboundAgeMs();
+  }
+
   close(): void {
     if (this.closed || this.disposed) return;
     this.closed = true;
@@ -885,15 +1034,38 @@ export class RemotePiAdapter {
   }
 
   /**
-   * The cached catalogue for `roomId` on the ACTIVE pairing, or null. The
+   *  The cached catalogue for `roomId` on the ACTIVE pairing, or null. The
    *  identity is re-derived here, so a caller can never read a catalogue that a
    *  different host reported.
+   *
+   *  Scope resolution deliberately does NOT require a live connection. After a
+   *  reload the adapter has restored the stored pairing but may not have
+   *  finished reconnecting (or the host may be offline) — gating on
+   *  `cacheScope` alone made that window render "asking the host…" for a
+   *  catalogue already on disk. It therefore falls back to deriving the scope
+   *  from the stored credential.
    */
   readCachedModels(
     roomId: string,
   ): { models: readonly WireModel[]; current: WireModel | undefined } | null {
-    if (this.credential === null || this.cacheScope === null) return null;
-    return this.modelCache.get(catalogueKey(this.cacheScope, roomId));
+    const scope = this.cacheScope ?? this._scopeFromStored();
+    if (scope === null) return null;
+    return this.modelCache.get(catalogueKey(scope, roomId));
+  }
+
+  /** Catalogue scope derived from the STORED pairing (no live connection
+   *  needed). Null when nothing is stored. Normalises the relay exactly like
+   *  `applyCatalogueCacheScope` so both compute the same key. */
+  private _scopeFromStored(): string | null {
+    const stored = this.storedCredential;
+    if (stored === null) return null;
+    let normalized: string;
+    try {
+      normalized = normalizeRelayUrl(stored.relayUrl);
+    } catch {
+      normalized = `raw:${stored.relayUrl}`;
+    }
+    return catalogueScope(normalized, stored.hostEpk);
   }
 
   /** Drops ONE room's cached catalogue: this client changed the active model
@@ -957,6 +1129,15 @@ export class RemotePiAdapter {
     return transport.sendSessionList(credential.hostEpk, roomId);
   }
 
+  /** Replays the LIVE session's transcript (`session_sync`). The host answers
+   *  with a `session_history` frame, which is the only source of the live
+   *  transcript: a freshly respawned process has an empty mirror, so without
+   *  this a resumed session shows no history at all. */
+  syncSession(roomId: string): string {
+    const { transport, credential } = this.requireLive();
+    return transport.sendSessionSync(credential.hostEpk, roomId);
+  }
+
   /** `session_read` — one session's transcript, WITHOUT switching the live
    *  session. The reply arrives via `onServerMessage` tagged with `roomId`. */
   readSession(
@@ -973,6 +1154,13 @@ export class RemotePiAdapter {
   switchSession(roomId: string, sessionId: string): string {
     const { transport, credential } = this.requireLive();
     return transport.sendSessionSwitch(credential.hostEpk, roomId, sessionId);
+  }
+
+  /** `session_new` — start a fresh AgentSession in this workspace. Answered
+   *  with the generic `action_ok`/`action_error` pair. */
+  newSession(roomId: string): string {
+    const { transport, credential } = this.requireLive();
+    return transport.sendSessionNew(credential.hostEpk, roomId);
   }
 
   // ── internals: catalogue cache ───────────────────────────────────────────
@@ -994,7 +1182,12 @@ export class RemotePiAdapter {
       normalized = `raw:${relayUrl}`;
     }
     const scope = catalogueScope(normalized, hostEpk);
-    if (scope !== this.cacheScope) this.modelCache.clear();
+    // Clear only on a real SCOPE CHANGE, never on the first bind. `cacheScope`
+    // starts null, and restore() binds it from the stored credential so the
+    // picker can paint from disk before connecting — clearing there would
+    // delete the very rows that make a reload instant, and reset `cacheScope`
+    // back to null on the next page load, reproducing the bug forever.
+    if (this.cacheScope !== null && scope !== this.cacheScope) this.modelCache.clear();
     this.cacheScope = scope;
   }
 

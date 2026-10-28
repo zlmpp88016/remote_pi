@@ -1,0 +1,337 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+
+  /*
+   * The copy action is no longer absolutely positioned over the code: it is a
+   * real child of the banner, which is what makes it reachable by Tab instead
+   * of only by hover.
+   */
+  .copyButton {
+    flex-shrink: 0;
+    display: inline-flex;
+    height: 24px;
+    align-items: center;
+    gap: 4px;
+    border-radius: var(--dsw-radius-sm);
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    background-color: transparent;
+    padding-inline: 8px;
+    font-family: var(--ff-mono);
+    font-size: 11px;
+    color: var(--dsw-alias-label-secondary);
+    opacity: 1;
+    cursor: pointer;
+    transition-property: color,background-color;
+    transition-timing-function: var(--dsw-ease-in-out);
+    transition-duration: var(--dsw-transition-duration-fast);
+  }
+
+  @media(hover:hover) {
+    .copyButton:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  .copyButton:focus-visible {
+    outline: var(--dsw-focus-outline);
+    outline-offset: var(--dsw-focus-outline-offset);
+  }
+
+  .copyButton[data-copied] {
+    color: var(--dsw-alias-state-success-primary);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .copyButton {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+      background-color: color-mix(in oklab,var(--bg-app) 90%,transparent);
+    }
+  }
+
+  @media(hover:hover) {
+    .copyButton:is(:where(.group):hover *) {
+      opacity: 1;
+    }
+  }
+
+  .copyButton:focus {
+    opacity: 1;
+  }
+
+  .copyButton[data-copied] {
+    color: var(--ok-text);
+  }
+
+  .unsafeLink {
+    color: var(--muted);
+  }
+
+  .link {
+    color: var(--accent);
+    text-decoration-line: underline;
+    text-decoration-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 40%, transparent);
+    text-underline-offset: 2px;
+  }
+
+  @media(hover:hover) {
+    .link:hover {
+      -webkit-text-decoration-color: var(--accent);
+      text-decoration-color: var(--accent);
+    }
+  }
+
+  .codeBlock {
+    display: block;
+    white-space: pre;
+  }
+
+  .codeInline {
+    border-radius: 5px;
+    background-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 10%, transparent);
+    padding-inline: calc(var(--spacing) * 1.5);
+    padding-block: calc(var(--spacing) * .5);
+    font-family: var(--ff-mono);
+    font-size: 12.5px;
+    color: var(--ok-text);
+  }
+
+  .preWrap {
+    position: relative;
+    margin-block: calc(var(--spacing) * 2);
+  }
+  /* !! missing: group */
+
+  /*
+   * Two-segment code block. The banner owns the TOP corners (12px), the body
+   * owns the BOTTOM ones; the touching edges stay square so the pair reads as
+   * one card. Colours are DSH's markdown tokens: banner = layer-2 (#2c2c2e),
+   * body = the darker code surface (#1b1b1c).
+   */
+  .pre {
+    overflow-x: auto;
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-bottom-left-radius: var(--dsw-radius-md);
+    border-bottom-right-radius: var(--dsw-radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 0;
+    background-color: var(--dsw-alias-markdown-code-block);
+    padding: 12px 16px;
+    font-family: var(--ff-mono);
+    font-size: 13px;
+    --tw-leading: 20px;
+    line-height: 20px;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .pre {
+      background-color: var(--dsw-alias-markdown-code-block);
+    }
+  }
+
+  .preBanner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: calc(var(--spacing) * 2);
+    border-top-left-radius: var(--dsw-radius-md);
+    border-top-right-radius: var(--dsw-radius-md);
+    background-color: var(--dsw-alias-markdown-code-block-banner);
+    padding: 6px 8px 6px 16px;
+    min-height: 32px;
+  }
+
+  .preLang {
+    font-family: var(--ff-mono);
+    font-size: 12px;
+    color: var(--dsw-alias-label-secondary);
+    text-transform: lowercase;
+  }
+
+  .p {
+    margin-block: calc(var(--spacing) * 1.5);
+    --tw-leading: 1.62;
+    line-height: 1.62;
+  }
+
+  .p:first-child {
+    margin-top: 0;
+  }
+
+  .p:last-child {
+    margin-bottom: 0;
+  }
+
+  .ul {
+    margin-block: calc(var(--spacing) * 1.5);
+    list-style-type: disc;
+    padding-left: calc(var(--spacing) * 5);
+  }
+  /* !! missing: space-y-0.5 */
+
+  .ol {
+    margin-block: calc(var(--spacing) * 1.5);
+    list-style-type: decimal;
+    padding-left: calc(var(--spacing) * 5);
+  }
+  /* !! missing: space-y-0.5 */
+
+  .li {
+    --tw-leading: 1.62;
+    line-height: 1.62;
+  }
+
+  .li>p {
+    margin-block: 0;
+  }
+
+  .h3 {
+    margin-bottom: var(--spacing);
+    margin-top: calc(var(--spacing) * 3);
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .h3:first-child {
+    margin-top: 0;
+  }
+
+  .h4 {
+    margin-bottom: var(--spacing);
+    margin-top: calc(var(--spacing) * 2.5);
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .h4:first-child {
+    margin-top: 0;
+  }
+
+  .h5 {
+    margin-bottom: var(--spacing);
+    margin-top: calc(var(--spacing) * 2);
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    color: var(--ink-soft);
+  }
+
+  .h5:first-child {
+    margin-top: 0;
+  }
+
+  .h6 {
+    margin-bottom: var(--spacing);
+    margin-top: calc(var(--spacing) * 2);
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    color: var(--muted);
+  }
+
+  .h6:first-child {
+    margin-top: 0;
+  }
+
+  .blockquote {
+    margin-block: calc(var(--spacing) * 2);
+    border-left-style: var(--tw-border-style);
+    border-left-width: 2px;
+    border-color: #fff3;
+    padding-left: calc(var(--spacing) * 3);
+    color: var(--muted);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .blockquote {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  .hr {
+    margin-block: calc(var(--spacing) * 3);
+    border-color: var(--dsw-alias-border-l2);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .hr {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  .tableWrap {
+    margin-block: calc(var(--spacing) * 2);
+    overflow-x: auto;
+  }
+
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .th {
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    background-color: var(--dsw-alias-bg-layer-2);
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: var(--spacing);
+    text-align: left;
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .th {
+      border-color: var(--dsw-alias-border-l2);
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  .td {
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: var(--spacing);
+    vertical-align: top;
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .td {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  .strong {
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .em {
+    font-style: italic;
+  }
+
+  .root {
+    font-size: 14.8px;
+    color: var(--ink-soft);
+    overflow-wrap: anywhere;
+  }
+}

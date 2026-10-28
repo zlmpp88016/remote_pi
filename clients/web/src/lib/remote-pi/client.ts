@@ -203,7 +203,7 @@ interface HandshakeFailureGate {
   release: () => void;
 }
 
-type WebSocketLike = {
+export type WebSocketLike = {
   send(data: string): void;
   close(): void;
   addEventListener(type: SocketEventType, listener: (event: unknown) => void): void;
@@ -293,8 +293,27 @@ export class RemotePiWebClient {
   private socket: WebSocketLike | null = null;
   private _signer: Ed25519Signer | null = null;
   private pending = new Map<string, PendingRequest>();
+  /**
+   * Liveness clock for the APPLICATION layer.
+   *
+   * A WebSocket `readyState === OPEN` says the socket is up, not that the host is
+   * answering. A silent stall — the page reports "host connected" while every
+   * request goes unanswered — is invisible without a record of the last inbound
+   * frame, which is exactly why it was reported as "nothing works and nothing
+   * says why".
+   */
+  private lastInboundAt = 0;
   private retired = new Map<string, "settled" | "expired">();
   private childRooms = new Set<string>();
+  /** `session_sync` ids → the room they were addressed to.
+   *
+   * `session_sync` is fire-and-forget: it registers no pending entry, so its
+   * `session_history` reply cannot be routed by `in_reply_to`. This map is the
+   * only link between the two, and it is what keeps the reply from being
+   * discarded as an unknown room. Bounded: an entry is dropped when its reply
+   * arrives, and the whole map is cleared on close.
+   */
+  private syncRooms = new Map<string, string>();
   private listeners = new Set<(msg: ServerMessage, room: string) => void>();
   /** Dedicated `workspace_state` sink — lifecycle pushes never enter the
    *  generic message stream (and therefore never reach chat forwarding). */
@@ -453,6 +472,34 @@ export class RemotePiWebClient {
           this.track(socket, "close", () => reject(new TransportError("connect_failed")));
         }), handshakeFailed);
       this.releaseSince(openStep);
+
+      /*
+       * SSE carries an ALREADY-AUTHENTICATED connection.
+       *
+       * In direct mode the server holds a single in-process `RelayClient` whose
+       * challenge/auth handshake completed when the stream opened. The browser never
+       * holds the relay's keystore material, so it cannot answer a challenge and must
+       * not try: `hello`/`auth` would be forwarded as ordinary frames and the wait
+       * for `challenge` would run to timeout while the server log looked healthy.
+       *
+       * So the relay handshake is skipped entirely and only the frame plumbing below
+       * is installed.
+       */
+      if (socket.protocol === "sse") {
+        this.track(socket, "message", (event: unknown) => {
+          if (generation !== this.generation || this.closed) return;
+          const text = (event as { data?: unknown }).data;
+          if (typeof text !== "string") return;
+          this.onFrame(text);
+        });
+        this.track(socket, "close", () => {
+          if (generation !== this.generation || this.closed) return;
+          this.onDropped();
+        });
+        failureGate.release();
+        this.handshakeDone = true;
+        return;
+      }
 
       const hello: ClientMessage = {
         type: "hello",
@@ -755,6 +802,27 @@ export class RemotePiWebClient {
     return this._forwardToRoom(hostEpk, roomId, (id) => ({ type: "session_list", id }));
   }
 
+  /**
+   * Asks the host to replay the LIVE session's transcript (`session_sync`).
+   *
+   * The reply is a `session_history` frame carrying the same event vocabulary as
+   * `session_read`. This is the ONLY way to obtain the live transcript: the host
+   * does not push it unprompted, so a fresh process (a resumed session, a `/new`)
+   * leaves the client with nothing to show until it asks.
+   */
+  sendSessionSync(hostEpk: string, roomId: string): string {
+    return this._forwardToRoom(hostEpk, roomId, (reqId) => ({ type: "session_sync", id: reqId }));
+  }
+
+  /** Room addressed by the `session_sync` this `session_history` answers. */
+  private roomOfRememberedSync(msg: ServerMessage): string | null {
+    const replyTo = (msg as { in_reply_to?: unknown }).in_reply_to;
+    if (typeof replyTo !== "string" || replyTo === "") return null;
+    const room = this.syncRooms.get(replyTo) ?? null;
+    if (room !== null) this.syncRooms.delete(replyTo);
+    return room;
+  }
+
   /** Reads ONE session's transcript (`session_read`) WITHOUT switching it.
    *  `sessionId` must be one the host listed; a path is refused host-side. */
   sendSessionRead(
@@ -783,6 +851,22 @@ export class RemotePiWebClient {
     }));
   }
 
+  /**
+   * Starts a fresh AgentSession in the workspace (`session_new`).
+   *
+   * Answered with `action_ok` / `action_error`, so the caller correlates on the
+   * returned id and must ALSO expect the host to fan out an empty
+   * `session_history` — a new session has no turns, and that broadcast is what
+   * makes the transcript clear. The id is returned so the UI can mark the
+   * control busy until the reply lands.
+   */
+  sendSessionNew(hostEpk: string, roomId: string): string {
+    return this._forwardToRoom(hostEpk, roomId, (id) => ({
+      type: "session_new",
+      id,
+    }));
+  }
+
   /** ONE host_forward sender shared by the typed actions above: mint the inner
    *  id, wrap the inner message, send on the host room and remember the room
    *  (addressing a room is the client's own statement that it exists). */
@@ -800,7 +884,42 @@ export class RemotePiWebClient {
     };
     this.rawSend(hostEpk, HOST_ROOM, forward);
     this.rememberRoom(roomId);
+    /*
+     * Remember which room this request belongs to, for EVERY proxied action.
+     *
+     * `_forwardToRoom` registers no `pending` entry, so when the reply comes back
+     * `proxyRoomFor` cannot correlate it by `in_reply_to` and has to fall back to
+     * the frame's own `room` field. When that field does not name a known child
+     * room the reply was discarded as `unknown_child_room` — the request looked
+     * like it had never been answered, the client waited out its full timeout, and
+     * the whole session panel stayed empty while the host had answered correctly
+     * and quickly (measured: `SessionManager.list` = 135ms).
+     *
+     * This was first patched for `session_sync` alone, as a special case, which
+     * left every other proxied action (list, read, switch, new, models, skills)
+     * exposed to the same silent drop. Recording it HERE covers all of them by
+     * construction, so a new proxied action cannot reintroduce the bug.
+     */
+    this.syncRooms.set(id, roomId);
+    if (this.syncRooms.size > 64) {
+      // A reply that never came must not leak. The oldest entry is the least
+      // likely to still be needed.
+      const oldest = this.syncRooms.keys().next();
+      if (!oldest.done) this.syncRooms.delete(oldest.value);
+    }
     return id;
+  }
+
+  /**
+   * Milliseconds since the last inbound frame, or null when none has arrived.
+   *
+   * Exposed so the UI can tell "the socket is open" apart from "the host is
+   * answering". A silent stall looks identical to a healthy connection through
+   * `connected` alone.
+   */
+  lastInboundAgeMs(): number | null {
+    if (this.lastInboundAt === 0) return null;
+    return Date.now() - this.lastInboundAt;
   }
 
   /** Terminal. Cancels everything this client owns, in an order in which no
@@ -1061,6 +1180,10 @@ export class RemotePiWebClient {
 
   /** One inbound frame: validated first, then dispatched by kind. */
   private onFrame(text: string): void {
+    // Any inbound frame proves the host is still serving, including one that is
+    // later rejected: the liveness question is "is it answering", not "did this
+    // particular frame apply".
+    this.lastInboundAt = Date.now();
     let decoded: DecodedEnvelope<ServerMessage>;
     try {
       decoded = decodeOuterChecked(text);
@@ -1123,6 +1246,21 @@ export class RemotePiWebClient {
   /** Host-room message: `in_reply_to` settles the request that declared this
    *  id, nothing else. A reply that matches no live request is NOT a push. */
   private onHostFrame(msg: ServerMessage): void {
+    /*
+     * `session_history` is a FAN-OUT, not an RPC reply, even though it carries
+     * the `in_reply_to` of the `session_sync` that asked for it.
+     *
+     * `_forwardToRoom` deliberately registers no pending entry — those calls are
+     * fire-and-forget room writes — so treating this frame as a reply dropped it
+     * as `unknown_reply`. That silently discarded the whole live transcript: the
+     * resumed/new session rendered zero turns while the host had answered with
+     * 33 events, and no amount of client-side retrying could recover it because
+     * every retry was answered and thrown away identically.
+     */
+    if (msg.type === "session_history") {
+      this.roomOfRememberedSync(msg);  // consume the correlation entry
+      this.emitMessage(msg, HOST_ROOM); return;
+    }
     const id = typeof msg.in_reply_to === "string" ? msg.in_reply_to : null;
     if (id === null) {
       this.emitMessage(msg, HOST_ROOM);
@@ -1147,11 +1285,6 @@ export class RemotePiWebClient {
       this.diagnose("malformed_proxy");
       return;
     }
-    const room = msg.room;
-    if (room === HOST_ROOM || !this.childRooms.has(room)) {
-      this.diagnose("unknown_child_room");
-      return;
-    }
     let inner: ServerMessage;
     try {
       inner = decodeCtChecked(msg.ct);
@@ -1163,10 +1296,77 @@ export class RemotePiWebClient {
       this.diagnose("malformed_proxy"); // no nested proxies
       return;
     }
+    // The child room is NOT `msg.room`.
+    //
+    // The relay rewrites every delivered envelope with the SENDER's identity
+    // (`relay/src/handlers/peer.rs`: "Rewrite: recipient sees sender's peer_id
+    // + sender's room_id"), and the host connection that re-emits a proxied
+    // child reply always sits on the HOST room. So `msg.room` is `"host"` for
+    // every proxied child frame, no matter what the daemon puts there.
+    //
+    // The room that matters is the one the request was ADDRESSED to: the proxy
+    // rooms this client learned from `workspace_list` (childRooms). The reply's
+    // `in_reply_to` selects exactly one pending request, so its room is known
+    // without guessing. When nothing correlates, fall back to `msg.room` only
+    // if it is a real child room (older/host-side traffic that still sets it).
+    const room = this.proxyRoomFor(inner, msg.room);
+    if (room === null) {
+      /*
+       * Fall back to the room this request was sent to.
+       *
+       * `_forwardToRoom` registers no pending entry, so `proxyRoomFor` relies on
+       * the frame's own `room`, which is not always present. Dropping the frame
+       * there loses the reply to a request the host DID answer — the session panel
+       * staying empty while every listing completed in ~135ms. `_forwardToRoom`
+       * now records id→room for all proxied actions, so the lookup covers list,
+       * read, switch, new, models, skills and history alike instead of only
+       * `session_history`.
+       */
+      const sent = this.roomOfRememberedSync(inner);
+      if (sent !== null) {
+        this.emitMessage(inner, sent);
+        return;
+      }
+      this.diagnose("unknown_child_room");
+      return;
+    }
     // A proxied child frame is CHILD-room traffic even when it names
     // `workspace_state`: the host state of this machine never travels inside
     // a host_message, so it is filed here and can never alter host state.
     this.emitMessage(inner, room);
+  }
+
+  /** The child room a proxied frame belongs to, or null when it cannot be told.
+   *
+   *  Preference order:
+   *   1. `candidate` when it is a room this client already knows as a child
+   *      (the daemon sets it, and the relay preserves it for child-room
+   *      traffic);
+   *   2. the room of the pending request this frame answers (`in_reply_to`);
+   *   3. the room `_forwardToRoom` recorded for this request id.
+   *
+   *  Step 3 matters because `_forwardToRoom` mints the id and returns it without
+   *  registering anything in `pending` — that table is only populated by the
+   *  paths that also set up a timeout. So for `session_list`, `session_read`,
+   *  `session_switch`, `session_new`, models and skills, steps 1 and 2 both miss
+   *  whenever the reply does not echo a known child room, and the reply was
+   *  dropped as `unknown_child_room`: the panel stayed empty while the host had
+   *  answered in ~135ms and logged `asked=hit`.
+   *
+   *  Never `HOST_ROOM`, and never a guess: an unknown room stays unknown so the
+   *  frame is dropped rather than filed under a room it does not belong to. */
+  private proxyRoomFor(inner: ServerMessage, candidate: string): string | null {
+    if (candidate !== HOST_ROOM && this.childRooms.has(candidate)) return candidate;
+    const replyTo = (inner as { in_reply_to?: unknown }).in_reply_to;
+    if (typeof replyTo === "string" && replyTo !== "") {
+      const pending = this.pending.get(replyTo);
+      if (pending !== undefined && pending.room !== HOST_ROOM && this.childRooms.has(pending.room)) {
+        return pending.room;
+      }
+      const remembered = this.syncRooms.get(replyTo);
+      if (remembered !== undefined && remembered !== HOST_ROOM) return remembered;
+    }
+    return null;
   }
 
   /** A live request's own reply: the kind must be the one the request
@@ -1291,5 +1491,6 @@ export class RemotePiWebClient {
       pending.reject(err);
     }
     this.pending.clear();
+    this.syncRooms.clear();
   }
 }

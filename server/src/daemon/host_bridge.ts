@@ -55,6 +55,137 @@ export interface HostBridgeOptions {
   /** Plan/69 — pairing-token source for the host-room `pair_request` handler.
    *  Defaults to the process-wide store (`hostPairing`). */
   pairing?: HostPairingSession;
+  /**
+   * Plan/76 — identity the in-process SSE endpoint dials with.
+   *
+   * When set, this peer is treated as local: it bypasses the persisted
+   * allow-list, because it is the server's OWN loopback connection, not a remote
+   * device. Only ever set from `direct.ts`, where the listener is bound to
+   * loopback and every non-loopback request has already been refused by the
+   * origin/host gate.
+   */
+  localPeer?: string;
+  /**
+   * Plan/76 phase two — delivery channel for frames addressed to a browser peer.
+   *
+   * Defaults to sending the frame over the relay, which is byte-for-byte what
+   * this class did before the option existed. A same-origin deployment can supply
+   * a direct implementation so browser replies never enter the relay's routing
+   * table at all.
+   *
+   * Child-daemon IPC does NOT go through this sink: `_forwardToChild` keeps using
+   * `this.relay` and `_isOwnKeyInbound` keeps its inference. Only the
+   * browser-facing direction is redirectable.
+   */
+  replySink?: ReplySink;
+}
+
+/**
+ * Delivers one already-encoded frame to a browser peer.
+ *
+ * `frame` is the inner `ServerMessage` JSON with `ct` already base64-encoded by the
+ * caller, so an implementation only has to decide HOW to hand it over, never how
+ * to shape it.
+ */
+export interface ReplySink {
+  /**
+   * @param peer - destination peer (the browser's public key).
+   * @param frame - the encoded envelope to deliver.
+   * @returns `true` when this sink owns `peer` and delivered the frame; `false`
+   *          to let the caller fall back to the relay. A WebSocket client is not
+   *          an SSE stream, so declining is the normal answer for it.
+   */
+  deliver(peer: string, frame: string): boolean;
+}
+
+/**
+ * Registry of in-process SSE peers that skip the pairing allow-list.
+ *
+ * One entry per OPEN stream. Each stream mints its own ephemeral keypair, so
+ * this is a SET keyed by public key, not a single "the local peer" value.
+ *
+ * Why per-stream keys instead of reusing the host's: the relay routes by
+ * `(peer, room)` and skips only the SENDING socket. When every stream shared the
+ * host's key, tab B received tab A's outbound frames (measured: tabB got 2
+ * frames for tabA's 1 request). Per-stream keys give each tab its own routing
+ * bucket, so replies land only where they belong.
+ */
+const localSsePeers = new Set<string>();
+
+/**
+ * Authorise one in-process SSE peer to talk to the host room without a pairing
+ * code.
+ *
+ * @param peer - the stream's public key, base64.
+ * @returns an idempotent revoker; call it when the stream closes.
+ */
+export function authoriseLocalPeer(peer: string): () => void {
+  localSsePeers.add(peer);
+  return () => {
+    localSsePeers.delete(peer);
+  };
+}
+
+/**
+ * Plan/76 phase two: the live bridge's local-injection entry point.
+ *
+ * Set while a `HostBridge` is running, cleared on stop. The SSE endpoint calls it to
+ * hand a browser frame straight to the bridge instead of POSTing it back through the
+ * relay and waiting for the relay to route it to this same process.
+ *
+ * A function rather than the instance itself, so a stopped bridge cannot be called
+ * through a stale reference.
+ */
+let localInbound: ((line: string) => boolean) | null = null;
+
+/**
+ * Plan/76 phase two: the live SSE endpoint's reply delivery.
+ *
+ * Registered by `sse_endpoint` on module load and left null in a WebSocket-only
+ * run. Keeping it as a registry here (instead of importing `sse_endpoint` from the
+ * supervisor) avoids dragging the relay client and its WebSocket stack into every
+ * process that merely imports the supervisor.
+ */
+let sseReplySink: ((peer: string, frame: string) => boolean) | null = null;
+
+/**
+ * Register the SSE endpoint's reply delivery.
+ *
+ * @param sink - delivers an encoded frame to the stream that owns `peer`, or
+ *               returns `false` when `peer` is not an SSE stream.
+ * @returns a function that unregisters it.
+ */
+export function registerSseReplySink(
+  sink: (peer: string, frame: string) => boolean,
+): () => void {
+  sseReplySink = sink;
+  return () => {
+    if (sseReplySink === sink) sseReplySink = null;
+  };
+}
+
+/**
+ * Try to deliver a host reply to a local SSE stream.
+ *
+ * @param peer - destination peer.
+ * @param frame - encoded envelope.
+ * @returns `true` only when an SSE stream owned `peer` and took the frame. A
+ *          `false` means the caller must use the relay — which is what every
+ *          WebSocket client (desktop, mobile, CLI) needs.
+ */
+export function deliverSseReply(peer: string, frame: string): boolean {
+  return sseReplySink === null ? false : sseReplySink(peer, frame);
+}
+
+/**
+ * Deliver one browser frame directly to the running bridge, bypassing the relay.
+ *
+ * @param line - the serialized outer envelope, `peer` = this host's public key.
+ * @returns `true` when a bridge accepted it; `false` means the caller should fall
+ *          back to the relay (no bridge running, or the frame was rejected).
+ */
+export function deliverLocalInbound(line: string): boolean {
+  return localInbound === null ? false : localInbound(line);
 }
 
 interface OuterEnvelope {
@@ -82,33 +213,89 @@ function readDaemonVersion(): string | null {
   }
 }
 
+/** The proxied payload's own request id, or null when it cannot be read.
+ *
+ *  `host_forward` wraps a client message as base64 JSON in `ct`; the child
+ *  answers THAT message's `id`, so `in_reply_to` on the reply matches it. The
+ *  envelope `id` is a different value and must never be used for correlation. */
+function readInnerRequestId(ct: string): string | null {
+  try {
+    const inner = JSON.parse(Buffer.from(ct, "base64").toString("utf8")) as { id?: unknown };
+    return typeof inner.id === "string" && inner.id !== "" ? inner.id : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Plan/69 — capabilities this host bridge actually implements. */
 const HOST_CAPABILITIES = ["host_pairing", "workspace_state", "host_forward", "fs_nav"] as const;
+
+/**
+ * How often the established host-room connection is checked for being ALIVE.
+ *
+ * This is the outer safety net, independent of the socket-level liveness
+ * watchdog: a daemon whose connection died without a `close` event used to sit
+ * dead forever while its last log line still read "host room online". 30 s keeps
+ * recovery well inside a user's patience without being chatty.
+ */
+const HOST_CONNECT_WATCHDOG_MS = 30_000;
 
 export class HostBridge {
   private relay: RelayClient | null = null;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Supervises the ESTABLISHED connection (see `_startConnectWatchdog`). */
+  private connectWatchdog: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
   private allowedPeers = new Set<string>();
   /** Plan/69 — this machine's own Pi-key (base64), the identity the bridge
    *  relays under. Needed for the host_forward re-emit (the child shares the
    *  Pi-key) and for own-key inbound detection. */
   private ownPubkey: string | null = null;
+  /** Peers that forwarded traffic toward a child room, most recent last.
+   *  A child reply cannot say which app asked — the relay rewrites it with the
+   *  machine's own key — so a per-request correlation is impossible here. What
+   *  IS knowable is the set of peers that currently drive this machine: replies
+   *  go there instead of to every device ever paired.
+   *
+   *  Why this matters: fanning a proxied reply out to `allowedPeers` made the
+   *  cost of ONE app action equal to the size of peers.json. With a browser
+   *  client that mints a fresh ephemeral App-key on every connect, that file
+   *  grows without bound (observed: 246 "Remote Pi Web" records), so a single
+   *  `session_read` turned into 246 WS writes and the reply never arrived. */
+  private activePeers = new Set<string>();
+  /** Bounded so a long-lived machine cannot accumulate peers forever. */
+  private static readonly MAX_ACTIVE_PEERS = 32;
+  /** Request id → the peer that sent it AND the child room it was addressed
+   *  to, for exact reply routing.
+   *  A proxied request's `id` and the child's `in_reply_to` are the same value
+   *  (verified 46/46 against real traffic), so a reply can be delivered to
+   *  exactly one device instead of a guess. Bounded like `activePeers`.
+   *
+   *  `room` is load-bearing: the relay rewrites a delivered envelope with the
+   *  SENDER's (peer, room), so a child reply arrives here with the outer room
+   *  set to `host` — NOT the child room the request was addressed to. Re-wrapping
+   *  it verbatim produced `host_message{room:"host"}` and every client dropped
+   *  it as `unknown_child_room` (client.ts rejects `room === HOST_ROOM`). The
+   *  request's own child room is the only correct value. */
+  private pendingReplies = new Map<string, { peer: string; room: string }>();
+  private static readonly MAX_PENDING_REPLIES = 256;
 
   constructor(private readonly opts: HostBridgeOptions) {}
 
   async start(): Promise<void> {
     this.stopped = false;
-    try {
-      await this._connect();
-    } catch (err) {
-      process.stderr.write(`[pi-supervisord] host room start failed: ${String(err)}\n`);
-      this._scheduleReconnect();
-    }
+    /* Phase two: expose this bridge for direct local injection while it runs. */
+    localInbound = (line: string) => this.deliverFromLocalPeer(line);
+    // Must AWAIT the first attempt: `start()` resolving means the host room is
+    // wired (message listener attached), which callers and tests rely on.
+    await this._connectOnce();
   }
 
   async stop(): Promise<void> {
     this.stopped = true;
+    /* Withdraw the injection point so a stopped bridge cannot be called. */
+    localInbound = null;
+    this._stopConnectWatchdog();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -117,41 +304,105 @@ export class HostBridge {
     this.relay = null;
   }
 
-  private async _connect(): Promise<void> {
+  private _connect(): void {
+    void this._connectOnce();
+  }
+
+  private async _connectOnce(): Promise<void> {
     if (this.stopped) return;
-    const keypair = await getOrCreateEd25519Keypair();
-    this.ownPubkey = Buffer.from(keypair.publicKey).toString("base64");
-    const { url } = resolveRelayUrl();
-    const wsUrl = toWebSocketUrl(url);
-    const relay = this.opts.relayFactory
-      ? this.opts.relayFactory(wsUrl, keypair)
-      : new RelayClient(wsUrl, keypair);
-    this.relay = relay;
-    const peers = await (this.opts.listPeersFn ?? listPeers)();
-    this.allowedPeers = new Set(peers.map((p) => p.remote_epk));
     try {
+      const keypair = await getOrCreateEd25519Keypair();
+      this.ownPubkey = Buffer.from(keypair.publicKey).toString("base64");
+      const { url } = resolveRelayUrl();
+      const wsUrl = toWebSocketUrl(url);
+      const relay = this.opts.relayFactory
+        ? this.opts.relayFactory(wsUrl, keypair)
+        : new RelayClient(wsUrl, keypair);
+      this.relay = relay;
+      const peers = await (this.opts.listPeersFn ?? listPeers)();
+      this.allowedPeers = new Set(peers.map((p) => p.remote_epk));
       await relay.connect({
         roomId: HOST_ROOM_ID,
         roomMeta: { name: "host", cwd: homedir(), model: hostname() },
       });
+      relay.on("message", (line) => this._onLine(line));
+      relay.on("close", () => {
+        this._stopConnectWatchdog();
+        if (!this.stopped) this._scheduleReconnect();
+      });
+      process.stderr.write(`[pi-supervisord] host room online (${HOST_ROOM_ID})\n`);
+      this._startConnectWatchdog(relay);
     } catch (err) {
       process.stderr.write(`[pi-supervisord] host room connect failed: ${String(err)}\n`);
       this._scheduleReconnect();
-      return;
     }
-    relay.on("message", (line) => this._onLine(line));
-    relay.on("close", () => {
-      if (!this.stopped) this._scheduleReconnect();
-    });
-    process.stderr.write(`[pi-supervisord] host room online (${HOST_ROOM_ID})\n`);
+  }
+
+  /**
+   * Independent supervision of an ESTABLISHED connection.
+   *
+   * The per-socket liveness watchdog inside `RelayClient` forces `close` when the
+   * socket goes silent — but relying on it alone means a single missed
+   * termination (a throw inside the timer, a socket that reports itself OPEN
+   * forever, or any future regression in that path) leaves the host room dead
+   * with no recovery mechanism at all. This timer is deliberately dumb: it only
+   * asks "is the client still open?", and rebuilds the connection when the
+   * answer is no. It never races the socket-level watchdog because a healthy
+   * connection always reports open.
+   */
+  private _startConnectWatchdog(relay: RelayClient): void {
+    this._stopConnectWatchdog();
+    this.connectWatchdog = setInterval(() => {
+      if (this.stopped) {
+        this._stopConnectWatchdog();
+        return;
+      }
+      // Prefer the traffic-aware probe. `isOpen()` reports a half-open socket as
+      // healthy forever (nothing flips `readyState` until a write finally
+      // fails), which is precisely how the host room stayed dead while its log
+      // still said "online". `isAlive()` applies the same silence bound the
+      // in-socket watchdog uses.
+      const alive = (relay as { isAlive?: (now?: number) => boolean }).isAlive;
+      const open = (relay as { isOpen?: () => boolean }).isOpen;
+      let healthy: boolean;
+      if (typeof alive === "function") {
+        healthy = alive.call(relay);
+      } else if (typeof open === "function") {
+        healthy = open.call(relay);
+      } else {
+        // Cannot judge — leave it running. The `close` path still covers it;
+        // this watchdog only exists for the case where `close` never fires.
+        return;
+      }
+      if (healthy) return;
+      // stderr, not logRelayEvent: the installed service does not set
+      // REMOTE_PI_LOG, so relay-scoped logging is silent by default and a
+      // recovery would leave no trace in supervisord.log at all.
+      process.stderr.write("[pi-supervisord] host room supervision: connection no longer alive — rebuilding\n");      process.stderr.write("[pi-supervisord] host room not open — reconnecting\n");
+      this._stopConnectWatchdog();
+      // The socket is dead but may never have emitted `close`; drop the
+      // reference so `_connectOnce` builds a fresh client instead of reusing
+      // this corpse, then reconnect.
+      this.relay = null;
+      this._scheduleReconnect();
+    }, HOST_CONNECT_WATCHDOG_MS);
+    if (typeof this.connectWatchdog.unref === "function") this.connectWatchdog.unref();
+  }
+
+  private _stopConnectWatchdog(): void {
+    if (this.connectWatchdog !== null) {
+      clearInterval(this.connectWatchdog);
+      this.connectWatchdog = null;
+    }
   }
 
   private _scheduleReconnect(): void {
     if (this.stopped || this.reconnectTimer) return;
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
-      void this._connect();
+      this._connect();
     }, 3_000);
+    if (typeof this.reconnectTimer.unref === "function") this.reconnectTimer.unref();
   }
 
   private _onLine(line: string): void {
@@ -168,8 +419,20 @@ export class HostBridge {
     // identity, not a paired peer, and `ct` rides through opaquely (the
     // child already produced it).
     if (this._isOwnKeyInbound(outer)) {
-      logRelayEvent(`proxy ← child room=${outer.room} (host_message fan-out to ${this.allowedPeers.size} peer(s))`);
-      this._fanOut({ type: "host_message", room: outer.room!, ct: outer.ct });
+      // Deliver to the ONE peer that asked when the child's reply names its
+      // request (`in_reply_to`), otherwise to the peers driving this machine.
+      // Never to every peer ever paired — see `activePeers`/`pendingReplies`.
+      const asked = this._replyTargetFor(outer.ct);
+      const targets = asked ? [asked.peer] : this._replyTargets();
+      // The outer `host_message` must carry the CHILD room the request was
+      // addressed to, never `outer.room` (the relay sets that to `host` for a
+      // reply addressed to our own key). Clients reject `room === "host"`.
+      const replyRoom = asked?.room ?? outer.room!;
+      logRelayEvent(
+        `proxy ← child room=${replyRoom} outerRoom=${outer.room} asked=${asked ? "hit" : "MISS"} (host_message to ${targets.length} peer(s))`,
+      );
+      const frame: ServerMessage = { type: "host_message", room: replyRoom, ct: outer.ct };
+      for (const peer of targets) this._reply(peer, frame);
       return;
     }
 
@@ -181,9 +444,21 @@ export class HostBridge {
     // the persisted allow-list, EXCEPT a `pair_request` — the pairing
     // bootstrap has no allow-list entry by definition. Every other inner
     // type from an unknown peer is still dropped here.
+    //
+    // Plan/76 — an in-process SSE stream carries no pairing code because there is
+    // no browser to paste one. It is authorised by construction: the key was
+    // minted inside this process, never left it, and the stream is only reachable
+    // through a loopback request that already passed the origin/host gate. Any
+    // OTHER unknown peer is still dropped here — that is the whole point of the
+    // allow-list, and a remote client cannot forge `outer.peer` because the relay
+    // rewrites it to the authenticated identity.
+    const isLocal =
+      (this.opts.localPeer !== undefined && outer.peer === this.opts.localPeer) ||
+      localSsePeers.has(outer.peer);
     if (
       this.allowedPeers.size > 0 &&
       !this.allowedPeers.has(outer.peer) &&
+      !isLocal &&
       inner.type !== "pair_request"
     ) {
       logRelayEvent(`host room: dropped ${inner.type} from unpaired peer ${outer.peer.slice(0, 8)}…`);
@@ -238,7 +513,7 @@ export class HostBridge {
       // payload on THIS connection under the machine's own Pi-key, so the
       // relay delivers it on the child's (pi_pk, childRoom) connection.
       case "host_forward":
-        this._forwardToChild(inner);
+        this._forwardToChild(inner, outer.peer);
         break;
       // Plan/69 — idempotent workspace restart (see handleWorkspaceRestart).
       case "workspace_restart":
@@ -270,8 +545,21 @@ export class HostBridge {
    * to the child's connection and rewrites the delivered envelope with our
    * (peer, room) — which the child recognizes as host-proxied.
    */
-  private _forwardToChild(inner: Extract<ClientMessage, { type: "host_forward" }>): void {
+  private _forwardToChild(inner: Extract<ClientMessage, { type: "host_forward" }>, from?: string): void {
     if (!this.relay || this.ownPubkey === null) return;
+    if (from) {
+      this._rememberActivePeer(from);
+      // Record the INNER request id, not `inner.id`.
+      //
+      // `host_forward` carries two ids: the envelope's own `id` (minted by
+      // `_forwardToRoom`) and the proxied payload's `id` (minted by the
+      // `build(id)` callback). The child answers the PAYLOAD id, so its
+      // `in_reply_to` matches the payload id only — keying the table by the
+      // envelope id made every lookup MISS and fell back to broadcasting on
+      // the host room, which clients then discard as `unknown_child_room`.
+      const pendingId = readInnerRequestId(inner.ct) ?? inner.id;
+      this._rememberPendingRequest(pendingId, from, inner.room);
+    }
     logRelayEvent(`proxy → child room=${inner.room}`);
     const outer: OuterEnvelope = { peer: this.ownPubkey, room: inner.room, ct: inner.ct };
     try {
@@ -288,8 +576,69 @@ export class HostBridge {
    * machine-level, not addressed to one device.
    */
   private _fanOut(msg: ServerMessage): void {
-    for (const peer of this.allowedPeers) {
+    for (const peer of this._replyTargets()) {
       this._reply(peer, msg);
+    }
+  }
+
+  /**
+   * Who a machine-level push is delivered to.
+   *
+   * `activePeers` when it is non-empty (peers that recently drove this
+   * machine), otherwise the whole allow-list so a freshly connected device
+   * still receives lifecycle pushes before it has sent anything.
+   */
+  private _replyTargets(): string[] {
+    if (this.activePeers.size > 0) return [...this.activePeers];
+    return [...this.allowedPeers];
+  }
+
+  /** Remembers `requestId → {peer, room}` so the child's reply can be unicast
+   *  to the asking peer on the child room the request was addressed to. */
+  private _rememberPendingRequest(requestId: string, peer: string, room: string): void {
+    if (!requestId) return;
+    this.pendingReplies.delete(requestId);
+    this.pendingReplies.set(requestId, { peer, room });
+    while (this.pendingReplies.size > HostBridge.MAX_PENDING_REPLIES) {
+      const oldest = this.pendingReplies.keys().next();
+      if (oldest.done) break;
+      this.pendingReplies.delete(oldest.value);
+    }
+  }
+
+  /**
+   * Which peer asked for the reply in `ct`, or null when it cannot be told.
+   *
+   * The proxied payload is base64 JSON in practice (`_forwardToChild` re-emits
+   * the app's `ct` verbatim), so its `in_reply_to` is readable here without any
+   * session key. A hit is one-shot: reply ids are never reused.
+   */
+  private _replyTargetFor(ct: string): { peer: string; room: string } | null {
+    if (this.pendingReplies.size === 0) return null;
+    let inner: { in_reply_to?: unknown };
+    try {
+      inner = JSON.parse(Buffer.from(ct, "base64").toString("utf8")) as { in_reply_to?: unknown };
+    } catch {
+      return null;
+    }
+    const replyTo = inner.in_reply_to;
+    if (typeof replyTo !== "string" || replyTo === "") return null;
+    const asked = this.pendingReplies.get(replyTo);
+    if (!asked) return null;
+    this.pendingReplies.delete(replyTo);
+    return asked;
+  }
+
+  /** Records that `peer` is driving this machine, evicting the oldest entry
+   *  once the bound is reached (insertion-ordered Set). */
+  private _rememberActivePeer(peer: string): void {
+    if (!peer) return;
+    this.activePeers.delete(peer);
+    this.activePeers.add(peer);
+    while (this.activePeers.size > HostBridge.MAX_ACTIVE_PEERS) {
+      const oldest = this.activePeers.values().next();
+      if (oldest.done) break;
+      this.activePeers.delete(oldest.value);
     }
   }
 
@@ -328,13 +677,90 @@ export class HostBridge {
   }
 
   private _reply(peer: string, msg: ServerMessage): void {
-    if (!this.relay) return;
     const ct = Buffer.from(JSON.stringify(msg)).toString("base64");
     const outer: OuterEnvelope = { peer, room: HOST_ROOM_ID, ct };
+    const frame = JSON.stringify(outer);
+
+    /*
+     * Plan/76 phase two: a caller-supplied sink gets first refusal, so a
+     * same-origin deployment can hand the frame straight to the browser's SSE
+     * stream.
+     *
+     * The sink MUST be able to decline. Not every peer is an SSE stream — a
+     * WebSocket client (desktop, mobile, CLI) has no entry in the stream index —
+     * and returning early for those would black-hole every reply they receive.
+     * A `false` therefore falls through to the relay exactly as before.
+     */
+    const sink = this.opts.replySink;
+    if (sink !== undefined) {
+      let delivered = false;
+      try {
+        delivered = sink.deliver(peer, frame);
+      } catch {
+        /* A dead sink must not take the bridge down with it. */
+        delivered = false;
+      }
+      if (delivered) return;
+    }
+
+    if (!this.relay) return;
     try {
-      this.relay.send(JSON.stringify(outer));
+      this.relay.send(frame);
     } catch {
       /* reconnect will recover */
     }
+  }
+
+  /**
+   * Inject one locally-originated frame as if it arrived from a browser peer.
+   *
+   * This is the phase-two entry point: the SSE endpoint already owns the browser's
+   * connection, so it can hand the frame over directly instead of re-encoding it,
+   * pushing it through the relay, and having the relay route it back to this same
+   * process.
+   *
+   * The frame must be an outer envelope whose `peer` is the SENDER's identity — the
+   * stream's own key, which `sse_endpoint` stamps before calling here. That is
+   * deliberately NOT the host's public key: `_isOwnKeyInbound` reads
+   * "`peer` == own pubkey" as a CHILD-DAEMON reply, so stamping the host key would
+   * make every browser command be rerouted to the child as if it were IPC traffic.
+   * The relay performs the same rewrite when it forwards a WebSocket frame, and this
+   * entry point reproduces it so both transports look identical downstream.
+   *
+   * @param line - the serialized outer envelope.
+   * @returns `true` when the frame was accepted for processing.
+   */
+  deliverFromLocalPeer(line: string): boolean {
+    if (this.stopped) return false;
+
+    /*
+     * Guard against DOUBLE DELIVERY, which the relay fallback would otherwise cause.
+     *
+     * `_onLine` can run a long way before throwing — `host_forward` reaches
+     * `_forwardToChild`, which already sent the frame to the child and recorded a
+     * pending reply. Reporting `false` at that point makes the caller re-send the
+     * same frame over the relay, so the child executes it twice.
+     *
+     * Once `_onLine` has been entered the frame has been consumed, so a throw is
+     * reported as `true` ("handled, do not retry") and only logged. A frame that was
+     * never consumed — wrong shape, unknown sender — is rejected before entry and
+     * honestly reports `false`.
+     */
+    let outer: { ct?: unknown; peer?: unknown };
+    try {
+      outer = JSON.parse(line) as { ct?: unknown; peer?: unknown };
+    } catch {
+      return false;
+    }
+    if (typeof outer.ct !== "string" || typeof outer.peer !== "string") return false;
+    if (outer.ct === "" || outer.peer === "") return false;
+
+    try {
+      this._onLine(line);
+    } catch (err) {
+      logRelayEvent(`local inbound threw after arrival (${(err as Error).message})`);
+    }
+    /* Consumed either way: never let the caller replay it through the relay. */
+    return true;
   }
 }

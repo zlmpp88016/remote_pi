@@ -14,13 +14,41 @@ export function shortSessionId(id: string): string {
 }
 
 /**
- * The name to show for a session. A session without a name is NOT unnamed in
- * the UI: the id prefix is what the user can match against the Pi TUI, so the
- * row shows that instead of an empty label.
+ * The name to show for a session.
+ *
+ * The host's `name` is NOT a title: the SDK's `SessionManager.list()` fills it
+ * from the user-defined display name, which in practice holds the WORKSPACE
+ * FOLDER NAME. Every session in one folder therefore arrives with the same
+ * `name` (measured: 11 sessions, all `"name":"4.1f"`), and rendering it made
+ * every row read identically.
+ *
+ * The distinguishing text is the session's own first message, so that is the
+ * title. A user-set display name still wins when it actually differs from the
+ * folder name, because someone explicitly typed it. Falling back to the id
+ * prefix stays last: it is only a handle for matching the Pi TUI.
  */
 export function sessionLabel(session: WireSessionInfo): string {
   const name = session.name?.trim() ?? "";
-  return name === "" ? shortSessionId(session.id) : name;
+  const preview = previewText(session);
+  const folderLike = session.cwd !== undefined && name === basenameOf(session.cwd);
+
+  if (name !== "" && !folderLike) return name;
+  if (preview !== "") return truncateLabel(preview);
+  return shortSessionId(session.id);
+}
+
+/** Last path segment of a cwd, tolerating both separators (host may be POSIX). */
+function basenameOf(p: string): string {
+  const parts = p.split(/[\\/]/).filter((x) => x !== "");
+  return parts[parts.length - 1] ?? p;
+}
+
+const LABEL_MAX = 64;
+
+/** Keep the label one line; the row ellipsises, but a cut here keeps the DOM
+ *  small and stops a pasted blob from dominating the row. */
+function truncateLabel(text: string): string {
+  return text.length <= LABEL_MAX ? text : `${text.slice(0, LABEL_MAX - 1)}…`;
 }
 
 /**
@@ -67,4 +95,31 @@ export function sortSessions(sessions: readonly WireSessionInfo[]): readonly Wir
 export function previewText(session: WireSessionInfo): string {
   const raw = (session.preview ?? "").replace(/\s+/g, " ").trim();
   return raw;
+}
+
+/** The session-surface requests the host can refuse with `action_error`. */
+export type SessionActionName =
+  | "session_read"
+  | "session_switch"
+  | "session_list"
+  | "session_new";
+
+/**
+ * Fixed, client-authored sentence for a REFUSED session request.
+ *
+ * The host refuses these with the same generic `action_error` frame it uses for
+ * everything else (an unknown session id, a workspace with no cwd yet, a Pi
+ * without command context). Before this existed the refusal was invisible: the
+ * client only handled the `_ok` replies, so the pending request never settled
+ * and clicking a session looked like it did nothing at all.
+ *
+ * Returns null for any other action so a caller can let unrelated failures fall
+ * through to their own handling instead of being rewritten as a session error.
+ */
+export function sessionActionErrorText(action: string): string | null {
+  if (action === "session_read") return "Could not read that session.";
+  if (action === "session_switch") return "Could not ask the host to switch sessions.";
+  if (action === "session_list") return "Could not list this workspace's sessions.";
+  if (action === "session_new") return "Could not start a new session in this workspace.";
+  return null;
 }

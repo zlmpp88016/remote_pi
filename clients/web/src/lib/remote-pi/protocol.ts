@@ -482,6 +482,15 @@ export interface WireModel {
   context_window: number;
   /** Plan/30: the model accepts image input (SDK `Model.input` has `image`). */
   vision: boolean;
+  /**
+   * Thinking levels THIS model honours, in picker order (server-derived from
+   * `Model.thinkingLevelMap`).
+   *
+   * Absent means the model is not a reasoning model, which is what lets the picker
+   * hide the control instead of showing a six-way switch that silently resolves to a
+   * neighbour. When present it is authoritative: render exactly these.
+   */
+  thinking_levels?: ThinkingLevel[];
 }
 
 /** `list_models {id}` — ask the workspace Pi for its available models. */
@@ -497,7 +506,7 @@ export interface ModelSetRequest extends ClientMessage {
 }
 
 /** The fixed thinking enum (PROTOCOL.md "Thinking levels"). */
-export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 
@@ -527,14 +536,21 @@ export interface ModelsListOk extends ServerMessage {
  *  daemon owns the shape and may add fields; the six below are the contract. */
 export function isWireModel(value: unknown): value is WireModel {
   if (!isJsonObject(value)) return false;
-  return (
+  if (!(
     typeof value.id === "string" && value.id !== "" &&
     typeof value.name === "string" && value.name !== "" &&
     typeof value.provider === "string" && value.provider !== "" &&
     typeof value.reasoning === "boolean" &&
     typeof value.context_window === "number" && Number.isFinite(value.context_window) &&
     typeof value.vision === "boolean"
-  );
+  )) return false;
+  /*
+   * `thinking_levels` is optional, but when present it must be a list of KNOWN
+   * levels: a typo'd level would render a button the daemon cannot apply.
+   */
+  const levels = (value as { thinking_levels?: unknown }).thinking_levels;
+  if (levels === undefined) return true;
+  return Array.isArray(levels) && levels.every((level) => isThinkingLevel(level));
 }
 
 /** Reply guard for `models_list`: every entry must satisfy `isWireModel`, and
@@ -578,10 +594,33 @@ export interface SessionListRequest extends ClientMessage {
   type: "session_list";
 }
 
+/**
+ * `session_new {id}` — start a fresh AgentSession in the workspace.
+ *
+ * Answered with the generic `action_ok` / `action_error` pair (the host runs it
+ * through `runAsync`, and `session_new` is an `ActionName`), NOT a dedicated
+ * `session_new_ok`: there is no payload beyond success. A failure carries the
+ * host's text (e.g. "newSession unavailable (no command ctx yet)", or
+ * "cancelled by extension hook") in `action_error.error`.
+ */
+export interface SessionNewRequest extends ClientMessage {
+  type: "session_new";
+}
+
 export interface SessionListOk extends ServerMessage {
   type: "session_list_ok";
   current_id: string | null;
   sessions: WireSessionInfo[];
+  /**
+   * Whether this host can switch the live session / start a new one.
+   *
+   * Both need a command-capable context that an RPC-mode daemon never
+   * captures, and the client has no other way to know. Absent on an older
+   * host, which is why the readers default to `true` — a control that used to
+   * work must not disappear just because the host does not announce it.
+   */
+  can_switch?: boolean;
+  can_new?: boolean;
 }
 
 /**
@@ -599,10 +638,55 @@ export interface SessionReadRequest extends ClientMessage {
   before?: string;
 }
 
+/**
+ * Narrow an unknown wire value into a `WireUsage`.
+ *
+ * Host frames are not type-checked at the boundary — `ServerMessage` carries an
+ * open index signature — so every numeric field is re-validated here. A malformed
+ * usage degrades to `undefined` (no reading rendered) rather than becoming NaN in
+ * the composer.
+ *
+ * @param value - the raw `usage` member of a frame.
+ * @returns a validated usage, or `undefined` when the value is unusable.
+ */
+export function wireUsageOf(value: unknown): WireUsage | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  const num = (key: string): number | undefined => {
+    const v = raw[key];
+    return typeof v === "number" && Number.isFinite(v) ? v : undefined;
+  };
+  const input = num("input_tokens");
+  const output = num("output_tokens");
+  if (input === undefined && output === undefined) return undefined;
+  const usage: WireUsage = { input_tokens: input ?? 0, output_tokens: output ?? 0 };
+  const cacheRead = num("cache_read_tokens");
+  if (cacheRead !== undefined) usage.cache_read_tokens = cacheRead;
+  const cacheWrite = num("cache_write_tokens");
+  if (cacheWrite !== undefined) usage.cache_write_tokens = cacheWrite;
+  const reasoning = num("reasoning_tokens");
+  if (reasoning !== undefined) usage.reasoning_tokens = reasoning;
+  const total = num("total_tokens");
+  if (total !== undefined) usage.total_tokens = total;
+  return usage;
+}
+
+/** Token accounting for one assistant message. Mirrors the host's `Usage` in
+ *  `server/src/protocol/types.ts` FIELD FOR FIELD — the SDK reports all of these
+ *  and the client bills its stats from them, so a missing field silently breaks
+ *  the cache-hit share rather than failing loudly. */
+export interface WireUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens?: number;
+  cache_write_tokens?: number;
+  reasoning_tokens?: number;
+  total_tokens?: number;
+}
+
 /** One transcript event. Mirrors the host's `SessionHistoryEvent`
  *  (`server/src/protocol/types.ts`) FIELD FOR FIELD: a mismatch here is not
- *  a stricter guard, it is a guard that rejects real host frames. `usage` is
- *  carried as an opaque number map because nothing renders it today. */
+ *  a stricter guard, it is a guard that rejects real host frames. */
 interface SessionEventBase {
   ts: number;
 }
@@ -612,7 +696,7 @@ export type WireSessionEvent =
       type: "agent_message";
       in_reply_to: string;
       text: string;
-      usage?: Record<string, number>;
+      usage?: WireUsage;
     })
   | (SessionEventBase & {
       type: "tool_request";
@@ -640,6 +724,24 @@ export type WireSessionEvent =
 export interface SessionReadOk extends ServerMessage {
   type: "session_read_ok";
   session_id: string;
+  events: WireSessionEvent[];
+  eos: boolean;
+  truncated: boolean;
+  older_cursor?: string | null;
+  has_older?: boolean;
+}
+
+/**
+ * `session_history` — an UNSOLICITED host fan-out of the live session's
+ * transcript. The host sends it on connect and again whenever its mirror is
+ * replaced (a resumed session, a `/new`), so it is the only signal that the
+ * fresh process has a transcript to show. The client used to drop this frame
+ * entirely, which is why a resumed session rendered as a brand-new empty
+ * conversation even though the file on disk held months of history.
+ */
+export interface SessionHistoryFrame extends ServerMessage {
+  type: "session_history";
+  session_started_at: number;
   events: WireSessionEvent[];
   eos: boolean;
   truncated: boolean;

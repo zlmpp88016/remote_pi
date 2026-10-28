@@ -8,7 +8,13 @@ import { daemonIdForCwd } from "./id.js";
 import { defaultAgentName, type LocalConfig } from "../session/local_config.js";
 import { resolveRelayUrl } from "../config.js";
 import { ipcAddress, usesNamedPipe } from "../session/ipc.js";
-import { EXIT_DAEMON_FRESH_SESSION, RpcChild, type RpcChildExitEvent, type RpcChildOptions } from "./rpc_child.js";
+import {
+  EXIT_DAEMON_FRESH_SESSION,
+  EXIT_DAEMON_SWITCH_SESSION,
+  RpcChild,
+  type RpcChildExitEvent,
+  type RpcChildOptions,
+} from "./rpc_child.js";
 import {
   type ControlReply,
   type ControlRequest,
@@ -31,7 +37,7 @@ import {
   type NewJobInput,
 } from "./cron_registry.js";
 import { appendCronLog, readCronLog, type CronResult } from "./cron_log.js";
-import { HostBridge } from "./host_bridge.js";
+import { HostBridge, deliverSseReply } from "./host_bridge.js";
 import { hostSessionName, type FleetEntry, type FleetOps } from "./host_control.js";
 import { HostPairingSession } from "../pairing/host_pairing.js";
 import { buildQRUri } from "../pairing/qr.js";
@@ -175,9 +181,36 @@ export class Supervisor {
     this._reconcileCron();
     this._runCatchup();
     if (!this.opts.skipHost) {
+      /*
+       * Plan/76 — `localPeer` is this supervisor's OWN public key. The in-process
+       * SSE endpoint dials with the same identity (see `sse_endpoint.ts`), so the
+       * host room must treat it as local rather than as an unknown device. It is
+       * passed unconditionally: an SSE stream can only reach the relay when
+       * `direct.ts` started one, and that path is loopback-bound.
+       */
+      const localKeypair = await getOrCreateEd25519Keypair();
+      const localPeer = Buffer.from(localKeypair.publicKey).toString("base64");
       this.host =
         this.opts.host ??
-        new HostBridge({ fleet: this._fleetOps(), pairing: this.pairing });
+        new HostBridge({
+          fleet: this._fleetOps(),
+          pairing: this.pairing,
+          localPeer,
+          /*
+           * Plan/76 phase two: hand browser replies straight to their SSE stream
+           * instead of pushing them through the relay to be routed back here.
+           *
+           * This sink DECLINES any peer it does not own (`deliverToPeer` returns
+           * false for a WebSocket client), and `_reply` then falls through to the
+           * relay. That fallback is essential: desktop, mobile and CLI clients
+           * still speak raw WebSocket, and claiming their replies here would
+           * black-hole every one of them.
+           *
+           * Child-daemon IPC is untouched: `_forwardToChild` still uses the relay
+           * and `_isOwnKeyInbound` keeps its inference.
+           */
+          replySink: { deliver: deliverSseReply },
+        });
       void this.host.start().catch((err) => {
         process.stderr.write(`[pi-supervisord] host room failed: ${String(err)}\n`);
       });
@@ -732,7 +765,20 @@ export class Supervisor {
       // crash. Restart immediately and don't burn the crash backoff budget.
       slot.restartAttempt = 0;
       slot.lastError = null;  // fresh spawn — no current error
-      slot.child.noteRestart();
+      slot.child.noteRecycle();
+      slot.child.spawn();
+      this._pushWorkspaceState(id);
+      return;
+    }
+
+    if (evt.code === EXIT_DAEMON_SWITCH_SESSION) {
+      // App-triggered daemon `session_switch`: also a deliberate recycle. The
+      // target session file was staged by the child, and `spawn()` picks it up
+      // to pass `--session <path>` — so this must restart the SAME way, without
+      // counting as a crash attempt.
+      slot.restartAttempt = 0;
+      slot.lastError = null;
+      slot.child.noteRecycle();
       slot.child.spawn();
       this._pushWorkspaceState(id);
       return;

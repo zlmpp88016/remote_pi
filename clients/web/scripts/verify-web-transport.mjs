@@ -529,6 +529,16 @@ async function scenarioMalformed() {
   check("host_message sem room/ct → malformed_proxy", count("malformed_proxy") === 1, diags.join(","));
   check("nenhum frame malformado virou push", pushes.length === 0);
 
+  // A reply whose id this client never minted (or already settled) is a
+  // DIAGNOSTIC, not a push: it must be reported as a fixed code and must never
+  // reach the transcript. This is the exact path behind the user-visible
+  // "unexpected frame" notice, so the classification is pinned here.
+  const unknownBefore = count("unknown_reply");
+  wire.deliver({ type: "fs_list_ok", in_reply_to: "id-que-nunca-existiu", path: "/x", parent: null, entries: [] });
+  await tick();
+  check("reply de id desconhecido → unknown_reply", count("unknown_reply") === unknownBefore + 1, diags.join(","));
+  check("e ainda não vira push", pushes.length === 0);
+
   // The client is still fully usable after the hostile batch.
   const ok = client.fsList(wire.hostEpk, "/ainda-vivo");
   wire.deliver(fsListOk(wire.socket.outers().slice(-1)[0].id, "/ainda-vivo"));

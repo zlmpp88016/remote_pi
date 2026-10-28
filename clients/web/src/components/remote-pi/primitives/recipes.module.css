@@ -1,0 +1,272 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+
+  .controlBase {
+    border-radius: 10px;
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+    --tw-outline-style: none;
+    outline-style: none;
+  }
+
+  .controlBase:focus-visible {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+    box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);
+    --tw-ring-color: var(--accent);
+    --tw-ring-offset-width: 0px;
+    --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  }
+
+  .controlPrimary {
+    border-radius: 10px;
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+    --tw-outline-style: none;
+    outline-style: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--spacing) * 1.5);
+    background-color: var(--accent);
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    color: var(--green-ink);
+  }
+
+  .controlPrimary:focus-visible {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+    box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);
+    --tw-ring-color: var(--accent);
+    --tw-ring-offset-width: 0px;
+    --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  }
+
+  @media(hover:hover) {
+    .controlPrimary:enabled:hover {
+      background-color: var(--accent-2);
+    }
+  }
+
+  .controlPrimary:disabled {
+    cursor: not-allowed;
+    opacity: .45;
+  }
+
+  .controlSecondary {
+    border-radius: 10px;
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+    --tw-outline-style: none;
+    outline-style: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--spacing) * 1.5);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l3);
+    background-color: var(--dsw-alias-bg-layer-2);
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+    color: var(--ink-soft);
+  }
+
+  .controlSecondary:focus-visible {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+    box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);
+    --tw-ring-color: var(--accent);
+    --tw-ring-offset-width: 0px;
+    --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .controlSecondary {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  @media(hover:hover) {
+    .controlSecondary:enabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  @media(hover:hover) @supports (color:color-mix(in lab,red,red)) {
+    .controlSecondary:enabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .controlSecondary:disabled {
+    cursor: not-allowed;
+    color: var(--faint);
+  }
+
+  .controlGhost {
+    border-radius: 10px;
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+    --tw-outline-style: none;
+    outline-style: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--spacing) * 1.5);
+    color: var(--muted);
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .controlGhost:focus-visible {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+    box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);
+    --tw-ring-color: var(--accent);
+    --tw-ring-offset-width: 0px;
+    --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  }
+
+  @media(hover:hover) {
+    .controlGhost:enabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) @supports (color:color-mix(in lab,red,red)) {
+    .controlGhost:enabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .controlGhost:disabled {
+    cursor: not-allowed;
+    color: var(--faint);
+  }
+
+  .controlDanger {
+    border-radius: 10px;
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+    --tw-outline-style: none;
+    outline-style: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--spacing) * 1.5);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: #f25a5a59;
+    background-color: #f25a5a14;
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+    color: var(--danger);
+  }
+
+  .controlDanger:focus-visible {
+    --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color,currentcolor);
+    box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);
+    --tw-ring-color: var(--accent);
+    --tw-ring-offset-width: 0px;
+    --tw-ring-offset-shadow: var(--tw-ring-inset,) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
+  }
+
+  @media(hover:hover) {
+    .controlDanger:enabled:hover {
+      background-color: #f25a5a24;
+    }
+  }
+
+  .controlDanger:disabled {
+    cursor: not-allowed;
+    opacity: .45;
+  }
+
+  .panel {
+    border-radius: 10px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    background-color: var(--dsw-alias-bg-layer-2);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .panel {
+      border-color: var(--dsw-alias-border-l2);
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  .field {
+    border-radius: 10px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    background-color: var(--dsw-alias-bg-layer-2);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .field {
+      border-color: var(--dsw-alias-border-l2);
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  .field:focus-within {
+    border-color: var(--accent);
+  }
+
+  .hairline {
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .hairline {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  .sizeSm {
+    height: 26px;
+    padding-inline: calc(var(--spacing) * 2);
+    font-size: 12px;
+  }
+
+  .sizeMd {
+    height: calc(var(--spacing) * 8);
+    padding-inline: calc(var(--spacing) * 2.5);
+    font-size: 13px;
+  }
+
+  .hint {
+    font-size: 12px;
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    color: var(--muted);
+  }
+
+  .errorLine {
+    font-size: 12px;
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    color: var(--danger);
+  }
+}

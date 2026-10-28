@@ -1,0 +1,59 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+
+  /*
+   * The docs page's own additions to the shared prose styling.
+   *
+   * Most of what used to be here is gone. The page is built from `DocsSection` /
+   * `DocsTable` / `InlineCode` and the `.prose` rules in `global.css`, which
+   * already style links and emphasis, so `text-accent underline` on 41 links and
+   * `text-fg` on the prose `<strong>`s had no effect: `.prose` rules are
+   * unlayered and therefore outrank Tailwind's layered utilities. Removing them
+   * changes nothing and stops the markup from implying a style that is not
+   * applied.
+   *
+   * Two utilities did apply and are reproduced below.
+   */
+
+  /* Applies because `.prose` sets no font-size on a paragraph. */
+  .smallText {
+    font-size: var(--text-sm);
+    line-height: var(--tw-leading, var(--text-sm--line-height));
+  }
+
+  /*
+   * The 8px gap between list items, from `space-y-2` on the list.
+   *
+   * Only HALF of that utility took effect: `.prose ul > li` sets `margin-top`, so
+   * the utility's `margin-block-start` lost while its `margin-block-end` still
+   * landed. Checking only `margin-top` made this look inert — the fingerprint
+   * comparison caught it. Written against the children rather than as a `gap`
+   * because the items are `display: list-item`, where `gap` does nothing.
+   */
+  .listGap > :not(:last-child) {
+    margin-block-end: calc(var(--spacing) * 2);
+  }
+
+  /*
+   * `text-fg` on the <strong>s in the page HEADER.
+   *
+   * Those sit outside `.prose`, where nothing sets a colour, so the utility was
+   * doing real work: the heading is `--ink-soft` and the emphasis was white.
+   * Inside `.prose` the same utility is inert, which is why only the header ones
+   * are reproduced.
+   */
+  .emphasis {
+    color: var(--fg);
+  }
+}

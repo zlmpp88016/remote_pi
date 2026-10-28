@@ -1,0 +1,243 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+
+  .root {
+    display: grid;
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto minmax(0,1fr);
+    gap: calc(var(--spacing) * 1.5);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    padding-inline: calc(var(--spacing) * 2);
+  }
+
+  .title {
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    --tw-tracking: .1em;
+    letter-spacing: .1em;
+    color: var(--faint);
+  }
+
+  .refresh {
+    margin-left: auto;
+    display: grid;
+    width: calc(var(--spacing) * 6);
+    height: calc(var(--spacing) * 6);
+    place-items: center;
+    border-radius: var(--radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    color: var(--faint);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .refresh {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  @media(hover:hover) {
+    .refresh:hover {
+      border-color: #fff3;
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .refresh:hover {
+        border-color: var(--dsw-alias-border-l2);
+      }
+    }
+  }
+
+  .refresh:disabled {
+    cursor: not-allowed;
+    opacity: .5;
+  }
+
+  .scroll {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .scrollX {
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .note {
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * 1.5);
+    font-size: 12px;
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    color: var(--faint);
+  }
+
+  .list {
+    display: grid;
+    gap: var(--spacing);
+  }
+
+  .row {
+    display: grid;
+    gap: var(--spacing);
+    border-radius: 10px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    padding-inline: calc(var(--spacing) * 2.5);
+    padding-block: calc(var(--spacing) * 2);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  .rowViewing {
+    border-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 35%, transparent);
+    background-color: color-mix(in srgb, var(--dsw-static-deepseek-400) 7%, transparent);
+  }
+
+  .rowIdle {
+    border-color: var(--dsw-alias-border-l2);
+    background-color: var(--dsw-alias-bg-layer-2);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .rowIdle {
+      border-color: var(--dsw-alias-border-l2);
+      background-color: var(--dsw-alias-bg-layer-2);
+    }
+  }
+
+  @media(hover:hover) {
+    .rowIdle:hover {
+      border-color: #fff3;
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .rowIdle:hover {
+        border-color: var(--dsw-alias-border-l2);
+      }
+    }
+  }
+
+  .readButton {
+    display: grid;
+    min-width: 0;
+    gap: calc(var(--spacing) * .5);
+    text-align: left;
+  }
+
+  .rowHead {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+  }
+
+  .rowName {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-size: 13px;
+    --tw-font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-medium);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .liveBadge {
+    flex-shrink: 0;
+    border-radius: .25rem;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: #5fd38a4d;
+    padding-inline: var(--spacing);
+    padding-block: 1px;
+    font-family: var(--ff-mono);
+    font-size: 9.5px;
+    text-transform: uppercase;
+    --tw-tracking: .06em;
+    letter-spacing: .06em;
+    color: var(--ok-text);
+  }
+
+  .age {
+    margin-left: auto;
+    flex-shrink: 0;
+    font-family: var(--ff-mono);
+    font-size: 10px;
+    color: var(--faint);
+  }
+
+  .preview {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .switchButton {
+    justify-self: flex-start;
+    border-radius: var(--radius-md);
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    border-color: var(--dsw-alias-border-l3);
+    padding-inline: calc(var(--spacing) * 2);
+    padding-block: calc(var(--spacing) * .5);
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    color: var(--muted);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .switchButton {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+    }
+  }
+
+  @media(hover:hover) {
+    .switchButton:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+  }
+
+  .notice {
+    padding-inline: calc(var(--spacing) * 2);
+    font-size: 11.5px;
+    --tw-leading: var(--leading-relaxed);
+    line-height: var(--leading-relaxed);
+    color: var(--warn-text);
+  }
+}

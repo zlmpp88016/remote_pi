@@ -1,0 +1,42 @@
+<!doctype html>
+<!--
+  The Vite entry.
+
+  Everything the old `app/layout.tsx` did at the document level lives here: the
+  language, the `h-full antialiased` root classes, and the #root mount point.
+  The Google font links are gone on purpose — the fonts are self-hosted and
+  declared in `src/styles/global.css`, because a desktop shell has no network
+  guarantee and a `next/font`-style build-time fetch would leave it unstyled.
+-->
+<html lang="en" class="h-full antialiased">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <title>Remote Pi: drive your Pi coding agents from the browser</title>
+    <meta
+      name="description"
+      content="Pair this browser with a Remote Pi host over a relay: browse the host filesystem, start a Pi workspace in any directory, and talk to the agent — no install required."
+    />
+    <meta name="application-name" content="Remote Pi" />
+    <meta
+      name="keywords"
+      content="Remote Pi, Pi coding agent, web client, remote development, coding agents, relay pairing"
+    />
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:title"
+      content="Remote Pi: drive your Pi coding agents from the browser"
+    />
+    <meta
+      property="og:description"
+      content="Pair this browser with a Remote Pi host over a relay: browse the host filesystem, start a Pi workspace in any directory, and talk to the agent — no install required."
+    />
+    <meta property="og:site_name" content="Remote Pi" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body class="min-h-full flex flex-col bg-bg text-fg">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

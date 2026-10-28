@@ -1,0 +1,62 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+
+
+
+    .section {
+      padding-block: calc(var(--spacing) * 24);
+    }
+
+    .eyebrow {
+      font-family: var(--ff-mono);
+      font-size: 12.5px;
+      text-transform: uppercase;
+      --tw-tracking: .14em;
+      letter-spacing: .14em;
+    }
+
+    .title {
+      margin-top: calc(var(--spacing) * 3);
+      font-size: 32px;
+      --tw-font-weight: var(--font-weight-semibold);
+      font-weight: var(--font-weight-semibold);
+      color: var(--dsw-alias-label-primary);
+    }
+
+    .lede {
+      margin-top: calc(var(--spacing) * 4);
+      max-width: 52ch;
+      font-size: 15px;
+      --tw-leading: var(--leading-relaxed);
+      line-height: var(--leading-relaxed);
+      color: var(--muted);
+    }
+
+    .path {
+      font-family: var(--ff-mono);
+    }
+
+    .links {
+      margin-top: calc(var(--spacing) * 6);
+      display: flex;
+      flex-wrap: wrap;
+      gap: calc(var(--spacing) * 4);
+      font-size: 14px;
+    }
+
+    .link {
+      color: var(--accent);
+      text-decoration-line: underline;
+    }
+}

@@ -262,7 +262,7 @@ describe("Supervisor — workspace_state push (plan/69)", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test("crash pushes crashed with the real last_error; backoff + fresh-session restarts bump the counter", async () => {
+  test("crash pushes crashed with the real last_error; only a crash bumps the counter", async () => {
     const { cwd, dir } = await startDaemon("crash");
 
     // 1) unexpected non-zero exit → crashed + the real reason.
@@ -282,8 +282,11 @@ describe("Supervisor — workspace_state push (plan/69)", () => {
     expect(respawned.restarts).toBe(1);
     expect(spawnedChildren).toHaveLength(2);
 
-    // 3) app-triggered `/new` (private exit code 42) → immediate recycle,
-    //    counter keeps climbing, no backoff burned.
+    // 3) app-triggered `/new` (private exit code 42) → immediate recycle, no
+    //    backoff burned. It is NOT a crash, so the crash counter must HOLD.
+    //    This is the regression that made normal switching report
+    //    "restarted this workspace 38 times": every deliberate recycle used to
+    //    increment the same counter the UI shows as a health warning.
     exitChild(spawnedChildren[1]!, 42, null);
     const recycled = (await waitForPush(
       relay,
@@ -291,7 +294,7 @@ describe("Supervisor — workspace_state push (plan/69)", () => {
       "fresh-session recycle",
     )).filter((s) => s.state === "running")[2]!;
     expect(recycled.cwd).toBe(cwd);
-    expect(recycled.restarts).toBe(2);
+    expect(recycled.restarts).toBe(1);
     expect(recycled.last_error).toBeNull();
     expect(spawnedChildren).toHaveLength(3);
 

@@ -111,8 +111,12 @@ remote-pi-server pair                                 # 打印地址 + 配对码
 
 ```bash
 git pull && cd server && npm install && npm run build
-remote-pi-server daemon restart        # 换成新的 dist/
+remote-pi-server restart-supervisor    # supervisor 没有热重载，必须重启进程
 ```
+
+`restart-supervisor` 是**唯一**能让 server 代码生效的命令：supervisor 是常驻 Node 进程，
+而 `daemon restart` 只重起工作区的 `pi` 子进程，碰不到 supervisor 已加载的代码
+（见[改 server](#改-server--先-build再重启-supervisor)）。
 
 > 守护进程是用显式的 `-e dist/index.js` 启动的，**不经过 `pi install`**。只有当你还想在
 > **交互式** Pi 会话里用 `/remote-pi start` 时，才需要 `pi install "$PWD"`。
@@ -133,21 +137,59 @@ remote-pi-server daemon status         # 确认真在跑
 
 `install` 写的是**用户级**单元 —— Linux `systemd --user`、macOS LaunchAgent、Windows 任务计划程序，
 不需要 root。Windows 是唯一的例外：第一次 `install` 要创建计划任务（存在于机器级存储），因此会弹
-一次 UAC；之后 `daemon restart` / `restart-supervisor` / `uninstall` 都不提权。
+一次 UAC；`uninstall` 也要一次，因为 `schtasks /Delete` 动的也是那个存储。
+`restart-supervisor` 和 `daemon restart` 不提权。
 
 登录即自启，重启也不丢。守护进程起来后连上中继，让这台机器保持在线 —— **无需任何 Pi 在跑**。
 
 ### 3. 停止 / 重启
 
 ```bash
-remote-pi-server daemon restart       # rebuild 之后用这个，工作区不丢
-remote-pi-server daemon start|stop    # 启停 supervisor
+remote-pi-server restart-supervisor   # 重载 SERVER 代码（build 之后用这个）
+remote-pi-server daemon restart       # 只重启工作区的 `pi` 子进程
+remote-pi-server daemon start|stop    # 启停常驻 supervisor
 remote-pi-server daemon status        # 每个工作区的 pid / 运行时长 / 重启次数
 remote-pi-server daemons              # 列出已注册的工作区
 remote-pi-server uninstall            # 移除服务（工作区保留）
 ```
 
-### 4. 配对客户端
+用哪个取决于**你改了什么**：
+
+| 你改的 | 用 | 原因 |
+|---|---|---|
+| `server/` 代码（`host_bridge`、`index`、CLI、`/remote-pi`） | `restart-supervisor` | 这些代码跑在 supervisor 进程**内部**，它从不热重载 |
+| 某个工作区的 Pi 状态（子进程卡住、模型、登录） | `daemon restart` | 重新拉起子进程就够，supervisor 继续用它已加载的代码 |
+| 只改了 `clients/web/` | 都不用 | 开发服务器热更新，刷新页面即可 |
+
+`restart-supervisor` 会顺带重启所有工作区 daemon，所以之后**不需要**再跑 `daemon restart`。
+
+### 4. 卸载
+
+```bash
+remote-pi-server uninstall
+```
+
+它做什么、以及刻意保留什么：
+
+| | 效果 |
+|---|---|
+| 停服务 | `launchctl bootout`（macOS）/ `systemctl --user disable --now`（Linux）/ `schtasks /End`（Windows） |
+| 删单元文件 | 删除 LaunchAgent plist / systemd unit / 任务计划 XML 及配套的 `wscript` 启动器 |
+| 删 CLI 软链 | 只删 `~/.local/bin` 下的 `remote-pi-server` / `pi-supervisord`。**不动 npm 全局目录里的 bin** —— 那是另一个前缀 |
+| 保留 `~/.pi/remote/daemons.json` | 工作区注册表还在，重跑 `install` 不用重新注册 |
+| 保留 `peers.json` / `identity.json` / `pairing.json` | 配对关系继续有效，重装后客户端能直接连回 |
+
+Windows 上第一次 `install` 要一次 UAC（创建计划任务会写机器级存储），`uninstall` 也要
+（`schtasks /Delete` 同样动那个存储）。`restart-supervisor` 和 `daemon restart` 从不提权。
+
+想把 CLI 也彻底删掉：
+
+```bash
+remote-pi-server uninstall
+npm uninstall -g remote-pi-server     # 再去掉 npm 的软链
+```
+
+### 5. 配对客户端
 
 直接从守护进程配对（不需要 Pi）：
 
@@ -158,7 +200,7 @@ remote-pi-server pair        # 打印地址 + 一次性/持久配对码
 把地址和配对码填进手机应用、浏览器客户端或 Cockpit。配对完成后，客户端即可浏览主机文件系统、
 注册目录，并在那里启动 Pi。
 
-### 5. 或者照旧在本机跑 Pi
+### 6. 或者照旧在本机跑 Pi
 
 `/remote-pi` 这条 Pi 命令在日常本地场景下依然可用。在任意 Pi 会话里：
 
@@ -176,6 +218,97 @@ pi install npm:@eko24ive/pi-ask
 ```
 
 装上 pi-ask 后，智能体的 `ask_user` 澄清式提问（带选项的结构化问题、多选、预览）会以原生形式展现在手机应用里 —— 你在手机上作答，桌面端的流程随即继续。没装的话，智能体就只在聊天里用纯文本提问（手机上一样能答，只是非结构化的）。两种情况 Remote Pi 都照常工作；pi-ask 是可选的。
+
+## 开发：改完代码怎么生效
+
+装成**服务**之后最容易踩的坑就在这里：服务一直跑着它启动时加载的那份代码，改文件不会自动生效，
+必须主动重载对应的那一侧。
+
+一共有**两个独立进程**，重载方式完全不同：
+
+| 你改的 | 跑在哪 | 怎么生效 |
+|---|---|---|
+| `server/`（守护进程、CLI、`/remote-pi` 命令） | `pi-supervisord` 服务 | 重新 build **并**重启 supervisor |
+| `clients/web/`（浏览器 UI） | `next`（开发服务器或 Docker） | 开发服务器热更新，刷新页面即可 |
+| `clients/mobile/`、`clients/desktop/` | 你自己 build/跑 | 重新 build 那个客户端 |
+
+### 改 server —— 先 build，再重启 supervisor
+
+**`daemon restart` 不够。** 它只重启工作区的 Pi 进程，supervisor 本身仍跑着已经加载的旧代码
+（`pi-supervisord` 是常驻 Node 进程，没有热重载）。要用 `restart-supervisor`：
+
+```bash
+cd server
+npm run build                       # tsc → dist/
+remote-pi-server restart-supervisor # 用新的 dist/ 重新拉起 pi-supervisord
+```
+
+`restart-supervisor` 会顺带把所有工作区 daemon 一起重启，所以之后**不需要**再执行 `daemon restart`。
+确认它回来了：
+
+```bash
+remote-pi-server daemon status      # 每个工作区的 pid / 运行时长 / 重启次数
+```
+
+**验证重启真的发生了。** 对比重启前后的 supervisor PID 是唯一可靠的证据 —— 命令返回 0 不够
+（见下面 Windows 那条）：
+
+```powershell
+# Windows
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+  Where-Object { $_.CommandLine -like '*supervisord.js*' } |
+  Select-Object ProcessId, CreationDate
+```
+
+```bash
+# Linux / macOS
+pgrep -af supervisord.js
+```
+
+`CreationDate` 必须**晚于**你执行 `npm run build` 的时间。如果比它早，说明旧代码还在跑。
+
+> **Windows 特别注意：** `schtasks /End` 会报成功，但 node 进程根本不退出 —— 所以朴素的
+> `End` + `Run` 组合是**静默空操作**。`restart-supervisor` 因此会等旧的 `supervisord.js` 真正消失，
+> 超时则强制结束进程；仍然失败时**如实报错（非 0 退出码）**，不会假称成功。
+> 如果它仍报告进程在跑，手动停掉：
+>
+> ```powershell
+> Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+>   Where-Object { $_.CommandLine -like '*supervisord.js*' } |
+>   ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+> remote-pi-server restart-supervisor
+> ```
+
+这两条命令在所有平台（含 Windows）都**不需要提权**，只有第一次 `install` 需要。
+
+> **为什么不直接重启系统服务？** 可以（Linux `systemctl --user restart <unit>`、
+macOS `launchctl kickstart -k`、Windows `schtasks /End && schtasks /Run`）。
+`restart-supervisor` 就是这件事的跨平台封装。
+
+如果你**没**装服务（普通 `pi` 会话、没有 supervisor），以上都不需要：重启你的 Pi 会话，它就会加载新的 `dist/`。
+
+### 改 web —— 刷新页面
+
+开发服务器跑着的时候，改动会热更新：
+
+```bash
+cd clients/web
+npm run dev                       # http://localhost:3000/remote-pi/connect
+```
+
+改到**连接/状态**相关的代码后，通常仍需要硬刷新（**Ctrl/Cmd+Shift+R**）：浏览器对 relay 保持着一条
+WebSocket 和配套的旧客户端代码。刷新同时会用已存的凭据重新配对，这才会重跑连接时的预取。
+
+生产/服务部署走 Docker 镜像（`clients/web/Dockerfile`，`docker build` + 重启容器），改完重新 build 并重启容器。
+
+### 验证 web 改动
+
+```bash
+cd clients/web
+npm run verify:web                # 全部 Node 校验脚本（不需要浏览器）
+npm run lint && npx tsc --noEmit  # 静态检查
+npm run build                     # 生产 build 仍能编译
+```
 
 ## 状态
 

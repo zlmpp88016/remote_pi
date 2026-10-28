@@ -1,3 +1,4 @@
+import { APP_ORIGIN } from "./_cdp.mjs";
 /**
  * End-to-end latency measurement in a REAL browser against the REAL host.
  *
@@ -16,13 +17,13 @@
  * The script drives Chrome DevTools Protocol directly over the WebSocket (no
  * puppeteer/playwright is installed here), so it must run under Node 22.
  *
- * Usage: node scripts/e2e-latency.mjs [--url http://localhost:3000/remote-pi/connect]
+ * Usage: node scripts/e2e-latency.mjs [--url <APP_ORIGIN>/remote-pi/connect]
  * Requires: a browser started with --remote-debugging-port (see PORT below).
  */
 
 const CDP_PORT = Number(process.env.CDP_PORT ?? 9333);
 const URL_ARG = process.argv.find((a) => a.startsWith("--url="))?.slice("--url=".length)
-  ?? "http://localhost:3000/remote-pi/connect";
+  ?? APP_ORIGIN + "/remote-pi/connect";
 
 let passed = 0;
 const failures = [];

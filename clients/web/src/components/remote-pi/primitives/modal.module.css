@@ -1,0 +1,132 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+  /*
+   * DSH Modal geometry, measured off the running instance:
+   *   panel  — #2c2c2e, radius 28px, `elevation-prominent`
+   *   mask   — rgba(0,0,0,.5), no blur (DSH's --dsw-mask-blur is `none`; the
+   *            frosted look comes from the hairline, not from backdrop-filter)
+   *   header — padding 22px 20px 12px 24px, title 16px/500
+   *   footer — 16px 24px 24px, right-aligned
+   */
+
+  .mask {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background-color: var(--dsw-alias-bg-mask-1);
+    overflow-y: auto;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    background-color: var(--dsw-alias-bg-layer-2);
+    border-radius: var(--dsw-radius-panel);
+    color: var(--dsw-alias-label-primary);
+    font-size: 14px;
+    line-height: 22px;
+    box-shadow: var(--dsw-elevation-prominent);
+    animation: modalIn var(--dsw-transition-duration) var(--dsw-ease-in-out);
+  }
+
+  .panelDialog {
+    max-width: 440px;
+  }
+
+  .panelWide {
+    max-width: 720px;
+  }
+
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 22px 20px 12px 24px;
+  }
+
+  .headerText {
+    min-width: 0;
+  }
+
+  .title {
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 24px;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .description {
+    margin-top: 4px;
+    font-size: 14px;
+    line-height: 22px;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  /* 28x28, 8px radius, transparent until hover — the DSH close affordance. */
+  .close {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--dsw-radius-sm);
+    background-color: transparent;
+    color: var(--dsw-alias-label-primary);
+    cursor: pointer;
+    transition-property: background-color;
+    transition-timing-function: var(--dsw-ease-in-out);
+    transition-duration: var(--dsw-transition-duration-fast);
+  }
+
+  @media (hover: hover) {
+    .close:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .body {
+    min-height: 0;
+    padding: 0 24px;
+  }
+
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px 24px;
+  }
+}
+
+@layer utilities {
+  @keyframes modalIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .panel {
+      animation: none;
+    }
+  }
+}

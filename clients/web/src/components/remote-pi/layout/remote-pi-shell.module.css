@@ -1,0 +1,278 @@
+/*
+ * The layer order is declared here as well as in styles/preflight.css.
+ *
+ * Layer precedence is fixed by the FIRST declaration of each layer name, and in
+ * dev Vite injects CSS Modules before the global stylesheet — so declaring the
+ * order only in global.css would make `utilities` the first-declared layer, i.e.
+ * the LOWEST priority, and preflight would start overriding every utility.
+ * Repeating the identical order here makes the outcome independent of load order.
+ */
+
+@layer components, properties, theme, base, utilities;
+
+@layer utilities {
+
+  .shell {
+    position: relative;
+    z-index: 10;
+    display: grid;
+    /*
+     * The row track is `minmax(0,1fr)`, which only resolves to the viewport when
+     * the grid itself has a definite height. Without `height:100%` the track
+     * sizes to its content: the shell grew to the full transcript height (~2600px
+     * in a 945px viewport), `body{overflow-y:hidden}` then clipped the overflow,
+     * and the inner `mainScroll` never became scrollable because it was never
+     * shorter than its content. The composer ended up below the fold, unreachable.
+     */
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-rows: 36px minmax(0,1fr);
+    /*
+     * THE root cause of "white text on white".
+     *
+     * This used to be `var(--color-white)`, inherited by every descendant. That
+     * was correct while the UI was dark-only; once light became the default it
+     * turned the whole app white-on-white — the transcript text, the empty-state
+     * headings, host labels and session names all rendered as blank gaps.
+     *
+     * The shell sets the app's base text colour, so it belongs to the primary
+     * label token: every child that does not override inherits a readable colour
+     * and nothing has to be patched one selector at a time.
+     */
+    color: var(--dsw-alias-label-primary);
+  }
+
+  /*
+   * Window chrome for the Electron shell.
+   *
+   * The fill was hardcoded `#060606`, i.e. a black bar above an otherwise white
+   * page. It followed the light theme so it no longer reads as a black bar, and
+   * the traffic lights are gone: they were macOS affordances painted by hand
+   * (`titleBarStyle: "hiddenInset"` on darwin only), so on Windows they were
+   * purely decorative dots that did nothing and imitated an OS the user is not
+   * on. The bar itself is kept because it carries the host identity, the
+   * connection status and Unpair, and because on darwin the shell still hides
+   * the native title bar and this row IS the app's top edge.
+   */
+  .titlebar {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 3);
+    border-bottom-style: var(--tw-border-style);
+    border-bottom-width: 1px;
+    border-color: var(--dsw-alias-border-l2);
+    background-color: var(--dsw-alias-bg-base);
+    padding-inline: 12px;
+    font-size: 12.5px;
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .titlebar {
+      border-color: var(--dsw-alias-border-l2);
+    }
+  }
+
+  .titleGroup {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: calc(var(--spacing) * 2);
+    color: var(--muted);
+  }
+
+  .hostName {
+    font-size: 12.5px;
+    --tw-font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-semibold);
+    /* Was a literal white — invisible once light became the default. */
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .separator {
+    color: var(--faint);
+  }
+
+  .machine {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    font-family: var(--ff-mono);
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  .titleActions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+  }
+
+  .unpair {
+    display: inline-flex;
+    height: 26px;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    border-radius: var(--radius-md);
+    padding-inline: calc(var(--spacing) * 2);
+    font-size: 12px;
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .unpair:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .unpair:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+
+  .unpairArmed {
+    color: var(--danger);
+  }
+
+  .unpairIdle {
+    color: var(--faint);
+  }
+
+  @media(hover:hover) {
+    .unpairIdle:hover {
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  .mainScroll {
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .bodyGrid {
+    display: grid;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .transcriptColumn {
+    display: grid;
+    min-height: 0;
+    min-width: 0;
+    grid-template-rows: minmax(0,1fr) auto;
+  }
+
+  .composerPad {
+    padding-inline: 70px;
+    padding-bottom: calc(var(--spacing) * 4);
+  }
+
+  @media not all and (min-width:1023px) {
+    .composerPad {
+      padding-left: 52px;
+      padding-right: calc(var(--spacing) * 6);
+    }
+  }
+
+  @media not all and (min-width:760px) {
+    .composerPad {
+      padding-left: 38px;
+      padding-right: calc(var(--spacing) * 4);
+    }
+  }
+
+  .composerBox {
+    margin-inline: auto;
+    max-width: 848px;
+  }
+
+  .toastLayer {
+    pointer-events: none;
+    position: absolute;
+    bottom: calc(var(--spacing) * 5);
+    left: 50%;
+    z-index: 20;
+    --tw-translate-x: -50%;
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+
+  .toast {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 2.5);
+    border-radius: 14px;
+    border-style: var(--tw-border-style);
+    border-width: 1px;
+    padding-inline: calc(var(--spacing) * 3.5);
+    padding-block: calc(var(--spacing) * 2.5);
+    font-size: 13px;
+    --tw-shadow: 0 12px 32px -8px var(--tw-shadow-color,#0f111599);
+    box-shadow: var(--tw-inset-shadow),var(--tw-inset-ring-shadow),var(--tw-ring-offset-shadow),var(--tw-ring-shadow),var(--tw-shadow);
+  }
+
+  .toastError {
+    border-color: #f25a5a66;
+    background-color: var(--bg-app);
+    color: var(--danger);
+  }
+
+  .toastInfo {
+    border-color: var(--dsw-alias-border-l3);
+    background-color: var(--bg-app);
+    color: var(--ink-soft);
+  }
+
+  @supports (color:color-mix(in lab,red,red)) {
+    .toastInfo {
+      border-color: var(--dsw-alias-border-l4, var(--dsw-alias-border-l3));
+    }
+  }
+
+  .toastDot {
+    width: 7px;
+    height: 7px;
+    flex-shrink: 0;
+    border-radius: 3.40282e38px;
+    background-color: var(--danger);
+  }
+
+  .toastText {
+    white-space: pre-wrap;
+  }
+
+  .toastDismiss {
+    margin-left: var(--spacing);
+    display: grid;
+    width: calc(var(--spacing) * 5);
+    height: calc(var(--spacing) * 5);
+    place-items: center;
+    border-radius: .25rem;
+    color: var(--muted);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .toastDismiss:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+      color: var(--dsw-alias-label-primary);
+    }
+  }
+
+  @media(hover:hover) {
+    @supports (color:color-mix(in lab,red,red)) {
+      .toastDismiss:hover {
+        background-color: var(--dsw-alias-interactive-bg-hover);
+      }
+    }
+  }
+}

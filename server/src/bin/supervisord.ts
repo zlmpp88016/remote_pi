@@ -38,12 +38,38 @@ Options:
                              summary = one line per frame; full = + raw JSON.
                              Daemon children inherit the level.
   --log-file <path>          Also append the relay log to a file.
+  --direct                   Run a local relay inside this process and point
+                             the host stack at it. No community relay, no
+                             network egress. The pair command then reports a
+                             local address automatically.
   -h, --help                 Show this help and exit.
   -v, --version              Print version and exit.
 
 Environment (equivalent to the flags; flags win):
   REMOTE_PI_LOG, REMOTE_PI_LOG_FILE
+  REMOTE_PI_RELAY            Relay address; --direct fills it in when unset.
 `;
+
+/**
+ * Read `--port <n>` or `--port=<n>` out of the remaining argv.
+ *
+ * @param rest - arguments left after logging flags were parsed.
+ * @returns the port as a string, or `null` when the flag is absent.
+ */
+function readPortFlag(rest: readonly string[]): string | null {
+  for (let i = 0; i < rest.length; i += 1) {
+    const arg = rest[i];
+    if (arg === "--port") {
+      const next = rest[i + 1];
+      if (next !== undefined && /^\d+$/.test(next)) return next;
+    }
+    if (arg.startsWith("--port=")) {
+      const value = arg.slice("--port=".length);
+      if (/^\d+$/.test(value)) return value;
+    }
+  }
+  return null;
+}
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
@@ -56,18 +82,28 @@ async function main(): Promise<void> {
     return;
   }
 
-  // `--log`/`--log-file` are the only accepted arguments. Anything else still
-  // aborts: a stray arg used to fall through and start a FULL supervisor (a
-  // `pi-supervisord --help` once ran for days), so unknown args must never
-  // silently spawn the daemon fleet.
+  // `--log`/`--log-file`/`--direct` are the only accepted arguments. Anything
+  // else still aborts: a stray arg used to fall through and start a FULL
+  // supervisor (a `pi-supervisord --help` once ran for days), so unknown args
+  // must never silently spawn the daemon fleet.
   const logFlags = parseRelayLogFlags(args);
   if (logFlags.error) {
     process.stderr.write(`pi-supervisord: ${logFlags.error}\n`);
     process.exit(2);
   }
-  if (logFlags.rest.length > 0) {
+  const direct = logFlags.rest.includes("--direct");
+  /*
+   * `--port <n>` / `--port=<n>` must reach `ensureDirectRelay`, otherwise an
+   * operator whose 4124 is taken has NO command-line escape hatch: the CLI
+   * would reject the flag and the only remedy would be an undocumented env var.
+   */
+  const portArg = readPortFlag(logFlags.rest);
+  const unexpected = logFlags.rest.filter(
+    (arg) => arg !== "--direct" && arg !== "--port" && !arg.startsWith("--port=") && arg !== portArg,
+  );
+  if (unexpected.length > 0) {
     process.stderr.write(
-      `pi-supervisord: unexpected argument(s): ${logFlags.rest.join(" ")}\n` +
+      `pi-supervisord: unexpected argument(s): ${unexpected.join(" ")}\n` +
       "Run `pi-supervisord --help`.\n",
     );
     process.exit(2);
@@ -75,6 +111,21 @@ async function main(): Promise<void> {
   // Mirrors the level into process.env so the spawned daemon children inherit
   // it (each child's log.ts reads the env at startup).
   configureRelayLog({ level: logFlags.level, file: logFlags.file });
+
+  // `--direct` — start the in-process relay BEFORE the Supervisor is
+  // constructed. `resolveRelayUrl()` is read when the HostBridge connects
+  // (`daemon/supervisor.ts:186`) and when the pairing code is built
+  // (`_pairView`, `:550`), so the address must already be in the environment
+  // by then. Children inherit `process.env` (`daemon/rpc_child.ts:350`), so
+  // they resolve the same relay with nothing else to configure.
+  let directUrl: string | null = null;
+  if (direct) {
+    const { ensureDirectRelay } = await import("../direct.js");
+    directUrl = await ensureDirectRelay(portArg === null ? {} : { args: ["--port", portArg] });
+    process.stderr.write(
+      `[pi-supervisord] direct mode — local relay at ${directUrl} (no community relay)\n`,
+    );
+  }
 
   // The supervisor needs to point each spawned Pi at the extension
   // entry it's bundled with. We're at `dist/bin/supervisord.js` after
@@ -92,6 +143,10 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     process.stderr.write(`[pi-supervisord] received ${signal}, shutting down\n`);
     await supervisor.stop();
+    if (directUrl) {
+      const { stopDirectRelay } = await import("../direct.js");
+      await stopDirectRelay();
+    }
     process.exit(0);
   };
   process.on("SIGTERM", () => void shutdown("SIGTERM"));

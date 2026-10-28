@@ -1,3 +1,4 @@
+import { APP_ORIGIN } from "./_cdp.mjs";
 /**
  * End-to-end CHAT latency in a REAL browser against the REAL daemon.
  *
@@ -20,7 +21,7 @@
 
 const CDP_PORT = Number(process.env.CDP_PORT ?? 9333);
 const URL_ARG = process.argv.find((a) => a.startsWith("--url="))?.slice("--url=".length)
-  ?? "http://localhost:3000/remote-pi/connect";
+  ?? APP_ORIGIN + "/remote-pi/connect";
 const PAIR_URI = process.argv.find((a) => a.startsWith("--uri="))?.slice("--uri=".length) ?? "";
 const MESSAGE = process.argv.find((a) => a.startsWith("--message="))?.slice("--message=".length)
   ?? "reply with exactly: pong";
