@@ -145,13 +145,23 @@ async function main(): Promise<void> {
   let directUrl: string | null = null;
   if (direct) {
     const { ensureDirectRelay } = await import("../direct.js");
-    const { resolvePublicRelayUrl } = await import("../config.js");
+    const { resolveBindHost, resolvePublicRelayUrl } = await import("../config.js");
     directUrl = await ensureDirectRelay(portArg === null ? {} : { args: ["--port", portArg] });
     const dial = resolvePublicRelayUrl();
+    /*
+     * Only claim "reachable" when it actually is. Bound to loopback there is no
+     * network address, and announcing one would send people to a URL that
+     * refuses the connection.
+     */
+    const reach =
+      dial.source === "lan"
+        ? `[pi-supervisord] reachable from the network at ${dial.url} — pair from any device with the code below\n`
+        : `[pi-supervisord] loopback only (${resolveBindHost()}) — pair from this machine, ` +
+          `or \`set-bind 0.0.0.0\` to allow other devices\n`;
     process.stderr.write(
       `[pi-supervisord] direct mode — embedded relay on http://127.0.0.1:${new URL(directUrl).port}` +
         ` (no community relay)\n` +
-        `[pi-supervisord] reachable from the network at ${dial.url} — pair from any device with the code below\n`,
+        reach,
     );
   }
 
