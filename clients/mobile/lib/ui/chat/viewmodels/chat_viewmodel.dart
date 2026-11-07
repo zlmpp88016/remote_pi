@@ -104,13 +104,53 @@ class ChatViewModel extends ViewModel<ChatState> {
     for (final r in _conn.roomsFor(epk)) {
       if (r.roomId == _activeRoomId) return r;
     }
-    return null;
+    // Fallback: the relay's room catalog can lag or be absent (a host whose
+    // relay predates `subscribe_rooms`, or the very first frames after
+    // connect). The daemon's `workspace_state` push already carries the cwd,
+    // and the workspace dock refuses to open without one — so synthesize the
+    // minimum RoomInfo rather than leaving the user with a dead button.
+    return _roomFromWorkspaceState();
+  }
+
+  /// Best-effort RoomInfo built from the daemon's lifecycle push.
+  ///
+  /// Only the cwd (and whatever name the state carries) is genuinely known
+  /// here; [RoomInfo.startedAt] is a placeholder because nothing in
+  /// `workspace_state` reports a start time. Callers only use it as a fallback
+  /// for navigation, never to render authoritative session metadata on its own.
+  RoomInfo? _roomFromWorkspaceState() {
+    final states = _conn.workspaceStatesSnapshot;
+    if (states.isEmpty) return null;
+    final state = states[_activeRoomId] ?? states.values.first;
+    final cwd = state.cwd;
+    if (cwd.isEmpty) return null;
+    return RoomInfo(roomId: _activeRoomId, cwd: cwd, startedAt: 0);
   }
 
   bool get isRoomLive {
     final epk = _activePeer?.remoteEpk;
     if (epk == null) return false;
     return _conn.isRoomLive(epk, _activeRoomId);
+  }
+
+  /// 主机在 `host_hello_ok` 里声明的能力，或 `null`（还没握手）。
+  ///
+  /// `null` 与 `[]` 不同：前者是「不知道」，后者是「主机声明了一个能力都没有」。
+  /// 调用方用 [hostSupports] 区分，不要在未握手时假装不支持。
+  List<String>? get hostCapabilities {
+    final epk = _activePeer?.remoteEpk;
+    if (epk == null) return null;
+    return _conn.hostHelloFor(epk)?.capabilities;
+  }
+
+  /// 主机是否声明了 [capability]。
+  ///
+  /// 尚未握手时返回 `true`：宁可让面板发一次请求（它自己会报错），也不要在
+  /// 握手的几毫秒里把面板错误地标成「主机不支持」。
+  bool hostSupports(String capability) {
+    final caps = hostCapabilities;
+    if (caps == null) return true;
+    return caps.contains(capability);
   }
 
   /// Whole-turn working signal for the room THIS chat is viewing — the
@@ -355,7 +395,7 @@ class ChatViewModel extends ViewModel<ChatState> {
         if (isWarning) {
           _pendingUiError = (req.message?.isNotEmpty ?? false)
               ? req.message
-              : 'Answer was not accepted.';
+              : '回复未被接受。';
         } else {
           _pendingUiRequest = null;
           _pendingUiError = null;
@@ -441,7 +481,7 @@ class ChatViewModel extends ViewModel<ChatState> {
     _recompute();
     final sent = await _sync.respondExtensionUi(resp);
     if (!sent) {
-      _pendingUiError = 'Not connected — check the link to Pi and retry.';
+      _pendingUiError = '未连接 —— 请检查与 Pi 的链路后重试。';
       _recompute();
     }
   }

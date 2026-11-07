@@ -42,7 +42,7 @@ class WorkspaceBrowserViewModel extends ViewModel<WorkspaceBrowserState> {
     } on WorkspaceControlFailure catch (e) {
       emit(WorkspaceBrowserError(message: humanError(e.message), path: path));
     } catch (e) {
-      emit(WorkspaceBrowserError(message: 'Could not read the folder: $e', path: path));
+      emit(WorkspaceBrowserError(message: '无法读取该目录：$e', path: path));
     }
   }
 
@@ -126,7 +126,7 @@ class WorkspaceBrowserViewModel extends ViewModel<WorkspaceBrowserState> {
       emit(WorkspaceBrowserError(message: humanError(e.message), path: s.path));
       return null;
     } catch (e) {
-      emit(WorkspaceBrowserError(message: 'Could not start that folder: $e', path: s.path));
+      emit(WorkspaceBrowserError(message: '无法在该目录启动：$e', path: s.path));
       return null;
     }
   }
@@ -134,13 +134,13 @@ class WorkspaceBrowserViewModel extends ViewModel<WorkspaceBrowserState> {
   /// Plan/68 typed errors → user-facing copy. Kept here (not in the page) so
   /// both the browser and the workspace list share one mapping.
   static String humanError(String code) => switch (code) {
-    'offline' => 'Not connected to that machine.',
-    'not_found' => 'That folder no longer exists on the machine.',
-    'not_a_directory' => 'That path is a file, not a folder.',
-    'permission_denied' => 'No permission to read that folder on the machine.',
+    'offline' => '未连接到该机器。',
+    'not_found' => '该目录在机器上已不存在。',
+    'not_a_directory' => '该路径是文件，不是目录。',
+    'permission_denied' => '没有权限读取机器上的该目录。',
     'not_registered' =>
       'That folder is not registered on the machine. Run "remote-pi create <cwd>" there.',
-    'spawn_failed' => 'The machine could not start a Pi in that folder.',
+    'spawn_failed' => '主机无法在该目录启动 Pi。',
     _ => code.isEmpty ? 'Workspace request failed.' : code,
   };
 

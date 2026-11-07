@@ -6,6 +6,7 @@ import 'package:mobile/ui/pairing/viewmodels/pairing_viewmodel.dart';
 import 'package:mobile/ui/pairing/widgets/nickname_sheet.dart';
 import 'package:mobile/ui/pairing/widgets/paste_pairing_sheet.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -59,7 +60,7 @@ class _PairingPageState extends State<PairingPage> {
       backgroundColor: colors.bg,
       appBar: AppBar(
         backgroundColor: colors.bg,
-        title: const Text('Pair device'),
+        title: const Text(OnboardingCopy.connectDevice),
       ),
       body: _buildBody(state, vm),
     );
@@ -112,17 +113,16 @@ class _PairingPageState extends State<PairingPage> {
             const SizedBox(height: 20),
             Text(
               isConnecting
-                  ? 'Connecting to $sessionName…'
-                  : 'Paste the pairing code from your computer',
+                  ? '正在连接 $sessionName…'
+                  : OnboardingCopy.copyCode,
               textAlign: TextAlign.center,
               style: TextStyle(color: colors.text, fontSize: 14),
             ),
             const SizedBox(height: 8),
             Text(
-              'Run /remote-pi pair on your computer and paste the '
-              'remotepi://pair?… code it prints. The relay address fills in '
-              'from the code — edit it only for a self-hosted relay, or '
-              'clear it to use your default.',
+              '在电脑上运行 /remote-pi pair，把打印出来的 '
+              'remotepi://pair?… 配对码粘贴到这里。中继地址会从配对码里自动填入 —— '
+              '只有用自建中继时才需要改它，清空则用默认值。',
               textAlign: TextAlign.center,
               style: TextStyle(color: colors.muted2, fontSize: 12, height: 1.4),
             ),
@@ -136,7 +136,7 @@ class _PairingPageState extends State<PairingPage> {
                   color: colors.onAccent,
                 ),
                 label: Text(
-                  'Paste pairing code',
+                  OnboardingCopy.pasteCode,
                   style: TextStyle(
                     color: colors.onAccent,
                     fontSize: 13,
@@ -205,7 +205,7 @@ class _ErrorView extends StatelessWidget {
                   backgroundColor: colors.accent,
                   foregroundColor: colors.onAccent,
                 ),
-                child: const Text('Try again'),
+                child: const Text(OnboardingCopy.tryAgain),
               ),
             ],
           ],

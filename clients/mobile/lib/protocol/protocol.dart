@@ -906,6 +906,20 @@ enum ActionName {
   workspaceStop('workspace_stop'),
   // Plan/68 — host filesystem navigation + explicit workspace catalog.
   fsList('fs_list'),
+  // Plan/84 — one allowlisted text file (Plan/Files panels).
+  fsRead('fs_read'),
+  // Plan/84 — automations: the five schedule_* actions.
+  scheduleList('schedule_list'),
+  scheduleAdd('schedule_add'),
+  scheduleRemove('schedule_remove'),
+  scheduleSetEnabled('schedule_set_enabled'),
+  scheduleRunNow('schedule_run_now'),
+  // Plan/84 — the host settings.json whitelist projection.
+  settingsDescribe('settings_describe'),
+  settingsMutate('settings_mutate'),
+  // Plan/84 — the host models.json (credentials; keys never on the wire).
+  modelsDescribe('models_describe'),
+  modelsMutate('models_mutate'),
   workspaceAdd('workspace_add'),
   workspaceRemove('workspace_remove'),
   // Plan/68 — Pi surface (skills + packages).
@@ -1304,6 +1318,195 @@ class FsList extends ClientMessage {
   };
 }
 
+/// Plan/84 — read ONE allowlisted text file (`fs_read`).
+///
+/// Carries `root` as well as `path` on purpose: the host uses `root` to confine
+/// the read to that workspace's allowlisted directories (plan/, .workflow/,
+/// docs/). A client that sent only `path` would be asking the host to trust the
+/// path outright, which is exactly what the host refuses to do.
+class FsReadRequest extends ClientMessage {
+  final String id;
+  final String path;
+  final String root;
+  FsReadRequest({required this.id, required this.path, required this.root});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'fs_read',
+    'id': id,
+    'path': path,
+    'root': root,
+  };
+}
+
+/// Plan/84 — `models_describe`. No path parameter: the target is resolved
+/// host-side, so nothing on this frame can point at another file.
+class ModelsDescribeRequest extends ClientMessage {
+  final String id;
+  ModelsDescribeRequest({required this.id});
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'models_describe', 'id': id};
+}
+
+/// Plan/84 — `models_mutate`. Path-addressed ops only; whole-file replace is
+/// deliberately absent because it would write back the secret-stripped config.
+class ModelsMutateRequest extends ClientMessage {
+  final String id;
+  final List<Map<String, dynamic>> ops;
+  final String revision;
+  ModelsMutateRequest({
+    required this.id,
+    required this.ops,
+    required this.revision,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'models_mutate',
+    'id': id,
+    'ops': ops,
+    'revision': revision,
+  };
+}
+
+/// Plan/84 — `settings_describe`. No path: the target is resolved host-side, so
+/// there is no parameter that could be pointed at another file.
+class SettingsDescribeRequest extends ClientMessage {
+  final String id;
+  SettingsDescribeRequest({required this.id});
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'settings_describe', 'id': id};
+}
+
+/// Plan/84 — `settings_mutate`. Ops are path-addressed SET/UNSET only; there is
+/// deliberately no whole-file replace, which would be a secret-wiping machine.
+class SettingsMutateRequest extends ClientMessage {
+  final String id;
+  final List<Map<String, dynamic>> ops;
+  final String revision;
+  SettingsMutateRequest({
+    required this.id,
+    required this.ops,
+    required this.revision,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'settings_mutate',
+    'id': id,
+    'ops': ops,
+    'revision': revision,
+  };
+}
+
+/// Plan/84 — `schedule_list`. No arguments: the host returns every task it
+/// knows about, across every workspace.
+class ScheduleListRequest extends ClientMessage {
+  final String id;
+  ScheduleListRequest({required this.id});
+
+  @override
+  Map<String, dynamic> toJson() => {'type': 'schedule_list', 'id': id};
+}
+
+/// Plan/84 — `schedule_add`. Every optional flag defaults to the host's own
+/// default, so the client never invents a policy the host did not choose.
+class ScheduleAdd extends ClientMessage {
+  final String id;
+  final String daemonId;
+  final String schedule;
+  final String prompt;
+  final String? tz;
+  final bool skipIfBusy;
+  final bool wake;
+  final bool catchup;
+  final String? modelProvider;
+  final String? modelId;
+  final bool freshSession;
+
+  ScheduleAdd({
+    required this.id,
+    required this.daemonId,
+    required this.schedule,
+    required this.prompt,
+    this.tz,
+    this.skipIfBusy = false,
+    this.wake = false,
+    this.catchup = false,
+    this.modelProvider,
+    this.modelId,
+    this.freshSession = false,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'schedule_add',
+    'id': id,
+    'daemon_id': daemonId,
+    'schedule': schedule,
+    'prompt': prompt,
+    if (tz != null) 'tz': tz,
+    'skip_if_busy': skipIfBusy,
+    'wake': wake,
+    'catchup': catchup,
+    // A pinned model is `{provider,id}`; omitting it means INHERIT, which is a
+    // meaningful state, not a missing value.
+    if (modelProvider != null && modelId != null)
+      'model': {'provider': modelProvider, 'id': modelId},
+    'fresh_session': freshSession,
+  };
+}
+
+/// Plan/84 — `schedule_remove` by id.
+class ScheduleRemove extends ClientMessage {
+  final String id;
+  final String jobId;
+  ScheduleRemove({required this.id, required this.jobId});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'schedule_remove',
+    'id': id,
+    'job_id': jobId,
+  };
+}
+
+/// Plan/84 — enable/disable one scheduled task.
+class ScheduleSetEnabled extends ClientMessage {
+  final String id;
+  final String jobId;
+  final bool enabled;
+  ScheduleSetEnabled({
+    required this.id,
+    required this.jobId,
+    required this.enabled,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'schedule_set_enabled',
+    'id': id,
+    'job_id': jobId,
+    'enabled': enabled,
+  };
+}
+
+/// Plan/84 — fire one scheduled task immediately.
+class ScheduleRunNow extends ClientMessage {
+  final String id;
+  final String jobId;
+  ScheduleRunNow({required this.id, required this.jobId});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'schedule_run_now',
+    'id': id,
+    'job_id': jobId,
+  };
+}
+
 /// Plan/68 — persist a workspace the user added from the picker.
 class WorkspaceAdd extends ClientMessage {
   final String id;
@@ -1481,6 +1684,27 @@ sealed class ServerMessage {
       'host_message' => HostMessage.fromJson(json),
       // Plan/68 — host filesystem navigation for the workspace picker.
       'fs_list_ok' => FsListOk.fromJson(json),
+      // Plan/84 — one allowlisted text file, for the Plan/Files panels.
+      'fs_read_ok' => FsReadOk.fromJson(json),
+      // Plan/84 — automations. One list reply, one add reply carrying the
+      // created task, and one shared ack shape for remove/set_enabled/run_now.
+      'schedule_list_ok' => ScheduleListOk.fromJson(json),
+      'schedule_add_ok' => ScheduleAddOk.fromJson(json),
+      'schedule_remove_ok' => ScheduleAck.fromJson(json),
+      'schedule_set_enabled_ok' => ScheduleAck.fromJson(json),
+      'schedule_run_now_ok' => ScheduleAck.fromJson(json),
+      // Plan/84 — host settings.json (positive whitelist projection).
+      'settings_describe_ok' => SettingsDescribeOk.fromJson(json),
+      'settings_mutate_ok' => SettingsMutateOk.fromJson(json),
+      // Plan/84 — host models.json. The config frame never carries a key.
+      'models_describe_ok' => ModelsDescribeOk.fromJson(json),
+      'models_mutate_ok' => ModelsMutateOk.fromJson(json),
+      // Plan/84 — Changes tab: the workspace's working-tree status. A failure is
+      // its own frame (`changes_snapshot_unavailable`) rather than an empty list,
+      // because "this is not a git repo" and "your worktree is clean" must not
+      // look the same on screen.
+      'changes_snapshot_ok' => ChangesSnapshotOk.fromJson(json),
+      'changes_snapshot_unavailable' => ChangesSnapshotUnavailable.fromJson(json),
       // Plan/68 — Pi surface (skills + packages) and its management acks.
       'pi_surface_ok' => PiSurfaceOk.fromJson(json),
       'skill_invoke_ok' => SkillInvokeOk.fromJson(json),
@@ -2248,6 +2472,140 @@ class FsListOk extends ServerMessage {
   );
 }
 
+/// Plan/84 — one allowlisted text file (`fs_read_ok`).
+///
+/// `truncated` says the content is the HEAD of a larger file, and `bytes` is the
+/// REAL size — so the UI can say 「文档超过读取上限」 with a true number instead
+/// of implying the file is that short.
+class FsReadOk extends ServerMessage {
+  final String inReplyTo;
+  final String path;
+  final String content;
+  final bool truncated;
+  final int bytes;
+  FsReadOk({
+    required this.inReplyTo,
+    required this.path,
+    required this.content,
+    this.truncated = false,
+    this.bytes = 0,
+  });
+
+  factory FsReadOk.fromJson(Map<String, dynamic> j) => FsReadOk(
+    inReplyTo: j['in_reply_to'] as String? ?? '',
+    path: j['path'] as String? ?? '',
+    content: j['content'] as String? ?? '',
+    truncated: j['truncated'] as bool? ?? false,
+    bytes: (j['bytes'] as num?)?.toInt() ?? 0,
+  );
+}
+
+/// Plan/84 — `models_describe_ok`. `config` has every secret field REMOVED;
+/// `secrets` carries existence only.
+class ModelsDescribeOk extends ServerMessage {
+  final String inReplyTo;
+  final Map<String, dynamic> body;
+  ModelsDescribeOk({required this.inReplyTo, this.body = const {}});
+
+  factory ModelsDescribeOk.fromJson(Map<String, dynamic> j) => ModelsDescribeOk(
+    inReplyTo: j['in_reply_to'] as String? ?? '',
+    body: j,
+  );
+}
+
+/// Plan/84 — `models_mutate_ok` returns the fresh revision.
+class ModelsMutateOk extends ServerMessage {
+  final String inReplyTo;
+  final String revision;
+  ModelsMutateOk({required this.inReplyTo, this.revision = ''});
+
+  factory ModelsMutateOk.fromJson(Map<String, dynamic> j) => ModelsMutateOk(
+    inReplyTo: j['in_reply_to'] as String? ?? '',
+    revision: j['revision'] as String? ?? '',
+  );
+}
+
+/// Plan/84 — `settings_describe_ok`. Carries the POSITIVE whitelist projection:
+/// six fields and nothing else. The frame is structurally incapable of carrying
+/// packages/extensions/changelog bookkeeping, which is the point.
+class SettingsDescribeOk extends ServerMessage {
+  final String inReplyTo;
+  final Map<String, dynamic> body;
+  SettingsDescribeOk({required this.inReplyTo, this.body = const {}});
+
+  factory SettingsDescribeOk.fromJson(Map<String, dynamic> j) => SettingsDescribeOk(
+    inReplyTo: j['in_reply_to'] as String? ?? '',
+    body: j,
+  );
+}
+
+/// Plan/84 — `settings_mutate_ok` returns the FRESH revision so the client never
+/// has to guess what the file looks like now.
+class SettingsMutateOk extends ServerMessage {
+  final String inReplyTo;
+  final String revision;
+  SettingsMutateOk({required this.inReplyTo, this.revision = ''});
+
+  factory SettingsMutateOk.fromJson(Map<String, dynamic> j) => SettingsMutateOk(
+    inReplyTo: j['in_reply_to'] as String? ?? '',
+    revision: j['revision'] as String? ?? '',
+  );
+}
+
+/// Plan/84 — `schedule_list_ok`. Also carries `workspace_names` so the panel can
+/// label a task's workspace without resolving it from the catalog.
+class ScheduleListOk extends ServerMessage {
+  final String inReplyTo;
+  final List<Map<String, dynamic>> tasks;
+  final Map<String, dynamic> workspaceNames;
+  ScheduleListOk({
+    required this.inReplyTo,
+    this.tasks = const [],
+    this.workspaceNames = const {},
+  });
+
+  factory ScheduleListOk.fromJson(Map<String, dynamic> j) {
+    final rawTasks = j['tasks'];
+    final tasks = <Map<String, dynamic>>[];
+    if (rawTasks is List) {
+      for (final t in rawTasks) {
+        if (t is Map<String, dynamic>) tasks.add(t);
+      }
+    }
+    return ScheduleListOk(
+      inReplyTo: j['in_reply_to'] as String? ?? '',
+      tasks: tasks,
+      workspaceNames: (j['workspace_names'] as Map<String, dynamic>?) ?? const {},
+    );
+  }
+}
+
+/// Plan/84 — `schedule_add_ok` carries the task the host actually created (not
+/// the one the client asked for), so the row reflects host truth.
+class ScheduleAddOk extends ServerMessage {
+  final String inReplyTo;
+  final Map<String, dynamic> task;
+  ScheduleAddOk({required this.inReplyTo, this.task = const {}});
+
+  factory ScheduleAddOk.fromJson(Map<String, dynamic> j) => ScheduleAddOk(
+    inReplyTo: j['in_reply_to'] as String? ?? '',
+    task: (j['task'] as Map<String, dynamic>?) ?? const {},
+  );
+}
+
+/// Plan/84 — ack for remove / set_enabled / run_now. All three share one shape:
+/// they name the job they acted on and nothing else.
+class ScheduleAck extends ServerMessage {
+  final String inReplyTo;
+  final String jobId;
+  ScheduleAck({required this.inReplyTo, required this.jobId});
+
+  factory ScheduleAck.fromJson(Map<String, dynamic> j) => ScheduleAck(
+    inReplyTo: j['in_reply_to'] as String? ?? '',
+    jobId: j['job_id'] as String? ?? '',
+  );
+}
+
 /// Plan/68 — runtime part of a `pi_surface_ok`. Every field is nullable because
 /// the host reports `null` rather than fabricating a value it cannot determine.
 class PiSurfaceRuntime {
@@ -2365,6 +2723,58 @@ enum PackageOp {
     }
     return PackageOp.update;
   }
+}
+
+/// Plan/84 — `changes_snapshot` request. Addressed to the host room and run
+/// against `root` (the workspace the client is looking at, never the host's own
+/// cwd). `daemon_id` rides along so a stale reply cannot be attributed to a
+/// different folder.
+class ChangesSnapshotRequest extends ClientMessage {
+  final String id;
+  final String root;
+  final String daemonId;
+  ChangesSnapshotRequest({
+    required this.id,
+    required this.root,
+    required this.daemonId,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'changes_snapshot',
+    'id': id,
+    'root': root,
+    'daemon_id': daemonId,
+  };
+}
+
+/// Plan/84 — success frame. The `snapshot` map is decoded by
+/// `lib/protocol/changes.dart`, which owns the field-by-field contract; the
+/// wire key here is `snapshot`, NOT the flattened fields.
+class ChangesSnapshotOk extends ServerMessage {
+  final String inReplyTo;
+  final Map<String, dynamic> snapshot;
+  ChangesSnapshotOk({required this.inReplyTo, required this.snapshot});
+
+  factory ChangesSnapshotOk.fromJson(Map<String, dynamic> j) => ChangesSnapshotOk(
+    inReplyTo: j['in_reply_to'] as String? ?? '',
+    snapshot: (j['snapshot'] as Map<String, dynamic>?) ?? const {},
+  );
+}
+
+/// Plan/84 — failure frame. `reason` is a closed vocabulary; the client owns the
+/// sentence. Never a populated list, because an empty list would claim the
+/// worktree is clean.
+class ChangesSnapshotUnavailable extends ServerMessage {
+  final String inReplyTo;
+  final String reason;
+  ChangesSnapshotUnavailable({required this.inReplyTo, required this.reason});
+
+  factory ChangesSnapshotUnavailable.fromJson(Map<String, dynamic> j) =>
+      ChangesSnapshotUnavailable(
+        inReplyTo: j['in_reply_to'] as String? ?? '',
+        reason: j['reason'] as String? ?? '',
+      );
 }
 
 class PiSurfaceOk extends ServerMessage {

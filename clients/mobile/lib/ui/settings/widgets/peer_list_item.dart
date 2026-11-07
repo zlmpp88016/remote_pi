@@ -119,7 +119,7 @@ class PeerListItem extends StatelessWidget {
               ),
             ),
             IconButton(
-              tooltip: 'Edit nickname',
+              tooltip: '编辑昵称',
               icon: const Icon(LucideIcons.pencil, size: 18),
               color: colors.muted2,
               onPressed: onEditNickname,

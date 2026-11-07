@@ -6,6 +6,7 @@ import 'package:mobile/domain/transcript_rows.dart';
 import 'package:mobile/domain/value_objects/device_capabilities.dart';
 import 'package:mobile/pairing/storage.dart';
 import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:mobile/ui/chat/quick_actions/widgets/quick_actions_sheet.dart';
 import 'package:mobile/ui/chat/attachment/states/attachment_state.dart';
@@ -222,12 +223,12 @@ class ChatPage extends StatelessWidget {
                             ? colors.success
                             : colors.muted;
                         final label = isWorking
-                            ? 'working…'
+                            ? '运行中…'
                             : isReconnecting
-                            ? 'reconnecting…'
+                            ? '重连中…'
                             : isOnline
-                            ? 'online'
-                            : 'offline';
+                            ? '在线'
+                            : '离线';
                         return Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -257,11 +258,42 @@ class ChatPage extends StatelessWidget {
               ],
             ),
           ),
+          // Plan/84 — the workspace dock (plan / files / changes / plugins /
+          // automations / models / settings). Needs the workspace root, which
+          // rides on the room the chat is bound to.
+          IconButton(
+            icon: Icon(LucideIcons.panelRight, size: 18, color: colors.muted2),
+            tooltip: ChatCopy.openDock,
+            onPressed: () {
+              final cwd = vm.activeRoom?.cwd;
+              if (cwd == null || cwd.isEmpty) {
+                // The dock is rooted at the session's cwd; without one there is
+                // nothing to list, read or diff. Say so — a silent return made
+                // this look like a broken button (the real cause was the relay
+                // not implementing the room catalog, so the app never learned
+                // any cwd at all).
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(ChatCopy.dockNeedsWorkspace)),
+                );
+                return;
+              }
+              context.push('/dock', extra: {
+                'root': cwd,
+                'device': vm.activePeer?.sessionName,
+                // 工作区没跑时，读工作树的三个面会直接说明原因而不是先发一次
+                // 注定被拒的请求。
+                'live': vm.isRoomLive,
+                // 主机没声明的能力同理：提前禁用并解释，不靠被拒来发现。
+                'models': vm.hostSupports('models_config'),
+                'settings': vm.hostSupports('settings'),
+              });
+            },
+          ),
           // Plan 01 — session tree / branching entry point. The sheet asks the
           // ViewModel for a fresh snapshot and rebuilds itself live.
           IconButton(
             icon: Icon(LucideIcons.gitBranch, size: 18, color: colors.muted2),
-            tooltip: 'Session tree',
+            tooltip: ChatCopy.sessionTree,
             onPressed: () => unawaited(
               showSessionTreeSheet(context, vm: vm),
             ),
@@ -274,7 +306,7 @@ class ChatPage extends StatelessWidget {
           // mount for the connection) and no-op in the unlikely pre-load tap.
           IconButton(
             icon: Icon(LucideIcons.info, size: 18, color: colors.muted2),
-            tooltip: 'Session info',
+            tooltip: ChatCopy.sessionInfo,
             onPressed: () {
               final p = vm.activePeer;
               if (p != null) {
@@ -316,7 +348,7 @@ class ChatPage extends StatelessWidget {
             side: BorderSide(color: colors.border),
           ),
           title: Text(
-            'Session info',
+            ChatCopy.sessionInfo,
             style: TextStyle(
               fontFamily: kMonoFamily,
               fontSize: 15,
@@ -401,11 +433,11 @@ class ChatPage extends StatelessWidget {
       // and uses Home / Settings → pairing.
       ChatNoPeer() => const _EmptyState(
         icon: LucideIcons.messageCircle,
-        message: 'No active device',
+        message: ChatCopy.noActiveDevice,
       ),
       ChatConnecting() => const _EmptyState(
         icon: LucideIcons.refreshCw,
-        message: 'Connecting…',
+        message: ChatCopy.connecting,
       ),
       ChatFatalError(:final message) => _EmptyState(
         icon: LucideIcons.circleAlert,
@@ -423,7 +455,7 @@ class ChatPage extends StatelessWidget {
         if (visible.isEmpty && streaming == null) {
           return const _EmptyState(
             icon: LucideIcons.terminal,
-            message: 'Nothing here',
+            message: ChatCopy.nothingHere,
           );
         }
         return _MessageList(
@@ -541,13 +573,13 @@ class ChatPage extends StatelessWidget {
         messenger.showSnackBar(
           SnackBar(
             content: const Text(
-              'Camera access is off — enable it in Settings to attach a photo.',
+              ChatCopy.cameraOff,
             ),
             duration: const Duration(seconds: 5),
             behavior: SnackBarBehavior.floating,
             action: canOpenSettings
                 ? SnackBarAction(
-                    label: 'Settings',
+                    label: AppSettingsCopy.title,
                     onPressed: AppSettings.openAppSettings,
                   )
                 : null,
@@ -578,7 +610,7 @@ class ChatPage extends StatelessWidget {
       case VoiceHint.holdToTalk:
         messenger.showSnackBar(
           const SnackBar(
-            content: Text('Hold the mic to talk'),
+            content: Text(ChatCopy.holdToTalk),
             duration: Duration(seconds: 2),
             behavior: SnackBarBehavior.floating,
           ),
@@ -587,13 +619,13 @@ class ChatPage extends StatelessWidget {
         messenger.showSnackBar(
           SnackBar(
             content: const Text(
-              'Microphone access is off — enable it in Settings to dictate.',
+              ChatCopy.micOff,
             ),
             duration: const Duration(seconds: 5),
             behavior: SnackBarBehavior.floating,
             action: canOpenSettings
                 ? SnackBarAction(
-                    label: 'Settings',
+                    label: AppSettingsCopy.title,
                     onPressed: AppSettings.openAppSettings,
                   )
                 : null,
@@ -766,7 +798,7 @@ class _LoadOlderButton extends StatelessWidget {
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       child: const Text(
-        'Load earlier messages',
+        ChatCopy.loadEarlier,
         style: TextStyle(fontFamily: kMonoFamily, fontSize: 11),
       ),
     );
@@ -829,7 +861,7 @@ class _RevokedBanner extends StatelessWidget {
           const SizedBox(width: 8),
           const Expanded(
             child: Text(
-              'Pairing revoked by Mac — re-pair to continue',
+              ChatCopy.pairingRevoked,
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.white,

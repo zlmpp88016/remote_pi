@@ -216,7 +216,7 @@ class _ExtensionUiSheetState extends State<ExtensionUiSheet> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final ask = _ask;
-    final title = widget.request.title ?? ask?.title ?? 'Clarification needed';
+    final title = widget.request.title ?? ask?.title ?? '需要澄清';
 
     // System back (Android) mirrors the close button: cancel the flow instead
     // of popping the chat route underneath while the modal is still overlaid.
@@ -310,7 +310,7 @@ class _ExtensionUiSheetState extends State<ExtensionUiSheet> {
           // Submit button would stay stale for text-only answers.
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
-            hintText: 'Type your own…',
+            hintText: '输入你自己的…',
             isDense: true,
             border: const OutlineInputBorder(),
             contentPadding: const EdgeInsets.symmetric(
@@ -454,7 +454,7 @@ class _ExtensionUiSheetState extends State<ExtensionUiSheet> {
               ),
             ),
             ExtensionUiMethod.confirm => Text(
-              'Please confirm.',
+              '请确认。',
               style: text.titleMedium,
             ),
             // ChatViewModel consumes notify requests without opening this
@@ -489,7 +489,7 @@ class _ExtensionUiSheetState extends State<ExtensionUiSheet> {
               const Padding(
                 padding: EdgeInsets.only(bottom: 8),
                 child: Text(
-                  'No response from Pi yet — retry or cancel.',
+                  'Pi 还没有回应 —— 请重试或取消。',
                   style: TextStyle(fontSize: 13),
                 ),
               ),

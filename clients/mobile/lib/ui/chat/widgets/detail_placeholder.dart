@@ -31,7 +31,7 @@ class DetailPlaceholder extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               Text(
-                'Pick a session on the left to open its chat.',
+                '从左侧选一个会话打开对话。',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontFamily: kMonoFamily,

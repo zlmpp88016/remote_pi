@@ -134,7 +134,7 @@ void main() {
 
       // Status dot uses initialOnline before the runtime resolves → shows
       // "online" immediately instead of flashing offline/reconnecting.
-      expect(find.text('online'), findsOneWidget);
+      expect(find.text('在线'), findsOneWidget);
 
       // Unmount + dispose in-body (the framework's pending-timer check runs
       // before addTearDown; conn's watchdog must be cancelled here).

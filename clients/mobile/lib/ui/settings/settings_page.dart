@@ -1,6 +1,7 @@
 import 'package:mobile/data/preferences/preferences.dart';
 import 'package:mobile/data/transport/relay_config.dart';
 import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:mobile/ui/settings/states/settings_state.dart';
 import 'package:mobile/ui/settings/viewmodels/settings_viewmodel.dart';
@@ -28,7 +29,7 @@ class SettingsPage extends StatelessWidget {
       backgroundColor: colors.bg,
       appBar: AppBar(
         backgroundColor: colors.bg,
-        title: const Text('Settings'),
+        title: const Text(AppSettingsCopy.title),
         automaticallyImplyLeading: false,
         leading: IconButton(
           icon: Icon(
@@ -52,7 +53,7 @@ class SettingsPage extends StatelessWidget {
           Divider(color: colors.border, height: 1),
           const _DisplaySection(),
           Divider(color: colors.border, height: 1),
-          const _SectionHeader('Pairings'),
+          const _SectionHeader(AppSettingsCopy.pairings),
           switch (state) {
             SettingsLoading() => Padding(
               padding: const EdgeInsets.symmetric(vertical: 32),
@@ -99,7 +100,7 @@ class _AddPairingButton extends StatelessWidget {
         ),
         icon: const Icon(LucideIcons.scanQrCode, size: 18),
         label: Text(
-          'Add new pairing',
+          AppSettingsCopy.addPairing,
           style: const TextStyle(fontFamily: kMonoFamily, fontSize: 13),
         ),
       ),
@@ -140,7 +141,7 @@ class _RelaySectionState extends State<_RelaySection> {
       messenger.showSnackBar(
         const SnackBar(
           content: Text(
-            'Relay updated',
+            AppSettingsCopy.relayUpdated,
             style: TextStyle(fontFamily: kMonoFamily),
           ),
           duration: Duration(seconds: 2),
@@ -156,7 +157,7 @@ class _RelaySectionState extends State<_RelaySection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionHeader('Relay'),
+        const _SectionHeader('中继'),
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
           child: Column(
@@ -175,7 +176,7 @@ class _RelaySectionState extends State<_RelaySection> {
                     color: colors.muted,
                     fontSize: 12,
                   ),
-                  helperText: 'Current: ${vm.effectiveRelayUrl}',
+                  helperText: '${AppSettingsCopy.currentRelay}: ${vm.effectiveRelayUrl}',
                   helperStyle: context.typo.mono.copyWith(
                     fontSize: 10,
                     color: colors.muted,
@@ -217,7 +218,7 @@ class _RelaySectionState extends State<_RelaySection> {
                         ),
                       ),
                       child: Text(
-                        'Save',
+                        '保存',
                         style: const TextStyle(
                           fontFamily: kMonoFamily,
                           fontSize: 13,
@@ -231,7 +232,7 @@ class _RelaySectionState extends State<_RelaySection> {
                         _save();
                       },
                       child: Text(
-                        'Use default Relay',
+                        AppSettingsCopy.useDefaultRelay,
                         style: const TextStyle(
                           fontFamily: kMonoFamily,
                           fontSize: 13,
@@ -259,7 +260,7 @@ class _DisplaySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionHeader('Display'),
+        const _SectionHeader('显示'),
         // Theme mode — System follows the OS; Light / Dark pin it.
         Padding(
           padding: const EdgeInsets.fromLTRB(18, 4, 18, 4),
@@ -267,7 +268,7 @@ class _DisplaySection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Theme',
+                '主题',
                 style: context.typo.sansBody.copyWith(color: colors.text),
               ),
               const SizedBox(height: 10),
@@ -278,15 +279,15 @@ class _DisplaySection extends StatelessWidget {
                   segments: const [
                     ButtonSegment(
                       value: ThemeMode.system,
-                      label: Text('System'),
+                      label: Text('跟随系统'),
                     ),
                     ButtonSegment(
                       value: ThemeMode.light,
-                      label: Text('Light'),
+                      label: Text('浅色'),
                     ),
                     ButtonSegment(
                       value: ThemeMode.dark,
-                      label: Text('Dark'),
+                      label: Text('深色'),
                     ),
                   ],
                   selected: {prefs.themeMode},
@@ -305,7 +306,7 @@ class _DisplaySection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Text size',
+                AppSettingsCopy.textSize,
                 style: context.typo.sansBody.copyWith(color: colors.text),
               ),
               const SizedBox(height: 10),
@@ -328,11 +329,11 @@ class _DisplaySection extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(horizontal: 18),
           activeThumbColor: colors.accent,
           title: Text(
-            'Hide tool calls in chat',
+            AppSettingsCopy.hideToolCalls,
             style: context.typo.sansBody.copyWith(color: colors.text),
           ),
           subtitle: Text(
-            'Only show your messages and the assistant replies.',
+            AppSettingsCopy.hideToolCallsDetail,
             style: context.typo.sansBody.copyWith(
               color: colors.muted,
               fontSize: 12,
@@ -382,12 +383,12 @@ class _EmptyState extends StatelessWidget {
           Icon(LucideIcons.monitorSmartphone, color: colors.muted, size: 40),
           const SizedBox(height: 12),
           Text(
-            'No pairings yet',
+            AppSettingsCopy.noPairings,
             style: TextStyle(color: colors.muted2, fontSize: 14),
           ),
           const SizedBox(height: 6),
           Text(
-            'Tap + to pair a new Mac.',
+            AppSettingsCopy.noPairingsHint,
             style: TextStyle(color: colors.muted, fontSize: 12),
           ),
           const SizedBox(height: 20),
@@ -398,7 +399,7 @@ class _EmptyState extends StatelessWidget {
               foregroundColor: colors.onAccent,
             ),
             icon: const Icon(LucideIcons.scanQrCode, size: 18),
-            label: const Text('Scan QR'),
+            label: const Text('扫码配对'),
           ),
         ],
       ),

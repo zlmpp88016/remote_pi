@@ -17,7 +17,7 @@ Future<bool> showRevokeConfirmDialog(
         style: TextStyle(color: ctx.colors.text),
       ),
       content: Text(
-        "You'll need to pair again from the PC or Mac to reconnect.",
+        "需要在电脑上重新配对才能再次连接。",
         style: TextStyle(color: ctx.colors.muted2),
       ),
       actions: [

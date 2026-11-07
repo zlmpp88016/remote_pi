@@ -90,7 +90,7 @@ class _NicknameEditorSheetState extends State<_NicknameEditorSheet> {
             ),
           ),
           Text(
-            'Nickname',
+            '昵称',
             style: TextStyle(
               color: colors.text,
               fontSize: 16,
@@ -99,7 +99,7 @@ class _NicknameEditorSheetState extends State<_NicknameEditorSheet> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Local only — the Mac is not notified.',
+            '仅本机生效 —— 不会通知主机。',
             style: TextStyle(color: colors.muted, fontSize: 12),
           ),
           const SizedBox(height: 16),
@@ -110,9 +110,9 @@ class _NicknameEditorSheetState extends State<_NicknameEditorSheet> {
             style: TextStyle(color: colors.text, fontSize: 15),
             cursorColor: colors.accent,
             decoration: InputDecoration(
-              labelText: 'Nickname',
+              labelText: '昵称',
               labelStyle: TextStyle(color: colors.muted),
-              helperText: 'Default: ${widget.defaultName}',
+              helperText: '默认：${widget.defaultName}',
               helperStyle: TextStyle(color: colors.muted, fontSize: 11),
               counterStyle: TextStyle(color: colors.muted, fontSize: 11),
             ),
@@ -124,7 +124,7 @@ class _NicknameEditorSheetState extends State<_NicknameEditorSheet> {
               onPressed: _remove,
               style: TextButton.styleFrom(foregroundColor: colors.error),
               icon: const Icon(LucideIcons.trash2, size: 16),
-              label: const Text('Remove nickname'),
+              label: const Text('移除昵称'),
             ),
             const SizedBox(height: 4),
           ],
@@ -151,7 +151,7 @@ class _NicknameEditorSheetState extends State<_NicknameEditorSheet> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: const Text(
-                    'Save',
+                    '保存',
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),

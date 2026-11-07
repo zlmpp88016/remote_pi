@@ -19,6 +19,7 @@ import 'package:mobile/ui/workspaces/viewmodels/workspace_list_viewmodel.dart';
 import 'package:mobile/ui/workspaces/workspace_list_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -208,7 +209,7 @@ void main() {
     expect(find.text('proj-b'), findsOneWidget);
     // O cwd aparece sempre; o estado (`running`) agora é uma linha própria do
     // card (plan/69), não mais um subtitle concatenado.
-    expect(find.text('running'), findsOneWidget);
+    expect(find.text('运行中'), findsOneWidget);
     expect(find.text('/proj/b'), findsOneWidget);
   });
 
@@ -217,14 +218,14 @@ void main() {
 
     // Plan/68 — o catálogo deixou de ser "só daemons registrados": o estado
     // vazio agora aponta para o navegador de pastas do host.
-    expect(find.text('No workspaces yet'), findsOneWidget);
+    expect(find.text(WorkspacesCopy.none), findsOneWidget);
     expect(
-      find.textContaining("Browse the machine's folders"),
+      find.textContaining(WorkspacesCopy.noneHint),
       findsOneWidget,
       reason: 'o usuário precisa saber como escolher uma pasta',
     );
     expect(
-      find.text('Browse folders on the machine'),
+      find.text(WorkspacesCopy.browseFolders),
       findsOneWidget,
       reason: 'atalho para o picker do filesystem do host',
     );
@@ -278,7 +279,7 @@ void main() {
 
     expect(vm.state, isA<WorkspaceListError>());
     expect(find.textContaining('remote-pi create'), findsOneWidget);
-    expect(find.text('Retry'), findsOneWidget);
+    expect(find.text(Common.retry), findsOneWidget);
     expect(find.text(_sessionsMarker), findsNothing);
   });
 
@@ -300,10 +301,10 @@ void main() {
     );
     final vm = await _pump(tester, ch);
 
-    expect(find.text('added'), findsOneWidget);
-    expect(find.byTooltip('Remove from list'), findsOneWidget);
+    expect(find.text('已添加'), findsOneWidget);
+    expect(find.byTooltip(WorkspacesCopy.removeFromList), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Remove from list'));
+    await tester.tap(find.byTooltip(WorkspacesCopy.removeFromList));
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 30)),
     );
@@ -326,8 +327,8 @@ void main() {
       ],
     );
     await _pump(tester, ch);
-    expect(find.byTooltip('Remove from list'), findsNothing);
-    expect(find.text('Browse folders on the machine'), findsOneWidget);
+    expect(find.byTooltip(WorkspacesCopy.removeFromList), findsNothing);
+    expect(find.text(WorkspacesCopy.browseFolders), findsOneWidget);
   });
 
   testWidgets('o estado vazio respeita a largura máxima de conteúdo', (
@@ -339,7 +340,7 @@ void main() {
     await _pump(tester, _Channel(), size: const Size(1024, 1366));
 
     final box = find.ancestor(
-      of: find.text('No workspaces yet'),
+      of: find.text(WorkspacesCopy.none),
       matching: find.byType(ConstrainedBox),
     );
     expect(box, findsWidgets);

@@ -316,7 +316,7 @@ void main() {
       expect(vm.state, isA<PairingError>());
       final err = vm.state as PairingError;
       expect(err.canRetry, isTrue);
-      expect(err.message, contains('Code expired'));
+      expect(err.message, contains('配对码已过期'));
       expect(storage._saved, isEmpty);
 
       vm.dispose();
@@ -382,7 +382,7 @@ void main() {
         final msg = (vm.state as PairingError).message;
         expect(msg, contains('relay.880160.xyz'),
             reason: 'the timeout must expose the relay it dialled');
-        expect(msg, contains('same relay'),
+        expect(msg, contains('同一个中继'),
             reason: 'and hint at the mismatch as a cause');
 
         vm.dispose();
@@ -802,11 +802,11 @@ void main() {
 
       expect(find.byKey(const Key('pairing-sheet-address')), findsOneWidget);
       expect(find.byKey(const Key('pairing-sheet-code')), findsOneWidget);
-      expect(find.text('Relay address'), findsOneWidget);
-      expect(find.text('Pairing code'), findsOneWidget);
+      expect(find.text('中继地址'), findsOneWidget);
+      expect(find.text('配对码'), findsOneWidget);
       // Empty address shows the Preferences default as the placeholder.
       expect(find.text('ws://localhost'), findsOneWidget);
-      expect(find.text('Leave empty to use the default relay'), findsOneWidget);
+      expect(find.text('留空则使用默认中继'), findsOneWidget);
 
       vm.dispose();
       conn.dispose(); // cancel the watchdog before the timer-pending check
@@ -847,7 +847,7 @@ void main() {
 
       expect(vm.validationError?.code, PairingValidationCode.invalidPayload);
       expect(
-        find.textContaining('not a Remote Pi pairing code'),
+        find.textContaining('不是 Remote Pi 的配对码'),
         findsOneWidget,
       );
       expect(vm.state, isA<PairingScanning>());
@@ -875,7 +875,7 @@ void main() {
       await tester.pump();
 
       expect(vm.validationError?.code, PairingValidationCode.relayMismatch);
-      expect(find.textContaining('issued for relay'), findsOneWidget);
+      expect(find.textContaining('签发的'), findsOneWidget);
 
       vm.dispose();
       conn.dispose(); // cancel the watchdog before the timer-pending check

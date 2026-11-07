@@ -66,7 +66,7 @@ class SettingsViewModel extends ViewModel<SettingsState> {
 
   Future<String?> saveRelayUrl(String? value) async {
     if (value == null || value.trim().isEmpty) {
-      return 'Enter a URL or clear the field to use the default relay.';
+      return '请输入 URL，或清空该字段以使用默认中继。';
     }
     final trimmed = value.trim();
 

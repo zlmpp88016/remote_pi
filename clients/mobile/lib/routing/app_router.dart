@@ -28,6 +28,7 @@ import 'package:mobile/ui/pairing/pairing_page.dart';
 import 'package:mobile/ui/pairing/viewmodels/pairing_viewmodel.dart';
 import 'package:mobile/ui/settings/settings_page.dart';
 import 'package:mobile/ui/settings/viewmodels/settings_viewmodel.dart';
+import 'package:mobile/ui/dock/dock_page.dart';
 import 'package:mobile/ui/sync_required/sync_required_page.dart';
 import 'package:mobile/ui/update/viewmodels/update_banner_viewmodel.dart';
 import 'package:flutter/material.dart';
@@ -506,6 +507,43 @@ GoRouter buildRouter(
         path: '/settings',
         builder: (ctx, st) =>
             ViewmodelProvider<SettingsViewModel>(child: const SettingsPage()),
+      ),
+
+      // Plan/84 — the workspace's dock: plan / files / changes / plugins /
+      // automations / models / settings in one place, mirroring the web
+      // client's right rail. Takes `root` (the workspace path) because plan,
+      // files and changes all read FROM that workspace, never from the host's
+      // own cwd.
+      GoRoute(
+        path: '/dock',
+        builder: (ctx, st) {
+          final extra = st.extra;
+          var root = '';
+          String? device;
+          var live = true;
+          var models = true;
+          var settings = true;
+          if (extra is Map) {
+            final r = extra['root'];
+            if (r is String) root = r;
+            final d = extra['device'];
+            if (d is String && d.isNotEmpty) device = d;
+            final l = extra['live'];
+            if (l is bool) live = l;
+            final m = extra['models'];
+            if (m is bool) models = m;
+            final st2 = extra['settings'];
+            if (st2 is bool) settings = st2;
+          }
+          return DockPage(
+            catalog: injector.get<SessionCatalog>(),
+            root: root,
+            device: device,
+            workspaceLive: live,
+            modelsSupported: models,
+            settingsSupported: settings,
+          );
+        },
       ),
     ],
   );

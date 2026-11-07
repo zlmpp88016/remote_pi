@@ -1,5 +1,6 @@
 import 'package:mobile/protocol/protocol.dart';
 import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:mobile/ui/pi_surface/states/pi_surface_state.dart';
 import 'package:mobile/ui/pi_surface/viewmodels/pi_surface_viewmodel.dart';
@@ -40,14 +41,14 @@ class PiSurfacePage extends StatelessWidget {
           children: [
             Text(title, style: TextStyle(color: colors.text, fontSize: 16)),
             Text(
-              device ?? 'Skills and plugins on the machine',
+              device ?? PluginsCopy.subtitle,
               style: TextStyle(color: colors.muted, fontSize: 12),
             ),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: PluginsCopy.refresh,
             onPressed: state is PiSurfaceReady ? () => vm.reload() : null,
             icon: Icon(LucideIcons.refreshCw, color: colors.muted, size: 18),
           ),
@@ -126,7 +127,7 @@ class _ReadyBody extends StatelessWidget {
             if (state.skills.isEmpty)
               const _EmptyRow(
                 icon: LucideIcons.sparkles,
-                text: 'No skills installed on this Pi.',
+                text: PluginsCopy.noSkills,
               )
             else
               ...state.skills.map(
@@ -139,14 +140,14 @@ class _ReadyBody extends StatelessWidget {
                 ),
               ),
             _SectionHeader(
-              title: 'Packages',
+              title: PluginsCopy.packages,
               trailing: TextButton.icon(
                 onPressed: state.busyPackage != null
                     ? null
                     : () => vm.updatePackages(),
                 icon: Icon(LucideIcons.refreshCw, size: 14, color: colors.accent),
                 label: Text(
-                  'Update all',
+                  PluginsCopy.updateAll,
                   style: TextStyle(color: colors.accent, fontSize: 12),
                 ),
               ),
@@ -154,7 +155,7 @@ class _ReadyBody extends StatelessWidget {
             if (state.packages.isEmpty)
               const _EmptyRow(
                 icon: LucideIcons.package,
-                text: 'No packages installed on this Pi.',
+                text: PluginsCopy.noPackages,
               )
             else
               ...state.packages.map(
@@ -175,7 +176,7 @@ class _ReadyBody extends StatelessWidget {
                     : () => _promptInstall(context),
                 icon: Icon(LucideIcons.plus, size: 16, color: colors.accent),
                 label: Text(
-                  'Install a package',
+                  PluginsCopy.install,
                   style: TextStyle(color: colors.accent),
                 ),
                 style: OutlinedButton.styleFrom(
@@ -205,7 +206,7 @@ class _ReadyBody extends StatelessWidget {
       builder: (dctx) => AlertDialog(
         backgroundColor: context.colors.bg,
         title: Text(
-          'Install third-party code?',
+          PluginsCopy.confirmThirdPartyTitle,
           style: TextStyle(color: context.colors.text),
         ),
         content: Text(
@@ -217,7 +218,7 @@ class _ReadyBody extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dctx).pop(false),
-            child: Text('Cancel', style: TextStyle(color: context.colors.muted)),
+            child: Text(Common.cancel, style: TextStyle(color: context.colors.muted)),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dctx).pop(true),
@@ -243,7 +244,7 @@ class _ReadyBody extends StatelessWidget {
       context: context,
       builder: (dctx) => AlertDialog(
         backgroundColor: context.colors.bg,
-        title: Text('Remove package?', style: TextStyle(color: context.colors.text)),
+        title: Text(PluginsCopy.removeTitle, style: TextStyle(color: context.colors.text)),
         content: Text(
           p.source,
           style: TextStyle(color: context.colors.muted, fontSize: 13),
@@ -251,7 +252,7 @@ class _ReadyBody extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dctx).pop(false),
-            child: Text('Cancel', style: TextStyle(color: context.colors.muted)),
+            child: Text(Common.cancel, style: TextStyle(color: context.colors.muted)),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dctx).pop(true),
@@ -259,7 +260,7 @@ class _ReadyBody extends StatelessWidget {
               backgroundColor: context.colors.error,
               foregroundColor: context.colors.onAccent,
             ),
-            child: const Text('Remove'),
+            child: const Text(PluginsCopy.remove),
           ),
         ],
       ),
@@ -298,7 +299,7 @@ class _RuntimeHeader extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              runtime.running ? 'Running · $model · $thinking' : 'Not running',
+              runtime.running ? '${PluginsCopy.running} · $model · $thinking' : PluginsCopy.notRunning,
               style: TextStyle(color: colors.muted, fontSize: 12),
             ),
           ),
@@ -324,8 +325,8 @@ class _OpBanner extends StatelessWidget {
       ),
       child: Text(
         switch (op.op) {
-          PackageOp.install => 'Installed ${op.source}',
-          PackageOp.remove => 'Removed ${op.source}',
+          PackageOp.install => '已安装 ${op.source}',
+          PackageOp.remove => '已移除 ${op.source}',
           PackageOp.update => op.source.isEmpty
               ? 'Updated all packages'
               : 'Updated ${op.source}',
@@ -458,7 +459,7 @@ class _SkillTile extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  tooltip: 'Run',
+                  tooltip: PluginsCopy.run,
                   onPressed: anyBusy ? null : () => _promptInvoke(context),
                   icon: Icon(LucideIcons.play, size: 18, color: colors.accent),
                 ),
@@ -486,14 +487,14 @@ class _SkillTile extends StatelessWidget {
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(hintText: 'Arguments (optional)'),
+          decoration: const InputDecoration(hintText: PluginsCopy.argumentsOptional),
           style: TextStyle(color: context.colors.text),
           onSubmitted: (v) => Navigator.of(dctx).pop(v),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dctx).pop(),
-            child: Text('Cancel', style: TextStyle(color: context.colors.muted)),
+            child: Text(Common.cancel, style: TextStyle(color: context.colors.muted)),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dctx).pop(controller.text),
@@ -548,7 +549,7 @@ class _PackageTile extends StatelessWidget {
       ),
       subtitle: Text(
         package.resources.isEmpty
-            ? 'No resources resolved yet'
+            ? PluginsCopy.noResources
             : package.resources.join(', '),
         style: TextStyle(color: colors.muted, fontSize: 12),
       ),
@@ -562,12 +563,12 @@ class _PackageTile extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  tooltip: 'Update',
+                  tooltip: PluginsCopy.update,
                   onPressed: anyBusy ? null : onUpdate,
                   icon: Icon(LucideIcons.refreshCw, size: 18, color: colors.muted),
                 ),
                 IconButton(
-                  tooltip: 'Remove',
+                  tooltip: PluginsCopy.remove,
                   onPressed: anyBusy ? null : onRemove,
                   icon: Icon(LucideIcons.trash2, size: 18, color: colors.error),
                 ),
@@ -628,7 +629,7 @@ class _InstallDialogState extends State<_InstallDialog> {
     final colors = context.colors;
     return AlertDialog(
       backgroundColor: colors.bg,
-      title: Text('Install a package', style: TextStyle(color: colors.text)),
+      title: Text(PluginsCopy.install, style: TextStyle(color: colors.text)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -645,8 +646,8 @@ class _InstallDialogState extends State<_InstallDialog> {
           const SizedBox(height: 12),
           SegmentedButton<PackageScope>(
             segments: const [
-              ButtonSegment(value: PackageScope.user, label: Text('This user')),
-              ButtonSegment(value: PackageScope.project, label: Text('This project')),
+              ButtonSegment(value: PackageScope.user, label: Text(PluginsCopy.scopeUser)),
+              ButtonSegment(value: PackageScope.project, label: Text(PluginsCopy.scopeProject)),
             ],
             selected: {_scope},
             onSelectionChanged: (s) => setState(() => _scope = s.first),
@@ -656,7 +657,7 @@ class _InstallDialogState extends State<_InstallDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text('Cancel', style: TextStyle(color: colors.muted)),
+          child: Text(Common.cancel, style: TextStyle(color: colors.muted)),
         ),
         FilledButton(
           onPressed: () {
@@ -668,7 +669,7 @@ class _InstallDialogState extends State<_InstallDialog> {
             backgroundColor: colors.accent,
             foregroundColor: colors.onAccent,
           ),
-          child: const Text('Continue'),
+          child: const Text(PluginsCopy.continueLabel),
         ),
       ],
     );

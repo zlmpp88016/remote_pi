@@ -238,6 +238,6 @@ void main() {
 
     final s = vm.state;
     expect(s, isA<WorkspaceListError>());
-    expect((s as WorkspaceListError).message, contains('Not connected'));
+    expect((s as WorkspaceListError).message, contains('未连接到该机器'));
   });
 }

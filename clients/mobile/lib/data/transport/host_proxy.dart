@@ -29,10 +29,29 @@ const kHostDirectTypes = <String>{
   'workspace_stop',
   'workspace_restart',
   'fs_list',
+  'fs_read',
   'workspace_add',
   'workspace_remove',
   'pair_request',
   'ping',
+  // Plan/84 + plan/68 dock faces. Every one of these is a `case` in the
+  // HostBridge switch (`server/src/daemon/host_bridge.ts`), i.e. answered by
+  // the DAEMON on room `host`, not proxied to a child workspace Pi. Leaving
+  // them out of this set wrapped them in `host_forward{room: activeRoom}`,
+  // where `activeRoom` is the host room after host-first pairing — the daemon
+  // then re-emitted them toward a child room that does not exist and the
+  // reply never came back, so Automations/Models/Settings/Changes sat on
+  // "正在读取…" forever.
+  'schedule_list',
+  'schedule_add',
+  'schedule_remove',
+  'schedule_set_enabled',
+  'schedule_run_now',
+  'models_describe',
+  'models_mutate',
+  'settings_describe',
+  'settings_mutate',
+  'changes_snapshot',
 };
 
 /// Whether an inner message type is host control-plane (answered by the

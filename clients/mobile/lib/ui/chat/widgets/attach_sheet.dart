@@ -75,7 +75,7 @@ class _AttachSheetBody extends StatelessWidget {
             _AttachOption(
               key: const Key('attach-gallery'),
               icon: LucideIcons.image,
-              label: 'Photo Library',
+              label: '照片图库',
               onTap: () => Navigator.of(context).pop(AttachSource.gallery),
             ),
           ],

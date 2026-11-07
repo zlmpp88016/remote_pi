@@ -314,11 +314,23 @@ class ConnectionManager extends Service {
   /// See `epk_encoding.dart` for the recurring-bug history.
   void subscribeToPeers(List<String> epks) {
     final standard = epks.map(toStandardB64).toList();
+    final unchanged =
+        standard.length == _subscribedEpks.length &&
+        standard.toSet().containsAll(_subscribedEpks);
     _subscribedEpks = standard;
     final link = _controlLink;
     if (link == null) {
       return;
     }
+    /*
+     * Re-sending the same subscription every time is a real cost here, not a
+     * harmless no-op: `HomeViewModel._load()` subscribes on every storage
+     * notification, and persisting a room (which each `rooms` reply causes)
+     * notifies storage. Unchanged subscriptions now stop at the cache — the
+     * first call still goes out, and `_replaySubscriptions` re-sends after any
+     * reconnect because `_controlLink` is null then.
+     */
+    if (unchanged) return;
     link.sendControl(subscribePresenceFrame(standard));
     link.sendControl(subscribeRoomsFrame(standard));
     if (standard.isNotEmpty) {

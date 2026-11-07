@@ -12,6 +12,7 @@ import 'package:mobile/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.
 import 'package:mobile/ui/chat/quick_actions/widgets/quick_actions_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:provider/provider.dart';
 
 class _FakeRepo implements IActionsRepository {
@@ -124,7 +125,7 @@ void main() {
     // Sheet dismissed on success.
     expect(find.byKey(const Key('qa-compact')), findsNothing);
     // No success toast — compacting is a quiet action (toast removed).
-    expect(find.text('Context compacted'), findsNothing);
+    expect(find.text('上下文已压缩'), findsNothing);
   });
 
   testWidgets('Compact: failure keeps the sheet open and toasts the error',
@@ -137,7 +138,7 @@ void main() {
     // Sheet stays open so the user can retry.
     expect(find.byKey(const Key('qa-compact')), findsOneWidget);
     expect(find.text('compact boom'), findsOneWidget);
-    expect(find.text('Context compacted'), findsNothing);
+    expect(find.text('上下文已压缩'), findsNothing);
   });
 
   testWidgets('New session: confirm fires, resets chat, closes (no toast)',
@@ -146,8 +147,8 @@ void main() {
     await tester.tap(find.byKey(const Key('qa-new-session')));
     await tester.pumpAndSettle();
     // Confirmation dialog up.
-    expect(find.text('Start a new session?'), findsOneWidget);
-    await tester.tap(find.text('Start new'));
+    expect(find.text(PanelsCopy.startNewTitle), findsOneWidget);
+    await tester.tap(find.text(PanelsCopy.startNew));
     await tester.pumpAndSettle();
 
     expect(s.repo.newSessionCalls, 1);
@@ -167,15 +168,15 @@ void main() {
       await tester.pumpAndSettle();
       // The sheet closes the moment the confirm dialog opens.
       expect(find.byKey(const Key('qa-new-session')), findsNothing);
-      expect(find.text('Start a new session?'), findsOneWidget);
+      expect(find.text(PanelsCopy.startNewTitle), findsOneWidget);
 
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(find.text(Common.cancel));
       await tester.pumpAndSettle();
 
       expect(s.repo.newSessionCalls, 0);
       expect(s.resetCalls, isEmpty);
       // Both the dialog and the (already-closed) sheet are gone.
-      expect(find.text('Start a new session?'), findsNothing);
+      expect(find.text(PanelsCopy.startNewTitle), findsNothing);
       expect(find.byKey(const Key('qa-new-session')), findsNothing);
     },
   );
@@ -230,13 +231,13 @@ void main() {
       await tester.pumpAndSettle();
       // Sheet already closed when the dialog opened.
       expect(find.byKey(const Key('qa-new-session')), findsNothing);
-      expect(find.text('Start a new session?'), findsOneWidget);
+      expect(find.text(PanelsCopy.startNewTitle), findsOneWidget);
 
-      await tester.tap(find.text('Cancel'));
+      await tester.tap(find.text(Common.cancel));
       await tester.pumpAndSettle();
 
       // The dialog must be gone (it wasn't, with the old sheet-context pop).
-      expect(find.text('Start a new session?'), findsNothing);
+      expect(find.text(PanelsCopy.startNewTitle), findsNothing);
       expect(repo.newSessionCalls, 0);
     },
   );
@@ -246,7 +247,7 @@ void main() {
     final s = await _openSheet(tester, failNewSession: true);
     await tester.tap(find.byKey(const Key('qa-new-session')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Start new'));
+    await tester.tap(find.text(PanelsCopy.startNew));
     await tester.pumpAndSettle();
 
     expect(s.repo.newSessionCalls, 1);

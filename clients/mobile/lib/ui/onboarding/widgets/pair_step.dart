@@ -3,6 +3,7 @@ import 'package:mobile/ui/pairing/states/pairing_state.dart';
 import 'package:mobile/ui/pairing/viewmodels/pairing_viewmodel.dart';
 import 'package:mobile/ui/pairing/widgets/paste_pairing_sheet.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -55,7 +56,7 @@ class _PairStepState extends State<PairStep> {
         children: [
           const SizedBox(height: 24),
           Text(
-            'Connect to your device',
+            OnboardingCopy.connectDevice,
             style: TextStyle(
               fontFamily: kMonoFamily,
               fontSize: 16,
@@ -65,7 +66,7 @@ class _PairStepState extends State<PairStep> {
           ),
           const SizedBox(height: 12),
           Text(
-            'On your computer (Mac, Linux, or Windows), open Pi and run:',
+            OnboardingCopy.runOnComputer,
             style: TextStyle(
                 fontFamily: kMonoFamily, fontSize: 11, color: colors.muted),
           ),
@@ -88,7 +89,7 @@ class _PairStepState extends State<PairStep> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Copy the pairing code it prints:',
+            OnboardingCopy.copyCode,
             style: TextStyle(
                 fontFamily: kMonoFamily, fontSize: 11, color: colors.muted),
           ),
@@ -131,7 +132,7 @@ class _PairStepState extends State<PairStep> {
                   ),
                 ),
                 child: Text(
-                  'Pair later',
+                  OnboardingCopy.pairLater,
                   style: TextStyle(
                     fontFamily: kMonoFamily,
                     fontSize: 13,
@@ -166,7 +167,7 @@ class _PairStepState extends State<PairStep> {
                   color: colors.onAccent,
                 ),
                 label: Text(
-                  'Paste pairing code',
+                  OnboardingCopy.pasteCode,
                   style: TextStyle(fontFamily: kMonoFamily, fontSize: 12),
                 ),
                 style: FilledButton.styleFrom(
@@ -186,14 +187,14 @@ class _PairStepState extends State<PairStep> {
     if (state is PairingConnecting) {
       return _StatusOverlay(
         icon: LucideIcons.refreshCw,
-        message: 'Pairing…',
+        message: OnboardingCopy.pairing,
       );
     }
     if (state is PairingError) {
       return _StatusOverlay(
         icon: LucideIcons.circleAlert,
         message: state.message,
-        actionLabel: state.canRetry ? 'Try again' : null,
+        actionLabel: state.canRetry ? OnboardingCopy.tryAgain : null,
         onAction: state.canRetry ? vm.retry : null,
       );
     }

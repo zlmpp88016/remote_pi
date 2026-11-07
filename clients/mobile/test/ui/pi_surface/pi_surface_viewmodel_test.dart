@@ -181,7 +181,7 @@ void main() {
   test('erro tipado do host vira mensagem clara', () async {
     final (vm, _, conn) = await _rig(_Channel(surfaceError: 'offline'));
     final s = vm.state as PiSurfaceError;
-    expect(s.message, contains('Not connected'));
+    expect(s.message, contains('未连接到该机器'));
     conn.dispose();
   });
 

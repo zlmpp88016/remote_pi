@@ -23,6 +23,7 @@ import 'package:mobile/ui/chat/widgets/session_tree_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
 
@@ -245,7 +246,7 @@ void main() {
       ch.push(TreeSnapshotOk(inReplyTo: 'r1', snapshot: _snapshot()));
       await _settle(tester);
 
-      expect(find.text('Session tree'), findsOneWidget);
+      expect(find.text(ChatCopy.sessionTree), findsOneWidget);
       expect(find.text('explique o reducer'), findsOneWidget);
       expect(find.text('O reducer aplica…'), findsOneWidget);
       await _teardown(tester, vm, sync, conn);
@@ -319,10 +320,10 @@ void main() {
       await _settle(tester);
 
       expect(
-        find.text('The tree changed — refresh and try again.'),
+        find.text(PanelsCopy.treeChanged),
         findsOneWidget,
       );
-      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text(Common.retry), findsOneWidget);
       await _teardown(tester, vm, sync, conn);
     });
   });

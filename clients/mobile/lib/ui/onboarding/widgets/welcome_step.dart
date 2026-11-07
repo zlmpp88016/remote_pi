@@ -1,5 +1,6 @@
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Onboarding step 1 — welcome. Static, no animations (per plan 14 D2 —
@@ -31,7 +32,7 @@ class WelcomeStep extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Control your Pi agent from anywhere',
+            OnboardingCopy.welcomeTagline,
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: kMonoFamily,
@@ -41,9 +42,8 @@ class WelcomeStep extends StatelessWidget {
           ),
           const SizedBox(height: 28),
           Text(
-            'Pair this app with the Pi running on your computer '
-            '(Mac, Linux, or Windows) so you can chat with it even '
-            'when you\'re away from home.',
+            '把本应用与电脑上运行的 Pi 配对 —— '
+              '扫一次码，之后就能随时随地使用。',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: kMonoFamily,
@@ -64,7 +64,7 @@ class WelcomeStep extends StatelessWidget {
               ),
             ),
             child: const Text(
-              'Get started',
+              OnboardingCopy.getStarted,
               style: TextStyle(
                 fontFamily: kMonoFamily,
                 fontSize: 14,

@@ -876,12 +876,34 @@ class SyncService extends Service {
       // Plan/68 — fs_list replies are consumed by the picker's request future
       // (SessionCatalog._expect), never by the chat stream.
       case FsListOk():
+      // Plan/84 — fs_read replies are consumed by the Plan/Files panels'
+      // request future, same as fs_list above; never by the chat stream.
+      case FsReadOk():
+      // Plan/84 — schedule_* replies are consumed by the Automations panel's
+      // request future (SessionCatalog), same as fs_list above. Never history.
+      case ScheduleListOk():
+      case ScheduleAddOk():
+      case ScheduleAck():
+      // Plan/84 — settings_describe / settings_mutate replies belong to the
+      // Settings panel's request future, never to chat history.
+      case SettingsDescribeOk():
+      case SettingsMutateOk():
+      // Plan/84 — models_describe / models_mutate replies belong to the Models
+      // panel's request future. They carry credentials-adjacent config, so they
+      // must never be persisted as history either.
+      case ModelsDescribeOk():
+      case ModelsMutateOk():
       // Plan/68 — Pi surface replies are consumed by the skills/plugins page's
       // request future, same as fs_list above.
       case PiSurfaceOk():
       case SkillInvokeOk():
       case SkillSetEnabledOk():
       case PackageOpOk():
+      // Plan/84 — changes_snapshot replies are consumed by the Changes panel's
+      // request future (SessionCatalog._expect), same as fs_list and pi_surface
+      // above. Neither frame is chat history, so neither is persisted here.
+      case ChangesSnapshotOk():
+      case ChangesSnapshotUnavailable():
         break;
     }
   }

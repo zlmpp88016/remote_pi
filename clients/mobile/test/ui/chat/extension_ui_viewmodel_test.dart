@@ -295,7 +295,7 @@ void main() {
     expect(state.pendingUiRequest?.id, 'tool:f1', reason: 'modal stays open');
     expect(
       state.pendingUiError,
-      'Not connected — check the link to Pi and retry.',
+      '未连接 —— 请检查与 Pi 的链路后重试。',
     );
     expect(h.ch.sent, isEmpty);
 

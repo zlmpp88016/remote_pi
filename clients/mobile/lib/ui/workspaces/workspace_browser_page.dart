@@ -1,4 +1,5 @@
 import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:mobile/ui/workspaces/states/workspace_browser_state.dart';
 import 'package:mobile/ui/workspaces/viewmodels/workspace_browser_viewmodel.dart';
@@ -40,14 +41,14 @@ class WorkspaceBrowserPage extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Choose a folder', style: TextStyle(color: colors.text, fontSize: 16)),
+            Text(WorkspacesCopy.chooseFolder, style: TextStyle(color: colors.text, fontSize: 16)),
             if (device != null)
               Text(device!, style: TextStyle(color: colors.muted, fontSize: 12)),
           ],
         ),
         actions: [
           IconButton(
-            tooltip: 'Show hidden files',
+            tooltip: WorkspacesCopy.showHidden,
             onPressed: state is WorkspaceBrowserReady ? vm.toggleHidden : null,
             icon: Icon(
               state is WorkspaceBrowserReady && (state).showHidden
@@ -103,7 +104,7 @@ class _ErrorBody extends StatelessWidget {
             const SizedBox(height: 16),
             TextButton(
               onPressed: onRetry,
-              child: Text('Retry', style: TextStyle(color: colors.accent)),
+              child: Text(Common.retry, style: TextStyle(color: colors.accent)),
             ),
           ],
         ),
@@ -182,7 +183,7 @@ class _ReadyBodyState extends State<_ReadyBody> {
                   decoration: const InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
-                    hintText: 'Type an absolute path',
+                    hintText: WorkspacesCopy.typeAbsolutePath,
                   ),
                   onTap: () => _isEditing = true,
                   onSubmitted: (v) {
@@ -205,7 +206,7 @@ class _ReadyBodyState extends State<_ReadyBody> {
             child: dirs.isEmpty
                 ? Center(
                     child: Text(
-                      'No sub-folders here',
+                      WorkspacesCopy.noSubFolders,
                       style: TextStyle(color: colors.muted, fontSize: 13),
                     ),
                   )
@@ -250,7 +251,7 @@ class _ReadyBodyState extends State<_ReadyBody> {
                       )
                     : Icon(LucideIcons.check, size: 18, color: colors.onAccent),
                 label: Text(
-                  'Use this folder',
+                  WorkspacesCopy.useThisFolder,
                   style: TextStyle(
                     color: colors.onAccent,
                     fontSize: 14,
@@ -281,16 +282,16 @@ class _ReadyBodyState extends State<_ReadyBody> {
         context: context,
         builder: (dctx) => AlertDialog(
           backgroundColor: context.colors.bg,
-          title: Text('Start a Pi here?', style: TextStyle(color: context.colors.text)),
+          title: Text(WorkspacesCopy.startHereTitle, style: TextStyle(color: context.colors.text)),
           content: Text(
             'The machine will run Pi in:\n\n${state.path}\n\n'
-            'Anything in that folder can execute. Continue?',
+            '该目录中的任何内容都可能被执行。继续？',
             style: TextStyle(color: context.colors.muted, fontSize: 13),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dctx).pop(false),
-              child: Text('Cancel', style: TextStyle(color: context.colors.muted)),
+              child: Text(Common.cancel, style: TextStyle(color: context.colors.muted)),
             ),
             FilledButton(
               onPressed: () => Navigator.of(dctx).pop(true),
@@ -298,7 +299,7 @@ class _ReadyBodyState extends State<_ReadyBody> {
                 backgroundColor: context.colors.accent,
                 foregroundColor: context.colors.onAccent,
               ),
-              child: const Text('Start'),
+              child: const Text(WorkspacesCopy.start),
             ),
           ],
         ),

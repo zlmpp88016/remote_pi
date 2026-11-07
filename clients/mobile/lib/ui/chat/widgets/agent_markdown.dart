@@ -153,7 +153,7 @@ class _CopyButtonState extends State<_CopyButton> {
       visualDensity: VisualDensity.compact,
       iconSize: 15,
       splashRadius: 16,
-      tooltip: 'Copy code',
+      tooltip: '复制代码',
       onPressed: _copy,
       icon: Icon(
         _copied ? LucideIcons.check : LucideIcons.copy,

@@ -107,7 +107,7 @@ class _NicknameSheetState extends State<_NicknameSheet> {
                 ),
               ),
               Text(
-                'Name this PC',
+                '给这台电脑起个名字',
                 style: TextStyle(
                   color: colors.text,
                   fontSize: 17,
@@ -116,7 +116,7 @@ class _NicknameSheetState extends State<_NicknameSheet> {
               ),
               const SizedBox(height: 6),
               Text(
-                'Pick a label so this Mac is easy to spot in your list. You can change it later from the home screen.',
+                '起个名字，方便在列表里认出这台主机。之后可在主页修改。',
                 style: TextStyle(color: colors.muted2, fontSize: 13),
               ),
               const SizedBox(height: 20),
@@ -149,7 +149,7 @@ class _NicknameSheetState extends State<_NicknameSheet> {
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       child: Text(
-                        'Skip',
+                        '跳过',
                         style: TextStyle(color: colors.muted),
                       ),
                     ),
@@ -164,7 +164,7 @@ class _NicknameSheetState extends State<_NicknameSheet> {
                         foregroundColor: colors.onAccent,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
-                      child: const Text('Save'),
+                      child: const Text('保存'),
                     ),
                   ),
                 ],

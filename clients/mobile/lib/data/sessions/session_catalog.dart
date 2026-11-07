@@ -1,8 +1,56 @@
 import 'dart:async';
 
 import 'package:mobile/data/transport/connection_manager.dart';
+import 'package:mobile/protocol/changes.dart';
+import 'package:mobile/protocol/plan.dart';
 import 'package:mobile/protocol/protocol.dart';
+import 'package:mobile/protocol/schedule.dart';
+import 'package:mobile/protocol/models.dart';
+import 'package:mobile/protocol/settings.dart';
 import 'package:mobile/protocol/uuid7.dart';
+
+/// Plan/84 — the host could not report the working tree.
+///
+/// Carries the CLOSED reason, not a string: the UI owns the sentence, so a host
+/// prose (or an exception text with an absolute path in it) can never reach the
+/// screen.
+class ChangesFailure implements Exception {
+  final ChangesUnavailable reason;
+  const ChangesFailure(this.reason);
+
+  @override
+  String toString() => 'ChangesFailure(${reason.wire})';
+}
+
+/// Plan/84 — the host refused to read a file.
+///
+/// Like [ChangesFailure], carries the CLOSED reason rather than a string: the
+/// refusal vocabulary is the contract, and the sentence belongs to the client.
+class FsReadFailure implements Exception {
+  final FsRefusal reason;
+  const FsReadFailure(this.reason);
+
+  @override
+  String toString() => 'FsReadFailure(${reason.wire})';
+}
+
+/// Plan/84 — the host refused a settings read or write.
+class SettingsFailure implements Exception {
+  final SettingsErrorReason reason;
+  const SettingsFailure(this.reason);
+
+  @override
+  String toString() => 'SettingsFailure(${reason.wire})';
+}
+
+/// Plan/84 — the host refused a models.json read or write.
+class ModelsFailure implements Exception {
+  final ModelsErrorReason reason;
+  const ModelsFailure(this.reason);
+
+  @override
+  String toString() => 'ModelsFailure(${reason.wire})';
+}
 
 /// Plan/67 — request/reply helper over the active [IChannel].
 class SessionCatalog {
@@ -81,6 +129,229 @@ class SessionCatalog {
         return msg is FsListOk && msg.inReplyTo == id;
       },
     );
+  }
+
+  /// Plan/84 — read ONE allowlisted text file (`fs_read`) under [root].
+  ///
+  /// [root] is the workspace, and it is not optional: the host uses it to confine
+  /// the read to that workspace's allowlisted directories. A refusal comes back
+  /// as a typed [FsRefusal], so the UI owns the sentence rather than echoing a
+  /// host message that may name an absolute path.
+  Future<FsReadOk> readFile({required String path, required String root}) {
+    return _expect<FsReadOk>(
+      FsReadRequest(id: uuid7(), path: path, root: root),
+      (id, msg) {
+        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'fs_read') {
+          final refusal = FsRefusal.fromWire(msg.error);
+          if (refusal != null) throw FsReadFailure(refusal);
+          throw WorkspaceControlFailure(msg.error);
+        }
+        return msg is FsReadOk && msg.inReplyTo == id;
+      },
+    );
+  }
+
+  /// Plan/84 — list every scheduled task on the host.
+  Future<ScheduleCatalog> listSchedules() async {
+    final ok = await _expect<ScheduleListOk>(
+      ScheduleListRequest(id: uuid7()),
+      (id, msg) {
+        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'schedule_list') {
+          throw WorkspaceControlFailure(msg.error);
+        }
+        return msg is ScheduleListOk && msg.inReplyTo == id;
+      },
+    );
+    return ScheduleCatalog.fromJson({
+      'tasks': ok.tasks,
+      'workspace_names': ok.workspaceNames,
+    });
+  }
+
+  /// Plan/84 — create a scheduled task. Returns the task the HOST created, not
+  /// the one we asked for: the host assigns the id and may normalize the cron.
+  Future<ScheduleTask> addSchedule({
+    required String daemonId,
+    required String schedule,
+    required String prompt,
+    String? tz,
+    bool skipIfBusy = false,
+    bool wake = false,
+    bool catchup = false,
+    String? modelProvider,
+    String? modelId,
+    bool freshSession = false,
+  }) async {
+    final ok = await _expect<ScheduleAddOk>(
+      ScheduleAdd(
+        id: uuid7(),
+        daemonId: daemonId,
+        schedule: schedule,
+        prompt: prompt,
+        tz: tz,
+        skipIfBusy: skipIfBusy,
+        wake: wake,
+        catchup: catchup,
+        modelProvider: modelProvider,
+        modelId: modelId,
+        freshSession: freshSession,
+      ),
+      (id, msg) {
+        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'schedule_add') {
+          throw WorkspaceControlFailure(msg.error);
+        }
+        return msg is ScheduleAddOk && msg.inReplyTo == id;
+      },
+    );
+    return ScheduleTask.fromJson(ok.task);
+  }
+
+  /// Plan/84 — delete one scheduled task.
+  Future<void> removeSchedule(String jobId) {
+    return _expect<ScheduleAck>(
+      ScheduleRemove(id: uuid7(), jobId: jobId),
+      (id, msg) {
+        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'schedule_remove') {
+          throw WorkspaceControlFailure(msg.error);
+        }
+        return msg is ScheduleAck && msg.inReplyTo == id;
+      },
+    );
+  }
+
+  /// Plan/84 — enable or disable one scheduled task.
+  Future<void> setScheduleEnabled(String jobId, bool enabled) {
+    return _expect<ScheduleAck>(
+      ScheduleSetEnabled(id: uuid7(), jobId: jobId, enabled: enabled),
+      (id, msg) {
+        if (msg is ActionError &&
+            msg.inReplyTo == id &&
+            msg.rawAction == 'schedule_set_enabled') {
+          throw WorkspaceControlFailure(msg.error);
+        }
+        return msg is ScheduleAck && msg.inReplyTo == id;
+      },
+    );
+  }
+
+  /// Plan/84 — fire one scheduled task immediately.
+  Future<void> runScheduleNow(String jobId) {
+    return _expect<ScheduleAck>(
+      ScheduleRunNow(id: uuid7(), jobId: jobId),
+      (id, msg) {
+        if (msg is ActionError &&
+            msg.inReplyTo == id &&
+            msg.rawAction == 'schedule_run_now') {
+          throw WorkspaceControlFailure(msg.error);
+        }
+        return msg is ScheduleAck && msg.inReplyTo == id;
+      },
+    );
+  }
+
+  /// Plan/84 — read the host's models.json. Keys never ride this reply.
+  Future<ModelsSnapshot> describeModels() async {
+    final ok = await _expect<ModelsDescribeOk>(
+      ModelsDescribeRequest(id: uuid7()),
+      (id, msg) {
+        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'models_describe') {
+          final reason = ModelsErrorReason.fromWire(msg.error);
+          throw ModelsFailure(reason ?? ModelsErrorReason.invalid);
+        }
+        return msg is ModelsDescribeOk && msg.inReplyTo == id;
+      },
+    );
+    return ModelsSnapshot.fromJson(ok.body);
+  }
+
+  /// Plan/84 — write models.json via path-addressed ops.
+  ///
+  /// [revision] is the sha256 from the describe that preceded this edit; the host
+  /// refuses a stale one.
+  Future<String> mutateModels({
+    required List<ModelsOp> ops,
+    required String revision,
+  }) async {
+    final ok = await _expect<ModelsMutateOk>(
+      ModelsMutateRequest(
+        id: uuid7(),
+        ops: ops.map((o) => o.toJson()).toList(),
+        revision: revision,
+      ),
+      (id, msg) {
+        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'models_mutate') {
+          final reason = ModelsErrorReason.fromWire(msg.error);
+          throw ModelsFailure(reason ?? ModelsErrorReason.invalid);
+        }
+        return msg is ModelsMutateOk && msg.inReplyTo == id;
+      },
+    );
+    return ok.revision;
+  }
+
+  /// Plan/84 — read the host's settings.json through the whitelist projection.
+  Future<SettingsSnapshot> describeSettings() async {
+    final ok = await _expect<SettingsDescribeOk>(
+      SettingsDescribeRequest(id: uuid7()),
+      (id, msg) {
+        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'settings_describe') {
+          final reason = SettingsErrorReason.fromWire(msg.error);
+          throw SettingsFailure(reason ?? SettingsErrorReason.invalid);
+        }
+        return msg is SettingsDescribeOk && msg.inReplyTo == id;
+      },
+    );
+    return SettingsSnapshot.fromJson(ok.body);
+  }
+
+  /// Plan/84 — write settings via path-addressed SET/UNSET ops.
+  ///
+  /// [revision] must be the value from the describe that preceded this edit: the
+  /// host compares it against the file's current byte sha256 and refuses a stale
+  /// one. That single check is what keeps a client from silently reverting a
+  /// change somebody else made in between.
+  Future<String> mutateSettings({
+    required List<SettingsOp> ops,
+    required String revision,
+  }) async {
+    final ok = await _expect<SettingsMutateOk>(
+      SettingsMutateRequest(
+        id: uuid7(),
+        ops: ops.map((o) => o.toJson()).toList(),
+        revision: revision,
+      ),
+      (id, msg) {
+        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'settings_mutate') {
+          final reason = SettingsErrorReason.fromWire(msg.error);
+          throw SettingsFailure(reason ?? SettingsErrorReason.invalid);
+        }
+        return msg is SettingsMutateOk && msg.inReplyTo == id;
+      },
+    );
+    return ok.revision;
+  }
+
+  /// Plan/84 — the workspace's working-tree status (`changes_snapshot`).
+  ///
+  /// Two distinct outcomes, and the difference matters: a CLEAN worktree is a
+  /// successful snapshot with an empty entry list, while "not a git repo" is
+  /// `ChangesSnapshotUnavailable`. Collapsing them would make a clean tree look
+  /// like a broken panel (and vice versa).
+  Future<ChangesSnapshot> changesSnapshot({
+    required String root,
+    required String daemonId,
+  }) async {
+    final ok = await _expect<ChangesSnapshotOk>(
+      ChangesSnapshotRequest(id: uuid7(), root: root, daemonId: daemonId),
+      (id, msg) {
+        if (msg is ChangesSnapshotUnavailable && msg.inReplyTo == id) {
+          final known = ChangesUnavailable.fromWire(msg.reason);
+          throw ChangesFailure(known ?? ChangesUnavailable.unreadable);
+        }
+        return msg is ChangesSnapshotOk && msg.inReplyTo == id;
+      },
+    );
+    return ChangesSnapshot.fromJson(ok.snapshot);
   }
 
   /// Plan/68 — persist a workspace the user added from the picker.

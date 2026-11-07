@@ -6,6 +6,7 @@ import 'package:mobile/ui/chat/widgets/input_bar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 void main() {
@@ -135,7 +136,7 @@ void main() {
     await tester.pumpAndSettle();
     final field = tester.widget<TextField>(find.byType(TextField));
     expect(field.enabled, isTrue);
-    expect(field.decoration?.hintText, 'Steer current response…');
+    expect(field.decoration?.hintText, PanelsCopy.steerCurrent);
     // The composer action button uses the heavier `600` weight variants
     // (see _ComposerActionButton._icon) — match those, not the plain glyphs.
     expect(find.byIcon(LucideIcons.square600), findsOneWidget); // stop

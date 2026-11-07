@@ -2,6 +2,7 @@ import 'package:mobile/routing/adaptive.dart' show kMaxContentWidth;
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:mobile/ui/home/states/home_state.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Plan-38 Fase 3 — presence filter for the Home list. A 3-pill segmented
@@ -37,9 +38,9 @@ class HomeFilterTabs extends StatelessWidget {
         padding: const EdgeInsets.all(3),
         child: Row(
           children: [
-            _segment(context, HomeFilter.all, 'All', counts.all),
-            _segment(context, HomeFilter.online, 'Online', counts.online),
-            _segment(context, HomeFilter.offline, 'Offline', counts.offline),
+            _segment(context, HomeFilter.all, '全部', counts.all),
+            _segment(context, HomeFilter.online, '在线', counts.online),
+            _segment(context, HomeFilter.offline, '离线', counts.offline),
           ],
         ),
       ),
@@ -115,16 +116,16 @@ class HomeFilterEmptyState extends StatelessWidget {
     final colors = context.colors;
     final (String title, String subtitle) = switch (filter) {
       HomeFilter.online => (
-        'No sessions online',
-        'Live sessions appear here when a paired Pi is active.',
+        '没有在线的会话',
+        '当已配对的 Pi 活动时，在线会话会出现在这里。',
       ),
       HomeFilter.offline => (
-        'No offline sessions',
-        'Sessions you’ve seen before that aren’t live show up here.',
+        '没有离线会话',
+        '你之前见过但当前不在线的会话会出现在这里。',
       ),
       HomeFilter.all => (
-        'Nothing here…',
-        'When a paired Pi opens a session, it shows up here.',
+        HomeCopy.nothingHere,
+        HomeCopy.nothingHint,
       ),
     };
     return Center(

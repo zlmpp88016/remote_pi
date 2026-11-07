@@ -29,9 +29,9 @@ void main() {
 
     testWidgets('renders the three tabs with their counts', (tester) async {
       await pump(tester);
-      expect(find.text('All'), findsOneWidget);
-      expect(find.text('Online'), findsOneWidget);
-      expect(find.text('Offline'), findsOneWidget);
+      expect(find.text('全部'), findsOneWidget);
+      expect(find.text('在线'), findsOneWidget);
+      expect(find.text('离线'), findsOneWidget);
       // Distinct counts so each digit maps to exactly one badge.
       expect(find.text('3'), findsOneWidget);
       expect(find.text('1'), findsOneWidget);
@@ -44,13 +44,13 @@ void main() {
       HomeFilter? picked;
       await pump(tester, onSelected: (f) => picked = f);
 
-      await tester.tap(find.text('Offline'));
+      await tester.tap(find.text('离线'));
       expect(picked, HomeFilter.offline);
 
-      await tester.tap(find.text('All'));
+      await tester.tap(find.text('全部'));
       expect(picked, HomeFilter.all);
 
-      await tester.tap(find.text('Online'));
+      await tester.tap(find.text('在线'));
       expect(picked, HomeFilter.online);
     });
   });
@@ -66,12 +66,12 @@ void main() {
 
     testWidgets('online tab → "No sessions online"', (tester) async {
       await pump(tester, HomeFilter.online);
-      expect(find.text('No sessions online'), findsOneWidget);
+      expect(find.text('没有在线的会话'), findsOneWidget);
     });
 
     testWidgets('offline tab → "No offline sessions"', (tester) async {
       await pump(tester, HomeFilter.offline);
-      expect(find.text('No offline sessions'), findsOneWidget);
+      expect(find.text('没有离线会话'), findsOneWidget);
     });
   });
 }

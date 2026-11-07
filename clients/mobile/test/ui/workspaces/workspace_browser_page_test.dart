@@ -19,6 +19,7 @@ import 'package:mobile/ui/workspaces/viewmodels/workspace_browser_viewmodel.dart
 import 'package:mobile/ui/workspaces/workspace_browser_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -190,7 +191,7 @@ void main() {
     expect(find.text('proj'), findsOneWidget);
     expect(find.text('plain'), findsOneWidget);
     // Arquivos não aparecem como alvo (o canal só devolve dirs aqui).
-    expect(find.text('Use this folder'), findsOneWidget);
+    expect(find.text(WorkspacesCopy.useThisFolder), findsOneWidget);
   });
 
   testWidgets('tocar numa pasta navega para dentro dela', (tester) async {
@@ -205,8 +206,8 @@ void main() {
   testWidgets('erro tipado mostra mensagem clara e oferece Retry', (tester) async {
     await _pump(tester, _Channel(failPath: '/home/me/proj'));
     await _tapAsync(tester, find.text('proj'));
-    expect(find.textContaining('permission'), findsOneWidget);
-    expect(find.text('Retry'), findsOneWidget);
+    expect(find.textContaining('没有权限'), findsOneWidget);
+    expect(find.text(Common.retry), findsOneWidget);
   });
 
   testWidgets('"usar esta pasta" pede confirmação e então navega para /sessions', (
@@ -214,20 +215,20 @@ void main() {
   ) async {
     await _pump(tester, _Channel());
 
-    await tester.tap(find.text('Use this folder'));
+    await tester.tap(find.text(WorkspacesCopy.useThisFolder));
     await tester.pump();
     // Primeira vez no diretório → diálogo de confirmação.
-    expect(find.text('Start a Pi here?'), findsOneWidget);
+    expect(find.text(WorkspacesCopy.startHereTitle), findsOneWidget);
 
-    await _tapAsync(tester, find.text('Start'));
+    await _tapAsync(tester, find.text(WorkspacesCopy.start));
     expect(find.text(_sessionsMarker), findsOneWidget);
   });
 
   testWidgets('cancelar a confirmação não navega', (tester) async {
     await _pump(tester, _Channel());
-    await tester.tap(find.text('Use this folder'));
+    await tester.tap(find.text(WorkspacesCopy.useThisFolder));
     await tester.pump();
-    await _tapAsync(tester, find.text('Cancel'));
+    await _tapAsync(tester, find.text(Common.cancel));
     expect(find.text(_sessionsMarker), findsNothing);
     expect(find.text('/home/me'), findsOneWidget, reason: 'segue no navegador');
   });
@@ -237,8 +238,8 @@ void main() {
   ) async {
     final vm = await _pump(tester, _Channel());
     vm.markConfirmed('/home/me');
-    await _tapAsync(tester, find.text('Use this folder'));
-    expect(find.text('Start a Pi here?'), findsNothing);
+    await _tapAsync(tester, find.text(WorkspacesCopy.useThisFolder));
+    expect(find.text(WorkspacesCopy.startHereTitle), findsNothing);
     expect(find.text(_sessionsMarker), findsOneWidget);
   });
 

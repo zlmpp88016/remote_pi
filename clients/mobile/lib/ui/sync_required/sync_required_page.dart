@@ -42,9 +42,8 @@ class _SyncRequiredPageState extends State<SyncRequiredPage> {
         ? 'Remote Pi keeps your Ed25519 owner key in iCloud Keychain so '
               'you can switch iPhones or pair your iPad without scanning '
               'a new QR.'
-        : 'Remote Pi keeps your Ed25519 owner key in Google Block Store '
-              'so you can restore it on a new device through Google '
-              'Backup without losing your paired Pis.';
+        : 'Remote Pi 把 Ed25519 所有者密钥保存在 Google Block Store，'
+              '也能通过 Google 备份恢复，不会丢失已配对的 Pi。';
 
     final colors = context.colors;
     return Scaffold(
@@ -63,7 +62,7 @@ class _SyncRequiredPageState extends State<SyncRequiredPage> {
               ),
               const SizedBox(height: 20),
               Text(
-                'Sync required',
+                '需要开启同步',
                 style: TextStyle(
                   fontFamily: kMonoFamily,
                   fontSize: 20,
@@ -83,7 +82,7 @@ class _SyncRequiredPageState extends State<SyncRequiredPage> {
               ),
               const SizedBox(height: 20),
               Text(
-                'To enable, on this device:',
+                '在这台设备上需要：',
                 style: TextStyle(
                   fontFamily: kMonoFamily,
                   fontSize: 11,
@@ -125,7 +124,7 @@ class _SyncRequiredPageState extends State<SyncRequiredPage> {
                         ),
                       )
                     : Text(
-                        'Check again',
+                        '重新检查',
                         style: TextStyle(
                           fontFamily: kMonoFamily,
                           fontSize: 14,
@@ -151,31 +150,31 @@ class _Requirement {
 
 const _androidRequirements = <_Requirement>[
   _Requirement(
-    title: 'Set up a screen lock',
-    path: 'Settings › Security › Screen lock',
-    note: 'PIN, pattern or biometrics — required by Block Store.',
+    title: '设置屏幕锁定',
+    path: '设置 › 安全 › 屏幕锁定',
+    note: 'PIN、图案或生物识别 —— Block Store 要求必须有。',
   ),
   _Requirement(
-    title: 'Turn on Google Backup',
-    path: 'Settings › System › Backup\n'
-        '(Samsung: Settings › Accounts and backup › Backup data)',
+    title: '开启 Google 备份',
+    path: '设置 › 系统 › 备份\n'
+        '（三星：设置 › 账户与备份 › 备份数据）',
   ),
   _Requirement(
-    title: 'Sign in to a Google account',
-    path: 'Settings › Passwords & accounts › Add account › Google',
+    title: '登录 Google 账号',
+    path: '设置 › 密码与账户 › 添加账户 › Google',
   ),
 ];
 
 const _iosRequirements = <_Requirement>[
   _Requirement(
-    title: 'Sign in to iCloud',
+    title: '登录 iCloud',
     path: 'Settings › [your name]',
-    note: 'If you see "Sign in to your iPhone" at the top, tap it.',
+    note: '顶部若显示「登录你的 iPhone」，点它。',
   ),
   _Requirement(
-    title: 'Turn on iCloud Keychain',
+    title: '开启 iCloud 钥匙串',
     path: 'Settings › [your name] › iCloud › Passwords and Keychain',
-    note: 'Toggle "Sync this iPhone" on.',
+    note: '打开「同步此 iPhone」。',
   ),
 ];
 

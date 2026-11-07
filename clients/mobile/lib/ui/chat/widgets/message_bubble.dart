@@ -146,7 +146,7 @@ class CompactionBubble extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Context compacted',
+                      '上下文已压缩',
                       style: TextStyle(
                         fontFamily: kMonoFamily,
                         fontSize: 12,

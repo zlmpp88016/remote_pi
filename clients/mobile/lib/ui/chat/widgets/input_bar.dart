@@ -9,6 +9,7 @@ import 'package:mobile/ui/chat/voice/viewmodels/voice_input_viewmodel.dart';
 import 'package:mobile/ui/chat/voice/widgets/recording_strip.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -411,12 +412,12 @@ class _InputBarState extends State<InputBar> {
                       cursorColor: colors.accent,
                       decoration: InputDecoration(
                         hintText: widget.disabled
-                            ? 'Offline…'
+                            ? PanelsCopy.offline
                             : widget.streaming
-                            ? 'Steer current response…'
+                            ? PanelsCopy.steerCurrent
                             : hasImage
-                            ? 'Add a caption…'
-                            : 'Send a message…',
+                            ? PanelsCopy.addCaption
+                            : PanelsCopy.sendMessage,
                         hintStyle: TextStyle(
                           color: colors.muted,
                           fontFamily: kMonoFamily,
@@ -557,7 +558,7 @@ class _QueuedMessagePreview extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        editable ? 'Queued. Tap to edit.' : 'Queued follow-up.',
+                        editable ? PanelsCopy.queuedEditable : PanelsCopy.queuedFollowUp,
                         style: TextStyle(
                           color: colors.accent,
                           fontFamily: kMonoFamily,
@@ -587,7 +588,7 @@ class _QueuedMessagePreview extends StatelessWidget {
                     height: 28,
                     child: IconButton(
                       key: const Key('input-bar-clear-queued'),
-                      tooltip: 'Clear queued message',
+                      tooltip: '清除排队的消息',
                       padding: EdgeInsets.zero,
                       iconSize: 16,
                       splashRadius: 16,
@@ -650,7 +651,7 @@ class _AttachButton extends StatelessWidget {
         padding: EdgeInsets.zero,
         iconSize: 18,
         splashRadius: 18,
-        tooltip: 'Attach image',
+        tooltip: '添加图片',
         icon: Icon(
           LucideIcons.paperclip,
           color: enabled
@@ -828,7 +829,7 @@ class _QuickActionsButtonState extends State<_QuickActionsButton>
                 padding: EdgeInsets.zero,
                 iconSize: 18,
                 splashRadius: 18,
-                tooltip: 'Quick actions',
+                tooltip: PanelsCopy.quickActions,
                 icon: Icon(
                   LucideIcons.slidersHorizontal,
                   color: context.colors.muted,

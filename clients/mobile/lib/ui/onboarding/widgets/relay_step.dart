@@ -2,6 +2,7 @@ import 'package:mobile/data/transport/relay_config.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:mobile/ui/onboarding/states/onboarding_state.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 /// Empty custom URL is allowed — onboarding treats it as "use default
@@ -45,7 +46,7 @@ class RelayStep extends StatelessWidget {
         children: [
           const SizedBox(height: 24),
           Text(
-            'Choose a relay',
+            OnboardingCopy.chooseRelay,
             style: TextStyle(
               fontFamily: kMonoFamily,
               fontSize: 16,
@@ -55,14 +56,14 @@ class RelayStep extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Where the app and your PC meet.',
+            OnboardingCopy.relayWhy,
             style: TextStyle(
                 fontFamily: kMonoFamily, fontSize: 11, color: colors.muted),
           ),
           const SizedBox(height: 24),
           _CustomRelayCard(
             badge: 'recommended',
-            description: 'Self-hosted. Best privacy.',
+            description: OnboardingCopy.selfHosted,
             selected: state.relayChoice == RelayChoice.custom,
             customUrl: state.customRelayUrl,
             error: state.customRelayError,
@@ -71,8 +72,8 @@ class RelayStep extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _RelayCard(
-            title: 'Community relay',
-            description: 'Hosted by us. Quick to start.',
+            title: OnboardingCopy.communityRelay,
+            description: OnboardingCopy.communityDesc,
             footer: kDefaultRelayUrl,
             selected: state.relayChoice == RelayChoice.community,
             onTap: () => onChoice(RelayChoice.community),
@@ -263,7 +264,7 @@ class _CustomRelayCard extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Use my own server',
+                    OnboardingCopy.useOwnServer,
                     style: TextStyle(
                       fontFamily: kMonoFamily,
                       fontSize: 13,

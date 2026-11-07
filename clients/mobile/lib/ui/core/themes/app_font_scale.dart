@@ -13,10 +13,10 @@
 /// per-widget `copyWith(fontSize: …)` call sites too — multiplying the base
 /// styles would leave every one-off size unscaled, which is most of the chat.
 enum AppFontScale {
-  small('Small', 0.9),
-  standard('Default', 1.0),
-  large('Large', 1.15),
-  extraLarge('XL', 1.3);
+  small('小', 0.9),
+  standard('默认', 1.0),
+  large('大', 1.15),
+  extraLarge('特大', 1.3);
 
   const AppFontScale(this.label, this.factor);
 

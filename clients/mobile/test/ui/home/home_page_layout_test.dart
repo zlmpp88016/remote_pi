@@ -46,6 +46,7 @@ import 'package:mobile/ui/sessions/session_list_page.dart';
 import 'package:mobile/ui/sessions/viewmodels/session_list_viewmodel.dart';
 import 'package:mobile/ui/update/viewmodels/update_banner_viewmodel.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -609,7 +610,7 @@ void main() {
       await assertClamped(
         tester,
         _iPhonePortrait,
-        'No pairings yet',
+        HomeCopy.noPairings,
         withPeer: false,
       );
     });
@@ -618,7 +619,7 @@ void main() {
       await assertClamped(
         tester,
         _iPadPortrait,
-        'No pairings yet',
+        HomeCopy.noPairings,
         withPeer: false,
       );
     });
@@ -630,7 +631,7 @@ void main() {
       await assertClamped(
         tester,
         _iPadPortrait,
-        'Nothing here…',
+        HomeCopy.nothingHere,
         withPeer: true,
         withRoom: false,
       );

@@ -156,8 +156,8 @@ class PairingViewModel extends ViewModel<PairingState> {
         const PairingValidationError(
           code: PairingValidationCode.invalidPayload,
           message:
-              'This is not a Remote Pi pairing code. Copy the full '
-              'remotepi://pair?… address printed by /remote-pi pair.',
+              '这不是 Remote Pi 的配对码。请完整复制 /remote-pi pair '
+              '打印出的 remotepi://pair?… 地址。',
         ),
       );
       return;
@@ -170,9 +170,8 @@ class PairingViewModel extends ViewModel<PairingState> {
           PairingValidationError(
             code: PairingValidationCode.relayMismatch,
             message:
-                'This code was issued for relay "${payload.relayUrl}", but '
-                'the address field says "$relayUrl". Fix the address (or '
-                'clear it to use your default relay) and try again.',
+                '这个配对码是为中继 "${payload.relayUrl}" 签发的，但地址栏写的是 '
+                '"$relayUrl"。请修正地址（或清空以使用默认中继）后重试。',
           ),
         );
         return;
@@ -233,7 +232,7 @@ class PairingViewModel extends ViewModel<PairingState> {
             onTimeout: () => throw const pair_flow.PairingError(
               code: 'pair_timeout',
               message:
-                  'Timed out — make sure /remote-pi is running on your Mac',
+                  '连接超时 —— 请确认主机上的 /remote-pi 正在运行',
             ),
           );
 
@@ -303,26 +302,25 @@ class PairingViewModel extends ViewModel<PairingState> {
   }
 
   String _friendlyError(pair_flow.PairingError e) => switch (e.code) {
-    'token_expired' => 'Code expired — generate a new one on your computer',
-    'token_consumed' => 'Code already used — generate a new one',
+    'token_expired' => '配对码已过期 —— 请在电脑上重新生成',
+    'token_consumed' => '配对码已被使用 —— 请重新生成',
     'token_unknown' =>
-      'Code not recognized by the host — re-run /remote-pi pair',
+      '主机不认识这个配对码 —— 请重新运行 /remote-pi pair',
     // Include the relay this attempt dialled: since plan 14 the code carries no
     // relay, and the ONLY symptom of an App/host relay mismatch is this timeout.
     // Without the address the error reads as "the host is down" and the real
     // cause (both sides on different relays) stays invisible.
     'pair_timeout' => _lastRelayUrl == null
-        ? 'Timed out — make sure /remote-pi is running on your computer'
-        : 'Timed out talking to $_lastRelayUrl — make sure /remote-pi is '
-            'running AND that the host uses this same relay (check '
-            '/remote-pi config on it).',
+        ? '连接超时 —— 请确认电脑上的 /remote-pi 正在运行'
+        : '连接中继 $_lastRelayUrl 超时 —— 请确认 /remote-pi 正在运行，'
+            '并且主机用的是同一个中继（在主机上执行 /remote-pi config 查看）。',
     _ => e.message.isEmpty ? e.code : e.message,
   };
 
   static String _deviceName() {
     try {
       if (Platform.isIOS) return 'iPhone';
-      if (Platform.isAndroid) return 'Android device';
+      if (Platform.isAndroid) return 'Android 设备';
       return 'Mobile';
     } catch (_) {
       return 'Mobile';

@@ -200,7 +200,8 @@ void main() {
     await vm.enter('secret');
     await _drain(vm);
     final err = vm.state as WorkspaceBrowserError;
-    expect(err.message, contains('permission'));
+    // 断言实际句子，不是英文碎片 —— 后者在汉化后会静默变成「通过」。
+    expect(err.message, contains('没有权限'));
     expect(err.path, '/home/me/secret');
 
     // Retry re-request the same directory (the channel must answer twice).
@@ -211,10 +212,11 @@ void main() {
   });
 
   test('not_found e not_a_directory têm copy própria', () {
-    expect(WorkspaceBrowserViewModel.humanError('not_found'), contains('no longer exists'));
-    expect(WorkspaceBrowserViewModel.humanError('not_a_directory'), contains('file'));
-    expect(WorkspaceBrowserViewModel.humanError('permission_denied'), contains('permission'));
-    expect(WorkspaceBrowserViewModel.humanError('spawn_failed'), contains('start a Pi'));
+    // 每条断言钉住的是实际中文句子，不是英文单词碎片。
+    expect(WorkspaceBrowserViewModel.humanError('not_found'), contains('已不存在'));
+    expect(WorkspaceBrowserViewModel.humanError('not_a_directory'), contains('是文件'));
+    expect(WorkspaceBrowserViewModel.humanError('permission_denied'), contains('没有权限'));
+    expect(WorkspaceBrowserViewModel.humanError('spawn_failed'), contains('无法'));
   });
 
   test('useCurrentFolder faz workspace_add ANTES de workspace_start', () async {
@@ -237,7 +239,7 @@ void main() {
     final ok = await vm.useCurrentFolder();
     expect(ok, isNull);
     final err = vm.state as WorkspaceBrowserError;
-    expect(err.message, contains('start a Pi'));
+    expect(err.message, contains('无法在该目录启动'));
     conn.dispose();
   });
 

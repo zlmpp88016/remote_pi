@@ -3,6 +3,7 @@ import 'package:mobile/protocol/protocol.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:mobile/ui/chat/quick_actions/viewmodels/quick_actions_viewmodel.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -102,7 +103,7 @@ class _ModelPickerBodyState extends State<_ModelPickerBody> {
                       return _ErrorState(
                         message: snap.error is ActionFailure
                             ? (snap.error as ActionFailure).message
-                            : 'Failed to load models',
+                            : '加载模型失败',
                         onRetry: _refresh,
                       );
                     }
@@ -163,7 +164,7 @@ class _Header extends StatelessWidget {
           const SizedBox(width: 4),
           Expanded(
             child: Text(
-              'Choose a model',
+              PanelsCopy.chooseModel,
               style: TextStyle(
                 fontFamily: kMonoFamily,
                 fontSize: 13,
@@ -417,7 +418,7 @@ class _EmptyState extends StatelessWidget {
       height: 120,
       child: Center(
         child: Text(
-          'No models available',
+          '没有可用的模型',
           style: TextStyle(
             fontFamily: kMonoFamily,
             fontSize: 12,

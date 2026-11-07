@@ -48,7 +48,7 @@ class _ActivityGroupCardState extends State<ActivityGroupCard> {
     final parts = names.entries
         .map((e) => e.value == 1 ? e.key : '${e.key} ×${e.value}')
         .toList();
-    return 'Ran ${widget.tools.length} '
+    return '运行了 ${widget.tools.length} '
         '${widget.tools.length == 1 ? 'tool' : 'tools'}: ${parts.join(', ')}';
   }
 

@@ -2,6 +2,7 @@ import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:mobile/ui/pairing/states/pairing_state.dart';
 import 'package:mobile/ui/pairing/viewmodels/pairing_viewmodel.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -155,7 +156,7 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
               ),
             ),
             Text(
-              'Pair device',
+              OnboardingCopy.connectDevice,
               style: TextStyle(
                 fontFamily: kMonoFamily,
                 fontSize: 15,
@@ -165,8 +166,8 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
             ),
             const SizedBox(height: 6),
             Text(
-              "Run /remote-pi pair on your computer and paste the code it "
-              "prints. The relay address fills in automatically.",
+              "在电脑上运行 /remote-pi pair，把打印出来的配对码粘贴到这里。"
+              "中继地址会自动填入。",
               style: TextStyle(
                 fontFamily: kMonoFamily,
                 fontSize: 11,
@@ -175,7 +176,7 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
               ),
             ),
             const SizedBox(height: 16),
-            _FieldLabel('Relay address'),
+            _FieldLabel('中继地址'),
             const SizedBox(height: 6),
             TextField(
               key: const Key('pairing-sheet-address'),
@@ -193,7 +194,7 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
               decoration: _fieldDecoration(
                 colors,
                 hintText: _vm.defaultRelayUrl,
-                helperText: 'Leave empty to use the default relay',
+                helperText: '留空则使用默认中继',
                 errorText: addressError,
                 suffix: IconButton(
                   icon: Icon(
@@ -201,13 +202,13 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
                     size: 14,
                     color: colors.muted,
                   ),
-                  tooltip: 'Paste address',
+                  tooltip: '粘贴地址',
                   onPressed: () => _pasteInto(_addressController, false),
                 ),
               ),
             ),
             const SizedBox(height: 14),
-            _FieldLabel('Pairing code'),
+            _FieldLabel('配对码'),
             const SizedBox(height: 6),
             TextField(
               key: const Key('pairing-sheet-code'),
@@ -239,7 +240,7 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
                 color: colors.accent,
               ),
               label: Text(
-                'Paste code from clipboard',
+                '从剪贴板粘贴配对码',
                 style: TextStyle(
                   fontFamily: kMonoFamily,
                   fontSize: 12,
@@ -268,7 +269,7 @@ class _PasteQrSheetBodyState extends State<_PasteQrSheetBody> {
                 ),
               ),
               child: const Text(
-                'Pair',
+                '开始配对',
                 style: TextStyle(
                   fontFamily: kMonoFamily,
                   fontSize: 14,

@@ -243,7 +243,7 @@ void main() {
     expect(s.restartingCwd, isNull);
     expect(s.restartError, isNotNull);
     expect(s.restartError!.cwd, _cwdA);
-    expect(s.restartError!.message, contains('could not start'));
+    expect(s.restartError!.message, contains('无法在该目录启动'));
   });
 
   test('restart sem conexão vira erro legível no row', () async {
@@ -262,7 +262,7 @@ void main() {
 
     // Back to Ready via a fresh rig-like flow is not possible offline; the
     // error state itself is the readable outcome.
-    expect((vm.state as WorkspaceListError).message, contains('Not connected'));
+    expect((vm.state as WorkspaceListError).message, contains('未连接到该机器'));
   });
 
   test('sem conn (picker puro) não há ciclo de vida e nada quebra', () async {

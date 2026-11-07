@@ -35,7 +35,7 @@ class PiSurfaceViewModel extends ViewModel<PiSurfaceState> {
     } on WorkspaceControlFailure catch (e) {
       emit(PiSurfaceError(message: humanError(e.message)));
     } catch (e) {
-      emit(PiSurfaceError(message: 'Could not read this Pi: $e'));
+      emit(PiSurfaceError(message: '无法读取这个 Pi：$e'));
     }
   }
 
@@ -52,7 +52,7 @@ class PiSurfaceViewModel extends ViewModel<PiSurfaceState> {
       emit(PiSurfaceError(message: humanError(e.message)));
       return false;
     } catch (e) {
-      emit(PiSurfaceError(message: 'Could not change the skill: $e'));
+      emit(PiSurfaceError(message: '无法修改技能：$e'));
       return false;
     }
   }
@@ -79,7 +79,7 @@ class PiSurfaceViewModel extends ViewModel<PiSurfaceState> {
       emit(PiSurfaceError(message: humanError(e.message)));
       return false;
     } catch (e) {
-      emit(PiSurfaceError(message: 'Could not run the skill: $e'));
+      emit(PiSurfaceError(message: '无法运行技能：$e'));
       return false;
     }
   }
@@ -106,7 +106,7 @@ class PiSurfaceViewModel extends ViewModel<PiSurfaceState> {
       emit(PiSurfaceError(message: humanError(e.message)));
       return false;
     } catch (e) {
-      emit(PiSurfaceError(message: 'Could not install the package: $e'));
+      emit(PiSurfaceError(message: '无法安装软件包：$e'));
       return false;
     }
   }
@@ -123,7 +123,7 @@ class PiSurfaceViewModel extends ViewModel<PiSurfaceState> {
       emit(PiSurfaceError(message: humanError(e.message)));
       return false;
     } catch (e) {
-      emit(PiSurfaceError(message: 'Could not remove the package: $e'));
+      emit(PiSurfaceError(message: '无法移除软件包：$e'));
       return false;
     }
   }
@@ -141,7 +141,7 @@ class PiSurfaceViewModel extends ViewModel<PiSurfaceState> {
       emit(PiSurfaceError(message: humanError(e.message)));
       return false;
     } catch (e) {
-      emit(PiSurfaceError(message: 'Could not update the packages: $e'));
+      emit(PiSurfaceError(message: '无法更新软件包：$e'));
       return false;
     }
   }

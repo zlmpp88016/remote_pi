@@ -23,7 +23,7 @@ void main() {
       ),
     );
 
-    expect(find.text('Context compacted'), findsOneWidget);
+    expect(find.text('上下文已压缩'), findsOneWidget);
     expect(find.text('Recapped the long thread'), findsOneWidget);
     expect(find.text('~12000 tokens'), findsOneWidget);
   });
@@ -34,7 +34,7 @@ void main() {
       const CompactionMsg(id: 'c2', summary: 'done'),
     );
 
-    expect(find.text('Context compacted'), findsOneWidget);
+    expect(find.text('上下文已压缩'), findsOneWidget);
     expect(find.text('done'), findsOneWidget);
     expect(find.textContaining('tokens'), findsNothing);
   });

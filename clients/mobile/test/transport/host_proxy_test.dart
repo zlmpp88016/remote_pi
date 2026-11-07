@@ -31,10 +31,33 @@ void main() {
         'workspace_stop',
         'workspace_restart',
         'fs_list',
+        'fs_read',
         'workspace_add',
         'workspace_remove',
         'pair_request',
         'ping',
+      ]) {
+        expect(isHostDirectType(t), isTrue, reason: t);
+      }
+    });
+
+    // Regression: the dock faces (plan/68, plan/84) are answered by the
+    // DAEMON, not by a child workspace Pi. When these were missing from
+    // `kHostDirectTypes` they were wrapped in `host_forward{room: activeRoom}`
+    // and the daemon re-emitted them toward a nonexistent child room, so the
+    // panels never left "正在读取…".
+    test('the dock faces the daemon answers are direct too', () {
+      for (final t in const [
+        'schedule_list',
+        'schedule_add',
+        'schedule_remove',
+        'schedule_set_enabled',
+        'schedule_run_now',
+        'models_describe',
+        'models_mutate',
+        'settings_describe',
+        'settings_mutate',
+        'changes_snapshot',
       ]) {
         expect(isHostDirectType(t), isTrue, reason: t);
       }

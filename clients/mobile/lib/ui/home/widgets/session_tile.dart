@@ -187,7 +187,7 @@ class _TitleBlock extends StatelessWidget {
           return Text(
             hasModel
                 ? _truncateModel(model)
-                : 'Last paired: ${_relativeTime(peer.pairedAt)}',
+                : '上次配对：${_relativeTime(peer.pairedAt)}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(

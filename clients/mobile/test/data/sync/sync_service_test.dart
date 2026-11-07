@@ -48,6 +48,30 @@ int _counter = 0;
 
 late Directory _dir;
 
+/// Waits until [condition] holds, or fails the test after [timeoutMs].
+///
+/// The fixed-sleep `_settle()` this replaces was the suite's only source of
+/// flakiness: 30 ms is plenty when the machine is idle and too short when the
+/// full suite runs in parallel, so `sync_service_test` failed only in the
+/// combined run and always passed in isolation. Polling makes the wait track
+/// the actual work instead of the wall clock — and it still returns in a few
+/// milliseconds on an idle machine.
+Future<void> _waitFor(
+  bool Function() condition, {
+  String? reason,
+  int timeoutMs = 5_000,
+}) async {
+  final deadline = DateTime.now().add(Duration(milliseconds: timeoutMs));
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) {
+      fail(reason ?? 'condition not met within ${timeoutMs}ms');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+}
+
+/// Gives already-scheduled microtasks and timers a chance to run, without
+/// assuming a specific duration.
 Future<void> _settle() =>
     Future<void>.delayed(const Duration(milliseconds: 30));
 
@@ -119,7 +143,9 @@ void main() {
     () async {
       final s = await setup();
       s.ch.push(UserInput(id: 'u1', text: 'hi'));
-      await _settle();
+      await _waitFor(() => messages(s.epk).isNotEmpty);
+      // The index flip is a separate async step after the row is written.
+      await _waitFor(() => index(s.epk)?.status == SessionActivity.working);
 
       final m = messages(s.epk);
       expect(m, hasLength(1));

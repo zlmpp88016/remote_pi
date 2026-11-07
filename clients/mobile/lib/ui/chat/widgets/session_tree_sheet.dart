@@ -4,6 +4,7 @@ import 'package:mobile/protocol/protocol.dart';
 import 'package:mobile/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -92,7 +93,7 @@ class _SessionTreeSheetBodyState extends State<_SessionTreeSheetBody> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Session tree',
+                        ChatCopy.sessionTree,
                         style: TextStyle(
                           fontFamily: kMonoFamily,
                           fontSize: 13,
@@ -116,7 +117,7 @@ class _SessionTreeSheetBodyState extends State<_SessionTreeSheetBody> {
               Divider(color: colors.border, height: 1, thickness: 1),
               if (busy)
                 _Notice(
-                  text: 'Agent is working — branching is paused.',
+                  text: PanelsCopy.agentBusy,
                   color: colors.warning,
                 ),
               if (snapshot != null && snapshot.filters.length > 1)
@@ -174,7 +175,7 @@ class _SessionTreeSheetBodyState extends State<_SessionTreeSheetBody> {
                 side: BorderSide(color: colors.border),
               ),
               child: const Text(
-                'Retry',
+                Common.retry,
                 style: TextStyle(fontFamily: kMonoFamily, fontSize: 12),
               ),
             ),
@@ -203,7 +204,7 @@ class _SessionTreeSheetBodyState extends State<_SessionTreeSheetBody> {
         height: 120,
         child: Center(
           child: Text(
-            'Empty tree',
+            PanelsCopy.emptyTree,
             style: TextStyle(
               fontFamily: kMonoFamily,
               fontSize: 12,
@@ -238,7 +239,7 @@ class _SessionTreeSheetBodyState extends State<_SessionTreeSheetBody> {
     if (busy) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('The agent is working — try again when it finishes.'),
+          content: Text(PanelsCopy.agentBusyRetry),
         ),
       );
       return;
@@ -256,10 +257,10 @@ class _SessionTreeSheetBodyState extends State<_SessionTreeSheetBody> {
   /// raw string rather than pretending to know what happened.
   static String _humanError(String code) {
     return switch (code) {
-      'session_busy' => 'The agent is working — try again when it finishes.',
-      'tree_state_changed' => 'The tree changed — refresh and try again.',
-      'target_not_found' => 'That entry no longer exists.',
-      'target_not_forkable' => 'That entry cannot be branched.',
+      'session_busy' => PanelsCopy.agentBusyRetry,
+      'tree_state_changed' => PanelsCopy.treeChanged,
+      'target_not_found' => PanelsCopy.entryGone,
+      'target_not_forkable' => PanelsCopy.notForkable,
       _ => code,
     };
   }
@@ -346,7 +347,7 @@ class _TreeTile extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 2, left: 8),
                 child: Tooltip(
-                  message: 'Fork from here',
+                  message: PanelsCopy.forkFromHere,
                   child: Icon(
                     LucideIcons.gitBranch,
                     size: 14,

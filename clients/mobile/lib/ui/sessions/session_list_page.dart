@@ -71,7 +71,7 @@ class SessionListPage extends StatelessWidget {
           sessions.isEmpty
               ? Center(
                   child: Text(
-                    'No sessions in this workspace yet.',
+                    '这个工作区还没有会话。',
                     style: TextStyle(color: colors.muted),
                   ),
                 )
@@ -90,7 +90,7 @@ class SessionListPage extends StatelessWidget {
                       ),
                       subtitle: Text(
                         [
-                          if (live) 'current',
+                          if (live) '当前',
                           if (s.preview != null && s.preview!.isNotEmpty)
                             s.preview!,
                         ].join(' · '),

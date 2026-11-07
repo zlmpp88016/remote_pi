@@ -11,6 +11,7 @@ import 'package:mobile/ui/chat/quick_actions/widgets/dismiss_on_session_change.d
 import 'package:mobile/ui/chat/quick_actions/widgets/model_picker_sheet.dart';
 import 'package:mobile/ui/chat/viewmodels/chat_viewmodel.dart';
 import 'package:flutter/material.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -134,13 +135,13 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
             const SizedBox(height: 10),
             _DragHandle(),
             const SizedBox(height: 6),
-            const _SheetTitle(text: 'Quick actions'),
+            const _SheetTitle(text: PanelsCopy.quickActions),
             const _Divider(),
             _ActionTile(
               key: const Key('qa-compact'),
               icon: LucideIcons.shrink,
-              label: 'Compact context',
-              subtitle: 'Summarize old turns to free room.',
+              label: PanelsCopy.compactContext,
+              subtitle: PanelsCopy.compactSubtitle,
               busy: busyAction == ActionName.sessionCompact,
               onTap: () => _onCompact(vm),
             ),
@@ -148,8 +149,8 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
             _ActionTile(
               key: const Key('qa-new-session'),
               icon: LucideIcons.sparkles,
-              label: 'New session',
-              subtitle: 'Clears the conversation on the Pi.',
+              label: PanelsCopy.newSession,
+              subtitle: PanelsCopy.newSessionSubtitle,
               busy: busyAction == ActionName.sessionNew,
               onTap: () => _onNewSession(vm),
             ),
@@ -206,7 +207,7 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
             side: BorderSide(color: colors.border),
           ),
           title: Text(
-            'Start a new session?',
+            PanelsCopy.startNewTitle,
             style: TextStyle(
               fontFamily: kMonoFamily,
               fontSize: 14,
@@ -226,7 +227,7 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
             TextButton(
               onPressed: () => Navigator.of(dCtx).pop(false),
               child: Text(
-                'Cancel',
+                Common.cancel,
                 style: TextStyle(fontFamily: kMonoFamily, color: colors.muted),
               ),
             ),
@@ -237,7 +238,7 @@ class _QuickActionsSheetBodyState extends State<QuickActionsSheetBody> {
               ),
               onPressed: () => Navigator.of(dCtx).pop(true),
               child: const Text(
-                'Start new',
+                PanelsCopy.startNew,
                 style: TextStyle(fontFamily: kMonoFamily),
               ),
             ),
@@ -409,7 +410,7 @@ class _ModelRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final label = currentLabel ?? (busy ? 'Switching…' : 'Choose a model');
+    final label = currentLabel ?? (busy ? PanelsCopy.switching : PanelsCopy.chooseModel);
     return InkWell(
       key: const Key('qa-model-row'),
       onTap: busy ? null : onTap,
@@ -484,7 +485,7 @@ class _ThinkingRow extends StatelessWidget {
               Icon(LucideIcons.brain, color: colors.accent, size: 18),
               const SizedBox(width: 14),
               Text(
-                'Thinking',
+                PanelsCopy.thinking,
                 style: TextStyle(
                   fontFamily: kMonoFamily,
                   fontSize: 11,

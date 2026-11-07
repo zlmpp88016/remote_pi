@@ -1,5 +1,6 @@
 import 'package:mobile/protocol/protocol.dart';
 import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:mobile/ui/workspaces/states/workspace_list_state.dart';
 import 'package:mobile/ui/workspaces/viewmodels/workspace_list_viewmodel.dart';
@@ -46,7 +47,7 @@ class WorkspaceListPage extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Workspaces', style: TextStyle(color: colors.text, fontSize: 16)),
+            Text(WorkspacesCopy.listTitle, style: TextStyle(color: colors.text, fontSize: 16)),
             if (device != null)
               Text(
                 device!,
@@ -57,7 +58,7 @@ class WorkspaceListPage extends StatelessWidget {
         actions: [
           // Plan/68 — the machine's Pi surface (skills + packages).
           IconButton(
-            tooltip: 'Pi skills and packages',
+            tooltip: WorkspacesCopy.piSurface,
             onPressed: () => context.push(
               '/pi',
               extra: {if (device != null) 'device': device},
@@ -86,7 +87,7 @@ class WorkspaceListPage extends StatelessWidget {
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: vm.reload,
-                  child: Text('Retry', style: TextStyle(color: colors.accent)),
+                  child: Text(Common.retry, style: TextStyle(color: colors.accent)),
                 ),
               ],
             ),
@@ -114,12 +115,12 @@ class WorkspaceListPage extends StatelessWidget {
                                 Icon(LucideIcons.folderOpen, color: colors.muted, size: 48),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'No workspaces yet',
+                                  WorkspacesCopy.none,
                                   style: TextStyle(color: colors.muted2, fontSize: 14),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  'Browse the machine\'s folders to pick one.',
+                                  WorkspacesCopy.noneHint,
                                   textAlign: TextAlign.center,
                                   style: TextStyle(color: colors.muted, fontSize: 12),
                                 ),
@@ -163,7 +164,7 @@ class WorkspaceListPage extends StatelessWidget {
                       onPressed: () => _browse(context, epk, device, online),
                       icon: Icon(LucideIcons.folderSearch, size: 18, color: colors.accent),
                       label: Text(
-                        'Browse folders on the machine',
+                        WorkspacesCopy.browseFolders,
                         style: TextStyle(color: colors.accent, fontSize: 13),
                       ),
                       style: OutlinedButton.styleFrom(
@@ -260,13 +261,13 @@ class _WorkspaceCard extends StatelessWidget {
     final name = workspace.name.isNotEmpty ? workspace.name : workspace.cwd;
 
     final (Color stateColor, String stateLabel) = switch (state) {
-      WorkspaceStateValue.running => (colors.accent, 'running'),
-      WorkspaceStateValue.starting => (colors.accent, 'starting…'),
-      WorkspaceStateValue.crashed => (colors.error, 'crashed'),
-      WorkspaceStateValue.stopped => (colors.muted, 'stopped'),
+      WorkspaceStateValue.running => (colors.accent, '运行中'),
+      WorkspaceStateValue.starting => (colors.accent, '启动中…'),
+      WorkspaceStateValue.crashed => (colors.error, '已崩溃'),
+      WorkspaceStateValue.stopped => (colors.muted, '已停止'),
       null => (
         workspace.live ? colors.accent : colors.muted,
-        workspace.live ? 'running' : 'stopped',
+        workspace.live ? '运行中' : '已停止',
       ),
     };
 
@@ -328,7 +329,7 @@ class _WorkspaceCard extends StatelessWidget {
                   )
                 else if (onRemove != null)
                   IconButton(
-                    tooltip: 'Remove from list',
+                    tooltip: WorkspacesCopy.removeFromList,
                     onPressed: onRemove,
                     icon: Icon(LucideIcons.trash2, color: colors.muted, size: 18),
                   )
@@ -370,7 +371,7 @@ class _WorkspaceCard extends StatelessWidget {
               if (workspace.source == 'added') ...[
                 const SizedBox(width: 8),
                 Text(
-                  'added',
+                  '已添加',
                   style: TextStyle(color: colors.muted, fontSize: 11),
                 ),
               ],
@@ -382,7 +383,7 @@ class _WorkspaceCard extends StatelessWidget {
             Text(
               lc?.lastError?.isNotEmpty == true
                   ? lc!.lastError!
-                  : 'The Pi process exited. No error detail was reported.',
+                  : WorkspacesCopy.exitedNoDetail,
               style: TextStyle(color: colors.error, fontSize: 11, height: 1.35),
             ),
             const SizedBox(height: 10),
@@ -401,7 +402,7 @@ class _WorkspaceCard extends StatelessWidget {
                       )
                     : Icon(LucideIcons.rotateCw, size: 14, color: colors.onAccent),
                 label: Text(
-                  restarting ? 'Restarting…' : 'Restart',
+                  restarting ? WorkspacesCopy.restarting : WorkspacesCopy.restart,
                   style: TextStyle(
                     color: colors.onAccent,
                     fontSize: 12,

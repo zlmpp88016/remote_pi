@@ -18,6 +18,7 @@ import 'package:mobile/ui/pi_surface/states/pi_surface_state.dart';
 import 'package:mobile/ui/pi_surface/viewmodels/pi_surface_viewmodel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:provider/provider.dart';
 
 const _epk = 'Bz02uLi';
@@ -244,7 +245,7 @@ void main() {
     expect(find.text('npm:@example/pi-tools@1.0.0'), findsOneWidget);
     // `user` aparece duas vezes: origem da skill E escopo do package.
     expect(find.text('user'), findsNWidgets(2));
-    expect(find.textContaining('Running · anthropic/claude-opus-4-7 · medium'), findsOneWidget);
+    expect(find.textContaining(PluginsCopy.running), findsOneWidget);
   });
 
   testWidgets('toggle desabilita o skill e re-lê o estado do host', (tester) async {
@@ -308,15 +309,15 @@ void main() {
     final ch = _Channel();
     await _pump(tester, ch);
 
-    await tester.tap(find.text('Install a package'));
+    await tester.tap(find.text(PluginsCopy.install));
     await tester.pump();
-    expect(find.text('Install a package'), findsWidgets);
+    expect(find.text(PluginsCopy.install), findsWidgets);
     await tester.enterText(find.byType(TextField), 'npm:@example/pi-tools@1.0.0');
     await tester.pump();
 
-    await _tapAsync(tester, find.text('Continue'));
+    await _tapAsync(tester, find.text(PluginsCopy.continueLabel));
     // Segundo aceite: o aviso de código de terceiros.
-    expect(find.text('Install third-party code?'), findsOneWidget);
+    expect(find.text(PluginsCopy.confirmThirdPartyTitle), findsOneWidget);
     await _tapAsync(tester, find.text('Install'));
 
     expect(ch.installRequests, hasLength(1));
@@ -329,12 +330,12 @@ void main() {
     final ch = _Channel();
     await _pump(tester, ch);
 
-    await tester.tap(find.text('Install a package'));
+    await tester.tap(find.text(PluginsCopy.install));
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'npm:@example/pi-tools@1.0.0');
     await tester.pump();
-    await _tapAsync(tester, find.text('Continue'));
-    await _tapAsync(tester, find.text('Cancel'));
+    await _tapAsync(tester, find.text(PluginsCopy.continueLabel));
+    await _tapAsync(tester, find.text(Common.cancel));
 
     expect(ch.installRequests, isEmpty, reason: 'sem aceite explícito, nada sai do app');
   });
@@ -347,10 +348,10 @@ void main() {
     );
     await _pump(tester, ch);
 
-    await tester.tap(find.byTooltip('Remove'));
+    await tester.tap(find.byTooltip(PluginsCopy.remove));
     await tester.pump();
-    expect(find.text('Remove package?'), findsOneWidget);
-    await _tapAsync(tester, find.text('Remove'));
+    expect(find.text(PluginsCopy.removeTitle), findsOneWidget);
+    await _tapAsync(tester, find.text(PluginsCopy.remove));
 
     expect(ch.sentTypes, contains('package_remove'));
   });
@@ -358,24 +359,24 @@ void main() {
   testWidgets('estado vazio ensina o que fazer nas duas seções', (tester) async {
     await _pump(tester, _Channel());
 
-    expect(find.text('No skills installed on this Pi.'), findsOneWidget);
-    expect(find.text('No packages installed on this Pi.'), findsOneWidget);
+    expect(find.text(PluginsCopy.noSkills), findsOneWidget);
+    expect(find.text(PluginsCopy.noPackages), findsOneWidget);
   });
 
   testWidgets('sem runtime mostra Not running (nunca inventa modelo)', (tester) async {
     await _pump(tester, _Channel(running: false));
-    expect(find.text('Not running'), findsOneWidget);
+    expect(find.text(PluginsCopy.notRunning), findsOneWidget);
   });
 
   testWidgets('erro de instalação vira mensagem clara com Retry', (tester) async {
     final ch = _Channel(installError: 'not_registered');
     await _pump(tester, ch);
 
-    await tester.tap(find.text('Install a package'));
+    await tester.tap(find.text(PluginsCopy.install));
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'npm:@x/y@1');
     await tester.pump();
-    await _tapAsync(tester, find.text('Continue'));
+    await _tapAsync(tester, find.text(PluginsCopy.continueLabel));
     await _tapAsync(tester, find.text('Install'));
 
     // O erro substitui o estado e a tela oferece retry.

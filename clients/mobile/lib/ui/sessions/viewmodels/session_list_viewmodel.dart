@@ -71,7 +71,7 @@ class SessionListViewModel extends ViewModel<SessionListState> {
       SessionSwitchErrorCode.noSdk =>
         'This workspace has no command context (start a Pi or a registered daemon).',
       SessionSwitchErrorCode.unknown =>
-        e.message.isEmpty ? 'Could not switch session.' : e.message,
+        e.message.isEmpty ? '无法切换会话。' : e.message,
     };
   }
 }

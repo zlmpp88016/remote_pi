@@ -2,6 +2,7 @@ import 'package:mobile/data/transport/epk_encoding.dart';
 import 'package:mobile/pairing/storage.dart';
 import 'package:mobile/protocol/protocol.dart' show RoomInfo;
 import 'package:mobile/routing/adaptive.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:mobile/ui/home/states/home_state.dart';
 import 'package:mobile/ui/settings/settings_sheet.dart';
@@ -102,13 +103,13 @@ class HomePage extends StatelessWidget {
         // transport is bound to.
         if (vm.activePeer != null)
           IconButton(
-            tooltip: 'Open another folder',
+            tooltip: HomeCopy.openAnotherFolder,
             icon: Icon(LucideIcons.folderOpen, color: colors.muted2),
             onPressed: () =>
                 _openWorkspaces(context, vm, vm.activePeer!),
           ),
         IconButton(
-          tooltip: 'Settings',
+          tooltip: AppSettingsCopy.title,
           icon: Icon(LucideIcons.settings, color: colors.muted2),
           // Tablet → bottom sheet (keeps the chat in context); phone →
           // full-screen push. See openSettings.
@@ -221,15 +222,15 @@ class HomePage extends StatelessWidget {
     final Color statusColor;
     if (connected) {
       dotColor = colors.success;
-      statusLabel = 'Connected';
+      statusLabel = HomeCopy.connected;
       statusColor = colors.muted;
     } else if (awaitingPairing) {
       dotColor = colors.muted;
-      statusLabel = 'Awaiting pairing';
+      statusLabel = HomeCopy.awaitingPairing;
       statusColor = colors.muted;
     } else {
       dotColor = colors.warning;
-      statusLabel = 'Offline';
+      statusLabel = '离线';
       statusColor = colors.warning;
     }
     return Row(
@@ -404,11 +405,11 @@ class HomePage extends StatelessWidget {
               ListTile(
                 leading: Icon(LucideIcons.folderOpen, color: colors.accent),
                 title: Text(
-                  'Open another folder',
+                  HomeCopy.openAnotherFolder,
                   style: TextStyle(color: colors.text),
                 ),
                 subtitle: Text(
-                  'List the workdirs registered on this machine',
+                  HomeCopy.workspacesHint,
                   style: TextStyle(color: colors.muted, fontSize: 11),
                 ),
                 onTap: () {
@@ -419,7 +420,7 @@ class HomePage extends StatelessWidget {
               ListTile(
                 leading: Icon(LucideIcons.pencil, color: colors.accent),
                 title: Text(
-                  'Rename session',
+                  HomeCopy.renameSession,
                   style: TextStyle(color: colors.text),
                 ),
                 onTap: () {
@@ -434,12 +435,12 @@ class HomePage extends StatelessWidget {
                 ),
                 enabled: !isLive,
                 title: Text(
-                  'Delete session (local only)',
+                  HomeCopy.deleteSession,
                   style: TextStyle(color: isLive ? colors.muted : colors.text),
                 ),
                 subtitle: isLive
                     ? Text(
-                        'Only available when the room is offline',
+                        HomeCopy.deleteOnlyOffline,
                         style: TextStyle(color: colors.muted, fontSize: 11),
                       )
                     : null,
@@ -469,7 +470,7 @@ class HomePage extends StatelessWidget {
         final colors = dCtx.colors;
         return AlertDialog(
           backgroundColor: colors.bg,
-          title: Text('Rename session', style: TextStyle(color: colors.text)),
+          title: Text(HomeCopy.renameSession, style: TextStyle(color: colors.text)),
           content: TextField(
             controller: controller,
             autofocus: true,
@@ -492,7 +493,7 @@ class HomePage extends StatelessWidget {
             ),
             TextButton(
               onPressed: () => Navigator.of(dCtx).pop(controller.text.trim()),
-              child: Text('Save', style: TextStyle(color: colors.accent)),
+              child: Text('保存', style: TextStyle(color: colors.accent)),
             ),
           ],
         );
@@ -513,10 +514,9 @@ class HomePage extends StatelessWidget {
         final colors = dCtx.colors;
         return AlertDialog(
           backgroundColor: colors.bg,
-          title: Text('Delete session?', style: TextStyle(color: colors.text)),
+          title: Text(HomeCopy.deleteTitle, style: TextStyle(color: colors.text)),
           content: Text(
-            'Removes locally only. If the session comes back online on '
-            'the Pi, it reappears in the list.',
+            HomeCopy.deleteBody,
             style: TextStyle(color: colors.muted, fontSize: 12),
           ),
           actions: [
@@ -656,7 +656,7 @@ class _LonelyEmptyState extends StatelessWidget {
                 Icon(LucideIcons.moon, color: colors.muted, size: 56),
                 const SizedBox(height: 18),
                 Text(
-                  'Nothing here…',
+                  HomeCopy.nothingHere,
                   style: TextStyle(
                     fontFamily: kMonoFamily,
                     color: colors.muted2,
@@ -666,7 +666,7 @@ class _LonelyEmptyState extends StatelessWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'When a paired Pi opens a session, it shows up here.',
+                  HomeCopy.nothingHint,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: kMonoFamily,
@@ -701,12 +701,12 @@ class _EmptyState extends StatelessWidget {
               Icon(LucideIcons.scanQrCode, color: colors.muted, size: 48),
               const SizedBox(height: 16),
               Text(
-                'No pairings yet',
+                HomeCopy.noPairings,
                 style: TextStyle(color: colors.muted2, fontSize: 14),
               ),
               const SizedBox(height: 6),
               Text(
-                'Scan a QR from your Mac to start.',
+                HomeCopy.noPairingsHint,
                 style: TextStyle(color: colors.muted, fontSize: 12),
               ),
               const SizedBox(height: 24),
@@ -717,7 +717,7 @@ class _EmptyState extends StatelessWidget {
                   foregroundColor: colors.onAccent,
                 ),
                 icon: const Icon(LucideIcons.scanQrCode, size: 18),
-                label: const Text('Scan QR'),
+                label: const Text('扫码配对'),
               ),
             ],
           ),

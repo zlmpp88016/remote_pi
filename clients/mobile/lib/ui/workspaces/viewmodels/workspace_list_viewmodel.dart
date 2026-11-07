@@ -58,7 +58,7 @@ class WorkspaceListViewModel extends ViewModel<WorkspaceListState> {
     } on WorkspaceControlFailure catch (e) {
       emit(WorkspaceListError(_human(e)));
     } catch (e) {
-      emit(WorkspaceListError('Could not list workspaces: $e'));
+      emit(WorkspaceListError('无法列出工作区：$e'));
     }
   }
 
@@ -77,7 +77,7 @@ class WorkspaceListViewModel extends ViewModel<WorkspaceListState> {
       emit(WorkspaceListError(_human(e)));
       return null;
     } catch (e) {
-      emit(WorkspaceListError('Could not start workspace: $e'));
+      emit(WorkspaceListError('无法启动工作区：$e'));
       return null;
     }
   }
@@ -105,7 +105,7 @@ class WorkspaceListViewModel extends ViewModel<WorkspaceListState> {
       _failRestart(cwd, _human(e));
       return false;
     } catch (e) {
-      _failRestart(cwd, 'Could not restart workspace: $e');
+      _failRestart(cwd, '无法重启工作区：$e');
       return false;
     }
   }
@@ -132,7 +132,7 @@ class WorkspaceListViewModel extends ViewModel<WorkspaceListState> {
     } on WorkspaceControlFailure catch (e) {
       emit(WorkspaceListError(_human(e)));
     } catch (e) {
-      emit(WorkspaceListError('Could not remove workspace: $e'));
+      emit(WorkspaceListError('无法移除工作区：$e'));
     }
   }
 
