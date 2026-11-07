@@ -65,9 +65,38 @@ const DEFAULT_DIRECT_PORT = 4124;
 let activeRelay: EmbeddedRelay | null = null;
 let activeServer: SameOriginServer | null = null;
 
-/** True when the CLI was invoked with `--direct`. */
+/** True when the CLI was invoked with the explicit opt-in `--direct` flag. */
 export function wantsDirect(args: readonly string[]): boolean {
   return args.includes("--direct");
+}
+
+/**
+ * Decide whether this process runs the self-contained stack.
+ *
+ * DIRECT IS THE DEFAULT. `remote-pi-server install` writes a unit with no
+ * arguments, so whatever this returns for an empty argv is what every installed
+ * service gets — and while this was opt-in, that meant every installed service
+ * dialled the community relay and every guide opened with `set-relay`.
+ *
+ * The two opt-outs are deliberately different in kind:
+ *   - `--community-relay` is the explicit statement "I want a public meeting
+ *     point";
+ *   - a non-empty `REMOTE_PI_RELAY` is treated the same way, because an operator
+ *     who exported one has already answered this question, and silently
+ *     overriding it (or, worse, letting `ensureDirectRelay` fill it in) would be
+ *     the two controls fighting with the flag winning by accident of ordering.
+ *
+ * `--direct` still wins over `REMOTE_PI_RELAY`: the flag is the more specific
+ * statement, and it is the documented way to take an installed-everything host
+ * back to self-contained after someone left the var in a shell profile.
+ */
+export function resolveDirectMode(
+  args: readonly string[],
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  if (wantsDirect(args)) return true;
+  if (args.includes("--community-relay")) return false;
+  return (env[DIRECT_ENV] ?? "").trim() === "";
 }
 
 /** Where the port/discovery file lives. */

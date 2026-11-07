@@ -5999,16 +5999,17 @@ if (_isDirectRun()) {
   }
   configureRelayLog({ level: logFlags.level, file: logFlags.file });
 
-  // `--direct` is owned by `pi-supervisord`, not by this CLI: the supervisor is
+  // Direct mode is owned by `pi-supervisord`, not by this CLI: the supervisor is
   // the long-lived process that holds the HostBridge (and therefore the relay
   // connection) and that spawns the daemon children. Starting a relay HERE
   // would bind a port, print a pairing code, and then close the port when this
   // short-lived command exits — a code pointing at nothing. Reject it loudly
   // instead of half-supporting it.
-  if (logFlags.rest.includes("--direct")) {
+  if (logFlags.rest.includes("--direct") || logFlags.rest.includes("--community-relay")) {
     console.error(
-      "[remote-pi-server] --direct belongs to `pi-supervisord --direct`, which is the\n" +
-      "long-lived process that owns the relay connection. Start that instead;\n" +
+      "[remote-pi-server] --direct / --community-relay belong to `pi-supervisord`, which is\n" +
+      "the long-lived process that owns the relay connection. Direct is the DEFAULT, so\n" +
+      "plain `pi-supervisord` already does the right thing; start that instead.\n" +
       "`remote-pi-server pair` then reports the local address automatically.",
     );
     process.exit(2);

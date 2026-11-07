@@ -166,6 +166,20 @@ describe("renderTemplate", () => {
     expect(out).not.toContain("{SUPERVISOR}");
   });
 
+  /*
+   * Direct is the default, so the unit must NOT pass a relay flag: `install`
+   * writing an argument-free ExecStart is exactly what makes an installed
+   * service self-contained. Pinning the flag here would re-create the old
+   * behaviour the moment the default changed back.
+   */
+  test("no relay flag in any unit — the default is what makes it self-contained", () => {
+    for (const name of ["systemd", "launchd", "vbs-launcher"] as const) {
+      const out = renderTemplate(readFileSync(findTemplate(name), "utf8"), vars);
+      expect(out).not.toContain("--community-relay");
+      expect(out).not.toContain("--direct");
+    }
+  });
+
   test("substitutes {NODE}/{SUPERVISOR}/{LOG} in the vbs-launcher template", () => {
     const tpl = readFileSync(findTemplate("vbs-launcher"), "utf8");
     const out = renderTemplate(tpl, vars);

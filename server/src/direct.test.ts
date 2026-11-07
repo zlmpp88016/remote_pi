@@ -3,7 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "vitest";
 import { Socket } from "node:net";
-import { ensureDirectRelay, readDirectState, stopDirectRelay, wantsDirect } from "./direct.js";
+import { ensureDirectRelay, readDirectState, resolveDirectMode, stopDirectRelay, wantsDirect } from "./direct.js";
 import { resolveRelayUrl } from "./config.js";
 
 /**
@@ -38,6 +38,41 @@ describe("wantsDirect", () => {
     expect(wantsDirect(["--log", "summary", "--direct"])).toBe(true);
     expect(wantsDirect(["--log", "summary"])).toBe(false);
     expect(wantsDirect([])).toBe(false);
+  });
+});
+
+describe("resolveDirectMode", () => {
+  /*
+   * Direct is the DEFAULT. `remote-pi-server install` writes a service unit
+   * with no arguments, so whatever an empty argv resolves to is what every
+   * installed service gets — and while this was opt-in, that meant every
+   * installed service dialled the community relay.
+   */
+  test("an empty argv means direct", () => {
+    expect(resolveDirectMode([], {})).toBe(true);
+  });
+
+  test("logging flags alone still mean direct", () => {
+    expect(resolveDirectMode(["--log", "full"], {})).toBe(true);
+    expect(resolveDirectMode(["--port", "4135"], {})).toBe(true);
+  });
+
+  test("--community-relay opts out", () => {
+    expect(resolveDirectMode(["--community-relay"], {})).toBe(false);
+  });
+
+  test("an explicit REMOTE_PI_RELAY opts out — the operator already decided", () => {
+    expect(resolveDirectMode([], { REMOTE_PI_RELAY: "https://relay.example.com" })).toBe(false);
+    /* Empty and whitespace are not a decision. */
+    expect(resolveDirectMode([], { REMOTE_PI_RELAY: "" })).toBe(true);
+    expect(resolveDirectMode([], { REMOTE_PI_RELAY: "   " })).toBe(true);
+  });
+
+  test("--direct wins over both opt-outs — it is the more specific statement", () => {
+    expect(resolveDirectMode(["--direct", "--community-relay"], {})).toBe(true);
+    expect(
+      resolveDirectMode(["--direct"], { REMOTE_PI_RELAY: "https://relay.example.com" }),
+    ).toBe(true);
   });
 });
 

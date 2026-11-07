@@ -41,13 +41,23 @@ Options:
   --direct                   Run a local relay inside this process and point
                              the host stack at it. No community relay, no
                              network egress. The pair command then reports a
-                             local address automatically.
+                             local address automatically. This is the DEFAULT;
+                             the flag still works and is the explicit way to
+                             ask for it back after --community-relay.
+  --community-relay          Dial the configured/public relay instead of
+                             running one in-process. The old behaviour.
+  --port <n>                 Port for the in-process relay (default 4124).
   -h, --help                 Show this help and exit.
   -v, --version              Print version and exit.
 
 Environment (equivalent to the flags; flags win):
   REMOTE_PI_LOG, REMOTE_PI_LOG_FILE
-  REMOTE_PI_RELAY            Relay address; --direct fills it in when unset.
+  REMOTE_PI_RELAY            Relay address. Setting it makes this process dial
+                             that relay (direct mode is skipped), which is the
+                             same escape hatch as --community-relay.
+  REMOTE_PI_PUBLIC_RELAY     Address PAIRING CODES carry, for a host behind a
+                             tunnel. Does not affect what this host dials.
+  REMOTE_PI_ALLOWED_HOSTS    Extra hostname the same-origin gate accepts.
 `;
 
 /**
@@ -82,16 +92,25 @@ async function main(): Promise<void> {
     return;
   }
 
-  // `--log`/`--log-file`/`--direct` are the only accepted arguments. Anything
-  // else still aborts: a stray arg used to fall through and start a FULL
-  // supervisor (a `pi-supervisord --help` once ran for days), so unknown args
-  // must never silently spawn the daemon fleet.
+  // `--log`/`--log-file`/`--direct`/`--community-relay` are the only accepted
+  // arguments. Anything else still aborts: a stray arg used to fall through and
+  // start a FULL supervisor (a `pi-supervisord --help` once ran for days), so
+  // unknown args must never silently spawn the daemon fleet.
   const logFlags = parseRelayLogFlags(args);
   if (logFlags.error) {
     process.stderr.write(`pi-supervisord: ${logFlags.error}\n`);
     process.exit(2);
   }
-  const direct = logFlags.rest.includes("--direct");
+  /*
+   * DIRECT IS THE DEFAULT — see `resolveDirectMode` in `direct.ts` for the full
+   * rule. Short version: this build is "install one server, install one client,
+   * done", and while direct was opt-in every installed service (`install` writes
+   * a unit with NO arguments) dialled the community relay instead, which is why
+   * every guide opened with `set-relay`. `--community-relay` and an explicit
+   * `REMOTE_PI_RELAY` are the two opt-outs.
+   */
+  const { resolveDirectMode } = await import("../direct.js");
+  const direct = resolveDirectMode(logFlags.rest);
   /*
    * `--port <n>` / `--port=<n>` must reach `ensureDirectRelay`, otherwise an
    * operator whose 4124 is taken has NO command-line escape hatch: the CLI
@@ -99,7 +118,12 @@ async function main(): Promise<void> {
    */
   const portArg = readPortFlag(logFlags.rest);
   const unexpected = logFlags.rest.filter(
-    (arg) => arg !== "--direct" && arg !== "--port" && !arg.startsWith("--port=") && arg !== portArg,
+    (arg) =>
+      arg !== "--direct" &&
+      arg !== "--community-relay" &&
+      arg !== "--port" &&
+      !arg.startsWith("--port=") &&
+      arg !== portArg,
   );
   if (unexpected.length > 0) {
     process.stderr.write(
@@ -112,7 +136,7 @@ async function main(): Promise<void> {
   // it (each child's log.ts reads the env at startup).
   configureRelayLog({ level: logFlags.level, file: logFlags.file });
 
-  // `--direct` — start the in-process relay BEFORE the Supervisor is
+  // Direct mode — start the in-process relay BEFORE the Supervisor is
   // constructed. `resolveRelayUrl()` is read when the HostBridge connects
   // (`daemon/supervisor.ts:186`) and when the pairing code is built
   // (`_pairView`, `:550`), so the address must already be in the environment
