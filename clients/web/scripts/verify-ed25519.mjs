@@ -12,13 +12,14 @@
  * Run: node scripts/verify-ed25519.mjs
  */
 
-import { createPublicKey, sign as nodeSign, verify as nodeVerify } from "node:crypto";
+import { createHash, createPublicKey, sign as nodeSign, verify as nodeVerify } from "node:crypto";
 import {
   base64ToBytes,
   bytesToBase64,
   createEd25519Signer,
   detectEd25519Support,
   pureTsVerify,
+  sha512PureForTest,
   webcryptoVerify,
 } from "../src/lib/remote-pi/ed25519.ts";
 
@@ -148,6 +149,66 @@ async function main() {
       ? "\nverify-ed25519: ALL PASS\n"
       : `\nverify-ed25519: ${failures} FAILURE(S)\n`,
   );
+  // ── 6. non-secure context: no SubtleCrypto at all ─────────────────────────
+  //
+  // This is the LAN case: http://192.168.x.x:4124 is not a secure context, so
+  // crypto.subtle does not exist and Ed25519 has no hash unless the pure-TS
+  // SHA-512 takes over. Simulated by swapping in a crypto object with
+  // getRandomValues only — exactly what the browser exposes on such a page.
+  console.log("\n== non-secure context (no crypto.subtle) ==");
+  const realCrypto = globalThis.crypto;
+  Object.defineProperty(globalThis, "crypto", {
+    value: { getRandomValues: (a) => realCrypto.getRandomValues(a) },
+    configurable: true,
+    writable: true,
+  });
+  try {
+    const insecureBackend = await detectEd25519Support();
+    check("detecção cai para pure-ts", insecureBackend === "pure-ts", "backend=" + insecureBackend);
+
+    const insecureSigner = await createEd25519Signer();
+    check("signer usa o backend pure-ts", insecureSigner.backend === "pure-ts");
+    const insecureSig = await insecureSigner.sign(message);
+    check(
+      "Node nativo aceita a assinatura feita sem crypto.subtle",
+      nodeVerify(
+        null,
+        message,
+        nodeKeyObjectFromRaw(insecureSigner.publicKeyBase64),
+        Buffer.from(insecureSig),
+      ),
+    );
+  } finally {
+    Object.defineProperty(globalThis, "crypto", {
+      value: realCrypto,
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  // ── 7. the pure-TS SHA-512 itself ─────────────────────────────────────────
+  console.log("\n== pure-TS SHA-512 ==");
+  const fips = [
+    ["", "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e"],
+    ["abc", "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f"],
+  ];
+  for (const [input, expected] of fips) {
+    const got = Buffer.from(sha512PureForTest(new TextEncoder().encode(input))).toString("hex");
+    check("vetor FIPS " + JSON.stringify(input), got === expected);
+  }
+  // Every padding branch: 0x80 alone, 55/56 (length fits / spills), multi-block.
+  let paddingOk = true;
+  for (const len of [1, 55, 56, 63, 64, 111, 112, 127, 128, 129, 1000, 4096]) {
+    const buf = new Uint8Array(len).map((_, i) => (i * 37 + 11) & 0xff);
+    const got = Buffer.from(sha512PureForTest(buf)).toString("hex");
+    const exp = createHash("sha512").update(Buffer.from(buf)).digest("hex");
+    if (got !== exp) {
+      paddingOk = false;
+      console.log("    mismatch at len=" + len);
+    }
+  }
+  check("fronteiras de padding batem com node:crypto", paddingOk);
+
   process.exit(failures === 0 ? 0 : 1);
 }
 
