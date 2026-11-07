@@ -14,121 +14,148 @@
 
 ## 部署
 
-三个角色。按手头的机器挑一个方案。
+**两个东西：一个 server，一个 client。装完就能用 —— 不用配中继，不用部署第三个服务。**
 
-| 角色 | 放哪 | 干什么 |
-| --- | --- | --- |
-| **relay** | 有公网 IP 的机器 —— 或者干脆不要 | 让两端不用互相可达。**用 `--direct` 时完全省掉**：该模式自带内嵌 relay。 |
-| **server** | 真正跑 Pi 的那台 | `pi-supervisord` 保活 Pi 工作区并应答配对 |
-| **client** | 浏览器 / 手机 / 桌面端 | web、iOS、Electron 壳 |
+server 自带内嵌 relay，同一个端口既服务网页又跑 WebSocket。
 
-### 方案一 —— 单机（五分钟试通）
+```
+跑 Pi 的那台机器                        你的手机 / 浏览器 / 桌面端
+┌────────────────────────────┐
+│  pi-supervisord            │   ← 只装这两个
+│   · 内嵌 relay              │      server 装这边
+│   · 托管 web 客户端          │      client 装那边
+│   · 保活 Pi 工作区           │
+└────────────────────────────┘
+```
 
-全部装一台。`--direct` 自带内嵌 relay 并且自己托管 web，所以**不需要 Docker，也不需要单独的 web 托管**。
+### 装 server
 
 ```bash
 cd server && npm install && npm run build && npm install -g .
-node dist/bin/supervisord.js --direct
+cd ../clients/web && npm install && npm run build
+cd ../../server
+
+remote-pi-server install      # 用户级服务，注销后仍活；Windows 首次弹一次 UAC
+remote-pi-server daemon status   # 确认在跑
 ```
 
-日志会打印 `direct mode — local relay at http://127.0.0.1:4124 (no community relay)`。
-打开 `http://127.0.0.1:4124/remote-pi/connect`。
+日志（`~/.pi/remote/supervisord.log`）里应该有这一行：
 
-配对码在另一个终端取：
+```
+[pi-supervisord] direct mode — local relay at http://127.0.0.1:4124 (no community relay)
+```
+
+看到它就说明是自包含模式，**全程零公网流量**。`install` 写出来的服务单元不带任何
+relay 参数，直接继承这个默认。
+
+### 连 client
+
+**浏览器**：直接打开 `http://127.0.0.1:4124/remote-pi/connect`。**不用填任何东西** ——
+页面会同源配对，自己连上。
+
+**手机**：装 App 后打开「设置 → 添加配对」。中继地址那一栏**不用填** —— 粘进配对码
+就会自动填好。只有两种场景需要你多看一眼：
+
+| 场景 | 你要做的 |
+| --- | --- |
+| 手机插 USB 连电脑 | 先 `adb reverse tcp:4124 tcp:4124`，然后**只粘配对码** |
+| 手机在别的设备上（Wi-Fi/外网） | 先按「跨网访问」配好隧道，再**只粘配对码** |
+
+配对码在 server 那台机器上取：
 
 ```bash
 remote-pi-server pair
 ```
 
-整串 `remotepi://pair?…` 粘到**配对码**框，`ws://127.0.0.1:4124` 填到**中继地址**框。
+把整串 `remotepi://pair?…` 粘进 App 的**配对码**框。**中继地址会自动从配对码里填进来**
+（`r=` 参数），只有要连别处时才需要手动改。
 
-> 这个方案需要 `clients/web/dist` 存在。没构建过的话 daemon 照样跑，但不服务页面
-> —— 日志里会说。构建一次：`cd clients/web && npm install && npm run build`。
-> **只有这个方案**要求 server 机器上有 web 构建产物。
+### 这样就完了
 
-### 方案二 —— 两台机（Pi 在 A，浏览器在 B）—— 推荐
+不需要 Docker、不需要单独的 web 托管、不需要部署 relay、不需要 `set-relay`。
 
-A 只跑 Pi，B 只开页面。**这个方案里 A 不构建 web** —— 由 B 托管。
+### 常见坑
 
-#### 机器 A
+- **`install` 之后又手动起了 `pi-supervisord`。** 两者抢同一个 supervisor 套接字
+  （Windows 上是命名管道，别处是 `/tmp/remote-pi-supervisor-<用户>.sock`），后起的
+  报 *「Another pi-supervisord is already running」*。装了服务就别再手动起。
+- **`daemon status` 说「未运行」，但网页明明能用。** 预期如此 —— 那些命令管的是
+  **安装的服务**，不是前台手动起的进程。
+- **网页打开是「Connect to a host」而不是已连接。** 说明同源自动配对没成
+  （比如页面不是由这台 server 提供的）。把 `remote-pi-server pair` 的输出粘进
+  配对码框即可 —— 手动路径永远可用。
+- **改了 `server/` 的代码但行为没变。** `pi-supervisord` 是常驻进程，没有热重载。
+  要 `npm run build` **再** `remote-pi-server restart-supervisor`，见「开发」一节。
+
+---
+
+## 可选：跨网访问
+
+`direct` 只绑 `127.0.0.1`，这是有意的 —— 不显式打开就不会意外暴露在网络上。
+让外网/局域网的手机连进来，前面挂一层隧道（frp / nginx / cloudflared / SSH `-L`），
+再告诉 server 两件事：
 
 ```bash
-cd server && npm install && npm run build && npm install -g .
-remote-pi-server set-relay https://relay.example.com   # 只收 http(s)，不收 ws://
-remote-pi-server install                              # 用户级服务，注销后仍活
-remote-pi-server daemon status                        # 确认在跑
-remote-pi-server pair                                 # 打印配对 URI
+remote-pi-server set-public-relay "https://pi.example.com"   # 手机该拨的地址
+remote-pi-server allow-host       "pi.example.com"           # 同源门禁放行的域名
+remote-pi-server restart-supervisor
 ```
 
-`install` 会写 systemd `--user` 单元、LaunchAgent 或任务计划条目 —— 不需要 root，
-只有 Windows 首次安装会弹一次 UAC。
+这两条解的是**两个独立问题**，缺一个都会失败：
 
-#### 机器 B
-
-```bash
-cd clients/web && npm install && npm run build
-npx serve dist -p 5173
-```
-
-打开 `http://localhost:5173/remote-pi/connect`：
-
-| 字段 | 值 |
+| 少了什么 | 症状 |
 | --- | --- |
-| 中继地址 | `wss://relay.example.com` |
-| 配对码 | A 上打印的整串 `remotepi://pair?…` |
+| 不设 `set-public-relay` | 配对码里是 `127.0.0.1`，外网手机去连**它自己**的 localhost，超时 |
+| 不设 `allow-host`（隧道转发域名时） | 代理在任何页面返回前就收到 `403` —— 同源门禁默认只认 loopback 和 IP 字面量 |
 
-### 方案三 —— 生产（自有 relay + 自有域名）
+`set-public-relay` **只影响配对码**，宿主自己仍连本机，不会绕公网。清空用
+`set-public-relay -` / `allow-host -`。
 
-#### relay 那台
+隧道指向本机，**不要**指 `0.0.0.0`：
+
+```toml
+# type = tcp → 用 http://公网IP:7000 访问，不需要 allow-host
+[[proxies]]
+name = "remote-pi"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 4124
+remotePort = 7000
+
+# type = http → 用域名访问，需要 allow-host
+[[proxies]]
+name = "remote-pi"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 4124
+customDomains = ["pi.example.com"]
+```
+
+> **局域网 IP 直接连会失败。** `http://192.168.x.x:4124` 不是 secure context，
+> 浏览器不提供 `crypto.subtle`，Ed25519 握手直接失败。这是浏览器规范约束，不是实现
+> 缺陷。局域网访问需要套 HTTPS（自签证书在 WebSocket 上没法让用户点「继续」），
+> 实际做法就是上面这层隧道。
+
+## 可选：自建或社区中继
+
+内嵌 relay 只服务单机场景。想要「多台机器共用一个会合点」（跨机 Pi-to-Pi mesh、
+多设备发现），才需要部署 `relay/` 里的 Rust relay：
 
 ```bash
 docker compose -f docker-compose.relay.yml up -d   # 宿主 3001 → 容器 3000
 ```
 
 用反向代理或 Cloudflare Tunnel 把域名的 `https://` 和 `wss://` 都指到
-`127.0.0.1:3001`。`RELAY_ALLOWED_ORIGINS` 是浏览器 Origin 白名单，默认宽松。
-
-#### server 那台
+`127.0.0.1:3001`，然后：
 
 ```bash
-cd server && npm install && npm run build && npm install -g .
 remote-pi-server set-relay https://relay.example.com
-remote-pi-server install
-remote-pi-server pair          # --rotate 作废旧码
+remote-pi-server restart-supervisor
 ```
 
-#### client 那台
+社区中继也可用（`wss://relay.880160.xyz`），但运营方能看见消息内容，敏感工作别用。
 
-把 `clients/web/dist` 发布到任意静态托管（Nginx、Cloudflare Pages、Vercel）并套上
-HTTPS，然后用上面的中继地址和配对码连接。
-
-### 从另一台机器访问 `--direct`
-
-`--direct` 只绑 `127.0.0.1`，主机和端口都不能通过它改。要从别处访问，前面挂隧道或
-反向代理，**并且**把浏览器实际发送的域名加入白名单：
-
-```bash
-REMOTE_PI_ALLOWED_HOSTS="your-tunnel-host.example.com" \
-  node dist/bin/supervisord.js --direct
-```
-
-这个变量不能省：不设的话代理在任何页面返回前就拿到 `403`，因为严格同源门禁默认只认
-loopback 的 `Host` 值。若页面所在 Origin 与 daemon 不同源，还要在
-`REMOTE_PI_ALLOWED_ORIGINS` 里列出它。
-
-### 常见坑
-
-- **配对码填错框。** 页面有两个输入框。中继地址收 `wss://…`，配对码收整串
-  `remotepi://pair?…` URI。把 URI 粘进地址框是最常见的失败。
-- **`set-relay` 拒收 `ws://`。** 只接受 `http://` / `https://`，内部自己转
-  WebSocket。传 `ws://` 会被直接拒绝。
-- **`install` 和 `--direct` 互斥。** 两者抢同一个 supervisor 套接字（Windows 上是
-  命名管道，别处是 `/tmp/remote-pi-supervisor-<用户>.sock`）。一个在跑时起另一个会报
-  *「Another pi-supervisord is already running」*。先停服务：
-  `remote-pi-server daemon stop`。
-- **`--direct` 明明能用，`daemon status` 却说「未运行」。** 预期如此。那些命令管的是
-  安装的服务，不是前台进程。
-- **隧道返回 `403`。** 少了 `REMOTE_PI_ALLOWED_HOSTS`，见上一节。
+**只用内嵌 relay 时整节跳过。** 完整的安全权衡见 [`relay/README.md`](./relay/README.md)。
 
 ---
 
@@ -157,23 +184,24 @@ Remote Pi 不是单个插件 —— 它是「在一台机器上运行和管理 P
 | [`clients/mobile/`](./clients/mobile) | Flutter（iOS / Android） | 移动端客户端（操作台） |
 | [`clients/desktop/`](./clients/desktop) | Flutter Desktop | 桌面端客户端（macOS / Windows / Linux，另含 iPad / Android） |
 | [`clients/web/`](./clients/web) | NextJS | 落地页、文档，以及浏览器客户端 |
-| [`relay/`](./relay) | Rust + Tokio | WebSocket 路由 + 带签名的 mesh 成员关系存储 |
+| [`relay/`](./relay) | Rust + Tokio | 可选的独立 relay —— 只有跨机共享会合点时才需要（默认走内嵌 relay） |
 
 ## 架构
 
 ```
 手机 / 浏览器 / 桌面端客户端
-        │  wss（配对一次 —— 地址 + 配对码）
+        │  wss（配对一次 —— 粘配对码即可）
         ▼
-   Relay（Rust）
-        ▲  wss
-        │
 主机守护进程  `pi-supervisord`   ──  room "host" · 常驻 · 不受 Pi 生死影响
-        │  按需拉起
+        │  · 内嵌 relay（默认，同端口）
+        │  · 托管 web 客户端（同端口）
         ├──►  Pi 子进程（`pi --mode rpc`）  ──  工作区 · 会话 · 对话
         │
         └──►  UDS broker   ──  本机智能体 mesh（`list_peers` / `agent_send`）
 ```
+
+默认拓扑里**没有中间那台机器**：relay 就跑在 `pi-supervisord` 进程里。只有要跨机共享一个
+会合点时才换成外部 Rust relay（[`relay/`](./relay)），那时客户端连的是它而不是守护进程。
 
 **主机即连接**。客户端连的是这台机器上的守护进程（room `host`），而不是某个 Pi 进程。Pi 停了、
 崩了、或压根没启动过，都不会断开连接 —— 守护进程让这台机器持续在线，推送工作区状态，并且能按操作者
@@ -181,8 +209,8 @@ Remote Pi 不是单个插件 —— 它是「在一台机器上运行和管理 P
 
 - **无需 Pi 在跑也能配对** —— 守护进程自己接受配对（地址 + 配对码）；Pi 进程不是前提
 - **工作区生命周期** —— 浏览主机文件系统、注册目录、启动 / 停止 / 重启它的 Pi、切换会话
-- **Ed25519 身份验证** —— 中继握手会证明对方持有连接密钥；App 与主机之间的配对由两端各自把关。至于 Pi 与 Pi 之间的路由，当前中继只要看到一份签名正确的 Owner blob 里同时列出两个 Pi 的密钥就放行；这一检查并不能证明 Owner 真的和这两个 Pi 配过对、或能控制它们
-- **TLS 只保护在途流量**，当前的消息载荷没有端到端加密；确切的信任边界见 [`relay/README.md`](./relay/README.md)
+- **Ed25519 身份验证** —— relay 握手会证明对方持有连接密钥；App 与主机之间的配对由两端各自把关。至于 Pi 与 Pi 之间的路由，外部 relay 只要看到一份签名正确的 Owner blob 里同时列出两个 Pi 的密钥就放行；这一检查并不能证明 Owner 真的和这两个 Pi 配过对、或能控制它们
+- **TLS 只保护在途流量**，当前的消息载荷没有端到端加密；外部 relay 的确切信任边界见 [`relay/README.md`](./relay/README.md)
 
 ## 本机智能体 mesh
 
@@ -196,9 +224,11 @@ Pi 对话里给大模型开放了三个工具：
 
 有了这些，你就能在本机搭起多智能体协作（比如让 `backend` 智能体找 `frontend` 智能体帮忙），和远程操作客户端并行不悖。
 
-## 中继
+## 中继（可选）
 
-社区免费中继：
+默认路径用进程内嵌 relay，**这一节可以整段跳过**。
+
+需要跨机共享一个会合点时，社区免费中继：
 
 ```
 wss://relay.880160.xyz

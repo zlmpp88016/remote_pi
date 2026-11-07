@@ -14,130 +14,152 @@
 
 ## Deploy
 
-Three roles. Pick the plan that matches what you have.
+**Two things: one server, one client. Install them and you are done — no relay to configure,
+no third service to deploy.**
 
-| Role | Where it runs | What it does |
-| --- | --- | --- |
-| **relay** | A host with a public IP — or nowhere at all | Lets both sides talk without either being reachable. **Omit it entirely** when you use `--direct`: that mode embeds its own relay. |
-| **server** | The machine that actually runs Pi | `pi-supervisord` keeps Pi workspaces alive and answers pairing |
-| **client** | Your browser / phone / desktop | Web, iOS, or the Electron shell |
+The server embeds its own relay and serves the web client on the same port.
 
-### Plan 1 — Single machine (try it in five minutes)
+```
+The machine that runs Pi                Your phone / browser / desktop
+┌────────────────────────────┐
+│  pi-supervisord            │   ← these two are all you install
+│   · embedded relay         │      server on this side
+│   · serves the web client  │      client on that side
+│   · keeps Pi workspaces up │
+└────────────────────────────┘
+```
 
-Everything on one box. `--direct` starts an embedded relay and serves the web
-client itself, so there is **no Docker and no separate web host**.
+### Install the server
 
 ```bash
 cd server && npm install && npm run build && npm install -g .
-node dist/bin/supervisord.js --direct
+cd ../clients/web && npm install && npm run build
+cd ../../server
+
+remote-pi-server install         # user-level service, survives logout; one UAC prompt on Windows
+remote-pi-server daemon status   # confirm it is running
 ```
 
-It logs `direct mode — local relay at http://127.0.0.1:4124 (no community relay)`.
-Open `http://127.0.0.1:4124/remote-pi/connect`.
+The log (`~/.pi/remote/supervisord.log`) should contain:
 
-For the pairing code, in a second terminal:
+```
+[pi-supervisord] direct mode — local relay at http://127.0.0.1:4124 (no community relay)
+```
+
+That line is the whole point: self-contained mode, **zero public-network traffic**. The
+service unit `install` writes carries no relay arguments and inherits this default.
+
+### Connect a client
+
+**Browser:** open `http://127.0.0.1:4124/remote-pi/connect`. **Type nothing** — the page pairs
+itself over the same origin.
+
+**Phone:** install the app, then Settings → Add pairing. The relay address field needs **nothing
+from you** — pasting the code fills it in. Only two situations need a second look:
+
+| Situation | What you do |
+| --- | --- |
+| Phone plugged into the machine over USB | run `adb reverse tcp:4124 tcp:4124`, then **just paste the code** |
+| Phone on another device (Wi-Fi or the internet) | set up the tunnel in "Reaching the server from elsewhere" first, then **just paste the code** |
+
+Get the pairing code on the server:
 
 ```bash
 remote-pi-server pair
 ```
 
-Paste the whole `remotepi://pair?…` string into the **pairing code** box, and
-`ws://127.0.0.1:4124` into the **relay address** box.
+Paste the whole `remotepi://pair?…` string into the app's **pairing code** box. The relay
+address **auto-fills from the code** (`r=`); you only touch it to point somewhere else.
 
-> The web client must exist under `clients/web/dist` for this plan. If you have
-> not built it, the daemon still runs but serves no page — it says so in the log.
-> Build it once with `cd clients/web && npm install && npm run build`. This is the
-> **only** plan where the server machine needs the web build.
+### That is it
 
-### Plan 2 — Two machines (Pi on A, browser on B) — recommended
+No Docker, no separate web host, no relay deployment, no `set-relay`.
 
-Machine A runs Pi. Machine B only opens a page. **A does not build the web client
-in this plan** — B serves it.
+### Common pitfalls
 
-#### Machine A
+- **Starting `pi-supervisord` by hand after `install`.** They contend for the same supervisor
+  socket (a named pipe on Windows, `/tmp/remote-pi-supervisor-<user>.sock` elsewhere) and the
+  second one fails with *"Another pi-supervisord is already running"*. Once the service is
+  installed, do not start it manually.
+- **`daemon status` says "not running" while the page works.** Expected. Those commands manage
+  the **installed service**, not a foreground process.
+- **The page shows "Connect to a host" instead of connecting.** Same-origin auto-pairing did
+  not happen (the page probably was not served by this server). Paste the output of
+  `remote-pi-server pair` into the pairing-code box — the manual path always works.
+- **Server code changes have no effect.** `pi-supervisord` is a long-lived process with no hot
+  reload. `npm run build` **then** `remote-pi-server restart-supervisor`, see "Developing".
+
+---
+
+## Optional: reaching the server from elsewhere
+
+`direct` binds `127.0.0.1` only, deliberately — nothing is exposed on the network unless you
+open it. To reach it from another device, put a tunnel in front (frp / nginx / cloudflared /
+SSH `-L`), then tell the server two things:
 
 ```bash
-cd server && npm install && npm run build && npm install -g .
-remote-pi-server set-relay https://relay.example.com   # http(s) only, never ws://
-remote-pi-server install                              # user-level service, survives logout
-remote-pi-server daemon status                        # confirm it is running
-remote-pi-server pair                                 # print the pairing URI
+remote-pi-server set-public-relay "https://pi.example.com"   # what a PHONE should dial
+remote-pi-server allow-host       "pi.example.com"           # hostname the origin gate accepts
+remote-pi-server restart-supervisor
 ```
 
-`install` writes a systemd `--user` unit, a LaunchAgent, or a Task Scheduler
-entry — no root, except the very first Windows install raises one UAC prompt.
+They solve **two independent problems**, and missing either one fails:
 
-#### Machine B
-
-```bash
-cd clients/web && npm install && npm run build
-npx serve dist -p 5173
-```
-
-Open `http://localhost:5173/remote-pi/connect`:
-
-| Field | Value |
+| Missing | Symptom |
 | --- | --- |
-| Relay address | `wss://relay.example.com` |
-| Pairing code | the whole `remotepi://pair?…` string from A |
+| `set-public-relay` | the code carries `127.0.0.1`, so a remote phone dials **its own** localhost and times out |
+| `allow-host` (when the tunnel forwards a name) | the proxy gets `403` before any page is served — the gate accepts only loopback and IP literals by default |
 
-### Plan 3 — Production (own relay + own domain)
+`set-public-relay` **affects only the pairing code**; the host keeps dialling its own address
+and never loops out over the internet. Clear them with `set-public-relay -` / `allow-host -`.
 
-#### Relay host
+Point the tunnel at loopback, **never** at `0.0.0.0`:
+
+```toml
+# type = tcp → reach it as http://PUBLIC_IP:7000, no allow-host needed
+[[proxies]]
+name = "remote-pi"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 4124
+remotePort = 7000
+
+# type = http → reach it by name, allow-host required
+[[proxies]]
+name = "remote-pi"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 4124
+customDomains = ["pi.example.com"]
+```
+
+> **A LAN IP will not work.** `http://192.168.x.x:4124` is not a secure context, so the browser
+> withholds `crypto.subtle` and the Ed25519 handshake fails outright. That is a platform rule,
+> not an implementation gap. LAN access needs HTTPS (a self-signed certificate cannot be
+> clicked through on a WebSocket), which in practice means the tunnel above.
+
+## Optional: self-hosted or community relay
+
+The embedded relay serves the single-machine case. Only a shared meeting point — cross-machine
+Pi-to-Pi mesh, multi-device presence — needs the Rust relay in `relay/`:
 
 ```bash
 docker compose -f docker-compose.relay.yml up -d   # host 3001 → container 3000
 ```
 
-Point a reverse proxy or Cloudflare Tunnel at `127.0.0.1:3001` so both
-`https://` and `wss://` on your domain land there. `RELAY_ALLOWED_ORIGINS` is the
-browser-origin allowlist and defaults to permissive.
-
-#### Server host
+Point a reverse proxy or Cloudflare Tunnel at `127.0.0.1:3001` for both `https://` and
+`wss://` on your domain, then:
 
 ```bash
-cd server && npm install && npm run build && npm install -g .
 remote-pi-server set-relay https://relay.example.com
-remote-pi-server install
-remote-pi-server pair          # --rotate to invalidate the previous code
+remote-pi-server restart-supervisor
 ```
 
-#### Client host
+The community relay (`wss://relay.880160.xyz`) also works, but its operator can see your
+message contents — do not use it for sensitive work.
 
-Publish `clients/web/dist` to any static host (Nginx, Cloudflare Pages, Vercel)
-behind HTTPS, then connect with the relay address and pairing code above.
-
-### Reaching a `--direct` daemon from another machine
-
-`--direct` binds `127.0.0.1` only — the host and port are not configurable through
-it. To reach it from elsewhere, put a tunnel or reverse proxy in front **and**
-allow the hostname the browser will send:
-
-```bash
-REMOTE_PI_ALLOWED_HOSTS="your-tunnel-host.example.com" \
-  node dist/bin/supervisord.js --direct
-```
-
-That variable is not optional: without it the proxy gets `403` before any page is
-served, because the strict same-origin gate only accepts loopback `Host` values by
-default. If the browser page is served from a different origin than the daemon,
-list it in `REMOTE_PI_ALLOWED_ORIGINS` too.
-
-### Common pitfalls
-
-- **Pairing code in the wrong box.** The page has two inputs. The relay address
-  takes `wss://…`; the pairing code takes the full `remotepi://pair?…` URI.
-  Pasting the URI into the address field is the single most common failure.
-- **`set-relay` rejects `ws://`.** It takes `http://` or `https://` only and
-  converts to WebSocket internally. Passing `ws://` is refused outright.
-- **`install` and `--direct` are mutually exclusive.** They contend for the same
-  supervisor socket (a named pipe on Windows,
-  `/tmp/remote-pi-supervisor-<user>.sock` elsewhere). Starting one while the other
-  runs fails with *"Another pi-supervisord is already running"*. Stop the service
-  first: `remote-pi-server daemon stop`.
-- **`daemon status` says "not running" while `--direct` works.** Expected. Those
-  commands manage the installed service, not a foreground process.
-- **`403` from a tunnel.** Missing `REMOTE_PI_ALLOWED_HOSTS`, see above.
+**Skip this whole section if you are on the embedded relay.** Full trade-offs live in
+[`relay/README.md`](./relay/README.md).
 
 ---
 
@@ -167,23 +189,25 @@ plus the clients that reach it.
 | [`clients/mobile/`](./clients/mobile) | Flutter (iOS / Android) | Mobile client (operator console) |
 | [`clients/desktop/`](./clients/desktop) | Flutter Desktop | Desktop client (macOS / Windows / Linux, + iPad / Android) |
 | [`clients/web/`](./clients/web) | NextJS | Landing page, docs, and the browser client |
-| [`relay/`](./relay) | Rust + Tokio | WebSocket routing + signed mesh membership storage |
+| [`relay/`](./relay) | Rust + Tokio | Optional standalone relay — only for a shared cross-machine meeting point (default uses the embedded one) |
 
 ## Architecture
 
 ```
 Phone / browser / desktop client
-        │  wss  (pair once — address + code)
+        │  wss  (pair once — paste the code, nothing else)
         ▼
-   Relay (Rust)
-        ▲  wss
-        │
 Host daemon  `pi-supervisord`   ──  room "host" · always on · survives Pi
-        │  spawns on demand
+        │  · embedded relay (default, same port)
+        │  · serves the web client (same port)
         ├──►  Pi child  (`pi --mode rpc`)   ──  workspace · sessions · chat
         │
         └──►  UDS broker   ──  local agent mesh (`list_peers` / `agent_send`)
 ```
+
+The default topology has **no machine in the middle**: the relay runs inside `pi-supervisord`.
+Only a shared meeting point across machines swaps in the external Rust relay
+([`relay/`](./relay)), and then clients dial that instead of the daemon.
 
 The **host is the connection**. Clients attach to the machine's daemon (room `host`), never to a
 particular Pi process. A Pi that is stopped, crashed, or never started does not drop the connection —
@@ -213,7 +237,9 @@ This lets you set up local multi-agent workflows (e.g. a `backend` agent asks a
 `frontend` agent for help) entirely on your machine, in parallel with the remote
 operator clients.
 
-## Relay
+## Relay (optional)
+
+On the default path the relay lives inside the daemon and **this section can be skipped**.
 
 A free community relay is available at:
 
