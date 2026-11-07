@@ -122,3 +122,51 @@ describe("HostPairingSession — ephemeral token (plan/69)", () => {
     expect([a, b].filter((r) => r === "consumed")).toHaveLength(1);
   });
 });
+
+describe("HostPairingSession — a configured FIXED code", () => {
+  /*
+   * A fixed code is what "install it, then connect from any device" needs: the
+   * same token works across restarts, so nothing has to be read off a terminal
+   * before the first connection. Without one, a fresh install has no token at
+   * all and the browser shows a paste box instead of pairing itself.
+   */
+  afterEach(() => {
+    delete process.env["REMOTE_PI_PAIRING_CODE"];
+  });
+
+  test("show() materialises the configured code without anyone running `pair`", async () => {
+    process.env["REMOTE_PI_PAIRING_CODE"] = "CONFIGURED-CODE";
+    const s = new HostPairingSession();
+
+    const rec = await s.show();
+    expect(rec?.token).toBe("CONFIGURED-CODE");
+    expect(rec?.persistent).toBe(true);
+    /* And it is on disk, so the CLI's `pair` reads the same record. */
+    const onDisk = JSON.parse(readFileSync(pairingPathForTest(), "utf8")) as { token: string };
+    expect(onDisk.token).toBe("CONFIGURED-CODE");
+  });
+
+  test("issue() returns the configured code instead of a random one", async () => {
+    process.env["REMOTE_PI_PAIRING_CODE"] = "STABLE-CODE";
+    const s = new HostPairingSession();
+
+    expect((await s.issue()).token).toBe("STABLE-CODE");
+    expect((await s.issue({ ephemeral: true })).token).toBe("STABLE-CODE");
+  });
+
+  test("consume() accepts it and never marks it consumed", async () => {
+    process.env["REMOTE_PI_PAIRING_CODE"] = "STABLE-CODE";
+    const s = new HostPairingSession();
+
+    expect(await s.consume("STABLE-CODE")).toBe("ok");
+    expect(await s.consume("STABLE-CODE")).toBe("ok");
+    expect(await s.consume("SOMETHING-ELSE")).toBe("unknown");
+  });
+
+  test("without a configured code nothing changes — still random and persisted", async () => {
+    const s = new HostPairingSession();
+    const rec = await s.issue();
+    expect(rec.token).not.toBe("");
+    expect(rec.token).not.toBe("CONFIGURED-CODE");
+  });
+});

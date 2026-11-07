@@ -10,6 +10,9 @@ import {
   kDefaultRelayUrl,
   detectLanAddress,
   resolveAllowedHosts,
+  resolveBindHost,
+  resolveFixedPairingCode,
+  resolvePort,
   resolvePublicRelayUrl,
   resolveRelayUrl,
   saveConfig,
@@ -212,5 +215,82 @@ describe("resolveAllowedHosts", () => {
   test("config supplies the list when the env var is unset", () => {
     saveConfig({ allowedHosts: ["Pi.Example.com"] });
     expect(resolveAllowedHosts()).toEqual(["pi.example.com"]);
+  });
+});
+
+describe("resolveFixedPairingCode", () => {
+  const saved: Record<string, string | undefined> = {};
+  const KEYS = ["REMOTE_PI_PAIRING_CODE", "REMOTE_PI_HOME"];
+  let home = "";
+
+  beforeEach(() => {
+    for (const key of KEYS) saved[key] = process.env[key];
+    home = mkdtempSync(join(tmpdir(), "pi-code-"));
+    process.env["REMOTE_PI_HOME"] = home;
+    delete process.env["REMOTE_PI_PAIRING_CODE"];
+  });
+
+  afterEach(() => {
+    for (const key of KEYS) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("null when nobody configured one — a generated token stays the default", () => {
+    expect(resolveFixedPairingCode()).toBeNull();
+  });
+
+  test("config supplies it", () => {
+    saveConfig({ pairingCode: "123456" });
+    expect(resolveFixedPairingCode()).toBe("123456");
+  });
+
+  test("env wins over config", () => {
+    saveConfig({ pairingCode: "from-config" });
+    process.env["REMOTE_PI_PAIRING_CODE"] = "from-env";
+    expect(resolveFixedPairingCode()).toBe("from-env");
+  });
+});
+
+describe("resolveBindHost / resolvePort", () => {
+  const saved: Record<string, string | undefined> = {};
+  const KEYS = ["REMOTE_PI_BIND", "REMOTE_PI_PORT", "REMOTE_PI_HOME"];
+  let home = "";
+
+  beforeEach(() => {
+    for (const key of KEYS) saved[key] = process.env[key];
+    home = mkdtempSync(join(tmpdir(), "pi-bind-"));
+    process.env["REMOTE_PI_HOME"] = home;
+    delete process.env["REMOTE_PI_BIND"];
+    delete process.env["REMOTE_PI_PORT"];
+  });
+
+  afterEach(() => {
+    for (const key of KEYS) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("binds every interface by default — that is what any-IP access means", () => {
+    expect(resolveBindHost()).toBe("0.0.0.0");
+  });
+
+  test("a configured bind narrows it, env first", () => {
+    saveConfig({ bind: "127.0.0.1" });
+    expect(resolveBindHost()).toBe("127.0.0.1");
+    process.env["REMOTE_PI_BIND"] = "10.0.0.5";
+    expect(resolveBindHost()).toBe("10.0.0.5");
+  });
+
+  test("port comes from env, then config, then 4124", () => {
+    expect(resolvePort()).toBe(4124);
+    saveConfig({ port: 5000 });
+    expect(resolvePort()).toBe(5000);
+    process.env["REMOTE_PI_PORT"] = "6000";
+    expect(resolvePort()).toBe(6000);
   });
 });

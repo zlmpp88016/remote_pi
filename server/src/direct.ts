@@ -396,6 +396,18 @@ export async function ensureDirectRelay(
 
   await writeStateFile({ pid: process.pid, port: server.port, url: httpUrl });
 
+  /*
+   * Publish the ACTUAL bound port.
+   *
+   * `resolvePublicRelayUrl()` builds the pairing code from `resolvePort()`, which
+   * reads env and config but cannot see `--port` — so a server started with
+   * `--port 4170` handed out a code pointing at 4124, which is the wrong listener
+   * or no listener at all. Writing the bound port into the environment makes
+   * every later reader (this process, the CLI's `pair`, the daemon children that
+   * inherit `process.env`) agree on the one port that is actually open.
+   */
+  process.env["REMOTE_PI_PORT"] = String(server.port);
+
   logRelayEvent(`direct mode: same-origin at ${httpUrl} (web + websocket, port ${server.port})`);
   return httpUrl;
 }
