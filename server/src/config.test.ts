@@ -1,10 +1,17 @@
-import { describe, expect, test } from "vitest";
+import { beforeEach, afterEach, describe, expect, test } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   isValidRelayUrl,
   isWebSocketScheme,
   toWebSocketUrl,
   toHttpUrl,
   kDefaultRelayUrl,
+  resolveAllowedHosts,
+  resolvePublicRelayUrl,
+  resolveRelayUrl,
+  saveConfig,
 } from "./config.js";
 
 describe("isValidRelayUrl (strict http(s):// only)", () => {
@@ -92,5 +99,95 @@ describe("kDefaultRelayUrl", () => {
   test("is canonical https:// form (no scheme conversion needed at resolve time)", () => {
     expect(kDefaultRelayUrl).toMatch(/^https:\/\//);
     expect(kDefaultRelayUrl).toBe("https://relay.880160.xyz");
+  });
+});
+
+describe("resolvePublicRelayUrl", () => {
+  /*
+   * The bug this covers: behind a tunnel the address the HOST dials and the
+   * address a PHONE must dial are different. Pairing codes were built from
+   * `resolveRelayUrl()`, so a tunnelled host emitted its loopback address and
+   * every remote phone dialled its own localhost. `--direct` made it
+   * unavoidable, because it fills `REMOTE_PI_RELAY` with that same loopback.
+   */
+  const saved: Record<string, string | undefined> = {};
+  const KEYS = ["REMOTE_PI_PUBLIC_RELAY", "REMOTE_PI_RELAY", "REMOTE_PI_HOME"];
+  let home = "";
+
+  beforeEach(() => {
+    for (const key of KEYS) saved[key] = process.env[key];
+    home = mkdtempSync(join(tmpdir(), "pi-cfg-"));
+    process.env["REMOTE_PI_HOME"] = home;
+    delete process.env["REMOTE_PI_PUBLIC_RELAY"];
+    delete process.env["REMOTE_PI_RELAY"];
+  });
+
+  afterEach(() => {
+    for (const key of KEYS) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("falls back to the host address when nothing public is configured", () => {
+    process.env["REMOTE_PI_RELAY"] = "http://127.0.0.1:4125";
+    expect(resolvePublicRelayUrl()).toEqual({ url: "http://127.0.0.1:4125", source: "env" });
+  });
+
+  test("env wins over config and leaves the host address alone", () => {
+    saveConfig({ publicRelay: "https://from-config.example" });
+    process.env["REMOTE_PI_RELAY"] = "http://127.0.0.1:4125";
+    process.env["REMOTE_PI_PUBLIC_RELAY"] = "https://from-env.example";
+
+    expect(resolvePublicRelayUrl().url).toBe("https://from-env.example");
+    /* The host must keep dialling its own address — that is the whole point. */
+    expect(resolveRelayUrl().url).toBe("http://127.0.0.1:4125");
+  });
+
+  test("config is used when the env var is absent", () => {
+    saveConfig({ publicRelay: "https://from-config.example" });
+    process.env["REMOTE_PI_RELAY"] = "http://127.0.0.1:4125";
+    expect(resolvePublicRelayUrl()).toEqual({ url: "https://from-config.example", source: "config" });
+  });
+
+  test("ws:// in the public setting is coerced to http://", () => {
+    process.env["REMOTE_PI_PUBLIC_RELAY"] = "ws://pi.example.com";
+    expect(resolvePublicRelayUrl().url).toBe("http://pi.example.com");
+  });
+});
+
+describe("resolveAllowedHosts", () => {
+  const saved: Record<string, string | undefined> = {};
+  const KEYS = ["REMOTE_PI_ALLOWED_HOSTS", "REMOTE_PI_HOME"];
+  let home = "";
+
+  beforeEach(() => {
+    for (const key of KEYS) saved[key] = process.env[key];
+    home = mkdtempSync(join(tmpdir(), "pi-cfg-"));
+    process.env["REMOTE_PI_HOME"] = home;
+    delete process.env["REMOTE_PI_ALLOWED_HOSTS"];
+  });
+
+  afterEach(() => {
+    for (const key of KEYS) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  test("empty by default — loopback and IP literals need no entry", () => {
+    expect(resolveAllowedHosts()).toEqual([]);
+  });
+
+  test("env list is split, trimmed and lowercased", () => {
+    process.env["REMOTE_PI_ALLOWED_HOSTS"] = " Pi.Example.com , other.example ";
+    expect(resolveAllowedHosts()).toEqual(["pi.example.com", "other.example"]);
+  });
+
+  test("config supplies the list when the env var is unset", () => {
+    saveConfig({ allowedHosts: ["Pi.Example.com"] });
+    expect(resolveAllowedHosts()).toEqual(["pi.example.com"]);
   });
 });

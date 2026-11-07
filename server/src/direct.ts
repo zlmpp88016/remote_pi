@@ -6,6 +6,7 @@ import { hostPairing } from "./pairing/host_pairing.js";
 import { getOrCreateEd25519Keypair } from "./pairing/storage.js";
 import { hostSessionName } from "./daemon/host_control.js";
 import { logRelayEvent } from "./log.js";
+import { resolveAllowedHosts } from "./config.js";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -278,10 +279,7 @@ export async function ensureDirectRelay(
   const server = await startSameOriginServer({
     staticDir: webDist,
     port,
-    allowedHosts: (process.env["REMOTE_PI_ALLOWED_HOSTS"] ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean),
+    allowedHosts: resolveAllowedHosts(),
     /*
      * Origins may differ from hosts: `localhost:3010` is a HOST of the vite dev
      * server, but it arrives as an Origin when that page opens a socket to us.

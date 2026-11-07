@@ -2,8 +2,21 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const CONFIG_DIR = path.join(os.homedir(), ".pi", "remote");
-const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
+/**
+ * Where `config.json` lives.
+ *
+ * Resolved per call, NOT frozen into a module constant, and it honours
+ * `REMOTE_PI_HOME` like every other state file (registry, workspaces, pairing,
+ * supervisor UDS). It used to be `os.homedir()` captured at import time, which
+ * meant a second instance started with a redirected home still read and WROTE
+ * the developer's real config — `set-public-relay` aimed at a staging stack
+ * silently rewrote the dev stack's relay. `pairing/storage.ts` documents the
+ * same trap; this is the remaining copy of it.
+ */
+function configFile(): string {
+  const home = process.env["REMOTE_PI_HOME"] || os.homedir();
+  return path.join(home, ".pi", "remote", "config.json");
+}
 
 /**
  * Default community relay. Stored in canonical http(s):// form — conversion
@@ -14,11 +27,11 @@ const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
  */
 export const kDefaultRelayUrl = "https://relay.880160.xyz";
 
-export type RemotePiConfig = { relay?: string };
+export type RemotePiConfig = { relay?: string; publicRelay?: string; allowedHosts?: string[] };
 
 export function loadConfig(): RemotePiConfig {
   try {
-    const raw = fs.readFileSync(CONFIG_FILE, "utf8");
+    const raw = fs.readFileSync(configFile(), "utf8");
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object") return {};
     return parsed as RemotePiConfig;
@@ -28,10 +41,11 @@ export function loadConfig(): RemotePiConfig {
 }
 
 export function saveConfig(patch: Partial<RemotePiConfig>): void {
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  const file = configFile();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   const current = loadConfig();
   const next = { ...current, ...patch };
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2));
+  fs.writeFileSync(file, JSON.stringify(next, null, 2));
 }
 
 export type RelayResolution = { url: string; source: "env" | "config" | "default" };
@@ -54,6 +68,62 @@ export function resolveRelayUrl(): RelayResolution {
   const cfg = loadConfig();
   if (cfg.relay && cfg.relay.length > 0) return { url: toHttpUrl(cfg.relay), source: "config" };
   return { url: toHttpUrl(kDefaultRelayUrl), source: "default" };
+}
+
+/**
+ * Resolve the address a CLIENT should dial, which is not always the address this
+ * host dials.
+ *
+ * `resolveRelayUrl()` answers "where does the host stack connect". Behind a
+ * tunneler (frp, cloudflared, nginx, an SSH `-L`) those two answers differ: the
+ * host still connects to `127.0.0.1:PORT`, while a phone on another network must
+ * be handed the public address and nothing else.
+ *
+ * Overloading `REMOTE_PI_RELAY` for both cannot express that. Setting it to the
+ * public address makes the host loop out over the internet to reach itself — and
+ * fail when the tunnel is down or the name only resolves for the outside world.
+ * `--direct` makes it worse: it fills `REMOTE_PI_RELAY` with the loopback
+ * address, so every pairing code carries `http://127.0.0.1:PORT` and a remote
+ * phone dials its own localhost.
+ *
+ * Precedence: `REMOTE_PI_PUBLIC_RELAY` → config `publicRelay` → `resolveRelayUrl()`.
+ * The last step keeps every untunnelled setup working unchanged.
+ */
+export function resolvePublicRelayUrl(): RelayResolution {
+  const env = process.env["REMOTE_PI_PUBLIC_RELAY"];
+  if (env && env.length > 0) return { url: toHttpUrl(env), source: "env" };
+  const cfg = loadConfig();
+  if (cfg.publicRelay && cfg.publicRelay.length > 0) {
+    return { url: toHttpUrl(cfg.publicRelay), source: "config" };
+  }
+  return resolveRelayUrl();
+}
+
+/**
+ * Hostnames the same-origin gate must accept beyond loopback and IP literals.
+ *
+ * The gate exists so a `Host` header from a foreign page cannot drive the
+ * daemon; it is not meant to block the operator's OWN tunnel. A tunneler that
+ * forwards a NAME (frp `type = http`, nginx `server_name`, cloudflared) makes
+ * every request arrive as `Host: pi.example.com`, which the gate rejects with
+ * 403 unless the name is listed — and since `boundIp` stays `127.0.0.1`, nothing
+ * about the bind address reveals this.
+ *
+ * Precedence: `REMOTE_PI_ALLOWED_HOSTS` (comma-separated) → config
+ * `allowedHosts` → empty. Read together so a tunnel name survives a restart
+ * instead of living only in the shell that started the process.
+ */
+export function resolveAllowedHosts(): string[] {
+  const env = process.env["REMOTE_PI_ALLOWED_HOSTS"];
+  if (env !== undefined && env.trim() !== "") {
+    return env
+      .split(",")
+      .map((value) => value.trim().toLowerCase())
+      .filter(Boolean);
+  }
+  return (loadConfig().allowedHosts ?? [])
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
 }
 
 /**

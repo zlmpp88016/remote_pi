@@ -6,7 +6,7 @@ import { addDaemon, listDaemons, migrateRegistryNames, removeDaemon } from "./re
 import { addWorkspace, listWorkspaces, removeWorkspace } from "./workspaces.js";
 import { daemonIdForCwd } from "./id.js";
 import { defaultAgentName, type LocalConfig } from "../session/local_config.js";
-import { resolveRelayUrl } from "../config.js";
+import { resolvePublicRelayUrl } from "../config.js";
 import { ipcAddress, usesNamedPipe } from "../session/ipc.js";
 import {
   EXIT_DAEMON_FRESH_SESSION,
@@ -576,7 +576,15 @@ export class Supervisor {
    */
   private async _pairView(record: HostPairingRecord): Promise<ControlReply<unknown>> {
     const keypair = await getOrCreateEd25519Keypair();
-    const { url } = resolveRelayUrl();
+    /*
+     * The `r` parameter is what a PHONE dials, so it must be the address the
+     * phone can reach — the public one when the host sits behind a tunnel — not
+     * necessarily the address this host connects to. Under `--direct` those
+     * differ: the host is on 127.0.0.1:PORT while the phone needs the public
+     * name, and emitting the loopback address made every remote pairing dial its
+     * own localhost.
+     */
+    const { url } = resolvePublicRelayUrl();
     const uri = buildQRUri(record.token, keypair.publicKey, hostSessionName(), HOST_ROOM_ID, url);
     return {
       ok: true,

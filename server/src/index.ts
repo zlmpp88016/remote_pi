@@ -164,7 +164,9 @@ import { spawnSync } from "node:child_process";
 import { hostname, tmpdir } from "node:os";
 import {
   kDefaultRelayUrl,
+  loadConfig,
   resolveRelayUrl,
+  resolvePublicRelayUrl,
   saveConfig,
   isValidRelayUrl,
   isWebSocketScheme,
@@ -3419,12 +3421,13 @@ async function _cmdPair(ctx: Pick<ExtensionContext, "ui" | "cwd">, args = ""): P
   const ttlMs = ttlMatch ? clampPairTtlMs(Number(ttlMatch[1]) * 1000) : TOKEN_TTL_MS;
   const { token, expiresAt } = qrSession.issueToken(ttlMs);
   const roomId = _myRoomId ?? roomIdFor(cwd, sessionName);
-  // Carry the relay this Pi is ACTUALLY on. `_relayUrl` is the live connection
-  // URL; fall back to the resolved config so a QR generated before the relay
-  // is up still names the right relay. Without this the app dials its own
-  // default and a self-hosted relay produces a bare timeout (plan/14 removed
-  // `r` on the wrong assumption that both sides always share a relay).
-  const pairRelayUrl = _relayUrl ?? resolveRelayUrl().url;
+  /*
+   * `r` is what the phone dials, so the PUBLIC address wins. `_relayUrl` is this
+   * Pi's own live connection — correct for an untunnelled setup, wrong the
+   * moment the host sits behind frp/nginx/cloudflared, because then the phone
+   * would be handed an address only the host can reach.
+   */
+  const pairRelayUrl = resolvePublicRelayUrl().url;
   const qrUri = buildQRUri(token, edKp.publicKey, sessionName, roomId, pairRelayUrl);
   // Plan/68 — pairing is a copy-paste step. The URI is printed inside the Pi
   // TUI's chat panel via `pi.sendMessage` (the same channel the SDK uses for
@@ -6076,6 +6079,54 @@ if (_isDirectRun()) {
       saveConfig({ relay: raw });
       console.log(`Relay set to ${raw}`);
     }
+  } else if (subcmd === "set-public-relay") {
+    /*
+     * Behind a tunnel the host dials its own loopback while phones must dial the
+     * public address. Two addresses, one setting (`relay`) — so this is the
+     * second one, and only the PAIRING CODE reads it.
+     */
+    const raw = (cliArgs[0] ?? "").trim();
+    if (!raw) {
+      console.log("Usage: set-public-relay <url>   (empty string clears it)");
+    } else if (isWebSocketScheme(raw)) {
+      console.log(`Use http:// or https://. The client converts to WebSocket automatically.`);
+    } else if (raw !== "-" && !isValidRelayUrl(raw)) {
+      console.log(`Invalid URL: ${raw}. Must start with http:// or https://`);
+    } else {
+      /* `-` clears it: back to "same as the host address", the untunnelled case. */
+      saveConfig({ publicRelay: raw === "-" ? undefined : raw });
+      console.log(
+        raw === "-"
+          ? "Public relay cleared — pairing codes name the host's own address again."
+          : `Public relay set to ${raw} — pairing codes will carry it. The host keeps dialling its own address.`,
+      );
+    }
+  } else if (subcmd === "allow-host") {
+    /*
+     * A tunneler that forwards a NAME (frp `type = http`, nginx `server_name`,
+     * cloudflared) sends `Host: pi.example.com`, which the same-origin gate
+     * rejects with 403 — the bind address stays 127.0.0.1, so nothing looks
+     * wrong until the phone gets a 403. Persisting the name here makes it
+     * survive a restart instead of living in the shell that started the host.
+     */
+    const raw = (cliArgs[0] ?? "").trim().toLowerCase();
+    const current = loadConfig().allowedHosts ?? [];
+    if (!raw) {
+      console.log(
+        current.length === 0
+          ? "No extra allowed hosts (loopback and IP literals are always accepted)."
+          : `Allowed hosts: ${current.join(", ")}\nUsage: allow-host <name>   |   allow-host -   (clears the list)`,
+      );
+    } else if (raw === "-") {
+      saveConfig({ allowedHosts: undefined });
+      console.log("Allowed hosts cleared — loopback and IP literals only.");
+    } else if (/[\s/,:>\\]/.test(raw)) {
+      console.log(`Invalid host "${raw}": pass a bare hostname (no scheme, port or slash).`);
+    } else {
+      const next = [...new Set([...current, raw])];
+      saveConfig({ allowedHosts: next });
+      console.log(`Allowed hosts: ${next.join(", ")} (restart the supervisor to apply)`);
+    }
   } else if (subcmd === "create") {
     // Standalone: `remote-pi-server create <cwd> [--name "X"]`. The shell already
     // split the args and stripped the outer quotes, so an arg like
@@ -6184,6 +6235,11 @@ if (_isDirectRun()) {
       "",
       "Config:",
       "  set-relay <url>                 Set the relay URL (http:// or https://)",
+      "  set-public-relay <url>          Address PAIRING CODES carry, for hosts behind a tunnel",
+      "                                  (frp/nginx/cloudflared). The host keeps dialling its own.",
+      "                                  Pass '-' to clear it.",
+      "  allow-host <name>               Extra hostname the same-origin gate accepts —",
+      "                                  required when a tunnel forwards a name. '-' clears.",
       "",
       "Debug:",
       "  --log <off|summary|full>        Log relay traffic to stderr (any command)",
