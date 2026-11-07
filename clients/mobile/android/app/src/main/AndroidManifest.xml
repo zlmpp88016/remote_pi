@@ -38,6 +38,25 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- `remotepi://pair?…` deep link, the same URI the desktop shell
+                 and the QR code carry. Without this filter Android has no way to
+                 hand the URI to the app at all.
+
+                 NOTE: this only gets the URI INTO the app. GoRouter has a
+                 `/pair` route but no destination for the `remotepi://pair` form,
+                 so the OS-resolved intent still lands on `GoException: no routes
+                 for location`. Pasting the code into the pair sheet is the
+                 supported path today; wiring the handoff is still open.
+
+                 iOS does NOT declare this scheme (`ios/Runner/Info.plist` has no
+                 `CFBundleURLTypes`), so the two platforms behave the same here:
+                 paste works, deep link does not. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="remotepi"/>
+            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
