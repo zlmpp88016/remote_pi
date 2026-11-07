@@ -214,4 +214,94 @@ describe("startEmbeddedRelay", () => {
 
     expect(closed).toBe(true);
   });
+
+  /*
+   * Room catalog. These frames used to be ignored outright on the theory that
+   * room browsing "only matters across multiple machines". That was wrong: the
+   * room carries `cwd`, and the app's workspace dock returns early without it.
+   * The failure mode was silent — the client simply never learned any room.
+   */
+  test("subscribe_rooms is answered with the catalog, including cwd", async () => {
+    const kp = generateEd25519Keypair();
+    const peer = Buffer.from(kp.publicKey).toString("base64");
+    const rooms = [
+      { room_id: "roomabcdef12", started_at: 1_700_000_000_000, name: "proj", cwd: "/work/proj" },
+    ];
+    relay = await startEmbeddedRelay({
+      roomCatalog: () => ({ peer, rooms }),
+    });
+
+    const client = new RelayClient(relay.url, kp);
+    const seen: Array<Record<string, unknown>> = [];
+    client.on("message", (line) => seen.push(JSON.parse(line) as Record<string, unknown>));
+    await client.connect();
+    client.sendControl({ type: "subscribe_rooms", peers: [peer] });
+
+    await waitFor(() => seen.some((m) => m["type"] === "rooms"));
+
+    const snapshot = seen.find((m) => m["type"] === "rooms");
+    expect(snapshot?.["peer"]).toBe(peer);
+    expect(snapshot?.["rooms"]).toEqual(rooms);
+
+    // Exactly ONE reply: a snapshot plus per-room announces made the client
+    // rebuild its tile list N+1 times per subscribe, which stormed the UI.
+    expect(seen.filter((m) => m["type"] === "rooms")).toHaveLength(1);
+    expect(seen.filter((m) => m["type"] === "room_announced")).toHaveLength(0);
+  });
+
+  test("rooms_check answers too (the app sends both frames)", async () => {
+    const kp = generateEd25519Keypair();
+    relay = await startEmbeddedRelay({
+      roomCatalog: () => ({ peer: "hostpeer", rooms: [{ room_id: "r1", started_at: 1 }] }),
+    });
+
+    const client = new RelayClient(relay.url, kp);
+    const seen: Array<Record<string, unknown>> = [];
+    client.on("message", (line) => seen.push(JSON.parse(line) as Record<string, unknown>));
+    await client.connect();
+    client.sendControl({ type: "rooms_check", peers: [] });
+
+    await waitFor(() => seen.some((m) => m["type"] === "rooms"));
+    expect(seen.some((m) => m["type"] === "rooms")).toBe(true);
+  });
+
+  test("without a catalog the answer is an empty snapshot, never silence", async () => {
+    // A bare relay has nothing to describe, but it must still ANSWER — a client
+    // that gets no reply cannot distinguish "no rooms" from "relay is broken".
+    const kp = generateEd25519Keypair();
+    relay = await startEmbeddedRelay();
+
+    const client = new RelayClient(relay.url, kp);
+    const seen: Array<Record<string, unknown>> = [];
+    client.on("message", (line) => seen.push(JSON.parse(line) as Record<string, unknown>));
+    await client.connect();
+    client.sendControl({ type: "subscribe_rooms", peers: [] });
+
+    await waitFor(() => seen.some((m) => m["type"] === "rooms"));
+    const snapshot = seen.find((m) => m["type"] === "rooms");
+    expect(snapshot?.["rooms"]).toEqual([]);
+  });
+
+  test("subscribe_presence marks the asking peer online", async () => {
+    const kp = generateEd25519Keypair();
+    relay = await startEmbeddedRelay();
+
+    const client = new RelayClient(relay.url, kp);
+    const seen: Array<Record<string, unknown>> = [];
+    client.on("message", (line) => seen.push(JSON.parse(line) as Record<string, unknown>));
+    await client.connect();
+    const peer = Buffer.from(kp.publicKey).toString("base64");
+    client.sendControl({ type: "subscribe_presence", peers: [peer] });
+
+    await waitFor(() => seen.some((m) => m["type"] === "peer_online"));
+    expect(seen.find((m) => m["type"] === "peer_online")?.["peer"]).toBe(peer);
+  });
 });
+
+/** Polls until [predicate] holds, so a local async round trip needs no fixed sleep. */
+async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate() && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 20));
+  }
+}

@@ -15,6 +15,8 @@ const AUTH_TIMEOUT_MS = 5_000;
  * triggers and a background daemon sits "online" but dead after a few idle
  * hours. We force-close on timeout so `close` drives the caller's reconnect.
  */
+/** A connect that has not reached `open` in this long is dead, not slow. */
+const CONNECT_TIMEOUT_MS = 15_000;
 const LIVENESS_TIMEOUT_MS = 70_000;  // ~2.8 missed relay pings → confidently dead
 const LIVENESS_CHECK_MS = 20_000;
 
@@ -115,7 +117,47 @@ export class RelayClient extends EventEmitter {
       const ws = new WebSocket(this.url);
       this.ws = ws;
 
-      ws.on("error", (err) => reject(err));
+      /*
+       * A socket can accept the TCP connection and then never emit `open`,
+       * `error`, or `close` — a wedged peer, a proxy holding the handshake open,
+       * or a relay that accepts and then goes silent. Without this timer
+       * `connect()` never settles and the caller has no way to retry, which is
+       * strictly worse than failing fast.
+       *
+       * Cleared on every settle path so a late timer cannot reject a promise
+       * that already resolved.
+       */
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn();
+      };
+      const timer = setTimeout(() => {
+        logRelayEvent(`connect timeout (${CONNECT_TIMEOUT_MS}ms) — terminating`);
+        try {
+          ws.terminate();
+        } catch {
+          // Already gone; the rejection below is what matters.
+        }
+        settle(() => reject(new Error("relay connect timeout")));
+      }, CONNECT_TIMEOUT_MS);
+
+      ws.on("error", (err) => settle(() => reject(err)));
+
+      /*
+       * A close BEFORE the socket ever opened means the handshake never
+       * completed — the relay refused, a proxy cut it, or the peer vanished.
+       * Nothing will follow an unopened socket, so surface it immediately as
+       * "closed during connect" rather than waiting out CONNECT_TIMEOUT_MS.
+       * Once opened, `close` is handled by the post-auth handler further down.
+       */
+      ws.on("close", () => {
+        if (ws.readyState !== WebSocket.OPEN) {
+          settle(() => reject(new Error("relay closed during connect")));
+        }
+      });
 
       ws.on("open", async () => {
         try {
@@ -151,10 +193,10 @@ export class RelayClient extends EventEmitter {
             this.emit("close");
           });
           this._startLiveness(ws);
-          resolve();
+          settle(() => resolve());
         } catch (err) {
           ws.terminate();
-          reject(err);
+          settle(() => reject(err));
         }
       });
     });
@@ -163,6 +205,24 @@ export class RelayClient extends EventEmitter {
   /** True only while the authenticated Relay WebSocket is currently open. */
   isOpen(): boolean {
     return this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  /**
+   * True while the socket is open AND traffic has arrived within
+   * `LIVENESS_TIMEOUT_MS`.
+   *
+   * `isOpen()` alone lies after a silent death: a laptop suspend or a relay that
+   * reaped the connection without a close frame leaves `readyState === OPEN` on a
+   * socket that will never deliver again. Callers deciding "should I reconnect?"
+   * must ask this instead — the whole point of tracking `lastActivityAt` is to
+   * answer exactly this question.
+   *
+   * `now` is injectable so an external supervisor can probe on its own clock
+   * without waiting wall-time, and so tests can assert the boundary directly.
+   */
+  isAlive(now: number = Date.now()): boolean {
+    if (!this.isOpen()) return false;
+    return now - this.lastActivityAt < LIVENESS_TIMEOUT_MS;
   }
 
   /** Sends a raw line to the relay (caller is responsible for framing). */

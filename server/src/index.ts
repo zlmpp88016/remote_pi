@@ -122,6 +122,7 @@ import {
   handlePiSurface,
   handlePackageInstall,
   handlePackageRemove,
+  handlePackageSetEnabled,
   handlePackageUpdate,
   handleSkillInvoke,
   handleSkillSetEnabled,
@@ -5008,6 +5009,11 @@ export function _routeClientMessageFrom(
     case "package_remove": {
       const { deps } = _surfaceContext();
       void handlePackageRemove(deps, sender, msg);
+      break;
+    }
+    case "package_set_enabled": {
+      const { deps } = _surfaceContext();
+      void handlePackageSetEnabled(deps, sender, msg);
       break;
     }
     case "package_update": {

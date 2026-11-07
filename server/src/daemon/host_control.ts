@@ -8,6 +8,7 @@
  */
 
 import { hostname } from "node:os";
+import type { CronJob, NewJobInput } from "./cron_registry.js";
 import { roomIdFor } from "../rooms.js";
 import { daemonIdForCwd } from "./id.js";
 import { addPeer } from "../pairing/storage.js";
@@ -33,6 +34,33 @@ export interface FleetOps {
   addWorkspace(cwd: string): { ok: true; cwd: string; added: boolean } | { ok: false; error: string };
   /** Plan/68 — drop an explicitly added workspace. Never touches daemons. */
   removeWorkspace(cwd: string): { ok: true; cwd: string; removed: boolean } | { ok: false; error: string };
+  /**
+   * Automations — the scheduled-task surface, when the host has one.
+   *
+   * OPTIONAL on purpose. `FleetOps` is also implemented by test doubles and by
+   * the bare host, neither of which owns a cron registry; making this required
+   * would force every one of them to grow a stub that silently answers "no
+   * tasks", which is worse than the capability simply being absent.
+   */
+  schedule?: ScheduleOps;
+}
+
+/**
+ * Automations — what the host-room bridge needs from the cron engine.
+ *
+ * Deliberately narrow: list, mutate, and fire-now. Everything else the panel
+ * shows (derived labels, next-run instants) is computed by the projection rather
+ * than by these ops, so this interface does not grow every time the UI does.
+ */
+export interface ScheduleOps {
+  list(): CronJob[];
+  add(input: NewJobInput): CronJob | { error: string };
+  remove(id: string): boolean;
+  setEnabled(id: string, enabled: boolean): boolean;
+  runNow(id: string): Promise<string>;
+  log(jobId: string, tail?: number): unknown[];
+  /** daemon id -> display name, so the UI never renders a raw cwd path. */
+  names(): Record<string, string>;
 }
 
 export interface HostReplySender {
@@ -139,7 +167,9 @@ function resolveEntry(
   return fleet.find((e) => e.id === id || e.cwd === cwd);
 }
 
-function workspaceRow(e: FleetEntry) {
+/** Wire row for one fleet entry — shared by `workspace_list` and the relay's
+ *  room catalog so both describe a workspace identically. */
+export function workspaceRow(e: FleetEntry) {
   return {
     cwd: e.cwd,
     daemon_id: e.id,

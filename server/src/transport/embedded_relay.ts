@@ -30,13 +30,23 @@ import { logRelayEvent } from "../log.js";
  * ## Deliberately NOT implemented
  *
  * - `pi_envelope` (Pi-to-Pi across machines) — needs mesh membership.
- * - `subscribe_presence` / `presence_check` / `unsubscribe_presence` — the web
- *   client never sends them (verified by grepping the client for the frame
- *   names); presence exists to discover peers on a shared relay.
- * - `rooms` / `room_update` / `room_meta_updated` — room catalog browsing.
+ * - `rooms` / `room_update` catalog *browsing* across machines — no meaning
+ *   with a single local host.
  *
- * Any of those frames arriving here is ignored (with a log line), never
- * silently misinterpreted as an envelope.
+ * ## Implemented because a single host still needs them
+ *
+ * - `subscribe_rooms` / `rooms_check` — answered from `roomCatalog`. The room
+ *   list is not merely catalog browsing: `room.cwd` is the only way a client
+ *   learns which directory a session belongs to, and the app's workspace dock
+ *   returns early without it. Skipping these left the client with zero control
+ *   frames, so every room lookup stayed empty.
+ * - `subscribe_presence` / `presence_check` — answered with the asking peer as
+ *   online. The only reachable peer on a local host is the one asking.
+ * - `room_meta_update` — echoed back as `room_meta_updated` so the busy flag is
+ *   live instead of permanently idle.
+ *
+ * Any other frame arriving here is ignored (with a log line), never silently
+ * misinterpreted as an envelope.
  */
 
 /** Mirrors the Rust relay's `HELLO_TIMEOUT_MS`. */
@@ -82,6 +92,36 @@ export interface EmbeddedRelayOptions {
    * checked socket rather than checking it a second time.
    */
   noServer?: boolean;
+  /**
+   * Supplies the room catalog for a peer (`subscribe_rooms` / `rooms_check`).
+   *
+   * The reader's assumption that room browsing "only matters across multiple
+   * machines" was wrong: `room.cwd` is also the ONLY way a client learns which
+   * directory a session belongs to, and the app gates its whole workspace dock
+   * on that cwd (`chat_page.dart` returns early when it is missing). Without a
+   * catalog the app never receives a single control frame, so every room lookup
+   * stays empty and the dock is unreachable through the normal path.
+   *
+   * The returned `peer` is the identity the rooms BELONG TO (the host's own
+   * key), not the asking connection — clients index the catalog by the machine
+   * they are paired with.
+   *
+   * Omitted in contexts with no fleet to describe (tests, bare relays) — the
+   * control frames are then answered with an empty snapshot.
+   */
+  roomCatalog?: (
+    askingPeer: string,
+  ) => { peer: string; rooms: RelayRoomInfo[] } | Promise<{ peer: string; rooms: RelayRoomInfo[] }>;
+}
+
+/** One room as the relay reports it to clients (wire shape of `room_announced`). */
+export interface RelayRoomInfo {
+  room_id: string;
+  started_at: number;
+  name?: string;
+  cwd?: string;
+  model?: string;
+  working?: boolean;
 }
 
 /**
@@ -90,6 +130,7 @@ export interface EmbeddedRelayOptions {
  */
 export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<EmbeddedRelay> {
   const host = options.host ?? "127.0.0.1";
+  const roomCatalog = options.roomCatalog ?? ((peer: string) => ({ peer, rooms: [] }));
   const requestedPort = options.port ?? 0;
   const noServer = options.noServer === true;
 
@@ -241,6 +282,99 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
    * with a top-level `type` is a control frame (handled here or ignored), and
    * anything else is an opaque outer envelope to route.
    */
+  /**
+   * Control frames. Only the room catalog is implemented — the rest (presence
+   * discovery, mesh federation) genuinely has no meaning for a single local
+   * host and is ignored with a log line.
+   *
+   * Room catalog IS meaningful locally, contrary to what this file used to
+   * claim: `room.cwd` is the only channel through which a client learns which
+   * directory a session belongs to, and the app gates its workspace dock on it.
+   */
+  const handleControlFrame = (
+    conn: Connection,
+    frame: Record<string, unknown>,
+  ): void => {
+    const type = frame["type"] as string;
+    switch (type) {
+      case "subscribe_rooms":
+      case "rooms_check": {
+        Promise.resolve(roomCatalog(conn.peer)).then(
+          ({ peer: owner, rooms }: { peer: string; rooms: RelayRoomInfo[] }) => {
+            if (conn.socket.readyState !== WebSocket.OPEN) return;
+            /*
+             * ONE snapshot frame per request, never a snapshot plus one
+             * `room_announced` per room: the client rebuilds its whole tile
+             * list on either, so answering a catalog of N rooms with N+1
+             * frames made every subscribe storm the UI thread. The snapshot
+             * carries the same `cwd` the announce would.
+             */
+            safeSend(conn, { type: "rooms", peer: owner, rooms });
+            logRelayEvent(
+              `embedded relay: ${type} peer=${conn.peer.slice(-8)} → ${rooms.length} room(s) for ${owner.slice(-8)}`,
+            );
+          },
+          (e: unknown) => {
+            logRelayEvent(`embedded relay: ${type} failed: ${String(e)}`);
+          },
+        );
+        return;
+      }
+      case "presence_check":
+      case "subscribe_presence": {
+        // A single local host: the only peer that can be online is the one
+        // asking. Answering keeps `Relay · 离线`/Home dots from depending on a
+        // presence pipeline that does not exist here.
+        safeSend(conn, {
+          type: "peer_online",
+          peer: conn.peer,
+          since_ts: Date.now(),
+        });
+        logRelayEvent(`embedded relay: ${type} peer=${conn.peer.slice(-8)} acknowledged`);
+        return;
+      }
+      case "room_meta_update": {
+        // The daemon broadcasts its own working flag; echo it to the peers
+        // that asked for rooms so the busy dot is live instead of always idle.
+        const roomId = frame["room_id"];
+        const meta = frame["meta"];
+        if (typeof roomId !== "string" || typeof meta !== "object" || meta === null) return;
+        for (const target of roomSubscribers(conn.peer)) {
+          safeSend(target, {
+            type: "room_meta_updated",
+            peer: conn.peer,
+            room_id: roomId,
+            meta,
+          });
+        }
+        return;
+      }
+      default:
+        logRelayEvent(`embedded relay: ignoring control frame type=${type}`);
+    }
+  };
+
+  /** Every connection in `routes` whose room catalog includes [peer]. */
+  const roomSubscribers = (peer: string): Connection[] => {
+    const out: Connection[] = [];
+    for (const bucket of routes.values()) {
+      for (const c of bucket) {
+        if (c.peer !== peer) out.push(c);
+      }
+    }
+    return out;
+  };
+
+  /** Send unless the socket already went away mid-iteration. */
+  const safeSend = (conn: Connection, payload: unknown): void => {
+    if (conn.socket.readyState !== WebSocket.OPEN) return;
+    try {
+      conn.socket.send(JSON.stringify(payload));
+    } catch {
+      /* close handler will reap the route */
+    }
+  };
+
   const onRoutedFrame = (conn: Connection, raw: unknown): void => {
     const text = Buffer.isBuffer(raw) ? raw.toString() : String(raw);
 
@@ -253,10 +387,11 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
     }
 
     if (typeof frame["type"] === "string") {
-      // Control frames the local mode does not implement. Ignored explicitly
-      // rather than routed, so a control frame can never be mistaken for an
-      // envelope (which would be a silent corruption).
-      logRelayEvent(`embedded relay: ignoring control frame type=${frame["type"]}`);
+      // Control frames. The room catalog ones are implemented (see
+      // `handleControlFrame`); everything else is ignored explicitly rather
+      // than routed, so a control frame can never be mistaken for an envelope
+      // (which would be a silent corruption).
+      handleControlFrame(conn, frame);
       return;
     }
 

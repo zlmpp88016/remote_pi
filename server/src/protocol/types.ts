@@ -244,6 +244,32 @@ export type ClientMessage =
     }
   // Plan/67 — host room (`room=host`) control plane on the supervisor.
   | { type: "workspace_list"; id: string }
+  /*
+   * Automations — scheduled tasks (plan/39 cron, projected for the web).
+   *
+   * `schedule_add` carries the raw cron expression rather than a friendly kind:
+   * the expression is what the host stores, and round-tripping through a UI
+   * abstraction would let the two drift.
+   */
+  | { type: "schedule_list"; id: string }
+  | {
+      type: "schedule_add";
+      id: string;
+      daemon_id: string;
+      schedule: string;
+      prompt: string;
+      tz?: string | null;
+      skip_if_busy?: boolean;
+      wake?: boolean;
+      catchup?: boolean;
+      /** Pin a model for this task; omitted means inherit the session's model. */
+      model?: { provider: string; id: string } | null;
+      /** Give each fire its own session instead of appending to the live one. */
+      fresh_session?: boolean;
+    }
+  | { type: "schedule_remove"; id: string; job_id: string }
+  | { type: "schedule_set_enabled"; id: string; job_id: string; enabled: boolean }
+  | { type: "schedule_run_now"; id: string; job_id: string }
   | { type: "workspace_start"; id: string; cwd?: string; daemon_id?: string }
   | { type: "workspace_stop"; id: string; cwd?: string; daemon_id?: string }
   // Plan/69 — host-first connection: the client anchors on room `host` only.
@@ -260,6 +286,35 @@ export type ClientMessage =
   // Plan/68 — host filesystem navigation + explicit workspace catalog. The host
   // resolves every path; the client never receives local-path access.
   | { type: "fs_list"; id: string; path: string; show_hidden?: boolean }
+  // Plan/77 — read ONE allowlisted text file (the web Plan viewer). The host
+  // resolves and fences the path; the client never resolves one itself.
+  //
+  // `root` is the WORKSPACE the read belongs to, and it is part of the fence:
+  // the allowlist is measured against it, so a host serving several workspaces
+  // cannot be talked into reading one workspace's files on another's behalf.
+  // It is required, not defaulted, because a default would silently fall back to
+  // the daemon's own cwd — which is not a workspace at all.
+  | { type: "fs_read"; id: string; path: string; root: string }
+  // Plan/78 — Changes tab. `root` is the workspace the client is looking at;
+  // the host runs git against THAT directory, never against its own cwd (which
+  // is wherever the supervisor started it, not a workspace), and echoes the
+  // daemon id so a stale reply cannot be attributed to a different folder.
+  | { type: "changes_snapshot"; id: string; root: string; daemon_id: string }
+  // Plan/79 — editing the host's own ~/.pi/agent/models.json.
+  //
+  // NOTE the absence of a path field. `fs_read` accepts a client path and fences
+  // it; here the target is resolved host-side, so there is no parameter that
+  // could be pointed at another file. That is a structural fence, not a check.
+  | { type: "models_describe"; id: string }
+  | { type: "models_mutate"; id: string; ops: ModelsOpWire[]; revision: string }
+  // Plan/80 — the host's own ~/.pi/agent/settings.json.
+  //
+  // Like models_*, no path parameter: the target is resolved host-side. Unlike
+  // models_*, this file is MIXED — it holds preferences AND machine state
+  // (packages with absolute host paths, extensions, changelog bookkeeping). The
+  // host projects a POSITIVE whitelist, so the frame cannot carry the rest.
+  | { type: "settings_describe"; id: string }
+  | { type: "settings_mutate"; id: string; ops: SettingsOpWire[]; revision: string }
   | { type: "workspace_add"; id: string; path: string }
   | { type: "workspace_remove"; id: string; path: string }
   // Plan/68 — Pi surface: what this Pi has installed (skills + packages) and
@@ -278,6 +333,27 @@ export type ClientMessage =
       confirm_third_party?: boolean;
     }
   | { type: "package_remove"; id: string; source: string; scope?: "user" | "project" }
+  /*
+   * Enable/disable a configured package WITHOUT uninstalling it.
+   *
+   * Distinct from `package_remove` on purpose: remove deletes the code (npm
+   * uninstall / git clone removal) and the settings entry, so re-enabling is
+   * impossible without a fresh install. Disable keeps the files on disk and only
+   * flips the settings entry to its filtered form, so it is reversible offline.
+   *
+   * The SDK's disable mechanism is the OBJECT form of a package entry: writing
+   * `{source, extensions: [], skills: [], prompts: [], themes: []}` makes
+   * `applyPackageFilter` mark every resource of every type as disabled
+   * ("Empty array explicitly disables all resources of this type"). Enable
+   * writes the plain string form back, i.e. load everything.
+   */
+  | {
+      type: "package_set_enabled";
+      id: string;
+      source: string;
+      scope: "user" | "project";
+      enabled: boolean;
+    }
   | { type: "package_update"; id: string; source?: string }
   // Plan/57 — interactive extension prompt response (ask_user via pi-ask).
   // Mirrors RpcExtensionUIResponse; the optional `ask` envelope carries
@@ -509,6 +585,36 @@ export type ServerMessage =
       in_reply_to: string;
       workspaces: WireWorkspaceInfo[];
     }
+  | {
+      type: "schedule_list_ok";
+      in_reply_to: string;
+      tasks: WireScheduleTask[];
+      /*
+       * daemon id -> display name. Sent alongside the tasks so the panel can
+       * name a workspace without resolving it from the catalog; a task whose
+       * daemon is absent here falls back to its id rather than to a cwd path.
+       */
+      workspace_names: Record<string, string>;
+    }
+  | { type: "schedule_add_ok"; in_reply_to: string; task: WireScheduleTask }
+  | { type: "schedule_remove_ok"; in_reply_to: string; job_id: string }
+  | {
+      type: "schedule_set_enabled_ok";
+      in_reply_to: string;
+      job_id: string;
+      enabled: boolean;
+    }
+  | {
+      type: "schedule_run_now_ok";
+      in_reply_to: string;
+      job_id: string;
+      /*
+       * The daemon's own fire outcome, verbatim. A string rather than the closed
+       * union because `fireJob` can also answer "missing"; the client shows
+       * whatever it got instead of us inventing a member for it.
+       */
+      result: string;
+    }
   // Plan/68 — directory listing for the workspace picker (host-side listing).
   | {
       type: "fs_list_ok";
@@ -516,6 +622,72 @@ export type ServerMessage =
       path: string;
       parent: string | null;
       entries: WireFsEntry[];
+    }
+  // Plan/77 — one allowlisted text file. `truncated` says the content is the
+  // head of a larger file; `bytes` is the REAL size, so the UI can say so.
+  | {
+      type: "fs_read_ok";
+      in_reply_to: string;
+      path: string;
+      content: string;
+      truncated: boolean;
+      bytes: number;
+    }
+  // Plan/78 — Changes snapshot. A failure is its own frame rather than an empty
+  // list, because "this is not a git repo" and "your worktree is clean" must
+  // never look the same: the workspace used for every acceptance run here is not
+  // a repo, so collapsing them would make the panel lie exactly when the user
+  // needs the truth. `reason` is a closed enum; the client owns the sentence.
+  | {
+      type: "changes_snapshot_ok";
+      in_reply_to: string;
+      snapshot: ChangesSnapshotWire;
+    }
+  | {
+      type: "changes_snapshot_unavailable";
+      in_reply_to: string;
+      reason: "not_a_repo" | "git_missing" | "timeout" | "workspace_missing" | "unreadable";
+    }
+  // Plan/79 — models.json describe/mutate. `models_describe_ok` carries the config
+  // with every secret field REMOVED and their existence reported separately, so a
+  // credential cannot ride this frame no matter what the form asks for.
+  | {
+      type: "models_describe_ok";
+      in_reply_to: string;
+      revision: string;
+      file: ModelsFileStateWire;
+      config: Record<string, unknown>;
+      secrets: ModelsSecretsWire;
+    }
+  | {
+      type: "models_mutate_ok";
+      in_reply_to: string;
+      revision: string;
+    }
+  | {
+      type: "models_error";
+      in_reply_to: string;
+      reason: ModelsErrorReasonWire;
+    }
+  // Plan/80 — settings.json. The payload is the whitelist projection; the host
+  // never serialises the document.
+  | {
+      type: "settings_describe_ok";
+      in_reply_to: string;
+      revision: string;
+      file: SettingsFileStateWire;
+      appearance: SettingsAppearanceWire;
+      behaviour: SettingsBehaviourWire;
+    }
+  | {
+      type: "settings_mutate_ok";
+      in_reply_to: string;
+      revision: string;
+    }
+  | {
+      type: "settings_error";
+      in_reply_to: string;
+      reason: SettingsErrorReasonWire;
     }
   // Plan/68 — Pi surface snapshot (skills + packages) and its management acks.
   | {
@@ -573,6 +745,29 @@ export type ServerMessage =
       last_error: string | null;
       restarts: number;
     }
+  /*
+   * Automations push (NOT a reply) — a scheduled task reached its fire time.
+   *
+   * Unsolicited like `workspace_state`: there is no `in_reply_to` because no
+   * client asked for this occurrence. It exists so the browser learns a fire
+   * happened without polling the whole task list on a timer.
+   *
+   * `result` is the daemon's OWN closed vocabulary, passed through unmapped. The
+   * difference between "delivered" and "skipped_busy" is exactly what a user
+   * staring at a task that appears not to have run needs to see.
+   *
+   * `prompt_preview` is truncated host-side (see SCHEDULE_PREVIEW_CHARS): the
+   * full prompt already lives in the transcript and in the task row, so the
+   * push carries only enough to identify which task fired.
+   */
+  | {
+      type: "schedule_fired";
+      job_id: string;
+      daemon_id: string;
+      result: CronResultWire;
+      fired_at: string;
+      prompt_preview: string;
+    }
   | { type: "workspace_restart_ok"; in_reply_to: string; cwd: string; daemon_id: string }
   | {
       type: "workspace_restart_error";
@@ -608,15 +803,29 @@ export type ActionName =
   | "workspace_stop"
   // Plan/68 — filesystem navigation + explicit workspace catalog.
   | "fs_list"
+  | "fs_read"
   | "workspace_add"
   | "workspace_remove"
+  // Plan/78 — git working-tree snapshot for the Changes dock tab.
+  | "changes_snapshot"
+  | "models_describe"
+  | "models_mutate"
+  | "settings_describe"
+  | "settings_mutate"
   // Plan/68 — Pi surface (skills + packages).
   | "pi_surface"
   | "skill_invoke"
   | "skill_set_enabled"
   | "package_install"
   | "package_remove"
+  | "package_set_enabled"
   | "package_update"
+  // Automations — scheduled tasks (plan/39 cron projected to the web).
+  | "schedule_list"
+  | "schedule_add"
+  | "schedule_remove"
+  | "schedule_set_enabled"
+  | "schedule_run_now"
   // Plan 01 — session tree navigation + branching.
   | "tree_get"
   | "tree_navigate"
@@ -624,6 +833,153 @@ export type ActionName =
   | "session_clone";
 
 /** Plan/67 — one row in `session_list_ok`. `id` is the Pi SessionManager id. */
+/** One changed path, as the Changes panel renders it (plan/78). */
+export interface ChangesEntryWire {
+  /** Repo-RELATIVE path with forward slashes. Never absolute: the panel needs
+   *  the part that differs between rows, not the host's directory layout. */
+  rel: string;
+  /** Index status column from `git status --porcelain` (`.MADRCU?!`). Single
+   *  character from git's closed vocabulary, not free text. */
+  x: string;
+  /** Worktree status column, same vocabulary. */
+  y: string;
+  /** True when git reported a rename; `rel` is the new name. */
+  renamed: boolean;
+}
+
+/**
+ * The Changes snapshot (plan/78).
+ *
+ * Status only — no file bodies, no diff. Returning a diff would widen a pairing
+ * token's grant from "a few allowlisted documents" (plan/77 `fs_read`) to "the
+ * content of every file you have edited", which is the hole that fence exists to
+ * prevent.
+ */
+/**
+ * One path-addressed edit to the models config (plan/79).
+ *
+ * `path` addresses the JSON STRUCTURE, never a filesystem path. This is the only
+ * way the client can express a change, which is why a key that no op names cannot
+ * be touched — the property that makes `replace`-style whole-document writes
+ * unsafe here (the client never receives the key, so "absent" and "delete it"
+ * would be the same message).
+ */
+export type ModelsOpWire =
+  | { op: "set"; path: (string | number)[]; value: unknown }
+  | { op: "insert"; path: (string | number)[]; value: unknown }
+  | { op: "remove"; path: (string | number)[] }
+  | { op: "unset"; path: (string | number)[] };
+
+/** What the host can say about the file, all as booleans — no host text. */
+export interface ModelsFileStateWire {
+  exists: boolean;
+  parseable: boolean;
+  writable: boolean;
+  /** Owner-only permissions. Plaintext keys live in this file. */
+  mode_safe: boolean;
+}
+
+/**
+ * Existence of a credential, and nothing else.
+ *
+ * No value, no `sk-…abcd` mask, no length. A mask leaks four credential
+ * characters for no decision this panel makes, and a masked value pre-filled into
+ * a form is the classic path to writing the mask back as the key. A length would
+ * reveal which scheme issued the key.
+ */
+export type ModelsSecretsWire = Record<string, { has_key: boolean }>;
+
+export interface ModelsDescribeOkWire {
+  /** sha256 of the raw file bytes — the optimistic-concurrency fence. */
+  revision: string;
+  file: ModelsFileStateWire;
+  /** Parsed config with every secret field REMOVED (not blanked). */
+  config: Record<string, unknown>;
+  secrets: ModelsSecretsWire;
+}
+
+/** Why a models-config operation failed. Closed set: the client owns the wording,
+ *  so no errno, stack or host path can reach the screen. */
+export type ModelsErrorReasonWire =
+  | "not_found"
+  | "corrupted"
+  | "permission"
+  | "conflict"
+  | "invalid"
+  | "verify_failed"
+  | "unsupported";
+
+/**
+ * Plan/80 — settings.json wire types.
+ *
+ * Every field here is on the host's POSITIVE whitelist. `packages`, `extensions`
+ * and `lastChangelogVersion` have no representation at all, so they cannot be
+ * expressed in a frame even by mistake.
+ */
+export type SettingsFieldWire =
+  | "theme"
+  | "hideThinkingBlock"
+  | "retry.enabled"
+  | "retry.maxRetries"
+  | "retry.baseDelayMs"
+  | "retry.provider.maxRetryDelayMs";
+
+export type SettingsOpWire =
+  | { op: "set"; path: SettingsFieldWire | string[]; value: unknown }
+  | { op: "unset"; path: SettingsFieldWire | string[] };
+
+export interface SettingsFileStateWire {
+  exists: boolean;
+  parseable: boolean;
+  writable: boolean;
+}
+
+/** `theme` is reported for DISPLAY only: it selects a pi TUI theme and this panel
+ *  does not offer to change it. The web client's visual presets are a separate,
+ *  browser-local concept and never write this value. */
+export interface SettingsAppearanceWire {
+  theme: string | null;
+  hide_thinking_block: boolean | null;
+}
+
+export interface SettingsBehaviourWire {
+  retry_enabled: boolean | null;
+  retry_max_retries: number | null;
+  retry_base_delay_ms: number | null;
+  retry_provider_max_retry_delay_ms: number | null;
+}
+
+export interface SettingsDescribeOkWire {
+  revision: string;
+  file: SettingsFileStateWire;
+  appearance: SettingsAppearanceWire;
+  behaviour: SettingsBehaviourWire;
+}
+
+export type SettingsErrorReasonWire =
+  | "not_found"
+  | "corrupted"
+  | "permission"
+  | "conflict"
+  | "invalid"
+  | "invalid_field"
+  | "unsupported"
+  | "verify_failed";
+
+export interface ChangesSnapshotWire {  is_repo: true;
+  /** Short branch name, or null on a detached HEAD. */
+  branch: string | null;
+  /** Short HEAD sha + subject, or null on an unborn branch. */
+  head: { sha7: string; subject: string } | null;
+  ahead: number | null;
+  behind: number | null;
+  entries: ChangesEntryWire[];
+  /** Full counts, independent of the entry cap. */
+  total: { staged: number; unstaged: number; untracked: number; conflicted: number };
+  /** True when `entries` was cut at the host's cap. */
+  truncated: boolean;
+}
+
 export interface WireSessionInfo {
   id: string;
   name?: string;
@@ -649,6 +1005,90 @@ export type WorkspaceState = "running" | "starting" | "crashed" | "stopped";
 export type WorkspaceRestartErrorCode = "spawn_failed" | "not_found";
 
 /**
+ * Automations — one scheduled task as the browser sees it.
+ *
+ * The derived fields (`kind`, `time`, `weekdays`, `every_*`) are computed by the
+ * host's projection from the AUTHORITATIVE `schedule` expression, and are `null`
+ * when the expression does not imply them. A client that renders `null` as
+ * "zero" would be describing a rule the host never stored, so the type keeps the
+ * distinction visible instead of defaulting.
+ */
+export interface WireScheduleTask {
+  id: string;
+  daemon_id: string;
+  /** The cron expression verbatim — the one field that is always meaningful. */
+  schedule: string;
+  kind: "every_minutes" | "every_hours" | "daily" | "weekly" | "custom";
+  every_minutes: number | null;
+  every_hours: number | null;
+  /** `HH:mm` for daily/weekly, else null. */
+  time: string | null;
+  /** ISO weekdays (Mon=1..Sun=7) for weekly, else null. */
+  weekdays: number[] | null;
+  tz: string | null;
+  prompt: string;
+  enabled: boolean;
+  skip_if_busy: boolean;
+  wake: boolean;
+  catchup: boolean;
+  created_at: string;
+  /** Last fire instant, or null when it has never fired. */
+  last_run: string | null;
+  /** The daemon's own outcome vocabulary, or null. Never translated. */
+  last_status: string | null;
+  next_run: string | null;
+  /**
+   * Pinned model for this task, or null when it inherits.
+   *
+   * Null is not "unknown": it is the meaningful state INHERIT, i.e. the fire uses
+   * whatever model the workspace session currently has. The panel must say so
+   * explicitly rather than leaving the row silent, because an inheriting task's
+   * cost follows whatever the user last picked in the UI.
+   */
+  model: WireScheduleModel | null;
+  /** True when each fire opens its own session instead of the live one. */
+  fresh_session: boolean;
+}
+
+/** A pinned model on a scheduled task. */
+export interface WireScheduleModel {
+  provider: string;
+  /** The provider's model id (e.g. `deepseek-flash`). */
+  id: string;
+  /** Display label when the host knows one; otherwise the client shows `id`. */
+  name: string | null;
+}
+
+/**
+ * Automations — outcome of one scheduled fire, mirrored onto the wire.
+ *
+ * Duplicated from `daemon/cron_log.ts` ON PURPOSE. That type is a daemon-internal
+ * detail; widening the protocol to import from it would let a daemon refactor
+ * silently change the browser contract. Keeping a closed copy here means a new
+ * result value is a deliberate protocol change, and the web mirror can assert
+ * against the same closed set.
+ *
+ * Every member is a fact the daemon actually records. There is no "unknown"
+ * member: a frame carrying anything else is rejected by the client guard.
+ */
+export type CronResultWire =
+  | "delivered"
+  | "deliver_failed"
+  | "woke_and_delivered"
+  | "skipped_busy"
+  | "skipped_down"
+  | "skipped_disabled";
+
+/**
+ * How much of a job's prompt the `schedule_fired` push carries.
+ *
+ * The preview identifies WHICH task fired; the full text is already in the task
+ * row and in the transcript. Keeping it short stops a large prompt from being
+ * duplicated over the wire on every single fire.
+ */
+export const SCHEDULE_PREVIEW_CHARS = 120;
+
+/**
  * Plan/69 — capabilities advertised by `host_hello_ok`. Closed union so the
  * app can switch on them with exhaustiveness checking.
  */
@@ -656,7 +1096,18 @@ export type HostCapability =
   | "host_pairing"
   | "workspace_state"
   | "host_forward"
-  | "fs_nav";
+  | "fs_nav"
+  | "changes"
+  /** Plan/79 — read AND write the host's own models.json. This is the first
+   *  capability that mutates host state, and the file holds plaintext API keys,
+   *  so a client that lacks it cannot even read the provider list. */
+  | "models_config"
+  /** Plan/80 — read AND write the host's own settings.json, projected through a
+   *  positive whitelist. Kept separate from `models_config` because the two files
+   *  have different threat models (credentials vs. mixed preferences). */
+  | "settings"
+  /* The host serves the Automations surface (plan/39 cron projected to the web). */
+  | "schedule";
 
 export interface WireWorkspaceInfo {
   cwd: string;
@@ -715,7 +1166,7 @@ export interface PiSurfaceSkillWire {
 }
 
 /** A package operation, echoed back on `package_op_ok`. */
-export type PackageOp = "install" | "remove" | "update";
+export type PackageOp = "install" | "remove" | "update" | "set_enabled";
 
 export interface PiSurfacePackageWire {
   source: string;
@@ -726,6 +1177,33 @@ export interface PiSurfacePackageWire {
    * Empty when the package declares nothing discoverable.
    */
   resources: string[];
+  /**
+   * The package's README text, or `null`.
+   *
+   * A plugin is third-party code, so "what does this actually do?" has to be
+   * answerable in the app before the user installs or keeps it. Only the host
+   * knows where a package was installed, so only the host can read this.
+   *
+   * OPTIONAL, and `null` is meaningful: an older host omits the field entirely,
+   * and a package may genuinely ship no README. The UI must distinguish "not
+   * provided" from an empty document instead of rendering a blank panel.
+   */
+  readme?: string | null;
+  /** Where that README came from, for provenance. `null` when none. */
+  readme_path?: string | null;
+  /** True when the README exceeded the cap and was cut. */
+  readme_truncated?: boolean;
+  /**
+   * Whether this package's resources will actually load.
+   *
+   * False means the settings entry is in Pi's "disabled" spelling (the object
+   * form with every resource array empty): the code is still on disk, so this is
+   * reversible and distinct from removing the package.
+   *
+   * OPTIONAL so an older host that does not report it never causes the client to
+   * claim a package is off. Absent must be read as "unknown", not "disabled".
+   */
+  enabled?: boolean;
 }
 
 /**

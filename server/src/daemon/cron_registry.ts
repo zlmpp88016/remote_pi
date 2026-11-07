@@ -44,6 +44,32 @@ export interface CronJob {
   last_run?: string;
   /** Last fire result — see cron_log `result` values. Shortcut for `cron list`. */
   last_status?: string;
+  /**
+   * Model to run this fire with, instead of whatever the workspace Pi happens to
+   * be using.
+   *
+   * Absent means INHERIT: the fire runs with the model the session currently
+   * has, which is what every job did before this existed. That default is kept
+   * because it is the least surprising one for an interactive session — but it
+   * also means a job's cost silently follows whatever the user last picked in
+   * the UI, which is why a job may pin one.
+   */
+  model?: CronJobModel;
+  /**
+   * Run each fire in a BRAND NEW session instead of the live one.
+   *
+   * Default false, i.e. append to the conversation the user is looking at. That
+   * shares the context window between the human and the schedule, which is
+   * wrong for a high-frequency job: it both pollutes their transcript and burns
+   * their context budget. `true` gives the job its own history.
+   */
+  fresh_session?: boolean;
+}
+
+/** A pinned model for a schedule fire. */
+export interface CronJobModel {
+  provider: string;
+  id: string;
 }
 
 export interface CronRegistry {
@@ -101,6 +127,10 @@ export interface NewJobInput {
   skip_if_busy?: boolean;
   wake?: boolean;
   catchup?: boolean;
+  /** Pin a model for this job; omitted means inherit the session's model. */
+  model?: CronJobModel;
+  /** Give each fire its own session instead of appending to the live one. */
+  fresh_session?: boolean;
 }
 
 /** Adds a job with a fresh `j_<hex>` id. Pure persistence — call
@@ -119,6 +149,8 @@ export function addJob(input: NewJobInput): CronJob {
     created_at: new Date().toISOString(),
   };
   if (input.tz) job.tz = input.tz;
+  if (input.model) job.model = { provider: input.model.provider, id: input.model.id };
+  if (input.fresh_session === true) job.fresh_session = true;
   reg.jobs.push(job);
   saveCronRegistry(reg);
   return job;
@@ -232,6 +264,17 @@ function _coerceJob(item: unknown): CronJob | null {
     created_at: typeof o["created_at"] === "string" ? o["created_at"] : new Date(0).toISOString(),
   };
   if (typeof o["tz"] === "string") job.tz = o["tz"];
+  const model = o["model"];
+  if (model && typeof model === "object") {
+    const m = model as Record<string, unknown>;
+    /* Both halves are required: a half-written pin would silently inherit, which
+     * is worse than refusing it — the user thinks the job is pinned and it is
+     * not. */
+    if (typeof m["provider"] === "string" && typeof m["id"] === "string") {
+      job.model = { provider: m["provider"], id: m["id"] };
+    }
+  }
+  if (o["fresh_session"] === true) job.fresh_session = true;
   if (typeof o["last_run"] === "string") job.last_run = o["last_run"];
   if (typeof o["last_status"] === "string") job.last_status = o["last_status"];
   return job;

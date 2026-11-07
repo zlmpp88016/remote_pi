@@ -213,6 +213,23 @@ export function busyTransition(line: string): boolean | null {
   return null;
 }
 
+/**
+ * Generic `response` envelope: `{ type:"response", command, id?, success, data? }`.
+ *
+ * Exported for tests. Returns null for anything that is not a response frame, so
+ * it stays cheap to call on every stdout line.
+ */
+export function parseResponseEnvelope(
+  line: string,
+): { id: string | null; payload: Record<string, unknown> } | null {
+  let obj: unknown;
+  try { obj = JSON.parse(line); } catch { return null; }
+  if (!obj || typeof obj !== "object") return null;
+  const o = obj as Record<string, unknown>;
+  if (o["type"] !== "response") return null;
+  return { id: typeof o["id"] === "string" ? o["id"] : null, payload: o };
+}
+
 /** Parses a `get_state` RPC response line, returning its id + isStreaming. */
 function parseGetStateResponse(line: string): { id?: string; isStreaming?: boolean } | null {
   let obj: unknown;
@@ -304,6 +321,11 @@ export class RpcChild extends EventEmitter {
   private _busy = false;
   /** In-flight `get_state` requests, keyed by request id. */
   private readonly _statePending = new Map<string, { resolve: (b: boolean) => void; timer: ReturnType<typeof setTimeout> }>();
+  /** In-flight generic RPC commands (`runRpcCommand`), keyed by request id. */
+  private readonly _commandPending = new Map<
+    string,
+    { resolve: (v: Record<string, unknown> | null) => void; timer: ReturnType<typeof setTimeout> }
+  >();
 
   constructor(private readonly opts: RpcChildOptions) {
     super();
@@ -460,6 +482,23 @@ export class RpcChild extends EventEmitter {
         pending.resolve(this._busy);
       }
     }
+    /*
+     * Generic command responses. `get_state` is claimed above via its own map,
+     * so a `get_state` sent through `runRpcCommand` is settled here instead —
+     * the two maps are keyed by unique ids, so only one of them can hold a given
+     * request and there is no double-resolve.
+     */
+    if (this._commandPending.size > 0) {
+      const parsed = parseResponseEnvelope(line);
+      if (parsed !== null && parsed.id !== null) {
+        const pending = this._commandPending.get(parsed.id);
+        if (pending) {
+          clearTimeout(pending.timer);
+          this._commandPending.delete(parsed.id);
+          pending.resolve(parsed.payload);
+        }
+      }
+    }
     this.emit("stdout", line);
   }
 
@@ -493,6 +532,65 @@ export class RpcChild extends EventEmitter {
     this._handleStdoutLine(line);
   }
 
+  /**
+   * Runs one RPC command and resolves with its `response` payload.
+   *
+   * The child's stdout used to be fire-and-forget (only `get_state` was ever
+   * awaited). Automations need real round-trips: switching the model and opening
+   * a fresh session both have to be CONFIRMED before the prompt is sent, because
+   * sending it early would run the schedule with the previous model — silently,
+   * and exactly the thing the pin was meant to prevent.
+   *
+   * Resolves `null` on timeout, on a `success:false` response, or when the child
+   * is not running. Callers must treat `null` as "not changed" and avoid sending.
+   */
+  async runRpcCommand(
+    command: Record<string, unknown> & { type: string },
+    timeoutMs = 4000,
+  ): Promise<Record<string, unknown> | null> {
+    if (this._state !== "running" || !this.child?.stdin) return null;
+    const id = `rpc-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+    return new Promise<Record<string, unknown> | null>((resolve) => {
+      const timer = setTimeout(() => {
+        this._commandPending.delete(id);
+        resolve(null);
+      }, timeoutMs);
+      this._commandPending.set(id, { resolve, timer });
+      try {
+        this.child!.stdin!.write(JSON.stringify({ ...command, id }) + "\n");
+      } catch {
+        clearTimeout(timer);
+        this._commandPending.delete(id);
+        resolve(null);
+      }
+    });
+  }
+
+  /** Switches the child's model. Resolves true only on a confirmed response. */
+  async setModel(provider: string, modelId: string): Promise<boolean> {
+    const res = await this.runRpcCommand({ type: "set_model", provider, modelId });
+    return res !== null && res["success"] === true;
+  }
+
+  /** Opens a fresh session in the child. Resolves true only on confirmation. */
+  async newSession(): Promise<boolean> {
+    const res = await this.runRpcCommand({ type: "new_session" });
+    return res !== null && res["success"] === true;
+  }
+
+  /** The child's current model, or null when unknown. Used to restore the
+   *  model a schedule fire borrowed. */
+  async getModel(): Promise<{ provider: string; id: string } | null> {
+    const res = await this.runRpcCommand({ type: "get_state" });
+    const data = res?.["data"] as Record<string, unknown> | undefined;
+    const model = data?.["model"] as Record<string, unknown> | undefined;
+    if (!model) return null;
+    const provider = model["provider"];
+    const id = model["id"];
+    if (typeof provider !== "string" || typeof id !== "string") return null;
+    return { provider, id };
+  }
+
   private _onExit(code: number | null, signal: NodeJS.Signals | null): void {
     // Daemon app-action `/new`: child exits with a private code, supervisor
     // restarts it, and the next spawn omits --continue once to create a fresh
@@ -517,6 +615,11 @@ export class RpcChild extends EventEmitter {
       p.resolve(false);
     }
     this._statePending.clear();
+    for (const p of this._commandPending.values()) {
+      clearTimeout(p.timer);
+      p.resolve(null);
+    }
+    this._commandPending.clear();
     this.emit("exit", { code, signal, isCrash } satisfies RpcChildExitEvent);
   }
 

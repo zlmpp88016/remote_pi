@@ -135,6 +135,10 @@ export async function startSameOriginServer(
     (options.allowedOrigins ?? []).map((value) => value.trim().toLowerCase()).filter(Boolean),
   );
 
+  // Resolved after `listen()`; requests cannot arrive before that, so the
+  // closure always observes the real bound address.
+  let boundIp: string | null = null;
+
   const server = createServer((req, res) => {
     void handleRequest(
       req,
@@ -144,6 +148,7 @@ export async function startSameOriginServer(
       allowedOrigins,
       options.relayUrl ?? null,
       options.pairingView ?? null,
+      () => boundIp !== null && isLoopbackAddress(boundIp),
     );
   });
 
@@ -153,7 +158,7 @@ export async function startSameOriginServer(
    * otherwise the check is decorative.
    */
   server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
-    const verdict = checkRequest(req, allowedHosts, allowedOrigins);
+    const verdict = checkRequest(req, allowedHosts, allowedOrigins, boundIp === null || isLoopbackAddress(boundIp));
     if (!verdict.ok) {
       logRelayEvent(`same-origin: refused upgrade (${verdict.reason})`);
       socket.write(`HTTP/1.1 ${verdict.status} ${verdict.reason}\r\nConnection: close\r\n\r\n`);
@@ -178,6 +183,7 @@ export async function startSameOriginServer(
   });
 
   const address = server.address();
+  if (typeof address === "object" && address !== null) boundIp = address.address;
   const port = typeof address === "object" && address !== null ? address.port : options.port;
   const url = `http://${host}:${port}`;
   logRelayEvent(`same-origin: serving ${staticRoot} at ${url}`);
@@ -220,6 +226,7 @@ function checkRequest(
   req: IncomingMessage,
   allowedHosts: ReadonlySet<string>,
   allowedOrigins: ReadonlySet<string>,
+  boundToLoopback: boolean,
 ): Verdict {
   const hostHeader = req.headers.host;
   const hostname = hostHeader === undefined ? null : hostnameOf(hostHeader);
@@ -239,12 +246,46 @@ function checkRequest(
      * reinstate exactly the drive-by exposure this check exists to close.
      */
     const isSameOrigin = authorityOf(origin) === hostnameWithPort(hostHeader as string);
-    if (!isSameOrigin && !allowedOrigins.has(origin.toLowerCase())) {
+    if (!isSameOrigin && !allowedOrigins.has(origin.toLowerCase()) && !isDesktopShellOrigin(origin, boundToLoopback)) {
       return { ok: false, status: 403, reason: "Origin mismatch" };
     }
   }
 
   return { ok: true };
+}
+
+/**
+ * The Electron shell's origin: `app://app`.
+ *
+ * Trusted ONLY when the server itself is bound to loopback, because that is the
+ * case the shell exists for — a desktop app driving the daemon on the same
+ * machine. On a routable bind it stays untrusted and the operator has to opt in
+ * with `REMOTE_PI_ALLOWED_ORIGINS`, exactly as before.
+ *
+ * This does not weaken the same-origin check it sits beside. That check defends
+ * against a *web page* on another site driving the daemon: the browser stamps
+ * `Origin` itself and page script cannot change it. `app://app` is only
+ * producible by a privileged local process (the shell's main process), and any
+ * such process could forge `Origin: http://127.0.0.1:PORT` just as easily while
+ * keeping the real browser defence intact. Refusing it bought no security and
+ * cost every desktop user a manual environment variable.
+ */
+/**
+ * True when the server is bound to a loopback interface.
+ *
+ * MUST be derived from the address the server actually listened on, never from
+ * the request's `Host` header: that header is supplied by the client, so a
+ * daemon bound to `0.0.0.0` and reached from another machine would still see a
+ * loopback `Host` if the caller wrote one. Trusting the header there would
+ * re-open exactly the exposure this gate exists to close.
+ */
+function isLoopbackAddress(address: string): boolean {
+  return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
+}
+
+function isDesktopShellOrigin(origin: string, boundToLoopback: boolean): boolean {
+  if (origin.toLowerCase() !== "app://app") return false;
+  return boundToLoopback;
 }
 
 /** Serve one file, or the SPA shell for an unknown path. */
@@ -256,6 +297,7 @@ async function handleRequest(
   allowedOrigins: ReadonlySet<string>,
   relayUrlThunk: (() => string | null) | null,
   pairingView: (() => Promise<{ hostEpk: string; token: string; name: string } | null>) | null,
+  boundToLoopback: () => boolean,
 ): Promise<void> {
   /*
    * Resolve the relay address at request time, not at construction: in
@@ -264,7 +306,7 @@ async function handleRequest(
    * after that, which is why a thunk is enough.
    */
   const relayUrl = relayUrlThunk === null ? null : relayUrlThunk();
-  const verdict = checkRequest(req, allowedHosts, allowedOrigins);
+  const verdict = checkRequest(req, allowedHosts, allowedOrigins, boundToLoopback());
   if (!verdict.ok) {
     res.writeHead(verdict.status, { "content-type": "text/plain; charset=utf-8" });
     res.end(verdict.reason);

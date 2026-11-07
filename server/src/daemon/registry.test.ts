@@ -213,3 +213,46 @@ describe("migrateRegistryNames", () => {
     expect(migrateRegistryNames()).toBe(0);
   });
 });
+
+/*
+ * One workspace, one daemon id — regardless of how the path is spelled.
+ *
+ * Regression for a real duplicate-Pi defect: `normalizeCwd` and
+ * `daemonIdForCwd` each called `realpathSync` independently, and the JS
+ * implementation preserves the caller's drive-letter case on Windows. So
+ * `d:\proj` and `D:\proj` were two different registry strings for the same
+ * folder, both passed the dedupe, and each got its own id and its own live Pi
+ * (measured on this machine: two `--mode rpc` children for one directory).
+ *
+ * These assertions are platform-guarded where the behaviour is Windows-specific,
+ * but the "same directory => same id" property is universal and is what the
+ * registry dedupe actually relies on.
+ */
+describe("path spelling must not create a second daemon", () => {
+  test("path variants of one existing folder all derive the same id", () => {
+    const dir = mkdtempSync(join(tmpdir(), "reg-spell-"));
+    try {
+      const variants = [dir, dir + "/", dir + "/.", ...(process.platform === "win32" ? [dir.toLowerCase()] : [])];
+      const ids = variants.map((v) => daemonIdForCwd(v));
+      expect(new Set(ids).size).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("normalizeCwd and the id function agree on the same directory", () => {
+    const dir = mkdtempSync(join(tmpdir(), "reg-agree-"));
+    try {
+      const a = addDaemon(dir, "first");
+      expect(daemonIdForCwd(normalizeCwd(dir))).toBe(a.id);
+      if (process.platform === "win32") {
+        /* The exact defect: a drive-letter case change used to slip past the
+         * dedupe and mint a second entry. It must now be refused. */
+        expect(() => addDaemon(dir.toLowerCase(), "second")).toThrow(/already registered/i);
+        expect(listDaemons().filter((d) => daemonIdForCwd(d.cwd) === a.id)).toHaveLength(1);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

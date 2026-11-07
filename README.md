@@ -14,216 +14,132 @@
 
 ## Deploy
 
-Three machines. Run in order. Commands are Linux/bash (WSL on Windows).
+Three roles. Pick the plan that matches what you have.
 
-### 1. Relay — a VPS or any host with a public IP
+| Role | Where it runs | What it does |
+| --- | --- | --- |
+| **relay** | A host with a public IP — or nowhere at all | Lets both sides talk without either being reachable. **Omit it entirely** when you use `--direct`: that mode embeds its own relay. |
+| **server** | The machine that actually runs Pi | `pi-supervisord` keeps Pi workspaces alive and answers pairing |
+| **client** | Your browser / phone / desktop | Web, iOS, or the Electron shell |
+
+### Plan 1 — Single machine (try it in five minutes)
+
+Everything on one box. `--direct` starts an embedded relay and serves the web
+client itself, so there is **no Docker and no separate web host**.
 
 ```bash
-curl -fsSL https://get.docker.com | sh
-
-git clone https://github.com/exampleorg/remote_pi
-cd remote_pi
-docker compose -f docker-compose.relay.yml up -d
+cd server && npm install && npm run build && npm install -g .
+node dist/bin/supervisord.js --direct
 ```
 
-The relay now listens on `127.0.0.1:3001`, with SQLite state in the `relay-data` volume.
+It logs `direct mode — local relay at http://127.0.0.1:4124 (no community relay)`.
+Open `http://127.0.0.1:4124/remote-pi/connect`.
 
-### 2. Cloudflare Tunnel — public `wss://`, no open inbound ports
-
-On the same host:
+For the pairing code, in a second terminal:
 
 ```bash
-curl -fsSL -o /usr/local/bin/cloudflared \
-  https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-chmod +x /usr/local/bin/cloudflared
-
-cloudflared tunnel login
-cloudflared tunnel create remote-pi
-cloudflared tunnel route dns remote-pi relay.example.com
-
-# 127.0.0.1:3001 is the port the relay is published on (step 1)
-cloudflared tunnel run --url http://127.0.0.1:3001 remote-pi
+remote-pi-server pair
 ```
 
-Verify: `curl https://relay.example.com/health` returns 200.
+Paste the whole `remotepi://pair?…` string into the **pairing code** box, and
+`ws://127.0.0.1:4124` into the **relay address** box.
 
-### 3. Server — the machine that runs Pi (no public IP needed)
+> The web client must exist under `clients/web/dist` for this plan. If you have
+> not built it, the daemon still runs but serves no page — it says so in the log.
+> Build it once with `cd clients/web && npm install && npm run build`. This is the
+> **only** plan where the server machine needs the web build.
 
-Not the VPS. This is the machine you want to reach.
+### Plan 2 — Two machines (Pi on A, browser on B) — recommended
 
-Needs Node >= 20.6 and the Pi coding agent installed.
+Machine A runs Pi. Machine B only opens a page. **A does not build the web client
+in this plan** — B serves it.
 
-#### Build and install from a local checkout
-
-This repo is not published to npm. Install the CLI from the working copy, which
-npm links rather than copies — so a rebuild is enough to pick up code changes.
-
-**Requires npm >= 11.** npm 10 crashes on this dependency tree with
-`Cannot read properties of null (reading 'edgesOut')` (an arborist bug in the
-peer-set resolver, triggered by vitest 4). Upgrade once with `npm install -g npm@11`.
-
-Under nvm, that upgrade rewrites `npm-cli.js` and nvm's integrity check then blocks
-every npm call (`NVM4306: delegated script changed since it was trusted`). Re-shim
-once after upgrading:
+#### Machine A
 
 ```bash
-nvm reshim
+cd server && npm install && npm run build && npm install -g .
+remote-pi-server set-relay https://relay.example.com   # http(s) only, never ws://
+remote-pi-server install                              # user-level service, survives logout
+remote-pi-server daemon status                        # confirm it is running
+remote-pi-server pair                                 # print the pairing URI
 ```
 
+`install` writes a systemd `--user` unit, a LaunchAgent, or a Task Scheduler
+entry — no root, except the very first Windows install raises one UAC prompt.
+
+#### Machine B
+
 ```bash
-git clone https://github.com/exampleorg/remote_pi
-cd remote_pi/server
-
-npm install          # dependencies
-npm run build        # tsc → dist/
-npm install -g .     # links this checkout as the global `remote-pi-server`
-
-remote-pi-server set-relay https://relay.example.com   # http(s), not wss
-remote-pi-server pair                                 # prints address + code
+cd clients/web && npm install && npm run build
+npx serve dist -p 5173
 ```
 
-`npm install -g .` symlinks the checkout, so after changing code:
+Open `http://localhost:5173/remote-pi/connect`:
+
+| Field | Value |
+| --- | --- |
+| Relay address | `wss://relay.example.com` |
+| Pairing code | the whole `remotepi://pair?…` string from A |
+
+### Plan 3 — Production (own relay + own domain)
+
+#### Relay host
 
 ```bash
-git pull && cd server && npm install && npm run build
-remote-pi-server restart-supervisor   # supervisor has no hot-reload
+docker compose -f docker-compose.relay.yml up -d   # host 3001 → container 3000
 ```
 
-`restart-supervisor` is the only command that reloads the server code: the
-supervisor is a long-running Node process, and `daemon restart` respawns the
-workspace `pi` children without touching it (see
-[Server changes](#server-changes--rebuild-then-restart-the-supervisor)).
+Point a reverse proxy or Cloudflare Tunnel at `127.0.0.1:3001` so both
+`https://` and `wss://` on your domain land there. `RELAY_ALLOWED_ORIGINS` is the
+browser-origin allowlist and defaults to permissive.
 
-The daemon is launched with an explicit `-e dist/index.js`, so it does not go
-through `pi install`. Use `pi install "$PWD"` only if you also want the extension
-available inside your **interactive** Pi sessions (`/remote-pi start`):
+#### Server host
 
 ```bash
-pi install "$PWD"      # optional — interactive use only
-```
-
-Already have an older global install under a different name? npm will not delete
-another package's binaries, so remove them first:
-
-```bash
-npm uninstall -g remote-pi            # the pre-rename package
-npm install -g .                      # then this
-```
-
-#### Run it
-
-Two modes. Pick based on whether you want Pi reachable while you are not sitting
-at the machine.
-
-**Foreground (interactive)** — the extension inside Pi. Nothing resident; `/remote-pi`
-commands work only while that Pi session is open.
-
-```bash
-pi                                    # then use /remote-pi start, /remote-pi pair
-```
-
-**Resident daemon** — a supervisor that keeps Pi workspaces running in the
-background and answers pairing with no interactive session. Use this to reach
-the machine from your phone or browser at any time.
-
-```bash
-remote-pi-server create /path/to/a/workspace --name "my project"
-remote-pi-server install              # registers the user-level service
-remote-pi-server daemon status        # confirm it is running
-```
-
-`install` writes a **user-level** unit — systemd `--user` on Linux, a LaunchAgent
-on macOS, a Task Scheduler entry on Windows. It does not need root.
-
-Windows is the one exception: the very first `install` has to create the
-scheduled task, which lives in the machine-wide store, so it raises one UAC
-prompt. `uninstall` needs one too — `schtasks /Delete` modifies that same store.
-`restart-supervisor` and `daemon restart` never elevate.
-
-#### Restart / stop
-
-```bash
-remote-pi-server restart-supervisor   # reload the SERVER code (after a rebuild)
-remote-pi-server daemon restart       # only respawn the workspace `pi` processes
-remote-pi-server daemon start|stop    # start or stop the resident supervisor
-remote-pi-server daemon status        # pid, uptime, restart count per workspace
-remote-pi-server daemons              # list registered workspaces
-remote-pi-server uninstall            # remove the service (workspaces kept)
-```
-
-Which restart you want depends on **what you changed**:
-
-| You changed | Use | Why |
-|---|---|---|
-| `server/` code (`host_bridge`, `index`, CLI, `/remote-pi`) | `restart-supervisor` | The code runs *inside* the supervisor process, which never hot-reloads. |
-| A workspace's Pi state (stuck child, model, auth) | `daemon restart` | Respawning the child is enough; the supervisor keeps its loaded code. |
-| Only `clients/web/` | neither | The dev server hot-reloads; just refresh the page. |
-
-`restart-supervisor` re-spawns every workspace daemon as a side effect, so you
-never need `daemon restart` after it.
-
-#### Uninstall
-
-```bash
-remote-pi-server uninstall
-```
-
-What it does, and what it deliberately keeps:
-
-| | Effect |
-|---|---|
-| Stops the service | `launchctl bootout` (macOS), `systemctl --user disable --now` (Linux), `schtasks /End` (Windows) |
-| Removes the unit | Deletes the LaunchAgent plist / systemd unit / Task Scheduler XML + its `wscript` launcher |
-| Removes CLI shims | Deletes the `remote-pi-server` / `pi-supervisord` links under `~/.local/bin` only. **npm-global bins are never touched** — those live in a different prefix. |
-| Keeps `~/.pi/remote/daemons.json` | The workspace registry survives, so `remote-pi-server install` brings everything back without re-registering. |
-| Keeps `~/.pi/remote/peers.json`, `identity.json`, `pairing.json` | Pairings stay valid; clients reconnect after a re-install. |
-
-On Windows the first `install` needs one UAC prompt (creating the scheduled task
-touches the machine-wide store). `uninstall` also needs it, because
-`schtasks /Delete` is what modifies that store. `restart-supervisor` and
-`daemon restart` never elevate.
-
-To remove the CLI entirely as well:
-
-```bash
-remote-pi-server uninstall
-npm uninstall -g remote-pi-server     # drop the npm link
-```
-
-#### Relay choice
-
-Set the relay **before** pairing: the pairing payload carries the relay URL, so a
-client that pairs first would point at the wrong relay. `set-relay` accepts
-`http://`/`https://` only — the clients convert to `ws(s)://` themselves. Skip it
-to use the community relay `https://relay.880160.xyz`.
-
-```bash
+cd server && npm install && npm run build && npm install -g .
 remote-pi-server set-relay https://relay.example.com
+remote-pi-server install
+remote-pi-server pair          # --rotate to invalidate the previous code
 ```
 
-The effective value and where it came from live in `~/.pi/remote/config.json`;
-inside Pi, `/remote-pi config` prints the same thing.
+#### Client host
 
-### 4. Client — web
+Publish `clients/web/dist` to any static host (Nginx, Cloudflare Pages, Vercel)
+behind HTTPS, then connect with the relay address and pairing code above.
+
+### Reaching a `--direct` daemon from another machine
+
+`--direct` binds `127.0.0.1` only — the host and port are not configurable through
+it. To reach it from elsewhere, put a tunnel or reverse proxy in front **and**
+allow the hostname the browser will send:
 
 ```bash
-cd clients/web
-docker build -t remote-pi-web .
-docker run -d --restart unless-stopped -p 3000:3000 remote-pi-web
+REMOTE_PI_ALLOWED_HOSTS="your-tunnel-host.example.com" \
+  node dist/bin/supervisord.js --direct
 ```
 
-Open `http://<that-host>:3000/remote-pi/connect` and paste the address + code
-from step 3. No environment variables: the relay URL and the pairing code are
-typed into the page (and stored in the browser afterwards).
+That variable is not optional: without it the proxy gets `403` before any page is
+served, because the strict same-origin gate only accepts loopback `Host` values by
+default. If the browser page is served from a different origin than the daemon,
+list it in `REMOTE_PI_ALLOWED_ORIGINS` too.
 
-### 5. Optional — mobile app
+### Common pitfalls
 
-[Google Play](https://play.google.com/store/apps/details?id=com.example.remotepi) ·
-[App Store](https://apps.apple.com/app/remote-pi-coding-agent/id6773499691) ·
-[APK](https://github.com/exampleorg/remote_pi/releases)
+- **Pairing code in the wrong box.** The page has two inputs. The relay address
+  takes `wss://…`; the pairing code takes the full `remotepi://pair?…` URI.
+  Pasting the URI into the address field is the single most common failure.
+- **`set-relay` rejects `ws://`.** It takes `http://` or `https://` only and
+  converts to WebSocket internally. Passing `ws://` is refused outright.
+- **`install` and `--direct` are mutually exclusive.** They contend for the same
+  supervisor socket (a named pipe on Windows,
+  `/tmp/remote-pi-supervisor-<user>.sock` elsewhere). Starting one while the other
+  runs fails with *"Another pi-supervisord is already running"*. Stop the service
+  first: `remote-pi-server daemon stop`.
+- **`daemon status` says "not running" while `--direct` works.** Expected. Those
+  commands manage the installed service, not a foreground process.
+- **`403` from a tunnel.** Missing `REMOTE_PI_ALLOWED_HOSTS`, see above.
 
-Scan the QR printed by `remote-pi-server pair`, or enter the same address + code.
-
+---
 
 ## Links
 
@@ -312,51 +228,6 @@ the only thing your traffic ever touches is your own infrastructure.
 
 Full security trade-offs and the self-hosting guide live in
 **[`relay/README.md`](./relay/README.md)**.
-
-## Getting started
-
-### 1. Run the host daemon
-
-Install the CLI globally from a local checkout (the package is not on npm):
-
-```bash
-cd remote_pi/server && npm install && npm run build && npm install -g .
-```
-
-Install the daemon as a user-level system service (Linux `systemd --user`, macOS
-launchd, Windows Task Scheduler). It auto-starts at login and survives reboots:
-
-```bash
-remote-pi-server install
-```
-
-The daemon comes up, connects to the relay, and holds the machine online — with
-**no Pi running**.
-
-### 2. Pair a client
-
-Pair from the daemon itself (no Pi needed):
-
-```bash
-remote-pi-server pair        # prints the address + one-time/persistent code
-```
-
-Enter that address and code in the mobile app, the browser client, or Cockpit.
-Once paired, the client can browse the host filesystem, register a directory, and
-start a Pi there.
-
-### 3. Or run Pi locally as usual
-
-The `/remote-pi` Pi command still works for the everyday local case. Inside any
-Pi session:
-
-```text
-/remote-pi
-```
-
-The wizard asks for an agent name, session name, and relay choice, then prints a
-QR code. Scan it with the mobile app — useful when you want the current Pi
-session itself reachable without a resident daemon.
 
 ### Recommended companion: `@eko24ive/pi-ask`
 

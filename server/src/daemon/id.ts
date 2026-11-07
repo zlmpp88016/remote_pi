@@ -25,11 +25,36 @@ import { realpathSync } from "node:fs";
  * needs the name to disambiguate. Decision: leave `daemonIdForCwd` cwd-only.
  */
 export function daemonIdForCwd(cwd: string): string {
-  let target: string;
+  return createHash("sha256").update(canonicalCwd(cwd)).digest("hex").slice(0, 8);
+}
+
+/**
+ * The single canonical spelling of a directory, used for BOTH the registry's
+ * dedupe comparison and the id derivation.
+ *
+ * Why this exists: the two used to disagree. `normalizeCwd` called
+ * `realpathSync` (the JS implementation), which on Windows resolves symlinks but
+ * PRESERVES the caller's drive-letter case — `d:\x` stays `d:\x` while `D:\x`
+ * stays `D:\x`. The registry then deduped on that string, so the same physical
+ * directory could be registered twice under two spellings, producing two daemon
+ * ids and TWO live Pi processes for one folder (measured: 93264 + 16448 alive at
+ * once against `D:\模型测试\4.1f`).
+ *
+ * `realpathSync.native` delegates to the OS canonicalizer and returns the real
+ * on-disk case, so `d:/x` and `D:/x` collapse to one string. Deliberately does NO
+ * `toLowerCase`: ids are already persisted in `daemons.json` and referenced by
+ * scheduled tasks, so changing the case of an existing path would silently
+ * re-key every daemon. Native realpath is enough — it is the only step that was
+ * missing.
+ *
+ * Falls back to the trimmed input when the path cannot be resolved (a registry
+ * entry pointing at a deleted folder), which keeps two genuinely different
+ * missing paths distinct.
+ */
+export function canonicalCwd(cwd: string): string {
   try {
-    target = realpathSync(cwd);
+    return realpathSync.native(cwd);
   } catch {
-    target = cwd;
+    return cwd.trim();
   }
-  return createHash("sha256").update(target).digest("hex").slice(0, 8);
 }

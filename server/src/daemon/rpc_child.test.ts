@@ -12,6 +12,7 @@ import {
   stagePendingSwitchTarget,
   takePendingSwitchTarget,
   PENDING_SWITCH_FILE,
+  parseResponseEnvelope,
   type RpcChildExitEvent,
 } from "./rpc_child.js";
 
@@ -262,5 +263,27 @@ describe("RpcChild — isBusy", () => {
     const child = new RpcChild({ piBin: "/usr/bin/true", extensionPath: "/x", cwd: dir });
     // never spawned → not running → returns passive _busy (false)
     expect(await child.refreshBusy(200)).toBe(false);
+  });
+});
+
+describe("parseResponseEnvelope", () => {
+  test("reads a generic response frame", () => {
+    const r = parseResponseEnvelope('{"type":"response","command":"set_model","id":"x","success":true}');
+    expect(r).not.toBeNull();
+    expect(r!.id).toBe("x");
+    expect(r!.payload["command"]).toBe("set_model");
+    expect(r!.payload["success"]).toBe(true);
+  });
+
+  test("ignores non-response frames", () => {
+    expect(parseResponseEnvelope('{"type":"message_start"}')).toBeNull();
+    expect(parseResponseEnvelope("not json")).toBeNull();
+    expect(parseResponseEnvelope('{"no":"type"}')).toBeNull();
+  });
+
+  test("a response without an id is reported with a null id", () => {
+    const r = parseResponseEnvelope('{"type":"response","command":"x"}');
+    expect(r).not.toBeNull();
+    expect(r!.id).toBeNull();
   });
 });

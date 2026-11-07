@@ -136,6 +136,16 @@ async function main(): Promise<void> {
 
   const supervisor = new Supervisor({ extensionPath });
   await supervisor.start();
+  /*
+   * The embedded relay was started before this Supervisor existed, so it could
+   * not receive the room catalog at construction time. Hand it over now: the
+   * relay reads the provider lazily on every `subscribe_rooms`, which is what
+   * lets the app learn each room's `cwd` (and therefore reach its dock).
+   */
+  if (direct) {
+    const { setRoomCatalogProvider } = await import("../direct.js");
+    setRoomCatalogProvider(() => supervisor.roomCatalog());
+  }
   process.stderr.write(
     `[pi-supervisord] up — UDS: ~/.pi/remote/supervisor.sock, extension: ${extensionPath}\n`,
   );

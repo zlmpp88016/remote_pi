@@ -1,4 +1,4 @@
-import type { EmbeddedRelay } from "./transport/embedded_relay.js";
+import type { EmbeddedRelay, RelayRoomInfo } from "./transport/embedded_relay.js";
 import { startEmbeddedRelay } from "./transport/embedded_relay.js";
 import type { SameOriginServer } from "./transport/same_origin_server.js";
 import { startSameOriginServer } from "./transport/same_origin_server.js";
@@ -164,6 +164,37 @@ function resolveWebDist(): string | null {
 let triedWebDistPaths: readonly string[] = [];
 
 /**
+ * Supplies the room catalog the embedded relay answers `subscribe_rooms` with.
+ *
+ * Registered by `supervisord` once the Supervisor exists — the relay is started
+ * BEFORE the Supervisor (its address must already be in the environment when the
+ * HostBridge connects), so the catalog cannot be passed in at start time.
+ *
+ * Returns an empty list until registered: the room control frames are then
+ * answered with a snapshot of zero rooms, which is honest for a host that has
+ * nothing running yet.
+ */
+let roomCatalogProvider: (
+  askingPeer: string,
+) => { peer: string; rooms: RelayRoomInfo[] } | Promise<{ peer: string; rooms: RelayRoomInfo[] }> = (
+  askingPeer,
+) => ({ peer: askingPeer, rooms: [] });
+
+/**
+ * Install the live room catalog used by the embedded relay.
+ *
+ * Called after the Supervisor starts; the relay reads it lazily on every
+ * `subscribe_rooms` / `rooms_check`, so late registration is fine.
+ */
+export function setRoomCatalogProvider(
+  fn: (
+    askingPeer: string,
+  ) => { peer: string; rooms: RelayRoomInfo[] } | Promise<{ peer: string; rooms: RelayRoomInfo[] }>,
+): void {
+  roomCatalogProvider = fn;
+}
+
+/**
  * Start the direct stack: one same-origin HTTP server that serves the built web
  * client and welds the embedded relay's WebSocket onto the same port, then
  * publish its address through `REMOTE_PI_RELAY`.
@@ -197,7 +228,10 @@ export async function ensureDirectRelay(
    * binds a second listener, which is what makes "one port for everything"
    * possible.
    */
-  const relay = await startEmbeddedRelay({ noServer: true });
+  const relay = await startEmbeddedRelay({
+    noServer: true,
+    roomCatalog: (peer) => roomCatalogProvider(peer),
+  });
   activeRelay = relay;
 
   if (webDist === null) {
@@ -222,7 +256,10 @@ export async function ensureDirectRelay(
     );
     logRelayEvent("direct mode: no clients/web/dist build found; relay-only listener");
     await relay.close();
-    activeRelay = await startEmbeddedRelay({ port });
+    activeRelay = await startEmbeddedRelay({
+      port,
+      roomCatalog: (peer) => roomCatalogProvider(peer),
+    });
     const fallbackUrl = toHttpUrl((activeRelay as EmbeddedRelay).url);
     if (!process.env[DIRECT_ENV]) process.env[DIRECT_ENV] = fallbackUrl;
     logRelayEvent(`direct mode: local relay at ${fallbackUrl}`);

@@ -76,9 +76,23 @@ export class PairedIdentityMissingError extends Error {
   }
 }
 
-const PI_DIR = join(homedir(), ".pi", "remote");
-const IDENTITY_FILE = join(PI_DIR, "identity.json");
-const PEERS_PATH = join(PI_DIR, "peers.json");
+/**
+ * Resolved per call, not at module load.
+ *
+ * Everything else in the daemon that touches on-disk state honours
+ * `REMOTE_PI_HOME` (`daemon/registry.ts`, `daemon/cron_registry.ts`, …) so tests
+ * and alternate installs can point at a scratch directory. This module used to
+ * freeze the path into a module-level constant, which silently ignored that
+ * override: `listPeers()` kept reading the real user's peers.json even when the
+ * caller had redirected home. A test that seeded no peers then still saw the
+ * developer's own pairings and behaved nothing like a fresh host.
+ */
+function piDir(): string {
+  const home = process.env["REMOTE_PI_HOME"];
+  return home ? join(home, ".pi", "remote") : join(homedir(), ".pi", "remote");
+}
+const IDENTITY_FILE_NAME = "identity.json";
+const PEERS_FILE_NAME = "peers.json";
 
 // ── KeyStore abstraction ─────────────────────────────────────────────────────
 
@@ -278,7 +292,7 @@ function _deserialize(stored: string): Ed25519Keypair {
 
 async function _readKeypairFromFile(): Promise<Ed25519Keypair | null> {
   try {
-    const raw = await readFile(IDENTITY_FILE, "utf8");
+    const raw = await readFile(join(piDir(), IDENTITY_FILE_NAME), "utf8");
     return _deserialize(raw);
   } catch {
     return null;
@@ -286,12 +300,12 @@ async function _readKeypairFromFile(): Promise<Ed25519Keypair | null> {
 }
 
 async function _writeKeypairToFile(kp: Ed25519Keypair): Promise<void> {
-  await mkdir(PI_DIR, { recursive: true, mode: 0o700 });
+  await mkdir(piDir(), { recursive: true, mode: 0o700 });
   // Best-effort tighten of the dir in case it pre-existed with looser
   // permissions (mkdir's mode is only applied to NEW dirs).
-  try { await chmod(PI_DIR, 0o700); } catch { /* not fatal */ }
-  await writeFile(IDENTITY_FILE, _serialize(kp), { mode: 0o600 });
-  try { await chmod(IDENTITY_FILE, 0o600); } catch { /* not fatal */ }
+  try { await chmod(piDir(), 0o700); } catch { /* not fatal */ }
+  await writeFile(join(piDir(), IDENTITY_FILE_NAME), _serialize(kp), { mode: 0o600 });
+  try { await chmod(join(piDir(), IDENTITY_FILE_NAME), 0o600); } catch { /* not fatal */ }
 }
 
 // ── Public API ──────────────────────────────────────────────────────────────
@@ -429,11 +443,11 @@ export async function getOrCreateEd25519Keypair(): Promise<Ed25519Keypair> {
       // loader prints blames npm's optional-dependency bug and sends people off
       // to delete node_modules, which takes their other pi packages with it.
       ? "[remote-pi] @napi-rs/keyring native binding could not be loaded in this " +
-        `runtime; using file-backed identity at ${IDENTITY_FILE} (0600) instead. ` +
+        `runtime; using file-backed identity at ${join(piDir(), IDENTITY_FILE_NAME)} (0600) instead. ` +
         "This is expected on a Bun-built pi. Paired devices keyed to a previous " +
         `keyring identity must be re-paired. ${String(keyringError)}`
       : "[remote-pi] keyring unavailable; using file-backed identity at " +
-        `${IDENTITY_FILE}. ${String(keyringError)}`,
+        `${join(piDir(), IDENTITY_FILE_NAME)}. ${String(keyringError)}`,
   );
   const fresh = generateEd25519Keypair();
   await _writeKeypairToFile(fresh);
@@ -450,7 +464,7 @@ export interface PeerRecord {
 
 export async function listPeers(): Promise<PeerRecord[]> {
   try {
-    const raw = await readFile(PEERS_PATH, "utf8");
+    const raw = await readFile(join(piDir(), PEERS_FILE_NAME), "utf8");
     const parsed = JSON.parse(raw) as { peers?: unknown };
     return Array.isArray(parsed.peers) ? parsed.peers as PeerRecord[] : [];
   } catch {
@@ -466,7 +480,7 @@ export async function listPeers(): Promise<PeerRecord[]> {
 async function _readPeerContainerStrict(): Promise<unknown[]> {
   let raw: string;
   try {
-    raw = await readFile(PEERS_PATH, "utf8");
+    raw = await readFile(join(piDir(), PEERS_FILE_NAME), "utf8");
   } catch (error) {
     if (
       typeof error === "object" &&
@@ -567,8 +581,8 @@ export function addPeer(record: PeerRecord): Promise<void> {
     peers.push(record);
     // Evict oldest beyond the cap, keeping the newest `MAX_PEERS` entries.
     while (peers.length > MAX_PEERS) peers.shift();
-    await mkdir(dirname(PEERS_PATH), { recursive: true });
-    await writeFile(PEERS_PATH, JSON.stringify({ peers }, null, 2));
+    await mkdir(piDir(), { recursive: true });
+    await writeFile(join(piDir(), PEERS_FILE_NAME), JSON.stringify({ peers }, null, 2));
     // A successful re-pair is a new storage provenance event even when the
     // record bytes happen to be identical.
     _invalidateOwnerSlot(record.remote_epk);
@@ -640,7 +654,7 @@ export function conditionalRemovePeer(
       (peer as { remote_epk?: unknown }).remote_epk !== remoteEpk,
     );
     if (filtered.length === peers.length) return { outcome: "not_found" };
-    await mkdir(dirname(PEERS_PATH), { recursive: true });
+    await mkdir(piDir(), { recursive: true });
     // No await may intervene between the final token/authority checks and
     // synchronous write, preserving the lane's fail-closed commit boundary.
     if (_tokenForSlot(slot) !== expectedToken) return { outcome: "stale" };
@@ -649,7 +663,7 @@ export function conditionalRemovePeer(
       try { authorized = canCommit(); } catch { return { outcome: "no_authority" }; }
       if (!authorized) return { outcome: "no_authority" };
     }
-    writeFileSync(PEERS_PATH, JSON.stringify({ peers: filtered }, null, 2));
+    writeFileSync(join(piDir(), PEERS_FILE_NAME), JSON.stringify({ peers: filtered }, null, 2));
     return { outcome: "removed", nextToken: _invalidateOwnerSlot(remoteEpk) };
   });
 }
@@ -666,7 +680,7 @@ export function removePeer(
       (peer as { remote_epk?: unknown }).remote_epk !== remoteEpk,
     );
     if (filtered.length === peers.length) return false;
-    await mkdir(dirname(PEERS_PATH), { recursive: true });
+    await mkdir(piDir(), { recursive: true });
 
     const serialized = JSON.stringify({ peers: filtered }, null, 2);
     if (canCommit) {
@@ -676,10 +690,10 @@ export function removePeer(
       let authorized = false;
       try { authorized = canCommit(); } catch { return false; }
       if (!authorized) return false;
-      writeFileSync(PEERS_PATH, serialized);
+      writeFileSync(join(piDir(), PEERS_FILE_NAME), serialized);
     } else {
       // Manual removals keep the established asynchronous storage behavior.
-      await writeFile(PEERS_PATH, serialized);
+      await writeFile(join(piDir(), PEERS_FILE_NAME), serialized);
     }
     const removed = true;
     if (removed) _invalidateOwnerSlot(remoteEpk);
@@ -690,8 +704,10 @@ export function removePeer(
 // ── Test-only helpers ────────────────────────────────────────────────────────
 
 /** Test-only: expose the identity-file path so tests can clean it. */
-export const _IDENTITY_FILE_FOR_TEST = IDENTITY_FILE;
+export const _IDENTITY_FILE_FOR_TEST = join(piDir(), IDENTITY_FILE_NAME);
+/** Backwards-compatible alias; keep both spellings so neither caller breaks. */
+export const _identityFileForTest = _IDENTITY_FILE_FOR_TEST;
 /** Test-only: expose unlink for cleanup. */
 export const _unlinkIdentityFileForTest = async (): Promise<void> => {
-  try { await unlink(IDENTITY_FILE); } catch { /* fine if missing */ }
+  try { await unlink(join(piDir(), IDENTITY_FILE_NAME)); } catch { /* fine if missing */ }
 };

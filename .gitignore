@@ -95,6 +95,19 @@ marketing/
 
 openspec
 
+# Capturas de tela de aceitacao (emulador/dispositivo, e2e). Sao evidencia de
+# uma execucao especifica, nao codigo: grandes em bytes e sem valor de revisao.
+# Ficam locais — o que interessa do aceite vai para o commit como assercao de
+# teste, nao como PNG.
+**/_android-evidence/
+**/_e2e-evidence/
+docs/截图/
+docs/截图-*.zip
+
+# Saida de empacotamento do Electron (`electron-builder`). 363 MB de binarios
+# derivados; o que entra no repo e a configuracao que os gera.
+clients/shell/release/
+
 # Windows: um `> NUL` mal escapado cria um arquivo literal chamado NUL.
 # Artefato acidental do SO, nunca conteudo do projeto.
 NUL

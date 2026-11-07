@@ -372,6 +372,41 @@ Errors (as `action_error`, see "Erros tipados" below):
 | `permission_denied` | Host cannot read the directory |
 | `spawn_failed` | (`workspace_start` only) the daemon could not be spawned |
 
+### File read (plan 77)
+
+A read-only way for the web client to display a plan document. The fence is a
+**positive allowlist**, not a denylist: `fs_list` only ever exposes directory
+*metadata*, while `fs_read` returns file *content*, so an unfenced version would
+let one pairing token pull `~/.ssh/id_rsa` or `~/.pi/remote/peers.json` off the
+host.
+
+```json
+{ "type": "fs_read", "id": "<uuid>", "path": "~/ws/plan/77-x.md" }
+{ "type": "fs_read_ok", "in_reply_to": "<uuid>", "path": "/abs/resolved",
+  "content": "# Plan 77…", "truncated": false, "bytes": 4096 }
+```
+
+A request is served only when ALL of the following hold:
+
+1. The path **realpath-resolves** inside the workspace (the daemon cwd). `..` and
+   symlinks are collapsed *before* the test, so `plan/../../.ssh/id_rsa` and a
+   symlink planted inside `plan/` both fail on containment.
+2. Some path segment is an allowlisted directory: `plan`, `.workflow`, `docs`.
+3. The filename is not a dotfile (so `.env` is refused even inside `plan/`).
+4. The extension is one of `.md`, `.markdown`, `.txt`, `.json`.
+
+Containment is evaluated **before** existence is revealed: otherwise
+`not_found` vs `not_allowed` would act as an existence oracle for arbitrary
+paths. Files above 2 MiB are capped: the response carries the head of the file
+with `truncated: true` and the real `bytes`, so a large plan is still readable.
+
+| `error` | When |
+|---|---|
+| `not_found` | Path does not exist |
+| `permission_denied` | Host cannot read the file |
+| `not_a_file` | Path exists but is a directory |
+| `not_allowed` | Outside the allowlist, dotfile, or a rejected extension |
+
 ### Workspace add / remove (plan 68)
 
 ```json
@@ -419,6 +454,181 @@ Reports what the Pi in this workspace actually has, so the app can drive it with
 ```
 
 **`package_install` without `confirm_third_party: true` is refused** with `action_error` — packages execute extension code. `source` accepts the same forms as the CLI (`npm:`, `git:`, a local path). `package_update` reconciles installed packages (`pi update --extensions`).
+
+### Models config — the host's own `models.json` (plan/79)
+
+The first capability that **writes** host state. `HostCapability: "models_config"`.
+It lives in the host room and, unlike `fs_read`, it accepts **no client path**: the
+target is resolved host-side from `homedir()`.
+
+```jsonc
+// client → host room
+{ "type": "models_describe", "id": "<uuid>" }
+{ "type": "models_mutate", "id": "<uuid>", "ops": [/* ModelsOpWire */], "revision": "<sha256>" }
+
+// host → client
+{ "type": "models_describe_ok", "in_reply_to": "<uuid>", "revision": "<sha256>",
+  "file": { "exists": true, "parseable": true, "writable": true, "mode_safe": false },
+  "config": { "providers": { /* every secret field REMOVED */ } },
+  "secrets": { "providers.<id>.apiKey": { "has_key": true } } }
+{ "type": "models_mutate_ok", "in_reply_to": "<uuid>", "revision": "<sha256>" }
+{ "type": "models_error", "in_reply_to": "<uuid>",
+  "reason": "not_found|corrupted|permission|conflict|invalid|verify_failed|unsupported" }
+```
+
+`ModelsOpWire` addresses the JSON **structure**, never a filesystem path:
+
+```jsonc
+{ "op": "set",    "path": ["providers","p","baseUrl"], "value": "https://…" }
+{ "op": "insert", "path": ["providers","p","models",-1], "value": { /* full model */ } }
+{ "op": "remove", "path": ["providers","p","models","<model-id>"] }
+{ "op": "unset",  "path": ["providers","p","apiKey"] }
+```
+
+Array segments accept an index **or** a model `id` (id preferred, and it must
+resolve to exactly one element). `insert` with a negative index appends.
+
+**A secret is never returned in any form** — not the value, not a mask, not a
+length. Only `has_key`. A blank `set` on a secret path is refused.
+
+**Writes are path-addressed only.** There is no `replace` op: because the client
+never receives the key, whole-document replacement would make "the client did not
+send a key" and "the client says there is no key" the same message, destroying the
+credential on every save.
+
+`revision` is the sha256 of the raw file bytes. It is compared after the read and
+before the write; a mismatch returns `conflict` and the newer content is **not**
+overwritten. A successful write is `tmp → fsync → chmod(original mode) → rename`,
+with the previous bytes kept at `models.json.bak` (mode 0600), then validated by
+pi's own `ModelRegistry` — rollback from `.bak` if that reports an error.
+
+The web mirror additionally **refuses any frame whose `config` contains
+`apiKey`/`token`/`secret`/`password`**, so a host-side stripping regression surfaces
+as a dropped frame instead of a rendered credential.
+
+### Settings — the host's own `settings.json` (plan/80)
+
+`HostCapability: "settings"`. Same shape as `models_*` (no client path, host-side
+target, optimistic revision), but a **different fence**: this file is mixed.
+
+```jsonc
+{ "type": "settings_describe", "id": "<uuid>" }
+{ "type": "settings_mutate", "id": "<uuid>", "ops": [/* SettingsOpWire */], "revision": "<sha256>" }
+
+{ "type": "settings_describe_ok", "in_reply_to": "<uuid>", "revision": "<sha256>",
+  "file": { "exists": true, "parseable": true, "writable": true },
+  "appearance": { "theme": "cockpit-ocean", "hide_thinking_block": true },
+  "behaviour": { "retry_enabled": true, "retry_max_retries": 10,
+                 "retry_base_delay_ms": 2000, "retry_provider_max_retry_delay_ms": 16000 } }
+{ "type": "settings_mutate_ok", "in_reply_to": "<uuid>", "revision": "<sha256>" }
+{ "type": "settings_error", "in_reply_to": "<uuid>", "reason":
+  "not_found|corrupted|permission|conflict|invalid|invalid_field|unsupported|verify_failed" }
+```
+
+**Only a positive whitelist is projected.** The real file contains `packages` with
+absolute host paths in it, plus `extensions` and `lastChangelogVersion`. None of
+those have a wire representation, so they cannot be expressed in a frame even by a
+host bug. Whitelisted fields:
+
+```
+theme  hideThinkingBlock  retry.enabled  retry.maxRetries
+retry.baseDelayMs  retry.provider.maxRetryDelayMs
+```
+
+Prefixes are **not** addressable: `retry` alone is refused, because replacing that
+subtree would silently drop `retry.provider`.
+
+`theme` is reported **read-only**. It selects pi's terminal appearance; this surface
+does not offer to change it. The web client's visual presets are a separate,
+browser-local concept stored in `localStorage` and never sent to a host.
+
+A successful write is `tmp → fsync → rename` with the previous bytes at
+`settings.json.bak`, followed by a re-read and parse (this file has no external
+schema loader analogous to pi's `ModelRegistry`), rolling back on failure.
+
+The web mirror **refuses any frame whose projection contains `packages`,
+`extensions`, `lastChangelogVersion`, or a drive-letter/absolute path**, so a
+projection regression surfaces as a dropped frame instead of a leaked directory
+layout.
+
+### Changes — a workspace's working tree (plan/78)
+
+`HostCapability: "changes"`. Read-only. The client names a **workspace root**
+(`root`) plus the daemon it believes owns it (`daemon_id`); the host resolves and
+reads. There is no client-supplied shell command.
+
+```jsonc
+{ "type": "changes_snapshot", "id": "<uuid>", "root": "/abs/ws", "daemon_id": "d-1" }
+
+{ "type": "changes_snapshot_ok", "in_reply_to": "<uuid>", "snapshot": {
+  "is_repo": true,
+  "branch": "main" | null,              // null on a detached HEAD
+  "head": { "sha7": "a1b2c3d", "subject": "fix: …" } | null,  // null on an unborn branch
+  "ahead": 0 | null, "behind": 0 | null,
+  "entries": [ { "rel": "src/a.ts", "x": " ", "y": "M", "renamed": false } ],
+  "total": { "staged": 0, "unstaged": 1, "untracked": 0, "conflicted": 0 },
+  "truncated": false
+} }
+{ "type": "changes_snapshot_unavailable", "in_reply_to": "<uuid>",
+  "reason": "not_a_repo|git_missing|timeout|workspace_missing|unreadable" }
+```
+
+**A failure is its own frame, never an empty list.** "This is not a git repo" and
+"your worktree is clean" are different answers, and collapsing them would make the
+panel lie exactly when the user needs the truth. The `reason` is a closed enum; the
+client owns the sentence.
+
+`x`/`y` are git porcelain v1's two columns **verbatim, including the space**. A
+client that trims them makes `" M"` (worktree-only) and `"M "` (staged-only) render
+identically, which hides from the user whether they staged anything. `total` is the
+full count and is independent of `truncated`: `entries` may be cut at the host's cap
+while the counts stay complete.
+
+### Automations — scheduled tasks (plan/79 successor)
+
+`HostCapability: "schedule"`. The list lives in the host room (machine-level), so
+the client names no path.
+
+```jsonc
+{ "type": "schedule_list", "id": "<uuid>" }
+{ "type": "schedule_add", "id": "<uuid>", "daemon_id": "d-1",
+  "schedule": "0 9 * * 1-5",            // raw cron: what the host stores
+  "prompt": "summarise yesterday",
+  "tz": "America/Sao_Paulo" | null,
+  "skip_if_busy": true, "wake": false, "catchup": false,
+  "model": { "provider": "anthropic", "id": "claude-…" } | null,  // null = inherit
+  "fresh_session": false }
+{ "type": "schedule_remove",     "id": "<uuid>", "job_id": "<id>" }
+{ "type": "schedule_set_enabled","id": "<uuid>", "job_id": "<id>", "enabled": false }
+{ "type": "schedule_run_now",    "id": "<uuid>", "job_id": "<id>" }
+
+{ "type": "schedule_list_ok", "in_reply_to": "<uuid>", "tasks": [/* WireScheduleTask */],
+  "workspace_names": { "d-1": "remote_pi" } }
+{ "type": "schedule_add_ok",           "in_reply_to": "<uuid>", "task": { /* … */ } }
+{ "type": "schedule_remove_ok",        "in_reply_to": "<uuid>", "job_id": "<id>" }
+{ "type": "schedule_set_enabled_ok",   "in_reply_to": "<uuid>", "job_id": "<id>", "enabled": false }
+{ "type": "schedule_run_now_ok",       "in_reply_to": "<uuid>", "job_id": "<id>", "result": "…" }
+```
+
+`schedule_add` carries the **raw cron expression**, not a friendly kind: the
+expression is what the host stores, and round-tripping through a UI abstraction
+would let the two drift.
+
+The behaviour fields follow **"never fabricate"**:
+
+- `model: null` means *inherit the session's model* — not "no model". A client that
+  renders null as blank describes a rule the host never stored.
+- `skip_if_busy` / `wake` / `catchup` are real booleans, but a derived field the
+  expression does not imply (`time`, `weekdays`, `every_minutes`, `every_hours`,
+  `kind` = `"custom"`) is `null` rather than `0`.
+- `last_status` is the **daemon's own closed vocabulary and is never translated**.
+  It reflects the host's runtime judgement; rendering it in another language would
+  be describing a state the host did not report.
+- `workspace_names` lets the panel name a workspace without resolving the catalog;
+  a task whose daemon is absent falls back to its **id**, never to a cwd path.
+- `schedule_run_now_ok.result` is the daemon's fire outcome **verbatim** — a string,
+  not a closed union, because `fireJob` can also answer `"missing"` and the client
+  shows whatever it got rather than inventing a member.
 
 ### Side-effects
 

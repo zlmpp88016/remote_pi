@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve as resolvePath } from "node:path";
-import { daemonIdForCwd } from "./id.js";
+import { canonicalCwd, daemonIdForCwd } from "./id.js";
 import { defaultAgentName } from "../session/local_config.js";
 
 /**
@@ -60,8 +60,22 @@ export function normalizeCwd(input: string): string {
   if (p === "~") p = homedir();
   else if (p.startsWith("~/")) p = join(homedir(), p.slice(2));
   if (!isAbsolute(p)) p = resolvePath(process.cwd(), p);
-  // realpath canonicalizes symlinks + throws if path doesn't exist.
-  return realpathSync(p);
+  /*
+   * Canonicalize through the SAME function the id is derived from.
+   *
+   * These used to be two independent `realpathSync` calls, which is how the
+   * registry ended up able to hold the same folder twice: the JS realpath keeps
+   * the caller's drive-letter case on Windows, so `d:\x` and `D:\x` compared as
+   * different cwd strings and both passed the dedupe, while producing two
+   * different ids and two live Pi processes.
+   *
+   * A caller must still get a hard error for a path that does not exist — the
+   * throw is preserved here rather than being absorbed by `canonicalCwd`'s
+   * fallback, because silently registering an unresolvable folder is worse than
+   * failing the command.
+   */
+  realpathSync(p);
+  return canonicalCwd(p);
 }
 
 /** Reads the registry, returning an empty one when the file is absent. */

@@ -128,3 +128,59 @@ describe("nextRunFor", () => {
     expect(next!.getTime()).toBeGreaterThan(Date.now());
   });
 });
+
+/*
+ * Model pin + session choice.
+ *
+ * These are the two fields that decide WHAT a fire actually does, so the tests
+ * check both directions: an absent field must stay absent (inherit), and a
+ * half-written pin must be discarded rather than half-applied.
+ */
+describe("job model pin and session choice", () => {
+  test("omitting the model leaves the job inheriting", () => {
+    const job = addJob({ daemon_id: "d", schedule: "0 9 * * *", prompt: "p" });
+    expect(job.model).toBeUndefined();
+    expect(job.fresh_session).toBeUndefined();
+    const reread = getJob(job.id);
+    expect(reread!.model).toBeUndefined();
+  });
+
+  test("a pinned model survives a save/load round trip", () => {
+    const job = addJob({
+      daemon_id: "d",
+      schedule: "0 9 * * *",
+      prompt: "p",
+      model: { provider: "my-newapi", id: "deepseek-flash" },
+      fresh_session: true,
+    });
+    const reread = getJob(job.id);
+    expect(reread!.model).toEqual({ provider: "my-newapi", id: "deepseek-flash" });
+    expect(reread!.fresh_session).toBe(true);
+  });
+
+  test("a half-written pin is dropped instead of silently applied", () => {
+    saveCronRegistry({
+      jobs: [
+        {
+          id: "j_bad",
+          daemon_id: "d",
+          schedule: "0 9 * * *",
+          prompt: "p",
+          enabled: true,
+          skip_if_busy: true,
+          wake: false,
+          catchup: false,
+          created_at: new Date(0).toISOString(),
+          // provider without an id: cannot be honoured, must not look pinned
+          model: { provider: "my-newapi" } as unknown as { provider: string; id: string },
+        },
+      ],
+    });
+    expect(getJob("j_bad")!.model).toBeUndefined();
+  });
+
+  test("fresh_session only becomes true when explicitly true", () => {
+    const job = addJob({ daemon_id: "d", schedule: "0 9 * * *", prompt: "p", fresh_session: false });
+    expect(getJob(job.id)!.fresh_session).toBeUndefined();
+  });
+});

@@ -39,10 +39,12 @@ import {
 import { appendCronLog, readCronLog, type CronResult } from "./cron_log.js";
 import { HostBridge, deliverSseReply } from "./host_bridge.js";
 import { hostSessionName, type FleetEntry, type FleetOps } from "./host_control.js";
+import { roomIdFor } from "../rooms.js";
+import type { RelayRoomInfo } from "../transport/embedded_relay.js";
 import { HostPairingSession } from "../pairing/host_pairing.js";
 import { buildQRUri } from "../pairing/qr.js";
 import { getOrCreateEd25519Keypair } from "../pairing/storage.js";
-import { HOST_ROOM_ID } from "../protocol/types.js";
+import { HOST_ROOM_ID, SCHEDULE_PREVIEW_CHARS } from "../protocol/types.js";
 import type { HostPairingRecord } from "../pairing/host_pairing.js";
 
 /**
@@ -665,20 +667,96 @@ export class Supervisor {
         } else {
           this._spawnEntry(entry.id, entry.cwd, entry.name);
           const woke = this.children.get(job.daemon_id);
-          result = woke && woke.child.sendPrompt(job.prompt) ? "woke_and_delivered" : "deliver_failed";
+          result = woke
+            ? await this._deliverPrompt(woke.child, job)
+            : "deliver_failed";
         }
       } else {
-        result = slot!.child.sendPrompt(job.prompt) ? "delivered" : "deliver_failed";
+        result = await this._deliverPrompt(slot!.child, job);
       }
     }
 
     const at = new Date().toISOString();
     recordRun(job.id, at, result);
     appendCronLog({ job_id: job.id, daemon_id: job.daemon_id, schedule: job.schedule, result, prompt: job.prompt });
+
+    /*
+     * Automations — tell connected clients a fire happened.
+     *
+     * Deliberately AFTER the two records above: a client that reacts by
+     * re-listing tasks must read the settled state, not race the write.
+     *
+     * `this.host` is absent under `skipHost` (tests, diag), so this is a no-op
+     * there rather than an error — the fire itself already succeeded and was
+     * recorded, and failing it because nobody is listening would be wrong.
+     */
+    this.host?.pushScheduleFired({
+      job_id: job.id,
+      daemon_id: job.daemon_id,
+      result,
+      fired_at: at,
+      prompt_preview: job.prompt.slice(0, SCHEDULE_PREVIEW_CHARS),
+    });
     return result;
   }
 
   // ── Child lifecycle ──────────────────────────────────────────────────────
+
+  /**
+   * Delivers one schedule fire into a running child, honouring the job's model
+   * pin and session choice.
+   *
+   * Why this is a sequence and not one `sendPrompt`:
+   *
+   * - The RPC `prompt` command carries no model field (see `RpcTypes`), so a pin
+   *   can only be applied with `set_model` BEFORE the prompt. Sending early would
+   *   run the fire with the previous model — silently, and that is precisely the
+   *   guarantee the pin exists to provide.
+   * - `set_model` is process-wide, not per-turn, so the previous model has to be
+   *   restored afterwards. Without the restore, one scheduled fire would
+   *   permanently change the model the human sees in their own session.
+   * - `fresh_session` opens a new session first; the prompt then lands in it
+   *   instead of in the conversation the user is reading.
+   *
+   * Every step is confirmed before the next one runs, and any unconfirmed step
+   * aborts the fire as `deliver_failed` rather than sending under the wrong
+   * model or into the wrong session.
+   */
+  private async _deliverPrompt(child: RpcChild, job: CronJob): Promise<CronResult> {
+    const previous = job.model !== undefined || job.fresh_session === true
+      ? await child.getModel()
+      : null;
+
+    if (job.model !== undefined) {
+      const applied = await child.setModel(job.model.provider, job.model.id);
+      if (!applied) return "deliver_failed";
+    }
+
+    if (job.fresh_session === true) {
+      const opened = await child.newSession();
+      if (!opened) {
+        await this._restoreModel(child, job, previous);
+        return "deliver_failed";
+      }
+    }
+
+    const delivered = child.sendPrompt(job.prompt);
+    await this._restoreModel(child, job, previous);
+    return delivered ? "delivered" : "deliver_failed";
+  }
+
+  /** Puts back the model a fire borrowed. Best-effort: a failure here must not
+   *  turn a delivered prompt into a failed fire, since the message is already
+   *  in flight. */
+  private async _restoreModel(
+    child: RpcChild,
+    job: CronJob,
+    previous: { provider: string; id: string } | null,
+  ): Promise<void> {
+    if (job.model === undefined || previous === null) return;
+    if (previous.provider === job.model.provider && previous.id === job.model.id) return;
+    await child.setModel(previous.provider, previous.id);
+  }
 
   private _spawnAllFromRegistry(): void {
     for (const entry of listDaemons()) {
@@ -808,6 +886,47 @@ export class Supervisor {
     }, delay);
   }
 
+  /**
+   * Plan/67–68 — the room catalog the embedded relay reports to clients.
+   *
+   * One room per fleet entry, carrying the `cwd` the app needs to open its
+   * workspace dock. The relay is started before this Supervisor (its address
+   * must be in the environment first), so `direct.ts` holds a provider that
+   * delegates here lazily rather than receiving data at start time.
+   *
+   * `peer` is THIS machine's own key: clients index the catalog by the machine
+   * they are paired with, never by their own identity.
+   */
+  async roomCatalog(): Promise<{ peer: string; rooms: RelayRoomInfo[] }> {
+    const now = Date.now();
+    return {
+      peer: await this._ownPeerKey(),
+      rooms: this._catalogEntries().map((e) => ({
+        room_id: roomIdFor(e.cwd, e.name),
+        started_at: now,
+        name: e.name,
+        cwd: e.cwd,
+        working: false,
+      })),
+    };
+  }
+
+  /**
+   * This machine's own relay identity, memoised.
+   *
+   * `getOrCreateEd25519Keypair()` may touch the OS keyring, and the relay
+   * answers `subscribe_rooms` on the hot path of every client connect — so
+   * resolve once and reuse. The identity never changes within a process run.
+   */
+  private _ownPeerCache: string | null = null;
+
+  private async _ownPeerKey(): Promise<string> {
+    if (this._ownPeerCache !== null) return this._ownPeerCache;
+    const kp = await getOrCreateEd25519Keypair();
+    this._ownPeerCache = Buffer.from(kp.publicKey).toString("base64");
+    return this._ownPeerCache;
+  }
+
   /** Plan/67–68 — fleet surface for the host room (daemons ∪ added workspaces). */
   private _fleetOps(): FleetOps {
     return {
@@ -864,6 +983,44 @@ export class Supervisor {
         } catch (e) {
           return { ok: false, error: (e as Error).message };
         }
+      },
+      /*
+       * Automations — the cron engine, exposed to the host room.
+       *
+       * Wired here rather than inside HostBridge so the bridge stays a pure
+       * dispatcher with no storage knowledge. Every mutation goes through the
+       * same registry functions the control ops use, so a task created from the
+       * browser and one created by `remote-pi-server cron add` are
+       * indistinguishable rows.
+       */
+      schedule: {
+        list: () => listCronJobs(),
+        add: (input) => {
+          const v = validateSchedule(input.schedule, input.tz);
+          if (!v.ok) return { error: v.error ?? "invalid schedule" };
+          const job = addCronJob(input);
+          this._scheduleCron(job);
+          return job;
+        },
+        remove: (id) => {
+          this._stopCron(id);
+          return removeCronJob(id);
+        },
+        setEnabled: (id, enabled) => {
+          const ok = setJobEnabled(id, enabled);
+          if (ok) this._reconcileCron();
+          return ok;
+        },
+        runNow: async (id) => {
+          const r = await this.fireJob(id, { manual: true });
+          return typeof r === "string" ? r : "unknown";
+        },
+        log: (jobId, tail) => readCronLog(tail === undefined ? { jobId } : { jobId, tail }),
+        names: () => {
+          const out: Record<string, string> = {};
+          for (const entry of this._catalogEntries()) out[entry.id] = entry.name ?? entry.cwd;
+          return out;
+        },
       },
     };
   }

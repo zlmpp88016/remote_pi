@@ -16,6 +16,7 @@ import type {
 import {
   listPackages,
   listSkills,
+  setPackageEnabled,
   setSkillEnabled,
   type SurfaceDeps,
 } from "./surface.js";
@@ -31,6 +32,7 @@ type SkillSetEnabledMsg = Extract<ClientMessage, { type: "skill_set_enabled" }>;
 type PackageInstallMsg = Extract<ClientMessage, { type: "package_install" }>;
 type PackageRemoveMsg = Extract<ClientMessage, { type: "package_remove" }>;
 type PackageUpdateMsg = Extract<ClientMessage, { type: "package_update" }>;
+type PackageSetEnabledMsg = Extract<ClientMessage, { type: "package_set_enabled" }>;
 
 /**
  * Live runtime bits for `pi_surface_ok.runtime`. All optional: when there is
@@ -258,5 +260,40 @@ export async function handlePackageUpdate(
     });
   } catch (e) {
     fail(sender, msg, "package_update", e);
+  }
+}
+
+/**
+ * `package_set_enabled` — turn a package's resources off or on without
+ * uninstalling it.
+ *
+ * Separate from `package_remove` on purpose. Remove deletes the code (npm
+ * uninstall / git clone removal) and drops the settings entry, so it cannot be
+ * undone offline. Disable rewrites the entry into Pi's filtered form, leaving the
+ * files in place — the same package can be switched back on without a network
+ * round-trip. Collapsing them into one control would mean telling the user
+ * "Remove" while doing something reversible, or vice versa.
+ */
+export async function handlePackageSetEnabled(
+  deps: SurfaceDeps,
+  sender: ReplySender,
+  msg: PackageSetEnabledMsg,
+): Promise<void> {
+  const source = msg.source.trim();
+  if (!source) {
+    fail(sender, msg, "package_set_enabled", new Error("package source is required"));
+    return;
+  }
+  try {
+    const pkg = await setPackageEnabled(deps, source, msg.scope, msg.enabled);
+    sender.send({
+      type: "package_op_ok",
+      in_reply_to: msg.id,
+      op: "set_enabled",
+      source: pkg.source,
+      scope: pkg.scope,
+    });
+  } catch (e) {
+    fail(sender, msg, "package_set_enabled", e);
   }
 }

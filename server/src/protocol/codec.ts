@@ -28,6 +28,7 @@ const SERVER_TYPES = new Set<ServerMessage["type"]>([
   "workspace_start_ok",
   "workspace_stop_ok",
   "fs_list_ok",
+  "fs_read_ok",
   // Plan/68 — Pi surface (skills + packages) snapshot and management acks.
   "pi_surface_ok",
   "skill_invoke_ok",

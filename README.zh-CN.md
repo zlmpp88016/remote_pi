@@ -12,6 +12,126 @@
 
 ---
 
+## 部署
+
+三个角色。按手头的机器挑一个方案。
+
+| 角色 | 放哪 | 干什么 |
+| --- | --- | --- |
+| **relay** | 有公网 IP 的机器 —— 或者干脆不要 | 让两端不用互相可达。**用 `--direct` 时完全省掉**：该模式自带内嵌 relay。 |
+| **server** | 真正跑 Pi 的那台 | `pi-supervisord` 保活 Pi 工作区并应答配对 |
+| **client** | 浏览器 / 手机 / 桌面端 | web、iOS、Electron 壳 |
+
+### 方案一 —— 单机（五分钟试通）
+
+全部装一台。`--direct` 自带内嵌 relay 并且自己托管 web，所以**不需要 Docker，也不需要单独的 web 托管**。
+
+```bash
+cd server && npm install && npm run build && npm install -g .
+node dist/bin/supervisord.js --direct
+```
+
+日志会打印 `direct mode — local relay at http://127.0.0.1:4124 (no community relay)`。
+打开 `http://127.0.0.1:4124/remote-pi/connect`。
+
+配对码在另一个终端取：
+
+```bash
+remote-pi-server pair
+```
+
+整串 `remotepi://pair?…` 粘到**配对码**框，`ws://127.0.0.1:4124` 填到**中继地址**框。
+
+> 这个方案需要 `clients/web/dist` 存在。没构建过的话 daemon 照样跑，但不服务页面
+> —— 日志里会说。构建一次：`cd clients/web && npm install && npm run build`。
+> **只有这个方案**要求 server 机器上有 web 构建产物。
+
+### 方案二 —— 两台机（Pi 在 A，浏览器在 B）—— 推荐
+
+A 只跑 Pi，B 只开页面。**这个方案里 A 不构建 web** —— 由 B 托管。
+
+#### 机器 A
+
+```bash
+cd server && npm install && npm run build && npm install -g .
+remote-pi-server set-relay https://relay.example.com   # 只收 http(s)，不收 ws://
+remote-pi-server install                              # 用户级服务，注销后仍活
+remote-pi-server daemon status                        # 确认在跑
+remote-pi-server pair                                 # 打印配对 URI
+```
+
+`install` 会写 systemd `--user` 单元、LaunchAgent 或任务计划条目 —— 不需要 root，
+只有 Windows 首次安装会弹一次 UAC。
+
+#### 机器 B
+
+```bash
+cd clients/web && npm install && npm run build
+npx serve dist -p 5173
+```
+
+打开 `http://localhost:5173/remote-pi/connect`：
+
+| 字段 | 值 |
+| --- | --- |
+| 中继地址 | `wss://relay.example.com` |
+| 配对码 | A 上打印的整串 `remotepi://pair?…` |
+
+### 方案三 —— 生产（自有 relay + 自有域名）
+
+#### relay 那台
+
+```bash
+docker compose -f docker-compose.relay.yml up -d   # 宿主 3001 → 容器 3000
+```
+
+用反向代理或 Cloudflare Tunnel 把域名的 `https://` 和 `wss://` 都指到
+`127.0.0.1:3001`。`RELAY_ALLOWED_ORIGINS` 是浏览器 Origin 白名单，默认宽松。
+
+#### server 那台
+
+```bash
+cd server && npm install && npm run build && npm install -g .
+remote-pi-server set-relay https://relay.example.com
+remote-pi-server install
+remote-pi-server pair          # --rotate 作废旧码
+```
+
+#### client 那台
+
+把 `clients/web/dist` 发布到任意静态托管（Nginx、Cloudflare Pages、Vercel）并套上
+HTTPS，然后用上面的中继地址和配对码连接。
+
+### 从另一台机器访问 `--direct`
+
+`--direct` 只绑 `127.0.0.1`，主机和端口都不能通过它改。要从别处访问，前面挂隧道或
+反向代理，**并且**把浏览器实际发送的域名加入白名单：
+
+```bash
+REMOTE_PI_ALLOWED_HOSTS="your-tunnel-host.example.com" \
+  node dist/bin/supervisord.js --direct
+```
+
+这个变量不能省：不设的话代理在任何页面返回前就拿到 `403`，因为严格同源门禁默认只认
+loopback 的 `Host` 值。若页面所在 Origin 与 daemon 不同源，还要在
+`REMOTE_PI_ALLOWED_ORIGINS` 里列出它。
+
+### 常见坑
+
+- **配对码填错框。** 页面有两个输入框。中继地址收 `wss://…`，配对码收整串
+  `remotepi://pair?…` URI。把 URI 粘进地址框是最常见的失败。
+- **`set-relay` 拒收 `ws://`。** 只接受 `http://` / `https://`，内部自己转
+  WebSocket。传 `ws://` 会被直接拒绝。
+- **`install` 和 `--direct` 互斥。** 两者抢同一个 supervisor 套接字（Windows 上是
+  命名管道，别处是 `/tmp/remote-pi-supervisor-<用户>.sock`）。一个在跑时起另一个会报
+  *「Another pi-supervisord is already running」*。先停服务：
+  `remote-pi-server daemon stop`。
+- **`--direct` 明明能用，`daemon status` 却说「未运行」。** 预期如此。那些命令管的是
+  安装的服务，不是前台进程。
+- **隧道返回 `403`。** 少了 `REMOTE_PI_ALLOWED_HOSTS`，见上一节。
+
+---
+
 ## 相关链接
 
 - **官网** —— <https://remote-pi.example.invalid>
@@ -87,129 +207,6 @@ wss://relay.880160.xyz
 拿来起步够用，但中继运营方能看到你消息的内容，而且它是路由上的单点信任。**如果做的是敏感工作，强烈建议自建中继** —— 一条 Docker 命令的事，而且从此你的流量只经过自己的基础设施。
 
 完整的安全权衡和自建指南见 **[`relay/README.md`](./relay/README.md)**。
-
-## 快速开始
-
-### 1. 从本地仓库构建并安装
-
-这个仓库**没有发布到 npm**，所以要装的是本地工作副本。`npm install -g .` 建的是软链而非拷贝，
-改完代码重新 build 就生效。
-
-```bash
-git clone https://github.com/exampleorg/remote_pi
-cd remote_pi/server
-
-npm install          # 装依赖
-npm run build        # tsc → dist/
-npm install -g .     # 把这份副本链成全局的 `remote-pi-server`
-
-remote-pi-server set-relay https://relay.example.com   # 只收 http(s)，不收 wss
-remote-pi-server pair                                 # 打印地址 + 配对码
-```
-
-改了代码之后：
-
-```bash
-git pull && cd server && npm install && npm run build
-remote-pi-server restart-supervisor    # supervisor 没有热重载，必须重启进程
-```
-
-`restart-supervisor` 是**唯一**能让 server 代码生效的命令：supervisor 是常驻 Node 进程，
-而 `daemon restart` 只重起工作区的 `pi` 子进程，碰不到 supervisor 已加载的代码
-（见[改 server](#改-server--先-build再重启-supervisor)）。
-
-> 守护进程是用显式的 `-e dist/index.js` 启动的，**不经过 `pi install`**。只有当你还想在
-> **交互式** Pi 会话里用 `/remote-pi start` 时，才需要 `pi install "$PWD"`。
-
-> 之前用旧包名装过？npm 不会删别的包留下的可执行文件，先清掉：
-> ```bash
-> npm uninstall -g remote-pi
-> npm install -g .
-> ```
-
-### 2. 装成常驻服务
-
-```bash
-remote-pi-server create /path/to/workspace --name "项目名"
-remote-pi-server install              # 注册用户级服务
-remote-pi-server daemon status         # 确认真在跑
-```
-
-`install` 写的是**用户级**单元 —— Linux `systemd --user`、macOS LaunchAgent、Windows 任务计划程序，
-不需要 root。Windows 是唯一的例外：第一次 `install` 要创建计划任务（存在于机器级存储），因此会弹
-一次 UAC；`uninstall` 也要一次，因为 `schtasks /Delete` 动的也是那个存储。
-`restart-supervisor` 和 `daemon restart` 不提权。
-
-登录即自启，重启也不丢。守护进程起来后连上中继，让这台机器保持在线 —— **无需任何 Pi 在跑**。
-
-### 3. 停止 / 重启
-
-```bash
-remote-pi-server restart-supervisor   # 重载 SERVER 代码（build 之后用这个）
-remote-pi-server daemon restart       # 只重启工作区的 `pi` 子进程
-remote-pi-server daemon start|stop    # 启停常驻 supervisor
-remote-pi-server daemon status        # 每个工作区的 pid / 运行时长 / 重启次数
-remote-pi-server daemons              # 列出已注册的工作区
-remote-pi-server uninstall            # 移除服务（工作区保留）
-```
-
-用哪个取决于**你改了什么**：
-
-| 你改的 | 用 | 原因 |
-|---|---|---|
-| `server/` 代码（`host_bridge`、`index`、CLI、`/remote-pi`） | `restart-supervisor` | 这些代码跑在 supervisor 进程**内部**，它从不热重载 |
-| 某个工作区的 Pi 状态（子进程卡住、模型、登录） | `daemon restart` | 重新拉起子进程就够，supervisor 继续用它已加载的代码 |
-| 只改了 `clients/web/` | 都不用 | 开发服务器热更新，刷新页面即可 |
-
-`restart-supervisor` 会顺带重启所有工作区 daemon，所以之后**不需要**再跑 `daemon restart`。
-
-### 4. 卸载
-
-```bash
-remote-pi-server uninstall
-```
-
-它做什么、以及刻意保留什么：
-
-| | 效果 |
-|---|---|
-| 停服务 | `launchctl bootout`（macOS）/ `systemctl --user disable --now`（Linux）/ `schtasks /End`（Windows） |
-| 删单元文件 | 删除 LaunchAgent plist / systemd unit / 任务计划 XML 及配套的 `wscript` 启动器 |
-| 删 CLI 软链 | 只删 `~/.local/bin` 下的 `remote-pi-server` / `pi-supervisord`。**不动 npm 全局目录里的 bin** —— 那是另一个前缀 |
-| 保留 `~/.pi/remote/daemons.json` | 工作区注册表还在，重跑 `install` 不用重新注册 |
-| 保留 `peers.json` / `identity.json` / `pairing.json` | 配对关系继续有效，重装后客户端能直接连回 |
-
-Windows 上第一次 `install` 要一次 UAC（创建计划任务会写机器级存储），`uninstall` 也要
-（`schtasks /Delete` 同样动那个存储）。`restart-supervisor` 和 `daemon restart` 从不提权。
-
-想把 CLI 也彻底删掉：
-
-```bash
-remote-pi-server uninstall
-npm uninstall -g remote-pi-server     # 再去掉 npm 的软链
-```
-
-### 5. 配对客户端
-
-直接从守护进程配对（不需要 Pi）：
-
-```bash
-remote-pi-server pair        # 打印地址 + 一次性/持久配对码
-```
-
-把地址和配对码填进手机应用、浏览器客户端或 Cockpit。配对完成后，客户端即可浏览主机文件系统、
-注册目录，并在那里启动 Pi。
-
-### 6. 或者照旧在本机跑 Pi
-
-`/remote-pi` 这条 Pi 命令在日常本地场景下依然可用。在任意 Pi 会话里：
-
-```text
-/remote-pi
-```
-
-向导会依次问你智能体名字、会话名和用哪个中继，然后打印一个二维码。用 Remote Pi 手机应用扫一下
-—— 适合你想让当前这个 Pi 会话本身可达、而不启用常驻守护进程的情况。
 
 ### 建议搭配：`@eko24ive/pi-ask`
 

@@ -29,6 +29,7 @@ import { resolveRelayUrl, toWebSocketUrl } from "../config.js";
 import {
   HOST_ROOM_ID,
   type ClientMessage,
+  type CronResultWire,
   type ServerMessage,
   type WorkspaceState,
 } from "../protocol/types.js";
@@ -43,7 +44,17 @@ import {
   type FleetOps,
   type HostReplySender,
 } from "./host_control.js";
-import { handleFsList } from "./fs_nav.js";
+import { handleFsList, handleFsRead } from "./fs_nav.js";
+import { takeChangesSnapshot } from "./changes.js";
+import { describeModelsConfig, mutateModelsConfig, type ModelsOp } from "./models_config.js";
+import { describeSettingsConfig, mutateSettingsConfig, type SettingsOp } from "./settings_config.js";
+import {
+  handleScheduleAdd,
+  handleScheduleList,
+  handleScheduleRemove,
+  handleScheduleRunNow,
+  handleScheduleSetEnabled,
+} from "./schedule_handlers.js";
 import { logRelayEvent } from "../log.js";
 
 export interface HostBridgeOptions {
@@ -228,7 +239,7 @@ function readInnerRequestId(ct: string): string | null {
 }
 
 /** Plan/69 — capabilities this host bridge actually implements. */
-const HOST_CAPABILITIES = ["host_pairing", "workspace_state", "host_forward", "fs_nav"] as const;
+const HOST_CAPABILITIES = ["host_pairing", "workspace_state", "host_forward", "fs_nav", "schedule", "changes", "models_config", "settings"] as const;
 
 /**
  * How often the established host-room connection is checked for being ALIVE.
@@ -472,6 +483,23 @@ export class HostBridge {
       case "workspace_list":
         handleWorkspaceList(this.opts.fleet, sender, inner);
         break;
+      /* Automations — the scheduled-task surface (plan/39 cron). Handlers live
+       * in schedule_handlers so this dispatcher stays storage-agnostic. */
+      case "schedule_list":
+        handleScheduleList(this.opts.fleet.schedule, sender, inner);
+        break;
+      case "schedule_add":
+        handleScheduleAdd(this.opts.fleet.schedule, sender, inner);
+        break;
+      case "schedule_remove":
+        handleScheduleRemove(this.opts.fleet.schedule, sender, inner);
+        break;
+      case "schedule_set_enabled":
+        handleScheduleSetEnabled(this.opts.fleet.schedule, sender, inner);
+        break;
+      case "schedule_run_now":
+        void handleScheduleRunNow(this.opts.fleet.schedule, sender, inner);
+        break;
       case "workspace_start":
         handleWorkspaceStart(this.opts.fleet, sender, inner);
         break;
@@ -482,6 +510,95 @@ export class HostBridge {
       case "fs_list":
         handleFsList(sender, inner);
         break;
+      // Plan/77 — allowlisted text read for the web Plan viewer.
+      case "fs_read":
+        handleFsRead(sender, inner);
+        break;
+      // Plan/78 — Changes tab: git working-tree STATUS for the requested
+      // workspace root. The root comes from the wire because the daemon's own
+      // cwd is wherever the supervisor started it, not a workspace.
+      case "changes_snapshot":
+        void takeChangesSnapshot(inner.root).then((result) => {
+          if (result.ok) {
+            sender.send({
+              type: "changes_snapshot_ok",
+              in_reply_to: inner.id,
+              snapshot: result.snapshot,
+            });
+          } else {
+            sender.send({
+              type: "changes_snapshot_unavailable",
+              in_reply_to: inner.id,
+              reason: result.reason,
+            });
+          }
+        });
+        break;
+      // Plan/79 — the host's own models.json. Note there is NO path parameter to
+      // validate: the target is resolved host-side, which is a stronger fence than
+      // an allowlist because there is nothing the client could point elsewhere.
+      case "models_describe": {
+        const result = describeModelsConfig();
+        if (result.ok) {
+          sender.send({
+            type: "models_describe_ok",
+            in_reply_to: inner.id,
+            revision: result.value.revision,
+            file: result.value.file,
+            config: result.value.config,
+            secrets: result.value.secrets,
+          });
+        } else {
+          sender.send({ type: "models_error", in_reply_to: inner.id, reason: result.reason });
+        }
+        break;
+      }
+      case "models_mutate": {
+        void mutateModelsConfig(inner.ops as ModelsOp[], inner.revision).then((result) => {
+          if (result.ok) {
+            sender.send({
+              type: "models_mutate_ok",
+              in_reply_to: inner.id,
+              revision: result.value.revision,
+            });
+          } else {
+            sender.send({ type: "models_error", in_reply_to: inner.id, reason: result.reason });
+          }
+        });
+        break;
+      }
+      // Plan/80 — the host's own settings.json, projected through a positive
+      // whitelist. `packages` (which carries absolute host paths), `extensions` and
+      // changelog bookkeeping have no representation in the reply.
+      case "settings_describe": {
+        const result = describeSettingsConfig();
+        if (result.ok) {
+          sender.send({
+            type: "settings_describe_ok",
+            in_reply_to: inner.id,
+            revision: result.value.revision,
+            file: result.value.file,
+            appearance: result.value.appearance,
+            behaviour: result.value.behaviour,
+          });
+        } else {
+          sender.send({ type: "settings_error", in_reply_to: inner.id, reason: result.reason });
+        }
+        break;
+      }
+      case "settings_mutate": {
+        const result = mutateSettingsConfig(inner.ops as SettingsOp[], inner.revision);
+        if (result.ok) {
+          sender.send({
+            type: "settings_mutate_ok",
+            in_reply_to: inner.id,
+            revision: result.value.revision,
+          });
+        } else {
+          sender.send({ type: "settings_error", in_reply_to: inner.id, reason: result.reason });
+        }
+        break;
+      }
       case "workspace_add":
         handleWorkspaceAdd(this.opts.fleet, sender, inner);
         break;
@@ -654,6 +771,26 @@ export class HostBridge {
     restarts: number;
   }): void {
     this._fanOut({ type: "workspace_state", ...state });
+  }
+
+  /**
+   * Automations — push one completed fire to every allow-listed peer.
+   *
+   * Same fan-out as `workspace_state`: it is machine-level news, not a reply to
+   * whoever happens to have a request in flight, so it carries no `in_reply_to`.
+   *
+   * Called AFTER the daemon has recorded the outcome (last_status + JSONL), so
+   * a client that reacts by re-listing tasks reads the settled state rather than
+   * racing the write.
+   */
+  pushScheduleFired(fired: {
+    job_id: string;
+    daemon_id: string;
+    result: CronResultWire;
+    fired_at: string;
+    prompt_preview: string;
+  }): void {
+    this._fanOut({ type: "schedule_fired", ...fired });
   }
 
   /**

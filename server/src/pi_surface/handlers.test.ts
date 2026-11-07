@@ -43,7 +43,8 @@ function fakeSettings(opts: { project?: string[]; trust?: boolean } = {}): Setti
     set project(v: string[]) { state.project = v; },
     getSkillPaths: () => state.global,
     setSkillPaths: (p) => { state.global = p; },
-    getProjectSettings: () => ({ skills: state.project }),
+    getGlobalSettings: () => ({ packages: [] }),
+    getProjectSettings: () => ({ skills: state.project, packages: [] }),
     setProjectSkillPaths: (p) => { state.project = p; },
     isProjectTrusted: () => opts.trust !== false,
     flush: async () => {},
@@ -119,7 +120,18 @@ describe("plan/68 — pi_surface", () => {
       ["pdf-tools", "user", null],
       ["repo-helper", "project", null],
     ]);
-    expect(ok.packages[0]).toEqual({ source: "npm:@x/y@1", scope: "user", resources: [] });
+    /* `readme` is null here because the fake provides no `installedPath`: the
+       host genuinely cannot read a README it does not know the location of, and
+       null says so instead of pretending the package has none. */
+    expect(ok.packages[0]).toEqual({
+      source: "npm:@x/y@1",
+      scope: "user",
+      resources: [],
+      enabled: true,
+      readme: null,
+      readmePath: null,
+      readmeTruncated: false,
+    });
   });
 
   test("no live ctx reports running:false with null model (never fabricate)", async () => {

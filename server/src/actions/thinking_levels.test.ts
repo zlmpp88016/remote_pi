@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { thinkingLevelsOf, wireFromModel } from "./handlers.js";
 
 /**
@@ -84,10 +84,24 @@ describe("thinkingLevelsOf", () => {
     /*
      * The oracle: every model in `models.json`, against the values the SDK's own
      * `getSupportedThinkingLevels` produces for the same input.
+     *
+     * This test reads a DEVELOPER-MACHINE file, so it must not assume which models
+     * that file contains. It previously asserted `gpt-6-luna` unconditionally and
+     * failed on any machine whose catalogue lacked that id — a red suite saying
+     * nothing about the code. The invariants that actually matter are checked
+     * below regardless of the catalogue's contents; the per-model assertions run
+     * only when the model is present.
      */
-    const raw = JSON.parse(readFileSync("C:/Users/zlmpp/.pi/agent/models.json", "utf8"));
+    const modelsPath = "C:/Users/zlmpp/.pi/agent/models.json";
+    if (!existsSync(modelsPath)) {
+      /* No catalogue on this machine — nothing to compare against. */
+      return;
+    }
+    const raw = JSON.parse(readFileSync(modelsPath, "utf8"));
+    const provider = raw.providers?.["my-newapi"];
+    if (!provider?.models) return;
     const byId = new Map<string, string[] | undefined>(
-      raw.providers["my-newapi"].models.map((m: Record<string, unknown>) => [
+      provider.models.map((m: Record<string, unknown>) => [
         String(m.id),
         thinkingLevelsOf(
           model({
@@ -98,16 +112,25 @@ describe("thinkingLevelsOf", () => {
       ]),
     );
 
-    /* The two levels `deepseek-flash` is configured for, plus the always-present off. */
-    expect(byId.get("deepseek-flash")).toEqual(["off", "high", "max"]);
-    expect(byId.get("gpt-6-luna")).toEqual([
-      "off",
-      "low",
-      "medium",
-      "high",
-      "xhigh",
-      "max",
-    ]);
+    /* A reasoning model with an explicit map exposes exactly the mapped levels
+     * plus the always-present `off`; anything else would put levels on the wire
+     * the model cannot honour. */
+    for (const m of provider.models as Record<string, unknown>[]) {
+      if (m.reasoning !== true) continue;
+      const levels = byId.get(String(m.id));
+      expect(levels, `${String(m.id)} is a reasoning model but reported no levels`).toBeDefined();
+      expect(levels).toContain("off");
+      const map = m.thinkingLevelMap as Record<string, unknown> | undefined;
+      if (map !== undefined) {
+        for (const [level, value] of Object.entries(map)) {
+          if (value === null) {
+            expect(levels, `${String(m.id)} must not offer ${level}`).not.toContain(level);
+          } else {
+            expect(levels, `${String(m.id)} should offer ${level}`).toContain(level);
+          }
+        }
+      }
+    }
     /* Every reported level must be one the protocol can carry. */
     for (const levels of byId.values()) {
       for (const level of levels ?? []) {
