@@ -3,7 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "vitest";
 import { Socket } from "node:net";
-import { ensureDirectRelay, readDirectState, resolveDirectMode, stopDirectRelay, wantsDirect } from "./direct.js";
+import { ensureDirectRelay, localPairingView, readDirectState, resolveDirectMode, stopDirectRelay, wantsDirect } from "./direct.js";
 import { resolveRelayUrl } from "./config.js";
 
 /**
@@ -204,5 +204,52 @@ describe("resolveWebDist via REMOTE_PI_WEB_DIST", () => {
     const index = await fetch(url + "/");
     expect(index.status).toBe(200);
     expect(await index.text()).toContain('<div id="root"');
+  });
+});
+
+describe("zero-click pairing credentials", () => {
+  /*
+   * `/api/bootstrap` hands the web client a host key that gets substituted into
+   * the pairing URI's `epk` parameter. That parameter is a BASE64URL contract:
+   * the client refuses `+`, `/` and `=` as non-canonical (`protocol.ts`
+   * `malformed_epk`) and then silently keeps its paste screen, because the
+   * caller's catch is deliberately empty. Standard base64 here therefore broke
+   * auto-pairing with nothing visible to the user anywhere.
+   */
+  test("hostEpk is base64url — standard base64 fails the client contract", async () => {
+    const { hostPairing } = await import("./pairing/host_pairing.js");
+    await hostPairing.issue({});
+
+    const view = await localPairingView();
+    expect(view).not.toBeNull();
+
+    /*
+     * The exact alphabet the client accepts: no `+`, no `/`, no padding. A
+     * 32-byte key almost never produces those by luck in standard base64, which
+     * is why the bug looked intermittent-free in review but broke every
+     * generated key in practice — the encoder, not the key, was wrong.
+     */
+    expect(view!.hostEpk).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(view!.hostEpk).not.toContain("=");
+    expect(Buffer.from(view!.hostEpk, "base64url").length).toBe(32);
+  });
+});
+
+describe("localPairingView issues a token instead of refusing", () => {
+  /*
+   * The browser asks for credentials the moment the page loads. When the
+   * server had no token yet it answered 503 and the user was shown "paste the
+   * code printed by remote-pi-server pair" — on a freshly installed machine,
+   * which is exactly the terminal detour the whole feature exists to remove.
+   * Issue on demand; the same-origin gate is what decides WHO may ask.
+   */
+  test("returns credentials even when no token was issued beforehand", async () => {
+    const { hostPairing } = await import("./pairing/host_pairing.js");
+    /* Fresh home per test: the record is a file, not process state. */
+    const view = await localPairingView();
+    expect(view.token).toMatch(/^[A-Za-z0-9_-]+$/);
+    /* And it is the SAME token the CLI would print — one source of truth. */
+    const shown = await hostPairing.show();
+    expect(shown?.token).toBe(view.token);
   });
 });

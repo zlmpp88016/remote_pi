@@ -203,6 +203,44 @@ function resolveWebDist(): string | null {
 let triedWebDistPaths: readonly string[] = [];
 
 /**
+ * Credentials for zero-click local pairing.
+ *
+ * Returns the SAME token `remote-pi-server pair` prints, so a user who already
+ * has a code and one who does not both work. When no token exists yet one is
+ * ISSUED, because otherwise a freshly installed server serves a page that asks
+ * the user to go run a command in a terminal — which is precisely the friction
+ * "install one server, install one client, done" is supposed to remove.
+ *
+ * That is safe because `/api/bootstrap` never calls this without proof that the
+ * caller loaded OUR page in a browser: a `SameSite=Strict` cookie this process
+ * signed, `Sec-Fetch-Site: same-origin`, and a matching `Origin`. A page on any
+ * other site has neither the cookie nor the ability to set that header. Another
+ * OS account on the same machine can pass, which is a property of every
+ * loopback listener and is recorded in plan/76 §7 rather than hidden here.
+ *
+ * Exported so a test can assert the `epk` ENCODING without driving a browser:
+ * this value is substituted straight into the pairing URI's `epk` parameter, and
+ * that parameter is a base64url contract (`buildQRUri` emits base64url, and the
+ * client refuses `+`, `/` and `=` as non-canonical). Emitting standard base64
+ * here made every zero-click pairing fail with `malformed_epk` — silently, since
+ * the client's failure path is deliberately an empty catch that keeps the paste
+ * screen. The only visible symptom was "auto-pairing does not work".
+ */
+export async function localPairingView(): Promise<{
+  hostEpk: string;
+  token: string;
+  name: string;
+}> {
+  const record = (await hostPairing.show()) ?? (await hostPairing.issue({}));
+  const keypair = await getOrCreateEd25519Keypair();
+  return {
+    hostEpk: Buffer.from(keypair.publicKey).toString("base64url"),
+    token: record.token,
+    name: hostSessionName(),
+  };
+}
+
+/**
  * Supplies the room catalog the embedded relay answers `subscribe_rooms` with.
  *
  * Registered by `supervisord` once the Supervisor exists — the relay is started
@@ -335,16 +373,7 @@ export async function ensureDirectRelay(
      * Returns null when no token has been issued yet — the browser then falls back
      * to the manual paste screen instead of being told the host is broken.
      */
-    pairingView: async () => {
-      const record = await hostPairing.show();
-      if (record === null) return null;
-      const keypair = await getOrCreateEd25519Keypair();
-      return {
-        hostEpk: Buffer.from(keypair.publicKey).toString("base64"),
-        token: record.token,
-        name: hostSessionName(),
-      };
-    },
+    pairingView: localPairingView,
   });
   activeServer = server;
 
