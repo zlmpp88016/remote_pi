@@ -204,7 +204,7 @@ console.log("\n== layout ==");
   await sleep(1200);
   await evaluate(send, `(() => { const d=[...document.querySelectorAll("button")].find(x=>(x.getAttribute("title")||"").startsWith("Show the right dock")); if(d)d.click(); return !!d; })()`);
   await sleep(1500);
-  await evaluate(send, `(() => { const t=[...document.querySelectorAll("button")].find(x=>/^Sessions$/i.test((x.innerText||"").trim())); if(t)t.click(); return !!t; })()`);
+  await evaluate(send, `(() => { const t=[...document.querySelectorAll("button")].find(x=>/^会话$/i.test((x.innerText||"").trim())); if(t)t.click(); return !!t; })()`);
   /* Wait for rows instead of guessing: a list request through the relay is not
      instant, and a fixed sleep is exactly how this section went flaky. */
   for (let i = 0; i < 100; i++) {

@@ -1,0 +1,285 @@
+/*
+ * Settings dock panel (plan/80).
+ *
+ * One scroll container (`.scroller`), same structural rule as every other panel: a
+ * second `overflow: auto` nests scrollers and reproduces the document-offset defect
+ * the Plan tab had.
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  flex: none;
+}
+
+.headTitle {
+  font-size: 0.72rem;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reload {
+  flex: none;
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  border-radius: var(--dsw-radius-xs);
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.reload:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.reload:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.reload:focus-visible,
+.input:focus-visible,
+.save:focus-visible,
+.preset:focus-visible,
+.presetActive:focus-visible {
+  outline: var(--dsw-focus-outline);
+  outline-offset: var(--dsw-focus-outline-offset);
+}
+
+.scroller {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: calc(var(--spacing) * 3);
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 4);
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  padding: calc(var(--spacing) * 4) calc(var(--spacing) * 3);
+  font-size: 0.75rem;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── sections ────────────────────────────────────────────────────────────── */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--spacing) * 2);
+}
+
+.sectionTitle {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.sectionNote {
+  margin: 0;
+  font-size: 0.66rem;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.label {
+  font-size: 0.68rem;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.hint {
+  font-size: 0.64rem;
+  color: var(--dsw-alias-label-tertiary);
+  line-height: 1.4;
+}
+
+.readonlyValue {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  font-size: 0.7rem;
+  color: var(--dsw-alias-label-primary);
+  unicode-bidi: isolate;
+}
+
+/* ── presets ─────────────────────────────────────────────────────────────── */
+
+.presetGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--spacing) * 2);
+}
+
+.preset,
+.presetActive {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  font-size: 0.68rem;
+  padding: 3px 8px;
+  border-radius: var(--dsw-radius-xs);
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.presetActive {
+  border-color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-label-primary);
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--dsw-alias-border-l4);
+  flex: none;
+}
+
+/* The default preset has no accent: show the base canvas instead of a colour. */
+.swatch[data-preset="default"] {
+  background: var(--dsw-alias-bg-base);
+}
+
+.presetDetail {
+  font-size: 0.64rem;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ── toggles & numbers ───────────────────────────────────────────────────── */
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  font-size: 0.7rem;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.numberGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: calc(var(--spacing) * 2);
+}
+
+.smallField {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.smallLabel {
+  font-size: 0.62rem;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 0.72rem;
+  padding: 3px 6px;
+  border-radius: var(--dsw-radius-xs);
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+}
+
+.input:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ── elsewhere ───────────────────────────────────────────────────────────── */
+
+.elsewhereList {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.66rem;
+  color: var(--dsw-alias-label-tertiary);
+  line-height: 1.45;
+}
+
+.elsewhereList em {
+  font-style: normal;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* ── status + footer ─────────────────────────────────────────────────────── */
+
+.warn {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.error {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.saved {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.muted {
+  margin: 0;
+  font-size: 0.68rem;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.footer {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.save {
+  font-size: 0.7rem;
+  padding: 3px 10px;
+  border-radius: var(--dsw-radius-xs);
+  border: 1px solid var(--dsw-alias-border-l3);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

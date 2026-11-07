@@ -27,7 +27,7 @@ await ev(`(() => { const b=[...document.querySelectorAll('button')].find(x=>(x.g
 await sleep(3000);
 await ev(`(() => { const d=[...document.querySelectorAll('button')].find(x=>(x.getAttribute('title')||'').startsWith('Show the right dock')); if(d) d.click(); return true; })()`);
 await sleep(1200);
-await ev(`(() => { const t=[...document.querySelectorAll('button')].find(x=>/^Sessions$/i.test((x.innerText||'').trim())); if(t) t.click(); return !!t; })()`);
+await ev(`(() => { const t=[...document.querySelectorAll('button')].find(x=>/^会话$/i.test((x.innerText||'').trim())); if(t) t.click(); return !!t; })()`);
 
 let rows = 0;
 for (let i = 0; i < 20; i++) {
@@ -57,7 +57,7 @@ for (const row of order) {
   })()`);
   if (sec < row.i + 1) {
     await ev(`(() => { const d=[...document.querySelectorAll('button')].find(x=>(x.getAttribute('title')||'').startsWith('Show the right dock')); if(d) d.click();
-      const t=[...document.querySelectorAll('button')].find(x=>/^Sessions$/i.test((x.innerText||'').trim())); if(t) t.click(); return true; })()`);
+      const t=[...document.querySelectorAll('button')].find(x=>/^会话$/i.test((x.innerText||'').trim())); if(t) t.click(); return true; })()`);
     await sleep(900);
   }
 

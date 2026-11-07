@@ -60,7 +60,7 @@ export function ReasoningRow({ text, live = false, defaultOpen = false }: Reason
             strokeLinecap="round"
           />
         </svg>
-        <span className={css.label}>{live ? "Thinking…" : "Thought process"}</span>
+        <span className={css.label}>{live ? "思考中…" : "思考过程"}</span>
         {preview === "" ? null : (
           <>
             <span className={css.dot} aria-hidden="true" />

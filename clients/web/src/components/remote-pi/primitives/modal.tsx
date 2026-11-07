@@ -134,7 +134,7 @@ export function Modal({
           <button
             type="button"
             className={css.close}
-            aria-label="Close dialog"
+            aria-label="关闭对话框"
             title="Close"
             onClick={onClose}
           >

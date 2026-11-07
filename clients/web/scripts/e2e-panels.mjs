@@ -153,7 +153,7 @@ check("its transcript is open without pressing Start", state.transcriptReady ===
 console.log("\n=== 3. Sessions panel ===");
 const opened = await evaluate(`(() => {
   const s = [...document.querySelectorAll("span.sr-only")]
-    .find((el) => (el.innerText || "").trim() === "Sessions");
+    .find((el) => (el.innerText || "").trim() === "会话");
   if (!s) return { ok: false, why: "no Sessions tab button in the dock" };
   s.closest("button")?.click();
   return { ok: true };
@@ -224,7 +224,7 @@ check("session_list was sent on the wire", askedList === true,
 console.log("\n=== 4. Models panel ===");
 await evaluate(`(() => {
   const s = [...document.querySelectorAll("span.sr-only")]
-    .find((el) => (el.innerText || "").trim() === "Models");
+    .find((el) => (el.innerText || "").trim() === "模型");
   s?.closest("button")?.click();
 })()`);
 await sleep(2000);

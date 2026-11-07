@@ -55,8 +55,18 @@ import {
   HOST_WEB_ROOM_ID,
   PairRejectedError,
   isModelsListOk,
+  isScheduleFiredPush,
   isWorkspaceStatePush,
   normalizeRelayUrl,
+  type FsReadOk,
+  type ChangesSnapshotWire,
+  type ChangesUnavailableReason,
+  type ModelsDescribeOk,
+  type ModelsErrorReason,
+  type SettingsDescribeOk,
+  type SettingsOpWire,
+  type SettingsErrorReason,
+  type ModelsOpWire,
   type FsListOk,
   type HostHelloOk,
   type PairOk,
@@ -66,8 +76,12 @@ import {
   type WorkspaceEntry,
   type WorkspaceListOk,
   type WorkspaceRestartOk,
+  type WorkspaceStopOk,
   type WorkspaceStartOk,
   type WorkspaceState,
+  type ScheduleFiredPush,
+  type ScheduleListOk,
+  type WireScheduleTask,
   type WorkspaceStatePush,
   type ThinkingLevel,
   type WireImage,
@@ -228,12 +242,66 @@ export interface RemotePiTransport {
     path: string,
     options?: { showHidden?: boolean; roomId?: string },
   ): Promise<FsListOk>;
+  fsRead(
+    hostEpk: string,
+    path: string,
+    root: string,
+    options?: { roomId?: string },
+  ): Promise<FsReadOk>;
+  changesSnapshot(
+    hostEpk: string,
+    root: string,
+    daemonId: string,
+    options?: { roomId?: string },
+  ): Promise<{ ok: true; snapshot: ChangesSnapshotWire } | { ok: false; reason: ChangesUnavailableReason }>;
+  /** Plan/79 — the host's models.json. No path parameter exists by design: the
+   *  target is resolved host-side, so this cannot be aimed at another file. */
+  describeModels(hostEpk: string, options?: { roomId?: string }): Promise<ModelsDescribeOk>;
+  describeSettings(hostEpk: string, options?: { roomId?: string }): Promise<SettingsDescribeOk>;
+  mutateSettings(
+    hostEpk: string,
+    ops: SettingsOpWire[],
+    revision: string,
+    options?: { roomId?: string },
+  ): Promise<{ ok: true; revision: string } | { ok: false; reason: SettingsErrorReason }>;
+  mutateModels(
+    hostEpk: string,
+    ops: ModelsOpWire[],
+    revision: string,
+    options?: { roomId?: string },
+  ): Promise<{ ok: true; revision: string } | { ok: false; reason: ModelsErrorReason }>;
   startWorkspace(hostEpk: string, cwd: string, roomId?: string): Promise<WorkspaceStartOk>;
   restartWorkspace(hostEpk: string, cwd: string, roomId?: string): Promise<WorkspaceRestartOk>;
+  stopWorkspace(hostEpk: string, cwd: string, roomId?: string): Promise<WorkspaceStopOk>;
+  removeWorkspace(hostEpk: string, path: string, roomId?: string): Promise<void>;
   addWorkspace(hostEpk: string, path: string, roomId?: string): Promise<void>;
   /** OPTIONAL: the real client routes `workspace_state` pushes here. A double
    *  that omits it simply receives no lifecycle state. */
   onWorkspaceState?(listener: (push: WorkspaceStatePush) => void): () => void;
+  /** OPTIONAL: routes `schedule_fired` pushes here. A double that omits it
+   *  simply never learns that a scheduled task ran. */
+  onScheduleFired?(listener: (push: ScheduleFiredPush) => void): () => void;
+  listSchedules(hostEpk: string, roomId: string): Promise<ScheduleListOk>;
+  addSchedule(
+    hostEpk: string,
+    roomId: string,
+    input: {
+      daemonId: string;
+      schedule: string;
+      prompt: string;
+      tz?: string | null;
+      skipIfBusy?: boolean;
+      wake?: boolean;
+      catchup?: boolean;
+      /** Pin a model for this task; omitted means inherit the session model. */
+      model?: { provider: string; id: string } | null;
+      /** Give each fire its own session instead of appending to the live one. */
+      freshSession?: boolean;
+    },
+  ): Promise<WireScheduleTask>;
+  removeSchedule(hostEpk: string, roomId: string, jobId: string): Promise<void>;
+  setScheduleEnabled(hostEpk: string, roomId: string, jobId: string, enabled: boolean): Promise<void>;
+  runScheduleNow(hostEpk: string, roomId: string, jobId: string): Promise<string>;
   sendChat(hostEpk: string, roomId: string, text: string, images?: readonly WireImage[]): string;
   /** Model surface (PROTOCOL.md "App actions"), proxied like chat: the
    *  request is addressed to the child room and the reply arrives through
@@ -245,6 +313,33 @@ export interface RemotePiTransport {
    *  `skill_invoke_ok` | `action_error`. Proxied to the child room like chat. */
   sendPiSurface(hostEpk: string, roomId: string): string;
   sendSkillInvoke(hostEpk: string, roomId: string, name: string, args?: string): string;
+  /** Turns one installed skill on/off by persisting an exclusion pattern
+   *  (`skill_set_enabled`). Answered with `skill_set_enabled_ok`. */
+  sendSkillSetEnabled(hostEpk: string, roomId: string, name: string, enabled: boolean): string;
+  /** Removes one configured package's settings entry (`package_remove`).
+   *  The reply is `package_op_ok{op:"remove"}` or `action_error`. */
+  sendPackageSetEnabled(
+    hostEpk: string,
+    roomId: string,
+    source: string,
+    scope: "user" | "project",
+    enabled: boolean,
+  ): string;
+  sendPackageRemove(hostEpk: string, roomId: string, source: string, scope?: "user" | "project"): string;
+  /** Installs a package (`package_install`). `confirmThirdParty` must be `true`;
+   *  the host refuses otherwise because the package runs third-party code. */
+  sendPackageInstall(
+    hostEpk: string,
+    roomId: string,
+    source: string,
+    options: { confirmThirdParty: true; scope?: "user" | "project" },
+  ): string;
+  /** Reconciles one source, or every installed package when `source` is
+   *  omitted (`package_update`). */
+  sendPackageUpdate(hostEpk: string, roomId: string, source?: string): string;
+  /** `cancel {target_id}` — stop the in-flight turn. `target_id` is the turn id
+   *  the caller tracks; the reply's `in_reply_to` is unrelated to it. */
+  sendCancel(hostEpk: string, roomId: string, targetId: string): string;
   /** Plan/67 + 71 sessions: `session_list` → `session_list_ok`, and
    *  `session_read` → `session_read_ok` (read-only, no switch). */
   sendSessionList(hostEpk: string, roomId: string): string;
@@ -624,6 +719,15 @@ export class RemotePiAdapter {
   private readonly diagnosticListeners = new Set<(code: TransportDiagnosticCode) => void>();
   private readonly stateListeners = new Set<(snapshot: AdapterSnapshot) => void>();
   private readonly messageListeners = new Set<(msg: ServerMessage, room: string) => void>();
+
+  /**
+   * Automations fire listeners.
+   *
+   * A separate set rather than reuse of `messageListeners` because fires carry no
+   * request correlation and no room — handing them to the general message sink
+   * would make every chat consumer responsible for recognising and ignoring them.
+   */
+  private readonly scheduleFiredListeners = new Set<(push: ScheduleFiredPush) => void>();
   /** Coalesced catalog invalidation requested by a `workspace_state` push. It
    *  owns its flow id, so a timer armed before a newer pair can never relist
    *  on the new connection. */
@@ -755,6 +859,21 @@ export class RemotePiAdapter {
     this.messageListeners.add(listener);
     return () => {
       this.messageListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Subscribe to Automations fire pushes.
+   *
+   * Kept off `onServerMessage` deliberately: a fire is machine-level news with no
+   * room and no correlation, so every chat consumer would otherwise have to
+   * recognise and ignore it.
+   */
+  onScheduleFired(listener: (push: ScheduleFiredPush) => void): () => void {
+    if (this.disposed) return () => undefined;
+    this.scheduleFiredListeners.add(listener);
+    return () => {
+      this.scheduleFiredListeners.delete(listener);
     };
   }
 
@@ -962,6 +1081,118 @@ export class RemotePiAdapter {
     }
   }
 
+  /** fs_read (plan/77) — one allowlisted text file. The staleness fence is
+   *  identical to fsList: a reply that lands after the credential changed must
+   *  not be handed to a caller that already moved on. */
+  async readFile(path: string, root: string): Promise<FsReadOk> {
+    const live = this.requireLive();
+    try {
+      const result = await live.transport.fsRead(live.credential.hostEpk, path, root, {
+        roomId: HOST_WEB_ROOM_ID,
+      });
+      this.assertCurrent(live);
+      return result;
+    } catch (err) {
+      this.assertCurrent(live);
+      throw err;
+    }
+  }
+
+  /**
+   * changes_snapshot (plan/78) — git working-tree STATUS for this workspace.
+   *
+   * The failure is a normal return value, not an exception: "not a git repo" is
+   * an answer the Changes dock must render, and it must be visually distinct from
+   * "clean worktree". The staleness fence is the same as readFile — a reply that
+   * lands after the credential changed belongs to a workspace this caller no
+   * longer represents.
+   */
+  async changesSnapshot(
+    root: string,
+    daemonId: string,
+  ): Promise<{ ok: true; snapshot: ChangesSnapshotWire } | { ok: false; reason: ChangesUnavailableReason }> {
+    const live = this.requireLive();
+    try {
+      const result = await live.transport.changesSnapshot(
+        live.credential.hostEpk,
+        root,
+        daemonId,
+        { roomId: HOST_WEB_ROOM_ID },
+      );
+      this.assertCurrent(live);
+      return result;
+    } catch (err) {
+      this.assertCurrent(live);
+      throw err;
+    }
+  }
+
+  /** models_describe (plan/79) — the host's models config, secrets removed. */
+  async describeModels(): Promise<ModelsDescribeOk> {
+    const live = this.requireLive();
+    try {
+      const result = await live.transport.describeModels(live.credential.hostEpk, {
+        roomId: HOST_WEB_ROOM_ID,
+      });
+      this.assertCurrent(live);
+      return result;
+    } catch (err) {
+      this.assertCurrent(live);
+      throw err;
+    }
+  }
+
+  /** models_mutate (plan/79) — apply path-addressed edits atomically. */
+  async mutateModels(
+    ops: ModelsOpWire[],
+    revision: string,
+  ): Promise<{ ok: true; revision: string } | { ok: false; reason: ModelsErrorReason }> {
+    const live = this.requireLive();
+    try {
+      const result = await live.transport.mutateModels(live.credential.hostEpk, ops, revision, {
+        roomId: HOST_WEB_ROOM_ID,
+      });
+      this.assertCurrent(live);
+      return result;
+    } catch (err) {
+      this.assertCurrent(live);
+      throw err;
+    }
+  }
+
+  /** settings_describe (plan/80) — the host settings whitelist projection. */
+  async describeSettings(): Promise<SettingsDescribeOk> {
+    const live = this.requireLive();
+    try {
+      const result = await live.transport.describeSettings(live.credential.hostEpk, {
+        roomId: HOST_WEB_ROOM_ID,
+      });
+      this.assertCurrent(live);
+      return result;
+    } catch (err) {
+      this.assertCurrent(live);
+      throw err;
+    }
+  }
+
+  /** settings_mutate (plan/80) — whitelisted edits against the shown revision. */
+  async mutateSettings(
+    ops: SettingsOpWire[],
+    revision: string,
+  ): Promise<{ ok: true; revision: string } | { ok: false; reason: SettingsErrorReason }> {
+    const live = this.requireLive();
+    try {
+      const result = await live.transport.mutateSettings(live.credential.hostEpk, ops, revision, {
+        roomId: HOST_WEB_ROOM_ID,
+      });
+      this.assertCurrent(live);
+      return result;
+    } catch (err) {
+      this.assertCurrent(live);
+      throw err;
+    }
+  }
+
   async startWorkspace(cwd: string): Promise<WorkspaceStartOk> {
     const live = this.requireLive();
     try {
@@ -994,6 +1225,37 @@ export class RemotePiAdapter {
     } catch (err) {
       // The fence runs on the FAILURE path too, so a stale flow's error never
       // surfaces as if this connection produced it.
+      this.assertCurrent(live);
+      throw err;
+    }
+  }
+
+  /** `workspace_stop` — shut down the Pi running in `cwd`. Same fence as
+   *  restart: a superseded flow never reports a stop this connection did not
+   *  request. */
+  async stopWorkspace(cwd: string): Promise<WorkspaceStopOk> {
+    const live = this.requireLive();
+    try {
+      const result = await live.transport.stopWorkspace(
+        live.credential.hostEpk,
+        cwd,
+        HOST_WEB_ROOM_ID,
+      );
+      this.assertCurrent(live);
+      return result;
+    } catch (err) {
+      this.assertCurrent(live);
+      throw err;
+    }
+  }
+
+  /** `workspace_remove` — drop `path` from the host catalog. */
+  async removeWorkspace(path: string): Promise<void> {
+    const live = this.requireLive();
+    try {
+      await live.transport.removeWorkspace(live.credential.hostEpk, path, HOST_WEB_ROOM_ID);
+      this.assertCurrent(live);
+    } catch (err) {
       this.assertCurrent(live);
       throw err;
     }
@@ -1116,11 +1378,109 @@ export class RemotePiAdapter {
     return transport.sendPiSurface(credential.hostEpk, roomId);
   }
 
+  /*
+   * Automations. These target the HOST room, not a child room: the cron registry
+   * is daemon-wide, so a task is machine-level news rather than workspace state.
+   */
+  listSchedules(roomId: string): Promise<ScheduleListOk> {
+    const { transport, credential } = this.requireLive();
+    return transport.listSchedules(credential.hostEpk, roomId);
+  }
+
+  addSchedule(roomId: string, input: {
+    daemonId: string;
+    schedule: string;
+    prompt: string;
+    tz?: string | null;
+    skipIfBusy?: boolean;
+    wake?: boolean;
+    catchup?: boolean;
+    model?: { provider: string; id: string } | null;
+    freshSession?: boolean;
+  }): Promise<WireScheduleTask> {
+    const { transport, credential } = this.requireLive();
+    return transport.addSchedule(credential.hostEpk, roomId, input);
+  }
+
+  removeSchedule(roomId: string, jobId: string): Promise<void> {
+    const { transport, credential } = this.requireLive();
+    return transport.removeSchedule(credential.hostEpk, roomId, jobId);
+  }
+
+  setScheduleEnabled(roomId: string, jobId: string, enabled: boolean): Promise<void> {
+    const { transport, credential } = this.requireLive();
+    return transport.setScheduleEnabled(credential.hostEpk, roomId, jobId, enabled);
+  }
+
+  runScheduleNow(roomId: string, jobId: string): Promise<string> {
+    const { transport, credential } = this.requireLive();
+    return transport.runScheduleNow(credential.hostEpk, roomId, jobId);
+  }
+
   /** `skill_invoke` for a workspace room. `name` must be one the host reported
    *  (it refuses anything else); `args` is appended verbatim. */
   invokeSkill(roomId: string, name: string, args?: string): string {
     const { transport, credential } = this.requireLive();
     return transport.sendSkillInvoke(credential.hostEpk, roomId, name, args);
+  }
+
+  /** `skill_set_enabled` — persist one skill's enabled state. */
+  setSkillEnabled(roomId: string, name: string, enabled: boolean): string {
+    const { transport, credential } = this.requireLive();
+    return transport.sendSkillSetEnabled(credential.hostEpk, roomId, name, enabled);
+  }
+
+  /**
+   * `package_install` — install a Pi package.
+   *
+   * `confirmThirdParty` is a required literal `true` all the way down to the
+   * wire, so no call site can install silently. Installing runs third-party
+   * code on the host, which is the whole reason the host insists on the flag.
+   */
+  installPackage(
+    roomId: string,
+    source: string,
+    options: { confirmThirdParty: true; scope?: "user" | "project" },
+  ): string {
+    const { transport, credential } = this.requireLive();
+    return transport.sendPackageInstall(credential.hostEpk, roomId, source, options);
+  }
+
+  /** `package_remove` — drop one package's settings entry. */
+  removePackage(roomId: string, source: string, scope?: "user" | "project"): string {
+    const { transport, credential } = this.requireLive();
+    return transport.sendPackageRemove(credential.hostEpk, roomId, source, scope);
+  }
+
+  /**
+   * `package_set_enabled` — reversible on/off that keeps the code installed.
+   *
+   * A separate call from removePackage because the two have different
+   * consequences: this leaves the files on disk and can be undone by coming back
+   * here, whereas remove uninstalls them.
+   */
+  setPackageEnabled(
+    roomId: string,
+    source: string,
+    scope: "user" | "project",
+    enabled: boolean,
+  ): string {
+    const { transport, credential } = this.requireLive();
+    return transport.sendPackageSetEnabled(credential.hostEpk, roomId, source, scope, enabled);
+  }
+
+  /** `package_update` — reconcile one source, or all when `source` is absent. */
+  updatePackage(roomId: string, source?: string): string {
+    const { transport, credential } = this.requireLive();
+    return transport.sendPackageUpdate(credential.hostEpk, roomId, source);
+  }
+
+  /** `cancel` for a workspace room — stops the turn named by `targetId`.
+   *  Confirmed by `cancelled {target_id}`, which the dispatcher files against
+   *  the reducer as the turn's own id. */
+  cancelTurn(roomId: string, targetId: string): string {
+    const { transport, credential } = this.requireLive();
+    return transport.sendCancel(credential.hostEpk, roomId, targetId);
   }
 
   /** `session_list` for a workspace room — its AgentSessions. */
@@ -1517,6 +1877,7 @@ export class RemotePiAdapter {
         // proxied child-room frame can never mutate the host state map,
         // whatever it claims to be.
         if (this.consumeWorkspaceState(msg, room)) return;
+        if (this.consumeScheduleFired(msg, room)) return;
         // Warm the catalogue cache from EVERY `models_list` that crosses this
         // socket, so the picker's next open is free even when another caller
         // issued the request.
@@ -1534,6 +1895,17 @@ export class RemotePiAdapter {
           // that is not a push at all) is dropped instead of merged.
           if (!isWorkspaceStatePush(push)) return;
           this.applyWorkspaceState(push);
+        }),
+      );
+    }
+    if (typeof transport.onScheduleFired === "function") {
+      unsubscribers.push(
+        transport.onScheduleFired((push) => {
+          if (this.stale(seq)) return;
+          if (!isScheduleFiredPush(push)) return;
+          // Same delivery path as the in-band consumer: one place decides what a
+          // listener sees, whichever seam the frame arrived through.
+          for (const listener of this.scheduleFiredListeners) listener(push);
         }),
       );
     }
@@ -1557,6 +1929,26 @@ export class RemotePiAdapter {
    * falls through to the ordinary chat filtering. Returns true when the frame
    * was consumed.
    */
+  /**
+   * Consumes an Automations fire push if `msg` is one.
+   *
+   * Same room discipline as `workspace_state`: only HOST-room traffic can reach
+   * this sink, so a proxied child frame that merely claims to be a fire is not
+   * consumed. The frame is re-validated with the strict guard (no correlation,
+   * closed result vocabulary, string preview) before any listener sees it.
+   *
+   * Unlike `workspace_state` this does NOT mutate catalog state: a fire says
+   * nothing about whether a workspace is alive, and inferring lifecycle from it
+   * would be a guess. Consumers re-list tasks if they want the settled row.
+   */
+  private consumeScheduleFired(msg: ServerMessage, room: string): boolean {
+    if (room !== HOST_WEB_ROOM_ID) return false;
+    if (msg.type !== "schedule_fired") return false;
+    if (!isScheduleFiredPush(msg)) return false;
+    for (const listener of this.scheduleFiredListeners) listener(msg);
+    return true;
+  }
+
   private consumeWorkspaceState(msg: ServerMessage, room: string): boolean {
     if (room !== HOST_WEB_ROOM_ID) return false;
     if (msg.type !== "workspace_state") return false;

@@ -109,11 +109,11 @@ export function SessionList({
      * rows scroll, inside this section's own bounded box. */
     <section
       className={css.root}
-      aria-label="Sessions"
+      aria-label="会话"
     >
       <div className={css.head}>
         <span className={css.title}>
-          Sessions
+          会话
         </span>
         <button
           type="button"
@@ -129,8 +129,8 @@ export function SessionList({
            */
           onClick={() => onOpen()}
           disabled={busy || disabledReason !== null}
-          aria-label="Refresh the session list"
-          title={disabledReason ?? "Reload this workspace's sessions"}
+          aria-label="刷新会话列表"
+          title={disabledReason ?? "重新加载该工作区的会话"}
           className={css.refresh}
         >
           <Icon name="refresh" size={12} />
@@ -144,7 +144,7 @@ export function SessionList({
       ) : sessions.length === 0 ? (
         <div className={css.scroll}>
           {/*
-           * "No sessions yet" may only be claimed when the host actually SAID
+           * "还没有会话" may only be claimed when the host actually SAID
            * so. An empty list can also mean: still asking, or the request failed
            * (the host respawns its Pi on a switch and cannot answer in that
            * window). Rendering the empty-state in those cases tells the user
@@ -152,10 +152,10 @@ export function SessionList({
            */}
           <p className={css.note}>
             {notice !== null
-              ? "Could not load this workspace's sessions. Press refresh to retry."
+              ? "无法加载该工作区的会话。点击刷新重试。"
               : busy
-                ? "Asking the host for this workspace's sessions…"
-                : "No sessions in this workspace yet."}
+                ? "正在向主机请求该工作区的会话…"
+                : "该工作区还没有会话。"}
           </p>
         </div>
       ) : (
@@ -183,7 +183,7 @@ export function SessionList({
                       onFocus={() => schedule(session.id)}
                       onBlur={cancel}
                       aria-label={`Read session ${label}`}
-                      title={preview === "" ? "Read this session" : preview}
+                      title={preview === "" ? "查看该会话" : preview}
                       className={css.readButton}
                     >
                       <span className={css.rowHead}>

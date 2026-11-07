@@ -76,7 +76,7 @@ const tabbed = await evaluate(
         the right edge) or an expanded panel; both expose a "Sessions" control,
         so match on the label alone rather than on geometry. */
      var all = [...document.querySelectorAll("button, [role=tab]")];
-     var b = all.find(function(x){ return (x.textContent || "").trim() === "Sessions"; });
+     var b = all.find(function(x){ return (x.textContent || "").trim() === "会话"; });
      if (!b) return "no-sessions-tab";
      b.click();
      return "sessions-tab";

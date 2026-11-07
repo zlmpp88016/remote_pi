@@ -1,0 +1,326 @@
+/* Plan viewer (plan/77).
+ *
+ * Every `var(--…)` here resolves to a token that exists in this repo (checked
+ * against src/ usage counts), under the same `@layer utilities` block the rest of
+ * this dock uses. Notably: `--dsw-radius-*`, `--dsw-alias-label-secondary`
+ * (there is no `--dsw-alias-label-muted`).
+ *
+ * Layout contract: `.planRoot` fills the dock cell and never scrolls itself.
+ * Exactly one child scrolls — `.planListScroll` in list view, `.planDocScroll` in
+ * document view. That is what removes the nested-scrollbar problem and what keeps
+ * a freshly opened document from inheriting a scroll offset from the list.
+ */
+@layer utilities {
+  .planRoot {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* ---------------- list view ---------------- */
+
+  .planToolbar {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    flex-shrink: 0;
+    padding-bottom: calc(var(--spacing) * 2);
+  }
+
+  .planSearchWrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .planSearchIcon {
+    position: absolute;
+    left: 7px;
+    color: var(--dsw-alias-label-secondary);
+    pointer-events: none;
+  }
+
+  .planSearch {
+    width: 100%;
+    height: 26px;
+    padding-left: 24px;
+    padding-right: 22px;
+    font-size: 12px;
+    color: var(--dsw-alias-label-primary);
+    background-color: var(--dsw-alias-bg-layer-1);
+    border: 1px solid var(--dsw-alias-border-l2);
+    border-radius: var(--dsw-radius-sm);
+  }
+
+  .planSearch::placeholder {
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  .planSearch:focus-visible {
+    outline: var(--dsw-focus-outline);
+    outline-offset: var(--dsw-focus-outline-offset);
+    border-color: var(--accent);
+  }
+
+  .planSearchClear {
+    position: absolute;
+    right: 5px;
+    display: grid;
+    place-items: center;
+    width: 15px;
+    height: 15px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: var(--dsw-alias-label-secondary);
+    cursor: pointer;
+  }
+
+  .planSearchClear:hover {
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .planCount {
+    flex-shrink: 0;
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    color: var(--dsw-alias-label-tertiary);
+    white-space: nowrap;
+  }
+
+  .planListScroll {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .planList {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .planRow {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    width: 100%;
+    min-width: 0;
+    padding: 5px 6px;
+    /* A left accent gutter that is invisible until the row is hovered/focused;
+       a 2px border keeps rows from shifting by 2px when it appears. */
+    border: none;
+    border-left: 2px solid transparent;
+    border-radius: var(--dsw-radius-sm);
+    background: none;
+    color: var(--dsw-alias-label-primary);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .planRow:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+    border-left-color: var(--accent);
+  }
+
+  .planRow:focus-visible {
+    outline: var(--dsw-focus-outline);
+    outline-offset: calc(var(--dsw-focus-outline-offset) * -1);
+  }
+
+  .planRowIcon {
+    flex-shrink: 0;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  /* The plan index (`76` of `76-remove-relay.md`) in a fixed-width pill, so the
+     titles line up in a column and the number stays readable when the title is
+     ellipsized in a narrow dock. */
+  .planIndex {
+    flex-shrink: 0;
+    min-width: 22px;
+    padding: 0 4px;
+    border-radius: var(--dsw-radius-xs);
+    background-color: var(--dsw-alias-bg-layer-2);
+    font-family: var(--ff-mono);
+    font-size: 10px;
+    line-height: 15px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--dsw-alias-label-secondary);
+    text-align: center;
+  }
+
+  .planRowTitle {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+  }
+
+  /* ---------------- document view ---------------- */
+
+  .planDocHead {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    flex-shrink: 0;
+    padding-bottom: calc(var(--spacing) * 2);
+    border-bottom: 1px solid var(--dsw-alias-border-l2);
+  }
+
+  .planBack {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+    height: 24px;
+    padding: 0 6px 0 3px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--dsw-radius-sm);
+    color: var(--accent);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .planBack:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .planBack:focus-visible {
+    outline: var(--dsw-focus-outline);
+    outline-offset: var(--dsw-focus-outline-offset);
+  }
+
+  .planBackIcon {
+    transform: rotate(180deg);
+  }
+
+  .planDocTitle {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    flex: 1;
+    min-width: 0;
+  }
+
+  .planDocName {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  /* The ONLY scroller in document view. No max-height: the dock is the limit, so
+     a 7000px plan uses the full column instead of a 58vh letterbox with a second
+     scrollbar inside it. */
+  .planDocScroll {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-top: calc(var(--spacing) * 2);
+  }
+
+  .planDocScroll:focus-visible {
+    outline: none;
+  }
+
+  .planDocBody {
+    /* A document, not a chat column: keep a comfortable measure and let long
+       tokens wrap instead of forcing a horizontal scrollbar. */
+    max-width: 78ch;
+    overflow-wrap: break-word;
+    font-size: 13px;
+    line-height: var(--leading-relaxed);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  /* ---------------- shared states ---------------- */
+
+  .planIntro {
+    margin: 0;
+    padding: calc(var(--spacing) * 2) 0;
+    font-size: 12px;
+    line-height: var(--leading-relaxed);
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .planEmpty {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: calc(var(--spacing) * 1);
+  }
+
+  .planEmptyClear {
+    padding: 3px 9px;
+    font: inherit;
+    font-size: 11.5px;
+    color: var(--accent);
+    background: transparent;
+    border: 1px solid var(--dsw-alias-border-l2);
+    border-radius: var(--dsw-radius-sm);
+    cursor: pointer;
+  }
+
+  .planEmptyClear:hover {
+    background-color: var(--dsw-alias-interactive-bg-hover);
+  }
+
+  .planError {
+    margin: 0;
+    padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+    font-size: 11.5px;
+    border-radius: var(--dsw-radius-sm);
+    color: var(--dsw-alias-state-error-primary);
+    background-color: var(--dsw-alias-bg-layer-2);
+    border-left: 2px solid var(--dsw-alias-state-error-primary);
+  }
+
+  .planNotice {
+    margin: 0;
+    padding: calc(var(--spacing) * 1.5) calc(var(--spacing) * 2);
+    font-size: 11.5px;
+    border-radius: var(--dsw-radius-sm);
+    color: var(--dsw-alias-label-primary);
+    background-color: var(--dsw-alias-bg-layer-2);
+    border-left: 2px solid var(--dsw-alias-border-l4);
+  }
+
+  .planStatus {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 1);
+    padding: calc(var(--spacing) * 1) 0;
+    font-size: 11.5px;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .planSpinner {
+    width: 10px;
+    height: 10px;
+    border: 1.5px solid var(--dsw-alias-border-l3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: planSpin 700ms linear infinite;
+  }
+
+  @keyframes planSpin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}

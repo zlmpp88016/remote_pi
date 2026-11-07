@@ -84,11 +84,11 @@ export function ConnectionLauncher({
           machine you want to drive. No Pi has to be running.
         </p>
 
-        {resuming ? <Loading label="Restoring the stored pairing…" /> : null}
+        {resuming ? <Loading label="正在恢复已保存的配对…" /> : null}
 
         <form className={css.form} onSubmit={onSubmit}>
           <label className={css.fieldGroup}>
-            <span className={css.fieldLabel}>Relay address</span>
+            <span className={css.fieldLabel}>中继地址</span>
             <input
               className={`${FIELD} ${css.fieldTall}`}
               value={address}
@@ -101,7 +101,7 @@ export function ConnectionLauncher({
           </label>
 
           <label className={css.fieldGroup}>
-            <span className={css.fieldLabel}>Pairing code</span>
+            <span className={css.fieldLabel}>配对码</span>
             <textarea
               className={`${FIELD} ${css.pairField}`}
               value={code}
@@ -124,7 +124,7 @@ export function ConnectionLauncher({
             {busy ?? "Connect"}
           </button>
 
-          {error ? <ErrorState title="Pairing failed" detail={error} /> : null}
+          {error ? <ErrorState title="配对失败" detail={error} /> : null}
         </form>
 
         {stored ? (

@@ -24,17 +24,17 @@ export const MessageFooter = memo(function MessageFooter({
   clock,
   copyText,
 }: MessageFooterProps) {
-  const [copied, setCopied] = useState(false);
+  const [copied, set已复制] = useState(false);
 
   const copy = useCallback(() => {
     /*
      * `navigator.clipboard` is unavailable on an insecure origin and in some
      * embedded webviews. The button reports failure by simply not changing its
-     * label, which is honest; a fake "Copied" would be worse than no feedback.
+     * label, which is honest; a fake "已复制" would be worse than no feedback.
      */
     const done = (): void => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1_500);
+      set已复制(true);
+      window.setTimeout(() => set已复制(false), 1_500);
     };
     if (navigator.clipboard?.writeText !== undefined) {
       void navigator.clipboard.writeText(copyText).then(done).catch(() => {});
@@ -74,8 +74,8 @@ export const MessageFooter = memo(function MessageFooter({
         type="button"
         className={css.copy}
         onClick={copy}
-        aria-label={copied ? "Copied" : "Copy this message"}
-        title={copied ? "Copied" : "Copy this message"}
+        aria-label={copied ? "已复制" : "Copy this message"}
+        title={copied ? "已复制" : "Copy this message"}
         data-copied={copied || undefined}
       >
         <Icon name="copy" size={13} />

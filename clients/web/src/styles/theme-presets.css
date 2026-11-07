@@ -1,0 +1,63 @@
+/*
+ * Plan/80 — browser-local visual presets.
+ *
+ * Design constraint that shapes this whole file: the base light/dark palettes in
+ * `design-platform.css` were measured against DSH's reference (contrast ratios, the
+ * `--dsw-alias-bg-base` variable chain). A preset must therefore NOT replace the
+ * palette. It supplies an ACCENT, and everything below is built from that one value
+ * so a preset cannot silently degrade legibility: the accent is always used as a
+ * fill behind `--dsw-alias-bg-base` text, or as a ring, never as body text colour on
+ * an unmeasured surface.
+ *
+ * `--dsw-preset-accent` is set on `body` by `applyPreset`. When it is absent (the
+ * `default` preset, or before hydration) every rule below is inert because each one
+ * references the property with no fallback colour — an unset custom property makes
+ * the declaration invalid at computed-value time, so the underlying measured token
+ * wins. That is what makes `default` a true no-op.
+ */
+
+@layer theme {
+  /* ── focus ring ──────────────────────────────────────────────────────────
+     The highest-value place for an accent: focus visibility is an accessibility
+     affordance, and tinting it makes "which preset am I in" legible at a glance. */
+  body[data-theme-preset]:not([data-theme-preset="default"]) :focus-visible {
+    outline-color: var(--dsw-preset-accent);
+  }
+
+  /* ── primary buttons ─────────────────────────────────────────────────────
+     Filled with the accent, with ink chosen for a LIGHT accent fill.
+
+     This used `--dsw-alias-bg-base`, reasoning that the canvas colour would contrast
+     with the accent by construction. It does in the DARK theme (near-black on a light
+     blue) but inverts in light: white ink on rgb(122,170,255) measures 2.33:1, and
+     every preset accent is a light 400-level hue. `--on-accent` is the dark ink the
+     primary button already uses for exactly this reason. */
+  body[data-theme-preset]:not([data-theme-preset="default"]) button[data-variant="primary"] {
+    background: var(--dsw-preset-accent);
+    border-color: var(--dsw-preset-accent);
+    color: var(--on-accent);
+  }
+
+  /* ── selection ───────────────────────────────────────────────────────────
+     Selection highlight is pure chrome; tinting it is safe in both themes. */
+  body[data-theme-preset]:not([data-theme-preset="default"]) ::selection {
+    background: color-mix(in srgb, var(--dsw-preset-accent) 28%, transparent);
+  }
+
+  /* ── sidebar active row ──────────────────────────────────────────────────
+     A low-opacity accent wash, NOT a solid fill: the row still carries measured
+     label tokens on top, so contrast is preserved. */
+  body[data-theme-preset]:not([data-theme-preset="default"]) [aria-current="true"] {
+    box-shadow: inset 2px 0 0 var(--dsw-preset-accent);
+  }
+
+  /* ── dock tab underline ──────────────────────────────────────────────────
+     Marks the active dock tab with the accent. Uses `text-decoration` so it does not
+     consume layout space the tab bar's measured heights depend on. */
+  body[data-theme-preset]:not([data-theme-preset="default"]) [role="tab"][aria-selected="true"] {
+    text-decoration: underline;
+    text-decoration-color: var(--dsw-preset-accent);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+  }
+}

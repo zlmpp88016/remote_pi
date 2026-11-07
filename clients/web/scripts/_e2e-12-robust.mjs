@@ -13,7 +13,7 @@ await sleep(3500);
 // open dock + Sessions tab
 await ev(`(() => {
   const d=[...document.querySelectorAll('button')].find(x=>(x.getAttribute('title')||'').startsWith('Show the right dock')); if(d) d.click();
-  const t=[...document.querySelectorAll('button')].find(x=>/^Sessions$/i.test((x.innerText||'').trim())); if(t) t.click();
+  const t=[...document.querySelectorAll('button')].find(x=>/^会话$/i.test((x.innerText||'').trim())); if(t) t.click();
   return true;
 })()`);
 await sleep(5000);

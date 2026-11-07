@@ -7,15 +7,17 @@
   "main": "dist/main.js",
   "scripts": {
     "export:web": "cd ../web && node scripts/build-shell-web.mjs",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.preload.json && node scripts/finish-preload.mjs",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify": "node scripts/verify-shell.mjs",
+    "dist": "npm run export:web && npm run build && electron-builder --config electron-builder.config.mjs",
     "start:cdp": "npm run build && electron . --remote-debugging-port=9444"
   },
   "devDependencies": {
     "electron": "^45.0.0",
+    "electron-builder": "^25.0.0",
     "typescript": "^5.9.0",
     "@types/node": "^22.10.0"
   }

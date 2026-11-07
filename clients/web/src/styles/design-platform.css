@@ -107,6 +107,13 @@
     --dsw-static-amber-900: rgb(39, 36, 31);
     --dsw-static-red-400: rgb(242, 90, 90);
     --dsw-static-red-500: rgb(239, 68, 68);
+    /*
+     * A lighter red for TEXT on the dark canvas (plan/82). red-400 measures 4.24:1 on
+     * `neutral-bluish-875`, just under AA for small text; destructive labels
+     * ("Remove key") are exactly the words that must not be the dimmest thing on
+     * screen. This step is only consumed by the dark theme's `--danger`.
+     */
+    --dsw-static-red-300: rgb(252, 129, 129);
 
     /* ── surfaces (light aliases, DSH defaults) ──────────────────────────── */
     --dsw-alias-bg-base: var(--dsw-static-neutral-bluish-00);
@@ -255,7 +262,11 @@
     --dsw-menu-surface-fill: rgba(67, 69, 74, 0.45);
     --dsw-alias-menu-group-header-fill: rgba(48, 49, 54, 0.94);
 
-    --dsw-alias-label-primary: var(--dsw-static-neutral-bluish-50);
+    /* Not neutral-bluish-50 (rgb 249,250,251). Near-pure white on a near-black
+     * canvas reads 17.5:1, and at body sizes that surplus contrast produces
+     * halation — the text appears to glow and blur. 100 is still ~14:1: far above AA,
+     * with no bloom. */
+    --dsw-alias-label-primary: var(--dsw-static-neutral-bluish-100);
     --dsw-alias-label-secondary: var(--dsw-static-neutral-bluish-300);
     --dsw-alias-label-tertiary: var(--dsw-static-neutral-bluish-400);
     --dsw-alias-label-caption: #9aa0a8;
@@ -277,7 +288,45 @@
     --dsw-alias-button-floating-fill: var(--dsw-static-neutral-bluish-850);
     --dsw-alias-button-floating-hover: var(--dsw-static-neutral-bluish-800);
 
-    --dsw-alias-state-error-primary: var(--dsw-static-red-400);
+    --dsw-alias-state-error-primary: var(--dsw-static-red-300);
+
+    /*
+     * Filled in so the dark theme is actually complete (plan/81).
+     *
+     * These were light-only, which meant a dark canvas inherited LIGHT chrome: a
+     * `neutral-200` (rgb 229) scrollbar thumb on a `neutral-bluish-950` surface is
+     * almost invisible, and `rgba(84,85,87,0.5)` floating chrome is a light grey
+     * wash. The neutral ramp's dark steps already exist in this file, so the
+     * scrollbar aliases simply re-point at them instead of inventing values.
+     *
+     * Success/warn stay on the same hue family as light and only shift one step
+     * brighter (green/amber 400 → 300) so they still clear AA on the dark canvas
+     * while remaining recognisably the same states.
+     */
+    /* Alpha-white, not a opaque grey step. A grey thumb is tuned for ONE surface:
+     * neutral-800 measured 1.32:1 on the base canvas and 1.14:1 on layer-2, i.e.
+     * effectively invisible in the exact place a scrollbar appears. An alpha white
+     * resolves against whatever it overlaps, so it reads on every tier. */
+    --dsw-alias-scrollbar-bg-l1: rgba(255, 255, 255, 0.16);
+    --dsw-alias-scrollbar-bg-l2: rgba(255, 255, 255, 0.16);
+    --dsw-alias-scrollbar-hover-l1: rgba(255, 255, 255, 0.28);
+    --dsw-alias-scrollbar-hover-l2: rgba(255, 255, 255, 0.28);
+    --dsw-alias-button-tool-bar-fill: rgba(41, 41, 41, 0.6);
+    --dsw-alias-button-tool-bar-hover: rgba(60, 60, 60, 0.75);
+    --dsw-alias-state-success-primary: var(--dsw-static-green-400);
+    --dsw-alias-state-warn-primary: var(--dsw-static-amber-400);
+    --dsw-alias-state-warn-label: var(--dsw-static-amber-600);
+    --dsw-alias-state-idle-primary: var(--dsw-static-neutral-bluish-400);
+
+    /* Shadows read as nothing on a dark canvas; the dark set leans on a stroke
+     * plus a deeper, tighter shadow so panels still separate from the base. */
+    --dsw-elevation-stroke: 0 0 0 0.5px var(--dsw-alias-border-l4);
+    --dsw-elevation-panel:
+      0 0 0 0.5px var(--dsw-alias-border-l4), 0 3px 8px 0 rgba(0, 0, 0, 0.4),
+      0 0 16px 0 rgba(0, 0, 0, 0.28);
+    --dsw-elevation-prominent:
+      0 0 0 0.5px var(--dsw-alias-border-l4), 0 8px 24px 0 rgba(0, 0, 0, 0.5);
+    --dsw-elevation-soft: 0 1px 3px 0 rgba(0, 0, 0, 0.35);
 
     --dsw-alias-markdown-code-block: var(--dsw-static-neutral-bluish-900);
     --dsw-alias-markdown-code-block-banner: var(--dsw-static-neutral-bluish-850);
@@ -285,6 +334,35 @@
 
     --dsw-focus-ring: 0 0 0 2px var(--dsw-alias-bg-base), 0 0 0 4px var(--dsw-static-deepseek-400);
     --dsw-focus-outline: 2px solid var(--dsw-static-deepseek-400);
+
+    /*
+     * Plan/82 — STATUS TEXT INVERTS IN DARK.
+     *
+     * The bridge tokens below are declared AFTER this block in `:root`, so the light
+     * values would win by document order no matter what this theme says. They are
+     * re-declared here because a status label is dark ink on a light wash in the
+     * light theme and must become light ink on a dark wash here — the same green-900
+     * that reads 11.97:1 on white reads 1.44:1 on `neutral-bluish-950`.
+     *
+     * Measured before this change: `running`/`live` badges and the `Start <dir>`
+     * buttons sat at 1.44:1 — effectively invisible, and these are exactly the words
+     * a user needs to tell whether a workspace is alive.
+     */
+    --ok-text: var(--dsw-static-green-400);
+    --warn-text: var(--dsw-static-amber-400);
+    --danger: var(--dsw-static-red-300);
+    /* Ink for text sitting ON the accent fill. The accent is a LIGHT blue in both
+     * themes (deepseek-400), so this is dark in both — unlike `--green-ink`, which
+     * follows the theme and put white on light blue at 2.33:1. */
+    --on-accent: #0b1530;
+    --warn: var(--dsw-static-amber-400);
+    --amber: var(--dsw-static-amber-400);
+    --amber-ink: var(--dsw-static-amber-400);
+
+    /* `--warn-ink` / `--ok-ink` are consumed by icon+label pairs; keep them legible. */
+    --ok: var(--dsw-static-green-400);
+    --ok-ink: var(--dsw-static-green-400);
+    --warn-ink: var(--dsw-static-amber-400);
   }
 
   /* ── Remote Pi → DSH bridge ───────────────────────────────────────────────
@@ -356,6 +434,8 @@
      * Light theme has no green-600/700, so green-900 is the correct dark leg.
      */
     --ok-text: var(--dsw-static-green-900);
+    /* Same dark ink as the dark theme: the accent fill is light blue in both. */
+    --on-accent: #0b1530;
     --danger: var(--dsw-static-red-400);
     --warn: var(--dsw-static-amber-500);
     /*

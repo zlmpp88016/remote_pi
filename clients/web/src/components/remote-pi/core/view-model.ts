@@ -207,7 +207,7 @@ export type ChatItem =
   | { kind: "user"; id: string; text: string }
   | { kind: "agent"; id: string; text: string; done: boolean };
 
-export type DockTabId = "plan" | "files" | "changes" | "sessions";
+export type DockTabId = "plan" | "files" | "changes" | "sessions" | "plugins" | "automations" | "models" | "settings";
 
 // ── workspace lifecycle (wave 3) ───────────────────────────────────────────
 
@@ -242,14 +242,14 @@ export interface WorkspaceStatusText {
   hasError: boolean;
 }
 
-const RUNNING_DETAIL = "The host reported this workspace's Pi as running.";
+const RUNNING_DETAIL = "主机报告该工作区的 Pi 正在运行。";
 const STARTING_DETAIL =
-  "The host reported this workspace as starting; its lifecycle is still in flight.";
+  "主机报告该工作区正在启动，生命周期尚未落定。";
 const CRASHED_DETAIL =
-  "The host reported this workspace as crashed. Restart is offered for a crashed workspace.";
-const STOPPED_DETAIL = "The host reported this workspace's Pi as stopped.";
+  "主机报告该工作区已崩溃。崩溃的工作区会提供重启操作。";
+const STOPPED_DETAIL = "主机报告该工作区的 Pi 已停止。";
 const NOT_RUNNING_DETAIL =
-  "The catalog did not list this workspace as live and no lifecycle push has been observed — this is not a report that it stopped.";
+  "目录未将该工作区列为在线，也未观察到生命周期推送 — 这并不代表它已停止。";
 
 /**
  * Row status for a catalog entry, observed push first and catalog `live`
@@ -263,17 +263,17 @@ export function workspaceStatus(
   const hasError = state?.hasError ?? false;
   switch (state?.state) {
     case "running":
-      return { tone: "running", label: "running", detail: RUNNING_DETAIL, observed: true, restarts, hasError };
+      return { tone: "running", label: "运行中", detail: RUNNING_DETAIL, observed: true, restarts, hasError };
     case "starting":
-      return { tone: "starting", label: "starting", detail: STARTING_DETAIL, observed: true, restarts, hasError };
+      return { tone: "starting", label: "启动中", detail: STARTING_DETAIL, observed: true, restarts, hasError };
     case "crashed":
-      return { tone: "crashed", label: "crashed", detail: CRASHED_DETAIL, observed: true, restarts, hasError };
+      return { tone: "crashed", label: "已崩溃", detail: CRASHED_DETAIL, observed: true, restarts, hasError };
     case "stopped":
-      return { tone: "stopped", label: "stopped", detail: STOPPED_DETAIL, observed: true, restarts, hasError };
+      return { tone: "stopped", label: "已停止", detail: STOPPED_DETAIL, observed: true, restarts, hasError };
     default:
       return entry.live
-        ? { tone: "running", label: "running", detail: "The catalog listed this workspace as live; no lifecycle push has been observed since.", observed: false, restarts, hasError }
-        : { tone: "not_running", label: "not running", detail: NOT_RUNNING_DETAIL, observed: false, restarts, hasError };
+        ? { tone: "running", label: "运行中", detail: "The catalog listed this workspace as live; no lifecycle push has been observed since.", observed: false, restarts, hasError }
+        : { tone: "not_running", label: "未运行", detail: NOT_RUNNING_DETAIL, observed: false, restarts, hasError };
   }
 }
 
@@ -291,61 +291,75 @@ export interface WorkspaceControlInput {
   state?: WorkspaceChildState | null;
 }
 
-const BUSY_REASON = "Another workspace action is still running.";
-const ALREADY_RUNNING = "The host reports this workspace as already running.";
-const STARTING_REASON = "This workspace is starting; wait for the host to report its lifecycle.";
-const USE_RESTART = "The host reported this workspace as crashed or stopped — use Restart.";
-const RESTART_ONLY_CRASHED = "Restart is offered only when the host reported this workspace as crashed or stopped.";
-const START_WHEN_NOT_RUNNING = "Start this workspace: the catalog does not list it as live.";
+const BUSY_REASON = "另一个工作区操作仍在进行。";
+const ALREADY_RUNNING = "主机报告该工作区已在运行。";
+const STARTING_REASON = "该工作区正在启动；等待主机报告其生命周期。";
+const USE_RESTART = "主机报告该工作区已崩溃或已停止 — 请使用重启。";
+const START_WHEN_NOT_RUNNING = "启动该工作区：目录未将其列为在线。";
+const STOP_WHEN_RUNNING = "请求主机关闭该工作区的 Pi。";
+const STOP_NOT_RUNNING = "该工作区没有可停止的 Pi 进程。";
 
 /**
- * Start/Restart for one catalog row.
+ * Start/Restart/Stop for one catalog row.
  *
+ *   • `running`             → Stop only. Restart is ALSO offered: the server
+ *                             documents it as idempotent ("an already-running
+ *                             workspace answers `workspace_restart_ok` without
+ *                             respawning", protocol/types.ts:259), so it is the
+ *                             recovery path for a workspace that is running but
+ *                             wedged. Withholding it left a stuck workspace with
+ *                             no way out from the web client.
  *   • `crashed` / `stopped` → Restart (the documented revive path).
- *   • `running`             → neither.
- *   • `starting`            → neither until the host settles the lifecycle.
+ *   • `starting`            → Stop only, until the host settles the lifecycle.
  *   • no push + live=false  → Start ("not running").
- *   • no push + live=true   → neither, treated exactly as running.
+ *   • no push + live=true   → treated exactly as running.
  *
- * An unknown lifecycle never enables Restart: the host has not said the child
- * crashed, so claiming it needs revival would be a guess.
+ * An unknown lifecycle never enables Restart on its own: the host has not said
+ * the child crashed, so claiming it needs revival would be a guess.
  */
 export function workspaceControls(
   entry: Pick<WorkspaceEntry, "live">,
   { busy, state }: WorkspaceControlInput,
-): { start: ControlState; restart: ControlState } {
+): { start: ControlState; restart: ControlState; stop: ControlState } {
   if (busy) {
     return {
       start: { enabled: false, reason: BUSY_REASON },
       restart: { enabled: false, reason: BUSY_REASON },
+      stop: { enabled: false, reason: BUSY_REASON },
     };
   }
   switch (state?.state) {
     case "running":
       return {
         start: { enabled: false, reason: ALREADY_RUNNING },
-        restart: { enabled: false, reason: RESTART_ONLY_CRASHED },
+        restart: { enabled: true, reason: "Ask the host to restart this workspace." },
+        stop: { enabled: true, reason: STOP_WHEN_RUNNING },
       };
     case "starting":
       return {
         start: { enabled: false, reason: STARTING_REASON },
         restart: { enabled: false, reason: STARTING_REASON },
+        /* A process exists while it starts; stopping it is the sane abort. */
+        stop: { enabled: true, reason: STOP_WHEN_RUNNING },
       };
     case "crashed":
     case "stopped":
       return {
         start: { enabled: false, reason: USE_RESTART },
         restart: { enabled: true, reason: "Ask the host to restart this workspace." },
+        stop: { enabled: false, reason: STOP_NOT_RUNNING },
       };
     default:
       return entry.live
         ? {
             start: { enabled: false, reason: ALREADY_RUNNING },
-            restart: { enabled: false, reason: RESTART_ONLY_CRASHED },
+            restart: { enabled: true, reason: "Ask the host to restart this workspace." },
+            stop: { enabled: true, reason: STOP_WHEN_RUNNING },
           }
         : {
             start: { enabled: true, reason: START_WHEN_NOT_RUNNING },
-            restart: { enabled: false, reason: RESTART_ONLY_CRASHED },
+            restart: { enabled: false, reason: STOP_NOT_RUNNING },
+            stop: { enabled: false, reason: STOP_NOT_RUNNING },
           };
   }
 }
@@ -403,24 +417,43 @@ export function fsControls({
   busy,
   fsLoading,
   fsLoaded,
-}: FsControlInput): { add: ControlState; start: ControlState } {
+}: FsControlInput): { add: ControlState; start: ControlState; remove: ControlState } {
   if (!available) {
-    return { add: { enabled: false, reason }, start: { enabled: false, reason } };
+    return {
+      add: { enabled: false, reason },
+      start: { enabled: false, reason },
+      remove: { enabled: false, reason },
+    };
   }
   if (busy) {
-    return { add: { enabled: false, reason: BUSY_REASON }, start: { enabled: false, reason: BUSY_REASON } };
+    return {
+      add: { enabled: false, reason: BUSY_REASON },
+      start: { enabled: false, reason: BUSY_REASON },
+      remove: { enabled: false, reason: BUSY_REASON },
+    };
   }
   if (fsLoading) {
     const why = "A directory listing is still in flight.";
-    return { add: { enabled: false, reason: why }, start: { enabled: false, reason: why } };
+    return {
+      add: { enabled: false, reason: why },
+      start: { enabled: false, reason: why },
+      remove: { enabled: false, reason: why },
+    };
   }
   if (!fsLoaded) {
     const why = "List a directory first — the host's own canonical path is required.";
-    return { add: { enabled: false, reason: why }, start: { enabled: false, reason: why } };
+    return {
+      add: { enabled: false, reason: why },
+      start: { enabled: false, reason: why },
+      remove: { enabled: false, reason: why },
+    };
   }
   return {
     add: { enabled: true, reason: "Add this directory to the host catalog as a workspace." },
     start: { enabled: true, reason: "Start a Pi in this directory." },
+    /* Removing an unlisted path is a no-op the host would reject, so this is
+       offered on the same footing as Add: the path is canonical and loaded. */
+    remove: { enabled: true, reason: "Drop this directory from the host catalog." },
   };
 }
 

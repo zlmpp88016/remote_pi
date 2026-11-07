@@ -2,7 +2,7 @@
 
 /* Model + thinking picker for the composer toolbar.
  *
- * Both surfaces are wired to the REAL host wire (PROTOCOL.md "App actions"):
+ * Both surfaces are wired to the REAL host wire (PROTOCOL.md "应用操作"):
  *   • `list_models` → `models_list {models, current}` — the picker rows and the
  *     highlighted current model come from the workspace Pi itself.
  *   • `model_set {provider, model_id}` → `action_ok{action:"model_set"}` |
@@ -134,8 +134,8 @@ export function ModelPicker({
       : current
         ? current.name
         : busy
-          ? "loading models…"
-          : "select a model";
+          ? "正在加载模型…"
+          : "选择模型";
 
   /* Close on outside click / Escape — a picker that traps focus or refuses to
      close is worse than no picker. */
@@ -164,7 +164,7 @@ export function ModelPicker({
 
   const reason =
     disabledReason ??
-    (busy ? "A model request is still in flight." : null);
+    (busy ? "模型请求仍在进行中。" : null);
 
   return (
     <div ref={rootRef} className={css.root}>
@@ -175,7 +175,7 @@ export function ModelPicker({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Model: ${label}`}
-        title={reason ?? "Choose the model this workspace's Pi uses"}
+        title={reason ?? "选择该工作区的 Pi 使用的模型"}
         className={`${css.trigger} ${disabled ? css.triggerDisabled : css.triggerIdle}`}
       >
         <Icon name="cpu" size={15} />
@@ -185,9 +185,9 @@ export function ModelPicker({
       {thinkingAvailable && !disabled && levels.length > 0 ? (
         <label
           className={css.thinking}
-          title="Thinking level for the selected model"
+          title="所选模型的思考级别"
         >
-          <span className="sr-only">Thinking level</span>
+          <span className="sr-only">思考级别</span>
           <select
             /*
              * Fall back to the first SUPPORTED level, not to a fixed `medium`.
@@ -211,14 +211,14 @@ export function ModelPicker({
       {open ? (
         <div
           role="listbox"
-          aria-label="Available models"
+          aria-label="可用模型"
           className={css.menu}
         >
           {options.length === 0 ? (
             <p className={css.note}>
               {busy
-                ? "Asking the host for this workspace's models…"
-                : "The host reported no models for this workspace."}
+                ? "正在向主机询问该工作区的模型…"
+                : "主机报告该工作区没有可用模型。"}
             </p>
           ) : (
             options.map((option) => (

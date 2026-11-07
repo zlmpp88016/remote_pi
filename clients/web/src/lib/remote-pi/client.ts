@@ -58,9 +58,21 @@ import {
   isHostHelloOk,
   isHostMessage,
   isFsListOk,
+  isFsReadOk,
+  isChangesSnapshotOk,
+  isChangesSnapshotUnavailable,
+  isModelsDescribeOk,
+  isModelsError,
+  isSettingsDescribeOk,
+  isSettingsMutateOk,
+  isSettingsError,
+  isModelsMutateOk,
   isJsonObject,
   isPairOk,
+  isScheduleListOk,
+  isWireScheduleTask,
   isWorkspaceListOk,
+  isWorkspaceStopOk,
   isWorkspaceRestartError,
   isWorkspaceRestartOk,
   isWorkspaceStartOk,
@@ -73,6 +85,15 @@ import {
   type ClientMessage,
   type DecodedEnvelope,
   type FsListOk,
+  type FsReadOk,
+  type ChangesSnapshotWire,
+  type ChangesUnavailableReason,
+  type ModelsDescribeOk,
+  type ModelsErrorReason,
+  type SettingsDescribeOk,
+  type SettingsOpWire,
+  type SettingsErrorReason,
+  type ModelsOpWire,
   type HostForward,
   type HostHelloOk,
   type PairOk,
@@ -82,7 +103,10 @@ import {
   type ServerMessage,
   type ThinkingLevel,
   type WireImage,
+  type ScheduleListOk,
+  type WireScheduleTask,
   type WorkspaceListOk,
+  type WorkspaceStopOk,
   type WorkspaceRestartOk,
   type WorkspaceStartOk,
   type WorkspaceStatePush,
@@ -259,7 +283,7 @@ interface RequestSpec {
   room: string;
   inner: ClientMessage;
   accepts: readonly string[];
-  acceptsError?: "action_error" | "pair_error" | "workspace_restart_error";
+  acceptsError?: "action_error" | "pair_error" | "workspace_restart_error" | "models_error" | "settings_error";
   expectedAction?: string;
 }
 
@@ -268,7 +292,7 @@ interface PendingRequest {
   peer: string;
   room: string;
   accepts: readonly string[];
-  acceptsError: "action_error" | "pair_error" | "workspace_restart_error" | null;
+  acceptsError: "action_error" | "pair_error" | "workspace_restart_error" | "models_error" | "settings_error" | null;
   expectedAction: string | null;
   resolve: (msg: ServerMessage) => void;
   reject: (err: Error) => void;
@@ -623,6 +647,121 @@ export class RemotePiWebClient {
     return reply;
   }
 
+  /*
+   * Automations — scheduled tasks.
+   *
+   * These use the SAME `request`/reply mechanism as `listWorkspaces` rather than
+   * fire-and-forget.
+   *
+   * Fire-and-forget looked equivalent and was not: the reply had to be re-routed
+   * through `onHostFrame`, which correlates strictly on `in_reply_to` against a
+   * `pending` table these senders never populated. The frames were delivered by
+   * the daemon (`replying schedule_list_ok … delivered=true`) and then dropped
+   * client-side as `unknown_reply`, so the panel waited forever. `request` owns
+   * the pending entry, its timeout and its rejection, which is exactly the
+   * bookkeeping a host-room RPC needs.
+   */
+  async listSchedules(hostEpk: string, roomId: string): Promise<ScheduleListOk> {
+    const reply = await this.request({
+      peer: hostEpk,
+      room: roomId,
+      inner: { type: "schedule_list", id: newId() },
+      accepts: ["schedule_list_ok"],
+      acceptsError: "action_error",
+      expectedAction: "schedule_list",
+    });
+    if (!isScheduleListOk(reply)) throw new ProtocolFrameError("unexpected_reply");
+    return reply;
+  }
+
+  async addSchedule(
+    hostEpk: string,
+    roomId: string,
+    input: {
+      daemonId: string;
+      schedule: string;
+      prompt: string;
+      tz?: string | null;
+      skipIfBusy?: boolean;
+      wake?: boolean;
+      catchup?: boolean;
+      /** Pin a model for this task; omitted means inherit the session model. */
+      model?: { provider: string; id: string } | null;
+      /** Give each fire its own session instead of appending to the live one. */
+      freshSession?: boolean;
+    },
+  ): Promise<WireScheduleTask> {
+    const reply = await this.request({
+      peer: hostEpk,
+      room: roomId,
+      inner: {
+        type: "schedule_add",
+        id: newId(),
+        daemon_id: input.daemonId,
+        schedule: input.schedule,
+        prompt: input.prompt,
+        tz: input.tz ?? null,
+        skip_if_busy: input.skipIfBusy,
+        wake: input.wake,
+        catchup: input.catchup,
+        /*
+         * Explicit null rather than omission for the model: the daemon reads a
+         * present-but-null as INHERIT, and sending the key makes the intent
+         * visible on the wire instead of relying on absence meaning the same
+         * thing.
+         */
+        model: input.model ?? null,
+        ...(input.freshSession === undefined ? {} : { fresh_session: input.freshSession }),
+      },
+      accepts: ["schedule_add_ok"],
+      acceptsError: "action_error",
+      expectedAction: "schedule_add",
+    });
+    const task = (reply as { task?: unknown }).task;
+    if (!isWireScheduleTask(task)) throw new ProtocolFrameError("unexpected_reply");
+    return task;
+  }
+
+  async removeSchedule(hostEpk: string, roomId: string, jobId: string): Promise<void> {
+    await this.request({
+      peer: hostEpk,
+      room: roomId,
+      inner: { type: "schedule_remove", id: newId(), job_id: jobId },
+      accepts: ["schedule_remove_ok"],
+      acceptsError: "action_error",
+      expectedAction: "schedule_remove",
+    });
+  }
+
+  async setScheduleEnabled(
+    hostEpk: string,
+    roomId: string,
+    jobId: string,
+    enabled: boolean,
+  ): Promise<void> {
+    await this.request({
+      peer: hostEpk,
+      room: roomId,
+      inner: { type: "schedule_set_enabled", id: newId(), job_id: jobId, enabled },
+      accepts: ["schedule_set_enabled_ok"],
+      acceptsError: "action_error",
+      expectedAction: "schedule_set_enabled",
+    });
+  }
+
+  async runScheduleNow(hostEpk: string, roomId: string, jobId: string): Promise<string> {
+    const reply = await this.request({
+      peer: hostEpk,
+      room: roomId,
+      inner: { type: "schedule_run_now", id: newId(), job_id: jobId },
+      accepts: ["schedule_run_now_ok"],
+      acceptsError: "action_error",
+      expectedAction: "schedule_run_now",
+    });
+    const result = (reply as { result?: unknown }).result;
+    return typeof result === "string" ? result : "unknown";
+  }
+
   /** fs_list — the host resolves and lists; the client never touches a path. */
   async fsList(
     hostEpk: string,
@@ -644,6 +783,142 @@ export class RemotePiWebClient {
     });
     if (!isFsListOk(reply)) throw new ProtocolFrameError("unexpected_reply");
     return reply;
+  }
+
+  /** fs_read — ONE allowlisted text file (plan/77).
+   *
+   * Same fence as fsList: the HOST decides what is readable (an allowlist of
+   * plan/.workflow/docs directories, checked on the realpath), so the client
+   * never validates a path and never decides what is safe. A refusal arrives as
+   * `action_error` with a typed code, which the caller must translate into a
+   * fixed client-authored reason — the host text is never shown to the user. */
+  async fsRead(
+    hostEpk: string,
+    path: string,
+    root: string,
+    options: { roomId?: string } = {},
+  ): Promise<FsReadOk> {
+    const reply = await this.request({
+      peer: hostEpk,
+      room: options.roomId ?? HOST_ROOM,
+      inner: { type: "fs_read", id: newId(), path, root },
+      accepts: ["fs_read_ok"],
+      acceptsError: "action_error",
+      expectedAction: "fs_read",
+    });
+    if (!isFsReadOk(reply)) throw new ProtocolFrameError("unexpected_reply");
+    return reply;
+  }
+
+  /**
+   * changes_snapshot — git working-tree STATUS for one workspace (plan/78).
+   *
+   * Two accepted replies, not one: a repo that cannot be read is NOT the same as
+   * a clean repo. `4.1f` — the workspace every acceptance run here uses — is not a
+   * git repository at all, so collapsing the failure into an empty snapshot would
+   * make the panel assert "nothing changed" about a directory git never looked at.
+   * The failure is returned as data (`{ ok: false, reason }`) rather than thrown,
+   * because it is an ordinary answer this dock must render.
+   *
+   * Nothing here validates a path: the host runs git against `root` and returns
+   * repo-relative paths, so the client never learns or decides anything about the
+   * host's directory layout.
+   */
+  async changesSnapshot(
+    hostEpk: string,
+    root: string,
+    daemonId: string,
+    options: { roomId?: string } = {},
+  ): Promise<{ ok: true; snapshot: ChangesSnapshotWire } | { ok: false; reason: ChangesUnavailableReason }> {
+    const reply = await this.request({
+      peer: hostEpk,
+      room: options.roomId ?? HOST_ROOM,
+      inner: { type: "changes_snapshot", id: newId(), root, daemon_id: daemonId },
+      accepts: ["changes_snapshot_ok", "changes_snapshot_unavailable"],
+    });
+    if (isChangesSnapshotOk(reply)) return { ok: true, snapshot: reply.snapshot };
+    if (isChangesSnapshotUnavailable(reply)) return { ok: false, reason: reply.reason };
+    throw new ProtocolFrameError("unexpected_reply");
+  }
+
+  /**
+   * models_describe — the host's own models.json (plan/79).
+   *
+   * Carries NO parameters at all: there is no path to name, so this method cannot
+   * be used to read a different file. The guard additionally refuses a frame that
+   * carries any credential, which means a host-side stripping regression surfaces
+   * as an `unexpected_reply` error rather than as a disclosure in the UI.
+   */
+  async describeModels(hostEpk: string, options: { roomId?: string } = {}): Promise<ModelsDescribeOk> {
+    const reply = await this.request({
+      peer: hostEpk,
+      room: options.roomId ?? HOST_ROOM,
+      inner: { type: "models_describe", id: newId() },
+      accepts: ["models_describe_ok"],
+      acceptsError: "models_error",
+    });
+    if (!isModelsDescribeOk(reply)) throw new ProtocolFrameError("unexpected_reply");
+    return reply;
+  }
+
+  /**
+   * models_mutate — apply path-addressed edits and get the new revision back.
+   *
+   * A refusal (stale revision, invalid value, unverifiable result) arrives as
+   * `models_error` with a closed reason, which the caller turns into its own
+   * sentence. No host text is ever forwarded.
+   */
+  async mutateModels(
+    hostEpk: string,
+    ops: ModelsOpWire[],
+    revision: string,
+    options: { roomId?: string } = {},
+  ): Promise<{ ok: true; revision: string } | { ok: false; reason: ModelsErrorReason }> {
+    const reply = await this.request({
+      peer: hostEpk,
+      room: options.roomId ?? HOST_ROOM,
+      inner: { type: "models_mutate", id: newId(), ops, revision },
+      accepts: ["models_mutate_ok", "models_error"],
+      acceptsError: "models_error",
+    });
+    /* A refusal is DATA, like a Changes failure: the caller renders a sentence
+     * from the closed reason instead of catching an exception it cannot
+     * classify. */
+    if (isModelsError(reply)) return { ok: false, reason: reply.reason };
+    if (!isModelsMutateOk(reply)) throw new ProtocolFrameError("unexpected_reply");
+    return { ok: true, revision: reply.revision };
+  }
+
+  /** settings_describe (plan/80) — the host settings whitelist projection. */
+  async describeSettings(hostEpk: string, options: { roomId?: string } = {}): Promise<SettingsDescribeOk> {
+    const reply = await this.request({
+      peer: hostEpk,
+      room: options.roomId ?? HOST_ROOM,
+      inner: { type: "settings_describe", id: newId() },
+      accepts: ["settings_describe_ok"],
+      acceptsError: "settings_error",
+    });
+    if (!isSettingsDescribeOk(reply)) throw new ProtocolFrameError("unexpected_reply");
+    return reply;
+  }
+
+  /** settings_mutate (plan/80) — whitelisted edits, refusal as data. */
+  async mutateSettings(
+    hostEpk: string,
+    ops: SettingsOpWire[],
+    revision: string,
+    options: { roomId?: string } = {},
+  ): Promise<{ ok: true; revision: string } | { ok: false; reason: SettingsErrorReason }> {
+    const reply = await this.request({
+      peer: hostEpk,
+      room: options.roomId ?? HOST_ROOM,
+      inner: { type: "settings_mutate", id: newId(), ops, revision },
+      accepts: ["settings_mutate_ok", "settings_error"],
+      acceptsError: "settings_error",
+    });
+    if (isSettingsError(reply)) return { ok: false, reason: reply.reason };
+    if (!isSettingsMutateOk(reply)) throw new ProtocolFrameError("unexpected_reply");
+    return { ok: true, revision: reply.revision };
   }
 
   /** workspace_start — spawn (or adopt) a Pi in `cwd`; returns its room. */
@@ -706,6 +981,52 @@ export class RemotePiWebClient {
       expectedAction: "workspace_add",
     });
     if (reply.type !== "action_ok" || reply.action !== "workspace_add") {
+      throw new ProtocolFrameError("unexpected_reply");
+    }
+  }
+
+  /**
+   * workspace_stop — shut down a live workspace's Pi by cwd. Supervisor verb:
+   * it is answered on the HOST room, never proxied to the child.
+   *
+   * Answered with its own `workspace_stop_ok` (NOT `action_ok`), which carries
+   * the canonical cwd and daemon id the host actually stopped.
+   */
+  async stopWorkspace(
+    hostEpk: string,
+    cwd: string,
+    roomId: string = HOST_ROOM,
+  ): Promise<WorkspaceStopOk> {
+    const reply = await this.request({
+      peer: hostEpk,
+      room: roomId,
+      inner: { type: "workspace_stop", id: newId(), cwd },
+      accepts: ["workspace_stop_ok"],
+      acceptsError: "action_error",
+      expectedAction: "workspace_stop",
+    });
+    if (!isWorkspaceStopOk(reply)) throw new ProtocolFrameError("unexpected_reply");
+    return reply;
+  }
+
+  /**
+   * workspace_remove — drop a path from the host catalog. Supervisor verb on the
+   * HOST room; answered with the generic `action_ok`/`action_error` pair.
+   */
+  async removeWorkspace(
+    hostEpk: string,
+    path: string,
+    roomId: string = HOST_ROOM,
+  ): Promise<void> {
+    const reply = await this.request({
+      peer: hostEpk,
+      room: roomId,
+      inner: { type: "workspace_remove", id: newId(), path },
+      accepts: ["action_ok"],
+      acceptsError: "action_error",
+      expectedAction: "workspace_remove",
+    });
+    if (reply.type !== "action_ok" || reply.action !== "workspace_remove") {
       throw new ProtocolFrameError("unexpected_reply");
     }
   }
@@ -785,6 +1106,23 @@ export class RemotePiWebClient {
     return this._forwardToRoom(hostEpk, roomId, (id) => ({ type: "pi_surface", id }));
   }
 
+  /**
+   * Stops the turn named by `targetId` (`cancel`).
+   *
+   * Addresses the CHILD room like every other workspace verb — the abort happens
+   * in the Pi process that is generating, not in the supervisor. The host answers
+   * `cancelled {in_reply_to: <this request id>, target_id: <targetId>}`; callers
+   * MUST correlate on `target_id`, because the turn they track is keyed by the
+   * id they are passing here, not by the request id minted below.
+   */
+  sendCancel(hostEpk: string, roomId: string, targetId: string): string {
+    return this._forwardToRoom(hostEpk, roomId, (id) => ({
+      type: "cancel",
+      id,
+      target_id: targetId,
+    }));
+  }
+
   /** Runs ONE installed skill (`skill_invoke`). The host refuses a name it does
    *  not have — it never passes a literal `/skill:<name>` through to the model.
    *  The skill's output arrives on the normal chat channels. */
@@ -794,6 +1132,93 @@ export class RemotePiWebClient {
       id,
       name,
       ...(args === undefined || args === "" ? {} : { args }),
+    }));
+  }
+
+  /** `skill_set_enabled` — persist a skill's enabled state on the host. */
+  sendSkillSetEnabled(hostEpk: string, roomId: string, name: string, enabled: boolean): string {
+    return this._forwardToRoom(hostEpk, roomId, (id) => ({
+      type: "skill_set_enabled",
+      id,
+      name,
+      enabled,
+    }));
+  }
+
+  /**
+   * `package_install` — install a Pi package (an extension bundle).
+   *
+   * `confirmThirdParty` is not optional and not defaulted. The host REFUSES the
+   * request unless it is literally `true`, because installing a package
+   * downloads and runs third-party code with the host user's privileges. Making
+   * it a required parameter means a caller cannot install anything by accident:
+   * every call site has to say, in source, that the user was told.
+   *
+   * `scope === "project"` writes the workspace's `.pi/settings.json` and needs
+   * that project to be trusted; the host enforces that and reports it back.
+   */
+  sendPackageInstall(
+    hostEpk: string,
+    roomId: string,
+    source: string,
+    options: { confirmThirdParty: true; scope?: "user" | "project" },
+  ): string {
+    return this._forwardToRoom(hostEpk, roomId, (id) => ({
+      type: "package_install",
+      id,
+      source,
+      confirm_third_party: options.confirmThirdParty,
+      ...(options.scope === undefined ? {} : { scope: options.scope }),
+    }));
+  }
+
+  /** `package_remove` — drop one configured package's settings entry. `scope`
+   *  selects which settings file; omitted lets the host decide. */
+  sendPackageRemove(
+    hostEpk: string,
+    roomId: string,
+    source: string,
+    scope?: "user" | "project",
+  ): string {
+    return this._forwardToRoom(hostEpk, roomId, (id) => ({
+      type: "package_remove",
+      id,
+      source,
+      ...(scope === undefined ? {} : { scope }),
+    }));
+  }
+
+  /**
+   * `package_set_enabled` — turn a package's resources off or on WITHOUT
+   * uninstalling it.
+   *
+   * Deliberately a sibling of sendPackageRemove rather than an option on it:
+   * remove deletes the code and cannot be undone offline, while this only flips
+   * the settings entry and is reversible. One control that did both would have
+   * to lie about which one it just did.
+   */
+  sendPackageSetEnabled(
+    hostEpk: string,
+    roomId: string,
+    source: string,
+    scope: "user" | "project",
+    enabled: boolean,
+  ): string {
+    return this._forwardToRoom(hostEpk, roomId, (id) => ({
+      type: "package_set_enabled",
+      id,
+      source,
+      scope,
+      enabled,
+    }));
+  }
+
+  /** `package_update` — reconcile one source, or every package when omitted. */
+  sendPackageUpdate(hostEpk: string, roomId: string, source?: string): string {
+    return this._forwardToRoom(hostEpk, roomId, (id) => ({
+      type: "package_update",
+      id,
+      ...(source === undefined || source === "" ? {} : { source }),
     }));
   }
 
@@ -1260,6 +1685,38 @@ export class RemotePiWebClient {
     if (msg.type === "session_history") {
       this.roomOfRememberedSync(msg);  // consume the correlation entry
       this.emitMessage(msg, HOST_ROOM); return;
+    }
+    /*
+     * Automations replies are FIRE-AND-FORGET answers, not RPC replies.
+     *
+     * `sendSchedule*` writes straight to the host room with `rawSend`, which
+     * registers nothing in `pending` — deliberately, because the panel re-lists
+     * the authoritative task list after every mutation instead of applying the
+     * reply optimistically. That made every `schedule_*` answer fall through to
+     * `unknown_reply` and get dropped: the daemon logged
+     * `replying schedule_list_ok ... delivered=true` while the browser stayed on
+     * "Talking to the host…" forever.
+     *
+     * Same shape as the `session_history` carve-out above, for the same reason.
+     */
+    /*
+     * Automations replies: settle the pending request when there is one, and only
+     * fall back to the push sink when there is not.
+     *
+     * An earlier version ALWAYS emitted instead of settling. That was the right
+     * shape when these senders were fire-and-forget, but once they became normal
+     * `request` calls the reply never resolved its promise — `listSchedules` threw
+     * "the host did not reply in time" while the daemon had answered in
+     * milliseconds, so the panel showed a failure notice and an empty list.
+     */
+    if (msg.type.startsWith("schedule_")) {
+      const scheduleTo = typeof msg.in_reply_to === "string" ? msg.in_reply_to : null;
+      const awaiting = scheduleTo === null ? undefined : this.pending.get(scheduleTo);
+      if (awaiting === undefined) {
+        this.emitMessage(msg, HOST_ROOM);
+        return;
+      }
+      // Fall through to the ordinary reply path below.
     }
     const id = typeof msg.in_reply_to === "string" ? msg.in_reply_to : null;
     if (id === null) {

@@ -201,6 +201,27 @@
     flex: 1;
     align-items: center;
     gap: calc(var(--spacing) * .5);
+    /* Eight tabs no longer fit a narrow dock (plan/81): with Settings and Models
+     * split out, the row overflowed and the LAST tab was clipped by the collapse
+     * button — the active surface became unreachable at some widths. Scrolling the
+     * row keeps every tab reachable at any dock width. `scrollbar-width: none`
+     * because a visible bar inside a 28px-tall row would eat more height than the
+     * tabs themselves; the row is still scrollable by trackpad and by keyboard
+     * (each tab is a real button, so Tab/arrow traversal works). */
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    /* Keep the focus ring of a scrolled-to tab from being clipped. */
+    padding-block: 2px;
+    /* Breathing room so the last tab does not butt against the collapse button
+     * when the row is fully scrolled — visually it reads as "clipped" otherwise. */
+    padding-inline-end: calc(var(--spacing) * 2);
+    scroll-padding-inline-end: calc(var(--spacing) * 2);
+  }
+
+  .tabList::-webkit-scrollbar {
+    display: none;
   }
 
   .tabActive {
@@ -257,6 +278,9 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;
+    /* The label must not shrink below its text when the row scrolls; otherwise
+     * flexbox squeezes every label to ellipses before overflow kicks in. */
+    flex: none;
   }
 
   .collapseButton {
@@ -355,7 +379,7 @@
     font-size: 12.5px;
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
-    color: var(--green-ink);
+    color: var(--on-accent);
     transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
     transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
     transition-duration: var(--tw-duration,var(--default-transition-duration));
@@ -439,7 +463,7 @@
     font-size: 12px;
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
-    color: var(--green-ink);
+    color: var(--on-accent);
     transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
     transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
     transition-duration: var(--tw-duration,var(--default-transition-duration));
@@ -684,7 +708,7 @@
     font-size: 11px;
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
-    color: var(--green-ink);
+    color: var(--on-accent);
     transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
     transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
     transition-duration: var(--tw-duration,var(--default-transition-duration));
@@ -709,3 +733,16 @@
     rotate: 180deg;
   }
 }
+
+  /* Plugins panel: the two group headers ("Packages" / "Skills") that split the
+     single scroll column. Small, uppercase and secondary — they label a group,
+     they are not section titles competing with the dock's own tab strip. */
+  .sectionLabel {
+    display: block;
+    margin-top: calc(var(--spacing) * 2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--dsw-alias-label-secondary);
+  }

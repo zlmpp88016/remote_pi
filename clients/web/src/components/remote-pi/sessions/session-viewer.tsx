@@ -165,7 +165,7 @@ export function SessionViewer({
                 ? "The host has no command context to switch sessions with."
                 : switchBusy
                   ? "Switching — the host is restarting its Pi onto this session…"
-                  : "Make this the live session, then keep talking in it (affects every paired client)"
+                  : "将此设为当前会话，然后在其中继续对话（影响所有已配对客户端）"
             }
             className={`${css.switchButton}${switchBusy ? ` ${css.switchButtonBusy}` : ""}`}
           >
@@ -179,7 +179,7 @@ export function SessionViewer({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close the read-only session view"
+          aria-label="关闭只读会话视图"
           className={css.refresh}
         >
           <Icon name="x" size={12} />

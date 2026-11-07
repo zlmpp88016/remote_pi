@@ -43,7 +43,7 @@
     background-color: var(--accent);
     --tw-font-weight: var(--font-weight-semibold);
     font-weight: var(--font-weight-semibold);
-    color: var(--green-ink);
+    color: var(--on-accent);
   }
 
   .controlPrimary:focus-visible {

@@ -22,13 +22,17 @@
 import type {
   ServerMessage,
   WireModel,
+  WirePackage,
   WireSessionEvent,
   WireSessionInfo,
   WireSkill,
 } from "@/lib/remote-pi/protocol";
 import {
   isActionError,
+  isCancelledMsg,
   isModelsListOk,
+  isPackageOpOk,
+  isSkillSetEnabledOk,
   isPiSurfaceOk,
   isSessionListOk,
   isSessionReadOk,
@@ -41,7 +45,7 @@ import {
 } from "@/lib/remote-pi/protocol";
 import { sessionActionErrorText, sortSessions, switchErrorText } from "@/lib/remote-pi/sessions";
 import { hydrateTurns, type ChatEvent } from "@/lib/remote-pi/chat";
-import { MODEL_SET_FAILED, SESSION_NEW_FAILED, SKILL_FAILED, THINKING_SET_FAILED } from "./notices";
+import { PACKAGE_FAILED, MODEL_SET_FAILED, SESSION_NEW_FAILED, SKILL_FAILED, THINKING_SET_FAILED } from "./notices";
 
 /** Structural twin of `ConfirmedModel` (kept local so this module has no cycle). */
 export interface ConfirmedModelLike {
@@ -60,6 +64,10 @@ export interface DispatcherPorts {
   readonly thinkingReqRef: { current: { id: string; room: string } | null };
   readonly skillsReqRef: { current: { id: string; room: string } | null };
   readonly skillInvokeRef: { current: { id: string; room: string } | null };
+  /** The in-flight package/skill mutation, acked by the generic action_ok/error. */
+  readonly packageReqRef: { current: { id: string; room: string; op?: string } | null };
+  /** Called when the host CONFIRMS a package mutation (never on a refusal). */
+  readonly onPackageConfirmed: (op: string | undefined) => void;
   readonly sessionsReqRef: { current: { id: string; room: string } | null };
   readonly sessionReadReqRef: {
     current: { id: string; room: string; sessionId: string } | null;
@@ -96,7 +104,7 @@ export interface DispatcherPorts {
     models: readonly WireModel[],
     current: WireModel | undefined,
   ) => void;
-  readonly applySkills: (roomId: string, rows: readonly WireSkill[]) => void;
+  readonly applySkills: (roomId: string, rows: readonly WireSkill[], packages: readonly WirePackage[]) => void;
   readonly markRowCurrent: (roomId: string, provider: string, modelId: string) => void;
   readonly confirmCachedModel: (roomId: string, provider: string, modelId: string) => void;
   readonly openViewer: (sessionId: string, events: readonly WireSessionEvent[]) => void;
@@ -112,6 +120,9 @@ export interface DispatcherPorts {
   readonly resetChatState: () => void;
   readonly runPrefetchNext: () => void;
   readonly dispatchChat: (event: ChatEvent) => void;
+  /** Asks the ACTIVE room for a fresh `pi_surface` after a mutation, so the
+   *  rows show what the host actually persisted instead of a local guess. */
+  readonly refreshSurface: (force?: boolean) => void;
 }
 
 /** Applies one host frame. Every effect is a port call; nothing is returned. */
@@ -122,7 +133,7 @@ export function dispatchServerMessage(
 ): void {
   const {
     activeRoomRef, modelReqRef, modelSetRef, thinkingReqRef,
-    skillsReqRef, skillInvokeRef, sessionsReqRef, sessionReadReqRef, sessionNewReqRef,
+    skillsReqRef, skillInvokeRef, packageReqRef, onPackageConfirmed, sessionsReqRef, sessionReadReqRef, sessionNewReqRef,
     sessionSwitchReqRef, pendingModelChoiceRef, prefetchReqRef,
     setModelBusy, setModelNotice, setModelSwitchTo,
     setSkillsBusy, setSkillsNotice,
@@ -130,7 +141,7 @@ export function dispatchServerMessage(
     setConfirmedByRoom, setSessionsByRoom, setSessionCaps,
     applyCatalogue, applySkills, markRowCurrent, confirmCachedModel,
     openViewer, clearViewer, relistAfterSwitch, resyncLive, resetChatState,
-    runPrefetchNext, dispatchChat, cacheRead,
+    runPrefetchNext, dispatchChat, cacheRead, refreshSurface,
   } = p;
 
   /* ── catalogue replies bypass the room filter ──────────────────────────
@@ -170,9 +181,45 @@ export function dispatchServerMessage(
     if (pending === null || pending.room !== room || pending.id !== msg.in_reply_to) return;
     if (!isPiSurfaceOk(msg)) return;
     skillsReqRef.current = null;
-    applySkills(room, msg.skills);
+    /* `packages` is OPTIONAL on the wire: an absent list is read as empty, so a
+       host that only reports skills still populates the slash menu. */
+    applySkills(room, msg.skills, msg.packages ?? []);
     setSkillsBusy(false);
     setSkillsNotice(null);
+    return;
+  }
+
+  /* A package/skill mutation landed. The HOST is the authority on the resulting
+     install state, so the reply is not applied optimistically: the surface is
+     asked again and the rows are replaced with what the host reports. */
+  if (msg.type === "skill_set_enabled_ok" || msg.type === "package_op_ok") {
+    if (!isSkillSetEnabledOk(msg) && !isPackageOpOk(msg)) return;
+    /*
+     * The SUCCESS path is a dedicated frame, not `action_ok`, so it has to be
+     * correlated here too. Missing this made the ref survive a successful
+     * mutation: a later refusal could then be attributed to an operation that
+     * had already finished, and the Install form had no way to know it should
+     * close.
+     */
+    const done = packageReqRef.current;
+    const isThisOp = done !== null && done.room === room && done.id === msg.in_reply_to;
+    /*
+     * Only the reply that answers the PENDING request may end the busy state.
+     * A stale or unrelated `package_op_ok` (a duplicate, or one belonging to a
+     * mutation already abandoned by a forced refresh) must not clear the flag
+     * while a different operation is still running — otherwise the panel would
+     * look idle and accept a second write.
+     */
+    if (!isThisOp && done !== null) return;
+    if (isThisOp) packageReqRef.current = null;
+    setSkillsBusy(false);
+    setSkillsNotice(null);
+    if (isThisOp) onPackageConfirmed(done.op);
+    /* Force: the reply proves the install state CHANGED, so any listing already
+     * in flight describes the state before the change and must not be waited
+     * on. Without this a stale pending request made the refresh a silent no-op
+     * and the panel sat on its busy text forever. */
+    refreshSurface(true);
     return;
   }
 
@@ -309,6 +356,32 @@ export function dispatchServerMessage(
       setSessionsNotice(msg.type === "action_ok" ? null : SESSION_NEW_FAILED);
       return;
     }
+    /*
+     * A package/skill mutation was refused or accepted.
+     *
+     * This MUST be correlated before the generic early-return below: the host
+     * answers these with the plain action_ok/action_error, so without this block
+     * a refusal (untrusted project, npm failure, bad source) matched nothing,
+     * left `busy` true forever, and — because the panel disables every control
+     * while busy — trapped the user with no way to retry short of a reload.
+     */
+    const mutation = packageReqRef.current;
+    if (mutation !== null && mutation.room === room && mutation.id === msg.in_reply_to) {
+      packageReqRef.current = null;
+      setSkillsBusy(false);
+      if (msg.type === "action_error") {
+        setSkillsNotice(PACKAGE_FAILED);
+        return;
+      }
+      /* Accepted: the HOST is the authority on the resulting state, so re-read
+       * the surface rather than assuming what changed. Forced, because the reply
+       * proves the old listing is stale. */
+      setSkillsNotice(null);
+      /* Passed explicitly: the ref is cleared one line above. */
+      onPackageConfirmed(mutation.op);
+      refreshSurface(true);
+      return;
+    }
     if (!isModelSet && !isThinking && !isSkillInvoke) return;
     if (isModelSet) modelSetRef.current = null;
     if (isThinking) thinkingReqRef.current = null;
@@ -421,6 +494,20 @@ export function dispatchServerMessage(
   if (msg.type === "user_message") {
     if (typeof msg.id !== "string") return;
     dispatchChat({ type: "echo", roomId: room, id: msg.id });
+    return;
+  }
+  /*
+   * The user stopped the turn.
+   *
+   * Correlated on `target_id`, NOT `in_reply_to`: the host answers
+   * `cancelled {in_reply_to: <cancel request id>, target_id: <turn id>}`
+   * (server/src/index.ts:4661), while the reducer's `matches()` compares against
+   * the TURN id. Using `in_reply_to` here would silently match nothing and leave
+   * the turn stuck open — the exact bug this control exists to fix.
+   */
+  if (msg.type === "cancelled") {
+    if (!isCancelledMsg(msg)) return;
+    dispatchChat({ type: "cancelled", roomId: room, id: msg.target_id });
     return;
   }
   if (msg.type === "agent_chunk") {

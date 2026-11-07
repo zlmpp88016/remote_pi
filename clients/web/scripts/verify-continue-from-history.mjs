@@ -84,7 +84,7 @@ await sleep(1200);
 
 await evaluate(send, `(() => {
   if (document.querySelector('section[aria-label="Sessions"]')) return true;
-  const t = [...document.querySelectorAll("button")].find((x) => /^Sessions$/i.test((x.innerText || "").trim()));
+  const t = [...document.querySelectorAll("button")].find((x) => /^会话$/i.test((x.innerText || "").trim()));
   if (t) t.click();
   return true;
 })()`);
@@ -158,7 +158,7 @@ else fail("clicking a history row issues a real session_read", "no session_read_
 /* ── 2. the continue control exists and is a real control ────────────────── */
 const control = await evaluate(send, `(() => {
   const b = [...document.querySelectorAll("button")]
-    .find((x) => /^Continue in this session$/i.test((x.innerText || "").trim()));
+    .find((x) => /^在此会话中继续$/i.test((x.innerText || "").trim()));
   if (!b) return { found: false };
   const cs = getComputedStyle(b);
   return {
@@ -190,7 +190,7 @@ else fail("the control is a normal UI size", `${control.fontSize} is too small t
 const switchBefore = received.length;
 await evaluate(send, `(() => {
   const b = [...document.querySelectorAll("button")]
-    .find((x) => /^Continue in this session$/i.test((x.innerText || "").trim()));
+    .find((x) => /^在此会话中继续$/i.test((x.innerText || "").trim()));
   if (b) b.click();
   return !!b;
 })()`);

@@ -75,7 +75,7 @@ export const TurnDivider = memo(function TurnDivider({
           data-open={open || undefined}
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          aria-label={`Turn ${index}: ${label}. ${open ? "Collapse" : "Expand"} its process.`}
+          aria-label={`Turn ${index}: ${label}. ${open ? "折叠" : "Expand"} its process.`}
         >
           {row}
         </button>

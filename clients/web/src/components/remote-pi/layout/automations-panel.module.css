@@ -1,0 +1,483 @@
+/* Automations panel (daemon-scheduled tasks).
+ *
+ * Tokens: every `var(--…)` below resolves to a declaration in
+ * src/styles/properties.css or design-platform.css — verified by a script over
+ * the whole file, not by eye. Deliberately NOT used because they do not exist
+ * in this project: `--dsw-alias-label-muted`, `--dsw-alias-state-accent-primary`,
+ * `--font-weight-regular` (only `medium` and `semibold` are declared).
+ *
+ * Layout contract: `.root` fills the dock cell and NEVER scrolls. Exactly one
+ * child scrolls — `.scroller`. That single rule is what stops a freshly opened
+ * detail view from inheriting the list's scroll offset, which is the bug that
+ * once put the Plan document at top:-2438px.
+ */
+@layer utilities {
+  .root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* ---------------- header ---------------- */
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--spacing) * 1.5);
+    flex-shrink: 0;
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+    border-bottom: 1px solid var(--dsw-alias-border-l2);
+  }
+
+  .headTitle {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: var(--font-weight-semibold);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .back {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    padding: 2px 6px 2px 2px;
+    border: 0;
+    border-radius: var(--dsw-radius-xs);
+    background-color: transparent;
+    font-size: 11px;
+    color: var(--dsw-alias-label-secondary);
+    cursor: pointer;
+  }
+
+  .back:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+    background-color: var(--dsw-alias-bg-layer-1);
+  }
+
+  .back:focus-visible {
+    outline: 2px solid var(--dsw-alias-label-secondary);
+    outline-offset: 1px;
+  }
+
+  /* The chevron points right; rotating it 180° turns it into a back arrow
+   * without a second glyph. */
+  .backIcon {
+    transform: rotate(180deg);
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  .refresh,
+  .new {
+    flex-shrink: 0;
+    padding: 2px 8px;
+    border: 1px solid var(--dsw-alias-border-l2);
+    border-radius: var(--dsw-radius-xs);
+    background-color: transparent;
+    font-size: 11px;
+    color: var(--dsw-alias-label-secondary);
+    cursor: pointer;
+  }
+
+  .refresh:hover:not(:disabled),
+  .new:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+    background-color: var(--dsw-alias-bg-layer-1);
+  }
+
+  .refresh:disabled,
+  .new:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* ---------------- the ONE scroller ---------------- */
+
+  .scroller {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+  }
+
+  /* ---------------- notices ---------------- */
+
+  .intro {
+    margin: 0;
+    padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+    font-size: 11.5px;
+    line-height: var(--leading-relaxed);
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .error {
+    margin: 0 0 calc(var(--spacing) * 1.5);
+    padding: 6px 8px;
+    border-radius: var(--dsw-radius-sm);
+    background-color: var(--dsw-alias-bg-layer-1);
+    border: 1px solid var(--dsw-alias-state-warn-primary);
+    font-size: 11px;
+    line-height: var(--leading-relaxed);
+    color: var(--dsw-alias-state-warn-label);
+  }
+
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: calc(var(--spacing) * 2) 0;
+    font-size: 11.5px;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .empty {
+    margin: calc(var(--spacing) * 3) 0;
+    font-size: 11.5px;
+    line-height: var(--leading-relaxed);
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .hint {
+    margin: 4px 0 calc(var(--spacing) * 1.5);
+    font-size: 10.5px;
+    line-height: var(--leading-relaxed);
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  /* ---------------- list ---------------- */
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--dsw-radius-xs);
+    background-color: transparent;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .row:hover {
+    background-color: var(--dsw-alias-bg-layer-1);
+  }
+
+  .row:focus-visible {
+    outline: 2px solid var(--dsw-alias-label-secondary);
+    outline-offset: -1px;
+  }
+
+  .rowTop {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .rowTitle {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: var(--font-weight-medium);
+    color: var(--dsw-alias-label-primary);
+  }
+
+  /* A disabled task stays listed (so it can be switched back on) but must not
+   * read like an active one. */
+  .rowTitleOff {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: var(--font-weight-medium);
+    color: var(--dsw-alias-label-tertiary);
+    text-decoration: line-through;
+  }
+
+  .badgeOff {
+    flex-shrink: 0;
+    height: 15px;
+    padding: 0 4px;
+    border-radius: var(--dsw-radius-xs);
+    border: 1px dashed var(--dsw-alias-border-l2);
+    font-family: var(--ff-mono);
+    font-size: 9.5px;
+    line-height: 13px;
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  .rowMeta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 10.5px;
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  .rowStatus {
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  /* ---------------- fire log ---------------- */
+
+  .fireLog {
+    margin-bottom: calc(var(--spacing) * 3);
+    padding-bottom: calc(var(--spacing) * 2);
+    border-bottom: 1px solid var(--dsw-alias-border-l2);
+  }
+
+  .sectionTitle {
+    margin: 0 0 6px;
+    font-size: 10.5px;
+    font-weight: var(--font-weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  .fireList {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .fireRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10.5px;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .fireIcon {
+    flex-shrink: 0;
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  .fireTime {
+    margin-left: auto;
+    color: var(--dsw-alias-label-tertiary);
+  }
+
+  /* ---------------- outcome tones ---------------- */
+
+  .ok {
+    color: var(--dsw-alias-state-success-primary);
+  }
+
+  .warn {
+    color: var(--dsw-alias-state-warn-label);
+  }
+
+  /* ---------------- detail ---------------- */
+
+  .facts {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 10px;
+    margin: 0 0 calc(var(--spacing) * 3);
+    font-size: 11px;
+  }
+
+  .facts dt {
+    color: var(--dsw-alias-label-tertiary);
+    white-space: nowrap;
+  }
+
+  .facts dd {
+    margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .mono {
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .promptBox {
+    margin: 0 0 calc(var(--spacing) * 3);
+    padding: 8px;
+    border-radius: var(--dsw-radius-sm);
+    background-color: var(--dsw-alias-bg-layer-1);
+    border: 1px solid var(--dsw-alias-border-l2);
+    font-family: var(--ff-mono);
+    font-size: 10.5px;
+    line-height: var(--leading-relaxed);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  /* ---------------- actions ---------------- */
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: calc(var(--spacing) * 1.5);
+  }
+
+  .action,
+  .danger,
+  .dangerArmed {
+    padding: 3px 8px;
+    border-radius: var(--dsw-radius-xs);
+    border: 1px solid var(--dsw-alias-border-l2);
+    background-color: transparent;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  .action {
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .action:hover:not(:disabled) {
+    color: var(--dsw-alias-label-primary);
+    background-color: var(--dsw-alias-bg-layer-1);
+  }
+
+  .danger {
+    color: var(--dsw-alias-state-warn-label);
+    border-color: var(--dsw-alias-border-l2);
+  }
+
+  .danger:hover:not(:disabled) {
+    border-color: var(--dsw-alias-state-warn-primary);
+  }
+
+  /* Armed state must look DIFFERENT from the unarmed one, or the second click
+   * that deletes is indistinguishable from the first that armed. */
+  .dangerArmed {
+    color: var(--dsw-alias-bg-layer-1);
+    background-color: var(--dsw-alias-state-warn-primary);
+    border-color: var(--dsw-alias-state-warn-primary);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .action:disabled,
+  .danger:disabled,
+  .dangerArmed:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* ---------------- create form ---------------- */
+
+  .fieldLabel {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 10.5px;
+    font-weight: var(--font-weight-medium);
+    color: var(--dsw-alias-label-secondary);
+  }
+
+  .input,
+  .textarea {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 4px;
+    padding: 4px 6px;
+    border-radius: var(--dsw-radius-xs);
+    border: 1px solid var(--dsw-alias-border-l2);
+    background-color: var(--dsw-alias-bg-layer-1);
+    font-size: 11px;
+    font-family: inherit;
+    color: var(--dsw-alias-label-primary);
+  }
+
+  .input {
+    font-family: var(--ff-mono);
+  }
+
+  .textarea {
+    resize: vertical;
+    line-height: var(--leading-relaxed);
+  }
+
+  .input:disabled,
+  .textarea:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .input:focus-visible,
+  .textarea:focus-visible {
+    outline: 2px solid var(--dsw-alias-label-secondary);
+    outline-offset: -1px;
+  }
+
+  .flags {
+    margin: 0 0 calc(var(--spacing) * 2);
+    padding: calc(var(--spacing) * 1.5) 0 0;
+    border: 0;
+    border-top: 1px solid var(--dsw-alias-border-l2);
+  }
+
+  .check {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 11px;
+    line-height: var(--leading-relaxed);
+    color: var(--dsw-alias-label-secondary);
+    cursor: pointer;
+  }
+
+  .check input {
+    margin-top: 2px;
+    flex-shrink: 0;
+  }
+
+  .primary {
+    display: block;
+    width: 100%;
+    padding: 5px 10px;
+    border: 1px solid var(--dsw-alias-border-l2);
+    border-radius: var(--dsw-radius-xs);
+    background-color: var(--dsw-alias-bg-layer-1);
+    font-size: 11px;
+    font-weight: var(--font-weight-medium);
+    color: var(--dsw-alias-label-primary);
+    cursor: pointer;
+  }
+
+  .primary:hover:not(:disabled) {
+    border-color: var(--dsw-alias-label-tertiary);
+  }
+
+  .primary:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}

@@ -756,6 +756,31 @@
     color: var(--dsw-alias-label-secondary);
   }
 
+  /* Stop — same 20px hit box as Start/Restart so the action trio stays a row.
+     Red rather than amber: this ends a process, it does not revive one. */
+  .stopWorkspaceButton {
+    display: grid;
+    width: calc(var(--spacing) * 5);
+    height: calc(var(--spacing) * 5);
+    place-items: center;
+    border-radius: .25rem;
+    color: var(--dsw-alias-state-error-primary, #d92d20);
+    transition-property: color,background-color,border-color,outline-color,text-decoration-color,fill,stroke,--tw-gradient-from,--tw-gradient-via,--tw-gradient-to,opacity,box-shadow,transform,translate,scale,rotate,filter,-webkit-backdrop-filter,backdrop-filter,display,content-visibility,overlay,pointer-events;
+    transition-timing-function: var(--tw-ease,var(--default-transition-timing-function));
+    transition-duration: var(--tw-duration,var(--default-transition-duration));
+  }
+
+  @media(hover:hover) {
+    .stopWorkspaceButton:enabled:hover {
+      background-color: var(--dsw-alias-interactive-bg-hover);
+    }
+  }
+
+  .stopWorkspaceButton:disabled {
+    cursor: not-allowed;
+    color: var(--dsw-alias-label-secondary);
+  }
+
   .wsWarning {
     display: flex;
     align-items: flex-start;

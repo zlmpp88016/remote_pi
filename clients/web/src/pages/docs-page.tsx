@@ -18,45 +18,45 @@ const RELAY_README_URL =
 const ISSUES_URL = "https://github.com/exampleorg/remote_pi/issues";
 
 const DOCS_TOC: TocItem[] = [
-  { id: "quick-start", label: "Quick start" },
-  { id: "what-it-does", label: "What it does" },
-  { id: "install", label: "Install" },
-  { id: "using-remote-pi", label: <>Using <InlineCode>/remote-pi</InlineCode></> },
-  { id: "pairing", label: "Pairing a mobile device" },
-  { id: "quick-actions", label: "Quick actions from the phone" },
-  { id: "agent-network", label: "Agent network" },
-  { id: "daemon-mode", label: "Daemon mode" },
+  { id: "quick-start", label: "快速开始" },
+  { id: "what-it-does", label: "功能说明" },
+  { id: "install", label: "安装" },
+  { id: "using-remote-pi", label: <>使用 <InlineCode>/remote-pi</InlineCode></> },
+  { id: "pairing", label: "配对你的手机" },
+  { id: "quick-actions", label: "手机上的快捷操作" },
+  { id: "agent-network", label: "代理网络" },
+  { id: "daemon-mode", label: "守护进程模式" },
   {
     id: "relay",
-    label: "The relay",
+    label: "中继",
     sub: [
-      { id: "community-relay", label: "Community relay" },
-      { id: "self-host", label: "Self-host" },
-      { id: "point-pi", label: "Point Pi at your relay" },
+      { id: "community-relay", label: "社区中继" },
+      { id: "self-host", label: "自建" },
+      { id: "point-pi", label: "让 Pi 指向你的中继" },
     ],
   },
   { id: "protocol", label: "Protocol & Security" },
   {
     id: "commands",
-    label: "Command reference",
+    label: "命令速查",
     sub: [
-      { id: "commands-local", label: "Local session" },
-      { id: "commands-daemon", label: "Daemon fleet" },
-      { id: "commands-cron", label: "Daemon cron" },
+      { id: "commands-local", label: "本地会话" },
+      { id: "commands-daemon", label: "守护进程集群" },
+      { id: "commands-cron", label: "守护进程定时任务" },
     ],
   },
-  { id: "config", label: "Configuration files" },
+  { id: "config", label: "配置文件" },
   {
     id: "troubleshooting",
-    label: "Troubleshooting",
+    label: "常见问题",
     sub: [
-      { id: "footer-stuck", label: "Stuck on pairing" },
-      { id: "timeout-mobile", label: "Mobile times out" },
-      { id: "timeout-request", label: "Reply never arrives" },
-      { id: "one-pi-per-cwd", label: "One Pi per cwd" },
+      { id: "footer-stuck", label: "卡在配对" },
+      { id: "timeout-mobile", label: "手机连接超时" },
+      { id: "timeout-request", label: "收不到回复" },
+      { id: "one-pi-per-cwd", label: "每个目录一个 Pi" },
     ],
   },
-  { id: "links", label: "Links" },
+  { id: "links", label: "相关链接" },
 ];
 
 export function DocsPage() {
@@ -73,9 +73,9 @@ export function DocsPage() {
             </div>
             <p className="lede">
               This is the <strong className={css.emphasis}>reference</strong>. Remote
-              Pi is a mesh for coding agents: agents on the same machine talk
-              through a local UDS broker, agents on different machines reach each
-              other through an open-source relay, and your phone authenticates
+              Pi 是编码代理的网格：同一台机器上的代理通过本地 UDS 代理进程通信，
+              不同机器上的代理通过开源中继互相连通，你的手机负责认证新节点并驱动会话。
+              首个支持的运行环境是
               new peers and drives sessions. The first supported harness is the{" "}
               <a
                
@@ -83,7 +83,7 @@ export function DocsPage() {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Pi coding agent
+                Pi 编码代理
               </a>
               ; <InlineCode>/remote-pi</InlineCode> wires everything up. To{" "}
               <strong className={css.emphasis}>learn by doing</strong>, start with
@@ -94,7 +94,7 @@ export function DocsPage() {
               ; for <strong className={css.emphasis}>why</strong> it works this way,
               see{" "}
               <Link href="/remote-pi/why">
-                Why Pi
+                为什么用 Pi
               </Link>
               . The pages below are for looking things up.
             </p>
@@ -106,22 +106,21 @@ export function DocsPage() {
             <article className="prose docs-article">
               {/* ── Pointers into the tutorials ─────────────────────────── */}
 
-              <DocsSection id="quick-start" title="Quick start">
+              <DocsSection id="quick-start" title="快速开始">
         <p>
-          Install the plugin, run the setup wizard, and pair your phone in a few
-          commands — then send your first prompt from the app. The full
-          walkthrough, including the mobile side, is a tutorial.
+          安装插件、运行安装向导、配对手机，只需几条命令 — 然后在应用中发送第一条提示词。
+          完整演练（含手机端）见教程。
         </p>
         <p>
           →{" "}
           <Link href="/remote-pi/tutorials/getting-started">
-            See the Getting started tutorial
+            查看快速开始教程
           </Link>
           .
         </p>
       </DocsSection>
 
-      <DocsSection id="what-it-does" title="What it does">
+      <DocsSection id="what-it-does" title="功能说明">
         <p>
           Remote Pi adds two independent layers on top of Pi. The{" "}
           <strong>agent network</strong> lets agents
@@ -129,33 +128,33 @@ export function DocsPage() {
           or through the relay across PCs. The{" "}
           <strong>mobile control plane</strong> is your
           phone: it authenticates new peers into the mesh and drives sessions.
-          Each is covered hands-on:
+          每项都可以上手实践：
         </p>
         <ul className={css.listGap}>
           <li>
             <Link href="/remote-pi/tutorials/mesh-local">
-              Local mesh
+              本地网格
             </Link>{" "}
             — agents discovering and messaging on the same machine.
           </li>
           <li>
             <Link href="/remote-pi/tutorials/mesh-remote">
-              Remote mesh
+              远程网格
             </Link>{" "}
             — routing between agents on different PCs.
           </li>
           <li>
             <Link href="/remote-pi/tutorials/getting-started">
-              Getting started
+              快速开始
             </Link>{" "}
             — pairing your phone and driving an agent from it.
           </li>
         </ul>
       </DocsSection>
 
-      <DocsSection id="install" title="Install">
+      <DocsSection id="install" title="安装">
         <p>
-          Requirements: Node 20+ and Pi (the host coding agent). Remote Pi
+          环境要求：Node 20+ 和 Pi（主机上的编码代理）。Remote Pi 以 Pi 插件形式安装：
           installs as a Pi plugin with{" "}
           <InlineCode>pi install ./path/to/remote_pi/server</InlineCode>, which
           self-registers the <InlineCode>/remote-pi</InlineCode> slash command and
@@ -167,11 +166,11 @@ export function DocsPage() {
         <p>
           →{" "}
           <Link href="/remote-pi/tutorials/getting-started">
-            See the Getting started tutorial
+            查看快速开始教程
           </Link>
           . Daemon mode has its own one-time install — see{" "}
           <a href="#daemon-mode">
-            Daemon mode
+            守护进程模式
           </a>{" "}
           below.
         </p>
@@ -192,13 +191,13 @@ export function DocsPage() {
         <p>
           →{" "}
           <Link href="/remote-pi/tutorials/getting-started">
-            See the Getting started tutorial
+            查看快速开始教程
           </Link>{" "}
           for the guided flow.
         </p>
       </DocsSection>
 
-      <DocsSection id="pairing" title="Pairing a mobile device">
+      <DocsSection id="pairing" title="配对你的手机">
         <p>
           <InlineCode>/remote-pi pair</InlineCode> prints a QR (and a copy-paste
           URI); scan it with the Remote Pi app. Pairing is{" "}
@@ -214,15 +213,15 @@ export function DocsPage() {
         <p>
           →{" "}
           <Link href="/remote-pi/tutorials/getting-started">
-            See the Getting started tutorial
+            查看快速开始教程
           </Link>
           .
         </p>
       </DocsSection>
 
-      <DocsSection id="quick-actions" title="Quick actions from the phone">
+      <DocsSection id="quick-actions" title="手机上的快捷操作">
         <p>
-          Beyond chatting, the app drives a session with a small set of typed
+          除对话外，应用还通过一组类型化操作驱动会话 —
           actions — <strong>compact context</strong>,{" "}
           <strong>new session</strong>,{" "}
           <strong>set model</strong>, and{" "}
@@ -243,13 +242,13 @@ export function DocsPage() {
         <p>
           →{" "}
           <Link href="/remote-pi/tutorials/getting-started">
-            See the Getting started tutorial
+            查看快速开始教程
           </Link>
           .
         </p>
       </DocsSection>
 
-      <DocsSection id="agent-network" title="Agent network">
+      <DocsSection id="agent-network" title="代理网络">
         <p>
           Each agent is a peer in a mesh. The LLM gets three tools —{" "}
           <InlineCode>list_peers</InlineCode> (who is online),{" "}
@@ -263,13 +262,13 @@ export function DocsPage() {
         <ul className={css.listGap}>
           <li>
             <Link href="/remote-pi/tutorials/mesh-local">
-              Local mesh
+              本地网格
             </Link>{" "}
             — the broker, the three tools, a concrete exchange.
           </li>
           <li>
             <Link href="/remote-pi/tutorials/mesh-remote">
-              Remote mesh
+              远程网格
             </Link>{" "}
             — cross-PC addressing and what an ACK does (and doesn&apos;t)
             guarantee.
@@ -277,7 +276,7 @@ export function DocsPage() {
         </ul>
       </DocsSection>
 
-      <DocsSection id="daemon-mode" title="Daemon mode">
+      <DocsSection id="daemon-mode" title="守护进程模式">
         <p>
           Promote a folder to a 24/7 background agent: run{" "}
           <InlineCode>/remote-pi install</InlineCode> once per machine to install
@@ -293,12 +292,12 @@ export function DocsPage() {
         </p>
         <p>
           → <Link href="/remote-pi/tutorials/daemon">
-            See the Daemon mode tutorial
+            查看守护进程模式教程
           </Link>{" "}
           for the full how-to; the <em>why</em> (and how it compares to
           all-in-one platforms) is{" "}
           <Link href="/remote-pi/why">
-            Why Pi
+            为什么用 Pi
           </Link>
           .
         </p>
@@ -306,17 +305,15 @@ export function DocsPage() {
 
       {/* ── Reference ───────────────────────────────────────────────────── */}
 
-      <DocsSection id="relay" title="The relay">
+      <DocsSection id="relay" title="中继">
         <p>
-          The relay is the only network-touching piece of Remote Pi. In the
-          current MVP it sees both message payloads (forwarded but never logged
-          or inspected by the community operator) and connection metadata: which
-          keypair is online, which room/cwd identifiers exist, message timing,
-          sizes. Traffic is encrypted in transit (TLS) and peers authenticate
-          with Ed25519 pairing, but payloads are not encrypted at the
+          中继是 Remote Pi 中唯一涉及网络的组件。当前 MVP 下，它既能看到消息载荷
+          （转发但社区运营方从不记录、不检查），也能看到连接元数据：哪个密钥对在线、
+          有哪些房间/工作目录标识、消息时序、大小。传输层用 TLS 加密，节点间以 Ed25519 配对认证，
+          但载荷未在应用层加密 — 见
           application layer — see{" "}
           <a href="#protocol">
-            Protocol &amp; Security
+            协议与安全
           </a>{" "}
           and the Privacy Policy, section 9, for the full picture.
         </p>
@@ -327,7 +324,7 @@ export function DocsPage() {
           mesh (a few KB per Owner). The relay verifies the Ed25519
           signature on every <InlineCode>POST /mesh/&lt;owner_pk_hash&gt;</InlineCode>{" "}
           and stores what you signed; it never decides membership itself.
-          New devices restoring your Owner key recover their peer list from
+          恢复 Owner 密钥的新设备会从这个 blob 取回节点列表。中继被攻破意味着拒绝服务，而非身份冒用。见
           this blob. A relay compromise means DoS, not impersonation. See the{" "}
           <a
            
@@ -413,7 +410,7 @@ docker compose -f docker-compose.relay.yml up -d`}
           </p>
         </DocsSubsection>
 
-        <DocsSubsection id="point-pi" title="Pointing Pi at your own relay">
+        <DocsSubsection id="point-pi" title="让 Pi 指向自建中继">
           <p>Once your relay is reachable, tell the extension:</p>
           <CodeBlock
             code="/remote-pi set-relay https://relay.yourdomain.tld"
@@ -492,9 +489,9 @@ docker compose -f docker-compose.relay.yml up -d`}
         </p>
       </DocsSection>
 
-      <DocsSection id="commands" title="Command reference">
+      <DocsSection id="commands" title="命令速查">
         <p>
-          Every command works as a Pi slash command (interactive) and as a
+          所有命令既可作为 Pi 斜杠命令（交互式）使用，也可作为 shell 级
           shell-level <InlineCode>remote-pi &lt;subcommand&gt;</InlineCode>{" "}
           when the package is installed globally (
           <InlineCode>npm install -g .</InlineCode> from the <InlineCode>server/</InlineCode> checkout, after <InlineCode>npm run build</InlineCode>).
@@ -505,7 +502,7 @@ docker compose -f docker-compose.relay.yml up -d`}
           title="Local session — one Pi, one terminal"
         >
           <DocsTable
-            headers={["Command", "Description"]}
+            headers={["命令", "说明"]}
             rows={[
               [
                 <InlineCode key="c">/remote-pi</InlineCode>,
@@ -513,7 +510,7 @@ docker compose -f docker-compose.relay.yml up -d`}
               ],
               [
                 <InlineCode key="c">/remote-pi setup</InlineCode>,
-                "Run the setup wizard and update local config",
+                "运行安装向导并更新本地配置",
               ],
               [
                 <InlineCode key="c">/remote-pi status</InlineCode>,
@@ -553,10 +550,10 @@ docker compose -f docker-compose.relay.yml up -d`}
         >
           <p className={css.smallText}>
             See <a href="#daemon-mode">Daemon mode</a> for the overview and the{" "}
-            <Link href="/remote-pi/tutorials/daemon">Daemon mode tutorial</Link> for the full how-to.
+            <Link href="/remote-pi/tutorials/daemon">守护进程模式教程</Link> for the full how-to.
           </p>
           <DocsTable
-            headers={["Command", "Description"]}
+            headers={["命令", "说明"]}
             rows={[
               [
                 <InlineCode key="c">/remote-pi create &lt;cwd&gt; [--name X]</InlineCode>,
@@ -572,7 +569,7 @@ docker compose -f docker-compose.relay.yml up -d`}
               ],
               [
                 <InlineCode key="c">/remote-pi daemon start [&lt;id&gt;]</InlineCode>,
-                "Start one daemon by id, or every registered daemon with no id",
+                "按 id 启动单个守护进程；不传 id 则启动所有已注册的守护进程",
               ],
               [
                 <InlineCode key="c">/remote-pi daemon stop [&lt;id&gt;]</InlineCode>,
@@ -584,7 +581,7 @@ docker compose -f docker-compose.relay.yml up -d`}
               ],
               [
                 <InlineCode key="c">/remote-pi daemon restart [&lt;id&gt;]</InlineCode>,
-                "Restart one daemon by id, or every daemon with no id",
+                "按 id 重启单个守护进程；不传 id 则重启所有守护进程",
               ],
               [
                 <InlineCode key="c">/remote-pi daemon status</InlineCode>,
@@ -592,7 +589,7 @@ docker compose -f docker-compose.relay.yml up -d`}
               ],
               [
                 <InlineCode key="c">/remote-pi daemon send &lt;id&gt; &quot;&lt;text&gt;&quot;</InlineCode>,
-                "Send a prompt to a specific daemon",
+                "向指定守护进程发送提示词",
               ],
               [
                 <InlineCode key="c">/remote-pi install</InlineCode>,
@@ -624,18 +621,18 @@ docker compose -f docker-compose.relay.yml up -d`}
             <strong>inside the supervisor</strong>, so it
             only fires when the supervisor is installed as a service (
             <a href="#daemon-mode">
-              Daemon mode
+              守护进程模式
             </a>{" "}
             / <InlineCode>/remote-pi install</InlineCode>) — otherwise{" "}
             <InlineCode>cron add</InlineCode> warns instead of scheduling. See
             the{" "}
             <Link href="/remote-pi/tutorials/daemon#cron">
-              Daemon mode tutorial
+              守护进程模式教程
             </Link>{" "}
             for the walkthrough.
           </p>
           <DocsTable
-            headers={["Command", "Description"]}
+            headers={["命令", "说明"]}
             rows={[
               [
                 <InlineCode key="c">
@@ -651,19 +648,19 @@ docker compose -f docker-compose.relay.yml up -d`}
               ],
               [
                 <InlineCode key="c">/remote-pi cron run &lt;jobId&gt;</InlineCode>,
-                "Fire a job now, ignoring its schedule",
+                "立即触发任务，忽略其计划",
               ],
               [
                 <InlineCode key="c">/remote-pi cron enable &lt;jobId&gt;</InlineCode>,
-                "Resume a paused job",
+                "恢复已暂停的任务",
               ],
               [
                 <InlineCode key="c">/remote-pi cron disable &lt;jobId&gt;</InlineCode>,
-                "Pause a job without deleting it",
+                "暂停任务，但不删除",
               ],
               [
                 <InlineCode key="c">/remote-pi cron remove &lt;jobId&gt;</InlineCode>,
-                "Delete a job",
+                "删除任务",
               ],
               [
                 <InlineCode key="c">/remote-pi cron log [&lt;jobId&gt;] [--tail N]</InlineCode>,
@@ -738,7 +735,7 @@ docker compose -f docker-compose.relay.yml up -d`}
         </p>
       </DocsSection>
 
-      <DocsSection id="config" title="Configuration files">
+      <DocsSection id="config" title="配置文件">
         <DocsTable
           headers={["Path", "Scope", "What's in it"]}
           rows={[
@@ -827,7 +824,7 @@ docker compose -f docker-compose.relay.yml up -d`}
         />
       </DocsSection>
 
-      <DocsSection id="troubleshooting" title="Troubleshooting">
+      <DocsSection id="troubleshooting" title="常见问题">
         <DocsSubsection id="footer-stuck" title="Footer says 🟡 relay waiting for pairing even though I paired a device">
           <p>
             The icon reflects whether <em>any</em> device has been paired on
@@ -837,14 +834,14 @@ docker compose -f docker-compose.relay.yml up -d`}
             report a bug if it recurs).
           </p>
         </DocsSubsection>
-        <DocsSubsection id="timeout-mobile" title="Mobile app times out connecting">
+        <DocsSubsection id="timeout-mobile" title="手机连接超时">
           <p>
             Verify the same relay URL is configured on both sides. If you
             self-host behind a VPN, your phone must also be on the VPN
             (Tailscale on iOS/Android works fine).
           </p>
         </DocsSubsection>
-        <DocsSubsection id="timeout-request" title="Reply never arrives">
+        <DocsSubsection id="timeout-request" title="收不到回复">
           <p>
             <InlineCode>agent_send</InlineCode> returned{" "}
             <InlineCode>{`{ status: "received" }`}</InlineCode> but no reply
@@ -898,7 +895,7 @@ docker compose -f docker-compose.relay.yml up -d`}
             and both meet in the same <InlineCode>local</InlineCode> session.
             See the{" "}
             <Link href="/remote-pi/tutorials/mesh-local">
-              Local mesh tutorial
+              本地网格教程
             </Link>
             .
           </p>
@@ -910,7 +907,7 @@ docker compose -f docker-compose.relay.yml up -d`}
         </DocsSubsection>
       </DocsSection>
 
-      <DocsSection id="links" title="Links">
+      <DocsSection id="links" title="相关链接">
         <ul className={css.listGap}>
           <li>
             Homepage:{" "}
@@ -927,7 +924,7 @@ docker compose -f docker-compose.relay.yml up -d`}
           <li>
             Cockpit reference:{" "}
             <Link href="/docs">
-              CLI, layouts, tasks, themes
+              CLI、布局、任务、主题
             </Link>
           </li>
           <li>

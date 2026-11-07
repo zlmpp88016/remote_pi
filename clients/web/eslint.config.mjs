@@ -20,7 +20,7 @@ import reactHooks from "eslint-plugin-react-hooks";
  * TWO RULES ARE DOWNGRADED TO `warn`, AND THE REASON IS THE SAME FOR BOTH: they
  * flag a pattern that is deliberate here and that no rewrite would improve.
  *
- *   `react-hooks/refs` (74 hits) — most of them one expression in
+ *   `react-hooks/refs` (94 hits) — nearly all of them one expression in
  *   `connect-client.tsx`: `portsRef.current = {...}` assigned during render. That
  *   is the documented escape hatch that keeps the dispatcher callback's identity
  *   stable, and the comment at the assignment says why: an unstable callback tore
@@ -31,7 +31,7 @@ import reactHooks from "eslint-plugin-react-hooks";
  *   or read a stale value. Until the adapter is restructured, the warning is
  *   accurate about the pattern and wrong about the remedy.
  *
- *   `react-hooks/exhaustive-deps` (20 hits) — every reported dependency is either
+ *   `react-hooks/exhaustive-deps` (30 hits) — every reported dependency is either
  *   a ref object or a `useState` setter. Both are stable for the component's
  *   lifetime, so adding them to the array cannot change behaviour; the rule
  *   simply cannot prove stability statically through the `chatStore.actions.*`

@@ -34,8 +34,8 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button
       type="button"
-      aria-label="Copy this code block"
-      title="Copy"
+      aria-label="复制代码块"
+      title="复制"
       onClick={(event) => {
         const button = event.currentTarget;
         void navigator.clipboard

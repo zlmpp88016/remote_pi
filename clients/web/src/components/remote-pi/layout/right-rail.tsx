@@ -15,7 +15,9 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
-import type { FsEntry } from "@/lib/remote-pi/protocol";
+import type { FsEntry, ModelsDescribeOk, ModelsOpWire, SettingsDescribeOk, SettingsOpWire } from "@/lib/remote-pi/protocol";
+import { DEFAULT_PRESET_ID, type ThemePreset } from "@/lib/theme-presets";
+import type { ResolvedMode, ThemeMode } from "@/lib/theme-mode";
 import type { WireSessionInfo } from "@/lib/remote-pi/sessions";
 
 import {
@@ -31,7 +33,15 @@ import { joinRemotePath } from "@/lib/remote-pi/remote-path";
 import { EmptyState, ErrorState, Spinner } from "./states";
 import css from "./right-rail.module.css";
 import { SessionList } from "../sessions/session-list";
+import { PlanPanel } from "./plan-panel";
+import { AutomationsPanel, type AutomationFire, type AutomationRow } from "./automations-panel";
+import { SettingsPanel, type SettingsPhase } from "./settings-panel";
+import { ModelProvidersPanel, type SettingsPhase as ModelsPhase } from "./model-providers-panel";
+import { PluginsPanel } from "./plugins-panel";
+import { ChangesPanel } from "./changes-panel";
+import type { ChangesSnapshotWire, ChangesUnavailableReason } from "@/lib/remote-pi/protocol";
 import { capability, fsControls, fsAvailability, type DockTabId } from "../core/view-model";
+
 
 /* Geometry values come from ./geometry.ts — the single clamp used by the
    default width, the shell grid column and this drag handle. Re-exported so
@@ -45,12 +55,75 @@ export const DOCK_MIN_CENTER = CENTER_MIN_WIDTH;
 const DOCK_KEY_STEP = 16;
 const DOCK_KEY_STEP_LARGE = 64;
 
-const TABS: readonly { id: DockTabId; label: string; icon: "book" | "folder" | "branch" | "msg" }[] = [
-  { id: "sessions", label: "Sessions", icon: "msg" },
-  { id: "plan", label: "Plan", icon: "book" },
-  { id: "files", label: "Files", icon: "folder" },
-  { id: "changes", label: "Changes", icon: "branch" },
+const TABS: readonly { id: DockTabId; label: string; icon: "book" | "folder" | "branch" | "msg" | "plug" | "clock" | "cpu" | "settings" }[] = [
+  { id: "sessions", label: "会话", icon: "msg" },
+  { id: "plan", label: "计划", icon: "book" },
+  { id: "files", label: "文件", icon: "folder" },
+  { id: "changes", label: "更改", icon: "branch" },
+  { id: "plugins", label: "插件", icon: "plug" },
+  { id: "automations", label: "自动化", icon: "clock" },
+  { id: "models", label: "模型", icon: "cpu" },
+  { id: "settings", label: "设置", icon: "settings" },
 ];
+
+/* Stable fallbacks for the Automations panel.
+ *
+ * Defined at module scope, not inline in the JSX: a fresh Map/closure on every
+ * render would defeat the panel's memoised derive and, worse, make a caller that
+ * forgot to pass a handler look like it re-subscribed on every keystroke.
+ * A NO-OP here is honest — the panel disables its controls when the host reports
+ * no automations surface, so these only run for a caller that wired the tab
+ * without wiring the data. */
+const EMPTY_NAMES: ReadonlyMap<string, string> = new Map();
+/** Stable empty catalog so the model picker does not remount every render while
+ *  the host has not answered yet. */
+const EMPTY_MODELS: readonly { id: string; name: string; provider: string }[] = [];
+const NOOP_VOID = (): void => undefined;
+const NOOP_OPS = (): void => undefined;
+const NOOP_OPS_SETTINGS = (): void => undefined;
+const NOOP_PRESET = (): void => undefined;
+const NOOP_MODE = (): void => undefined;
+const NOOP_ID = (_id: string): void => undefined;
+const NOOP_ENABLED = (_id: string, _enabled: boolean): void => undefined;
+const NOOP_CREATE = (_input: {
+  schedule: string;
+  prompt: string;
+  tz: string | null;
+  skipIfBusy: boolean;
+  wake: boolean;
+  catchup: boolean;
+  daemonId: string | null;
+  model: { provider: string; id: string } | null;
+  freshSession: boolean;
+}): void => undefined;
+
+/** One package row as the dock renders it. `key` is `source`+`scope` so the
+ *  same source configured at both scopes stays two distinct rows. */
+export interface WirePackageRow {
+  source: string;
+  scope: "user" | "project";
+  resources: readonly string[];
+  /** The package README the host read, or null when it ships none. */
+  readme: string | null;
+  readmePath: string | null;
+  readmeTruncated: boolean;
+  /**
+   * Whether the package's resources will load.
+   *
+   * `null` means the host did not say (an older host omits the field). It must
+   * not be drawn as "off": a package whose state is unknown is not disabled.
+   */
+  enabled: boolean | null;
+}
+
+/** One installed skill, with the `enabled` tri-state the host reports
+ *  (`null` = it could not determine the state, which is NOT `false`). */
+export interface PluginSkillRow {
+  name: string;
+  description: string;
+  source: "user" | "project" | "package";
+  enabled: boolean | null;
+}
 
 export interface RightRailProps {
   tab: DockTabId;
@@ -79,6 +152,123 @@ export interface RightRailProps {
    * the path handed to the host is one the host itself returned.
    */
   onAdd: (cwd: string) => void;
+  /**
+   * Wave 4: drop the CURRENT host-canonical directory from the host catalog
+   * (`workspace_remove`). Gated exactly like `onAdd` — the path must be one the
+   * host itself returned — so a removal can never name a path the client typed.
+   */
+  onRemove: (path: string) => void;
+  /**
+   * Plugins tab (`pi_surface_ok.packages` + the installed skills).
+   *
+   * Both lists come straight from the host — the dock never guesses what is
+   * installed. `packagesBusy` disables the per-row actions while a mutation is
+   * in flight, so a double click cannot queue two writes to the same settings
+   * entry.
+   */
+  packages: readonly WirePackageRow[];
+  pluginSkills: readonly PluginSkillRow[];
+  packagesBusy: boolean;
+  packagesReason: string | null;
+  /** Per-package in-flight operations, keyed by `scope:source`. */
+  packagesBusyKeys: ReadonlySet<string>;
+  /** Fixed failure sentence for the last plugin operation, or null. */
+  packagesNotice: string | null;
+  onPackageInstall: (source: string, scope: "user" | "project") => void;
+  onPackageSetEnabled: (source: string, scope: "user" | "project", enabled: boolean) => void;
+  /** Called when the Plugins tab becomes active, and by its Refresh control.
+   *  Optional so a test fixture can render the dock idle. */
+  onPluginsRefresh?: () => void;
+  /** Increments once per confirmed install; lets the Install form close itself. */
+  pluginsInstalledAt?: number;
+  /** A plugin change is written but the Pi has not restarted to load it yet. */
+  pluginsRestartPending?: boolean;
+  /** Automations — the projected task list (daemon cron, plan/39). */
+  automations?: readonly AutomationRow[];
+  /** Automations — fires pushed while the client was connected, newest first. */
+  automationFires?: readonly AutomationFire[];
+  automationReason?: string | null;
+  automationNotice?: string | null;
+  automationsBusy?: boolean;
+  /** daemon id -> human workspace name. Never a host path. */
+  automationWorkspaceNames?: ReadonlyMap<string, string>;
+  /** Plan/78 — Changes tab state. `snapshot` null + `busy` means still asking;
+   *  `unavailable` non-null is a FAILURE (non-repo, git missing), which is a
+   *  different fact from a clean worktree and must not render as one. */
+  changesSnapshot?: ChangesSnapshotWire | null;
+  changesBusy?: boolean;
+  /** Plan/79 — Model Providers tab state. `modelsData` is the host's models config
+   *  with every credential REMOVED; the error/saved strings are client-authored. */
+  modelsData?: ModelsDescribeOk | null;
+  modelsPhase?: ModelsPhase;
+  modelsError?: string | null;
+  modelsSaved?: string | null;
+  modelsDisabledReason?: string | null;
+  modelsHostName?: string | null;
+  onModelsReload?: () => void;
+  onModelsSave?: (ops: ModelsOpWire[]) => void;
+  /** Plan/80 — Settings tab state: the host settings.json whitelist projection. */
+  settingsData?: SettingsDescribeOk | null;
+  settingsPhase?: SettingsPhase;
+  settingsError?: string | null;
+  settingsSaved?: string | null;
+  settingsDisabledReason?: string | null;
+  settingsHostName?: string | null;
+  onSettingsReload?: () => void;
+  onSettingsSave?: (ops: SettingsOpWire[]) => void;
+  /** Plan/81 — light/dark/system. Selects the palette. */
+  themeMode?: ThemeMode;
+  resolvedMode?: ResolvedMode;
+  onThemeModeChange?: (mode: ThemeMode) => void;
+  /** Plan/80 — the active browser-local accent preset. */
+  themePresetId?: string;
+  onThemePresetChange?: (preset: ThemePreset) => void;
+  changesUnavailable?: ChangesUnavailableReason | null;
+  changesReason?: string | null;
+  onChangesRefresh?: () => void;
+  changesDisabledReason?: string | null;
+  automationActiveDaemonId?: string | null;
+  automationModelOptions?: readonly { id: string; name: string; provider: string }[];
+  onAutomationCreate?: (input: {
+    schedule: string;
+    prompt: string;
+    tz: string | null;
+    skipIfBusy: boolean;
+    wake: boolean;
+    catchup: boolean;
+    daemonId: string | null;
+    model: { provider: string; id: string } | null;
+    freshSession: boolean;
+  }) => void;
+  onAutomationSetEnabled?: (id: string, enabled: boolean) => void;
+  onAutomationRemove?: (id: string) => void;
+  onAutomationRunNow?: (id: string) => void;
+  onAutomationsRefresh?: () => void;
+  onPackageUpdate: (source: string) => void;
+  onPackageRemove: (source: string, scope: "user" | "project") => void;
+  onSkillToggle: (name: string, enabled: boolean) => void;
+  /**
+   * Plan tab (`fs_read`, plan/77).
+   *
+   * `planDoc` is null until a read succeeds; `planError` is a FIXED
+   * client-authored sentence, never host prose. `planFile` is the path the
+   * viewer asked for, so the empty state can name what it looked at instead of
+   * claiming the protocol is incapable.
+   */
+  /** Absolute paths of the workspace plan documents the host listed. Owned by
+   *  the container: the dock renders what the host returned and never builds a
+   *  path of its own. */
+  planFiles: readonly string[];
+  planDoc: { path: string; content: string; truncated: boolean; bytes: number } | null;
+  planLoading: boolean;
+  planError: string | null;
+  planTruncatedNotice: string;
+  onReadPlan: (path: string) => void;
+  /** Clears the open document so the panel returns to its list. */
+  onClosePlan: () => void;
+  /** Called when the Plan tab becomes active: the container lists plan/ for
+   *  this workspace. Optional so a test fixture can render the dock idle. */
+  onPlanTabOpen?: () => void;
   /** Hidden entries are opt-in on the wire (`fs_list {show_hidden}`). */
   showHidden: boolean;
   onShowHiddenChange: (value: boolean) => void;
@@ -127,8 +317,70 @@ export function RightRail({
   fsError,
   fsLoaded,
   onList,
+  planFiles,
+  planDoc,
+  planLoading,
+  planError,
+  planTruncatedNotice,
+  onReadPlan,
+  onClosePlan,
   onStart,
   onAdd,
+  onRemove,
+  packages,
+  pluginSkills,
+  packagesBusy,
+  packagesReason,
+  packagesNotice,
+  packagesBusyKeys,
+  onPackageInstall,
+  onPackageSetEnabled,
+  onPluginsRefresh,
+  pluginsInstalledAt,
+  pluginsRestartPending,
+  automations,
+  automationFires,
+  automationReason,
+  automationNotice,
+  automationsBusy,
+  automationWorkspaceNames,
+  automationActiveDaemonId,
+  automationModelOptions,
+  changesSnapshot,
+  changesBusy,
+  changesUnavailable,
+  changesReason,
+  onChangesRefresh,
+  changesDisabledReason,
+  modelsData,
+  modelsPhase = "idle",
+  modelsError = null,
+  modelsSaved = null,
+  modelsDisabledReason = null,
+  modelsHostName = null,
+  onModelsReload,
+  onModelsSave,
+  settingsData,
+  settingsPhase = "idle",
+  settingsError = null,
+  settingsSaved = null,
+  settingsDisabledReason = null,
+  settingsHostName = null,
+  onSettingsReload,
+  onSettingsSave,
+  themeMode = "system",
+  resolvedMode = "light",
+  onThemeModeChange,
+  themePresetId,
+  onThemePresetChange,
+  onAutomationCreate,
+  onAutomationSetEnabled,
+  onAutomationRemove,
+  onAutomationRunNow,
+  onAutomationsRefresh,
+  onPackageUpdate,
+  onPackageRemove,
+  onSkillToggle,
   showHidden,
   onShowHiddenChange,
   fsAvailable,
@@ -215,6 +467,7 @@ export function RightRail({
   const addCap = capability("workspace.add");
   const fs = fsAvailability(fsAvailable, fsAvailableReason);
   const controls = fsControls({ ...fs, busy, fsLoading, fsLoaded });
+
   /* The host's `parent` is authoritative, including a `null` root: the browser
    *  resolves nothing and never guesses a parent from the path text. */
   const parent = fsParent;
@@ -223,17 +476,17 @@ export function RightRail({
     return (
       <aside
         className={css.railCollapsed}
-        aria-label="Dock (collapsed)"
+        aria-label="停靠栏（已折叠）"
       >
         <div className={css.collapsedHead}>
           <button
             type="button"
             onClick={onToggleCollapse}
-            title="Show the right dock"
+            title="显示右侧停靠栏"
             className={css.iconButton}
           >
             <Icon name="chevR" size={15} className={css.iconFlipped} />
-            <span className="sr-only">Show the right dock</span>
+            <span className="sr-only">显示右侧停靠栏</span>
           </button>
         </div>
         {/* Rail body: icons only (the label lives in `title` + `sr-only`).
@@ -264,13 +517,13 @@ export function RightRail({
     <aside
       className={css.rail}
       style={{ width }}
-      aria-label="Dock"
+      aria-label="停靠栏"
     >
       <div
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize the dock"
-        title="Drag, or focus and use Left/Right (Shift for larger steps, Home/End for min/max)"
+        aria-label="调整停靠栏宽度"
+        title="拖动，或聚焦后用左右方向键（按住 Shift 步长更大，Home/End 到最小/最大）"
         tabIndex={0}
         aria-valuemin={DOCK_MIN_WIDTH}
         aria-valuemax={dockMax}
@@ -306,11 +559,11 @@ export function RightRail({
         <button
           type="button"
           onClick={onToggleCollapse}
-          title="Collapse the dock (Ctrl/Cmd+J)"
+          title="收起停靠栏（Ctrl/Cmd+J）"
           className={css.collapseButton}
         >
           <Icon name="x" size={15} />
-          <span className="sr-only">Collapse the dock</span>
+          <span className="sr-only">收起停靠栏</span>
         </button>
       </div>
 
@@ -333,6 +586,116 @@ export function RightRail({
             onPrefetch={onSessionPrefetch}
           />
         </div>
+      ) : tab === "plan" ? (
+        /* Plan owns the whole cell height, like Sessions. The panel itself is
+         * `overflow:auto`, which is precisely the container that scrolled a
+         * freshly opened document off the top; giving Plan its own
+         * `overflow:hidden` wrapper removes that scroll context entirely. */
+        <div className={css.panelHidden}>
+          <PlanPanel
+            planFiles={planFiles}
+            planDoc={planDoc}
+            planLoading={planLoading}
+            planError={planError}
+            planTruncatedNotice={planTruncatedNotice}
+            onReadPlan={onReadPlan}
+            onClosePlan={onClosePlan}
+            introReason={tabReason("plan")}
+          />
+        </div>
+      ) : tab === "plugins" ? (
+        /* Plugins owns the whole cell height, like Sessions and Plan. It must
+         * NOT sit inside `.panel`, whose `overflow: auto` would become a second
+         * scroll container around the panel own scroller and could push a
+         * freshly opened detail view off-screen — the exact failure that moved
+         * Plan out of `.panel` earlier. */
+        <div className={css.panelHidden}>
+          <PluginsPanel
+            packages={packages}
+            skills={pluginSkills}
+            disabledReason={packagesReason}
+            busy={packagesBusy}
+            notice={packagesNotice}
+            busyKeys={packagesBusyKeys}
+            installedAt={pluginsInstalledAt ?? 0}
+            restartPending={pluginsRestartPending === true}
+            onSetEnabled={onPackageSetEnabled}
+            onInstall={onPackageInstall}
+            onRemove={onPackageRemove}
+            onUpdate={onPackageUpdate}
+            onSkillToggle={onSkillToggle}
+            onRefresh={onPluginsRefresh}
+            introReason={tabReason("plugins")}
+          />
+        </div>
+      ) : tab === "automations" ? (
+        /* Same placement rule as Plugins: outside `.panel`, owning the whole
+         * cell height, so its single scroller is the only one. */
+        <div className={css.panelHidden}>
+          <AutomationsPanel
+            tasks={automations ?? []}
+            fires={automationFires ?? []}
+            disabledReason={automationReason ?? null}
+            notice={automationNotice ?? null}
+            busy={automationsBusy === true}
+            workspaceNames={automationWorkspaceNames ?? EMPTY_NAMES}
+            activeDaemonId={automationActiveDaemonId ?? null}
+            modelOptions={automationModelOptions ?? EMPTY_MODELS}
+            onCreate={onAutomationCreate ?? NOOP_CREATE}
+            onSetEnabled={onAutomationSetEnabled ?? NOOP_ENABLED}
+            onRemove={onAutomationRemove ?? NOOP_ID}
+            onRunNow={onAutomationRunNow ?? NOOP_ID}
+            onRefresh={onAutomationsRefresh ?? NOOP_VOID}
+          />
+        </div>
+      ) : tab === "changes" ? (
+        /* Owns the whole cell height like Plugins/Automations, so its single
+         * scroller is the only one in this tab (plan/78). */
+        <div className={css.panelHidden}>
+          <ChangesPanel
+            snapshot={changesSnapshot ?? null}
+            busy={changesBusy === true}
+            unavailable={changesUnavailable ?? null}
+            unavailableText={changesReason ?? null}
+            onRefresh={onChangesRefresh ?? NOOP_VOID}
+            disabledReason={changesDisabledReason ?? null}
+          />
+        </div>
+      ) : tab === "models" ? (
+        /* Plan/80 — model providers moved OUT of Settings. Owns the whole cell
+         * height like the other full-bleed panels. */
+        <div className={css.panelHidden}>
+          <ModelProvidersPanel
+            data={modelsData ?? null}
+            phase={modelsPhase}
+            error={modelsError}
+            saved={modelsSaved}
+            disabledReason={modelsDisabledReason}
+            hostName={modelsHostName}
+            onReload={onModelsReload ?? NOOP_VOID}
+            onSave={onModelsSave ?? NOOP_OPS}
+          />
+        </div>
+      ) : tab === "settings" ? (
+        /* Owns the whole cell height like Plugins/Automations/Changes, so its
+         * single scroller is the only one in this tab. */
+        <div className={css.panelHidden}>
+          <SettingsPanel
+            data={settingsData ?? null}
+            phase={settingsPhase}
+            error={settingsError}
+            saved={settingsSaved}
+            disabledReason={settingsDisabledReason}
+            hostName={settingsHostName}
+            themeMode={themeMode}
+            resolvedMode={resolvedMode}
+            onModeChange={onThemeModeChange ?? NOOP_MODE}
+            presetId={themePresetId ?? DEFAULT_PRESET_ID}
+            onPresetChange={onThemePresetChange ?? NOOP_PRESET}
+            onReload={onSettingsReload ?? NOOP_VOID}
+            onSave={onSettingsSave ?? NOOP_OPS_SETTINGS}
+          />
+        </div>
       ) : (
         <div className={css.panel}>
           {tab === "files" ? (
@@ -341,8 +704,8 @@ export function RightRail({
               <input
                 value={fsPath}
                 onChange={(event) => onFsPathChange(event.target.value)}
-                aria-label="Remote directory path to list"
-                title="Remote directory path to list"
+                aria-label="要列出的远程目录路径"
+                title="要列出的远程目录路径"
                 placeholder="~/projects"
                 autoComplete="off"
                 spellCheck={false}
@@ -355,7 +718,7 @@ export function RightRail({
                 title={fs.available ? filesCap.reason : fs.reason}
                 className={css.primaryButton}
               >
-                List
+                列出
               </button>
             </div>
 
@@ -368,23 +731,37 @@ export function RightRail({
                 type="button"
                 disabled={!controls.add.enabled}
                 onClick={() => onAdd(fsPath)}
-                title={`Add to catalog — ${controls.add.reason} ${addCap.reason}`}
+                title={`加入目录 — ${controls.add.reason} ${addCap.reason}`}
                 className={css.secondaryButton}
               >
                 <Icon name="plus" size={13} />
-                Add to catalog
-                <span className="sr-only">Add the current directory to the host catalog</span>
+                加入目录
+                <span className="sr-only">将当前目录加入主机目录</span>
               </button>
               <button
                 type="button"
                 disabled={!controls.start.enabled}
                 onClick={() => onStart(fsPath)}
-                title={`Start Pi here — ${controls.start.reason}`}
+                title={`在此启动 Pi — ${controls.start.reason}`}
                 className={css.accentButton}
               >
                 <Icon name="spark" size={13} />
-                Start Pi here
-                <span className="sr-only">Start a Pi in the current directory</span>
+                在此启动 Pi
+                <span className="sr-only">在当前目录启动 Pi</span>
+              </button>
+              {/* Removal sits beside Add because the two are inverses of the
+                  same catalog entry, and disabled with the same fixed reason:
+                  once a path is canonical and loaded, either is legal. */}
+              <button
+                type="button"
+                disabled={!controls.remove.enabled}
+                onClick={() => onRemove(fsPath)}
+                title={`从目录中移除 — ${controls.remove.reason}`}
+                className={css.secondaryButton}
+              >
+                <Icon name="x" size={13} />
+                移除
+                <span className="sr-only">从主机目录移除当前目录</span>
               </button>
             </div>
 
@@ -392,7 +769,7 @@ export function RightRail({
               className={`${css.checkboxRow} ${fs.available ? css.checkboxAvailable : css.checkboxUnavailable}`}
               title={
                 fs.available
-                  ? "Ask the host to include dotfiles and hidden entries in the listing."
+                  ? "让主机在列表中包含点文件和隐藏项。"
                   : fs.reason
               }
             >
@@ -403,7 +780,7 @@ export function RightRail({
                 onChange={(event) => onShowHiddenChange(event.target.checked)}
                 className={css.checkbox}
               />
-              <span>Show hidden entries</span>
+              <span>显示隐藏项</span>
             </label>
 
             <div className={css.pathRow}>
@@ -430,19 +807,19 @@ export function RightRail({
             {fsLoading ? (
               <div className={css.listingRow}>
                 <Spinner />
-                <span className={css.loadingText}>Listing…</span>
+                <span className={css.loadingText}>正在列出…</span>
               </div>
             ) : null}
 
-            {fsError ? <ErrorState title="Filesystem list failed" detail={fsError} /> : null}
+            {fsError ? <ErrorState title="文件系统列表失败" detail={fsError} /> : null}
 
             {!fsLoading && !fsError && fsEntries.length === 0 ? (
               <EmptyState
                 compact
-                title={fsLoaded ? "This directory is empty." : "Nothing listed yet."}
+                title={fsLoaded ? "该目录为空。" : "尚未列出任何内容。"}
                 detail={
                   filesCap.status === "ready"
-                    ? "Enter a path above (for example ~/projects) and press List. Directories can be opened or started as a Pi workspace."
+                    ? "在上方输入路径（如 ~/projects）后点「列出」。目录可以打开，也可以作为 Pi 工作区启动。"
                     : filesCap.reason
                 }
               />
@@ -527,8 +904,8 @@ export function RightRail({
           </div>
         ) : (
           <EmptyState
-            icon={tab === "plan" ? "book" : "branch"}
-            title={tab === "plan" ? "No plan document yet" : "No changes reported"}
+            icon="branch"
+            title="没有报告更改"
             detail={tabReason(tab)}
           />
         )}
@@ -538,12 +915,46 @@ export function RightRail({
   );
 }
 
-/** One reason string per tab body, sourced from the capability spine. */
+/**
+ * One reason string per tab body.
+ *
+ * Every tab gets an EXPLICIT branch. This used to end in a bare `return` that
+ * described the Changes tab, so `automations` fell through into "the host
+ * exposes no diff/working-tree API" — a tooltip claiming the surface could not
+ * work while the tab right next to it could create, disable, delete and fire
+ * scheduled tasks. A fallthrough here is a lie waiting for the next tab to be
+ * added, so the Changes text is now attached to Changes by name and the
+ * unreachable default is explicit about being a bug rather than a description.
+ */
 function tabReason(tab: DockTabId): string {
-  if (tab === "sessions") return "This workspace's AgentSessions, newest first.";
-  if (tab === "files") return capability("fs.list").reason;
-  if (tab === "plan") {
-    return "The host protocol exposes no plan/document API, so the dock cannot read one. Declared here so the surface is not silently missing.";
+  switch (tab) {
+    case "sessions":
+      return "该工作区的会话列表，最新的在前。";
+    case "files":
+      return capability("fs.list").reason;
+    case "plugins":
+      return "该工作区的 Pi 通过 pi_surface 上报的软件包和技能，可在此启用开关并执行软件包维护操作。";
+    case "plan":
+      return "打开该工作区 plan/ 目录中的计划文档。由主机读取，停靠栏负责渲染 Markdown。";
+    case "changes":
+      return "该工作区的工作树状态：相对当前分支，哪些路径已暂存、已修改、未跟踪或存在冲突。";
+    case "automations":
+      /* The real thing, and deliberately NOT the Changes sentence: these tasks
+       * are created, enabled, disabled, deleted and fired from this tab. */
+      return "主机按计划运行的提示词 — 可新建、开关、立即运行或删除。";
+    case "models":
+      /* Names the HOST, because that is the fact a user must not get wrong: this
+       * edits the machine's own models.json, not a copy in the workspace. */
+      return "该主机的 Pi 从自身的 models.json 加载的模型提供方和模型 — 无需登录机器即可在此编辑。";
+    case "settings":
+      /* Deliberately NOT the Models sentence: this tab holds real preferences. An
+       * earlier version of this code put a models editor behind the "Settings"
+       * label, which is the copy-vs-behaviour defect §7 exists to catch. */
+      return "本浏览器和该主机的外观与行为 — 本地主题预设、思考块显示、重试策略。";
+    default:
+      /* Unreachable by type, but a fallthrough here is exactly the defect this
+       * function was fixed for, so it fails loudly in dev instead of silently
+       * borrowing another tab's description. */
+      return `未知的停靠栏标签页：${String(tab)}`;
   }
-  return "The host protocol exposes no diff/working-tree API, so there is nothing to report. Declared here so the surface is not silently missing.";
 }

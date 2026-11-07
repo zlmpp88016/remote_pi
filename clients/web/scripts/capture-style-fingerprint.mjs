@@ -309,11 +309,11 @@ async function applySetup(name) {
     );
     await sleep(1500);
     await waitFor(
-      `document.querySelector('section[aria-label="Sessions"]') || [...document.querySelectorAll("button")].find((x) => /^Sessions$/i.test((x.innerText || "").trim()))`,
+      `document.querySelector('section[aria-label="Sessions"]') || [...document.querySelectorAll("button")].find((x) => /^会话$/i.test((x.innerText || "").trim()))`,
     );
     await click(
       "sessions tab",
-      `document.querySelector('section[aria-label="Sessions"]') ? null : [...document.querySelectorAll("button")].find((x) => /^Sessions$/i.test((x.innerText || "").trim()))`,
+      `document.querySelector('section[aria-label="Sessions"]') ? null : [...document.querySelectorAll("button")].find((x) => /^会话$/i.test((x.innerText || "").trim()))`,
     );
     await sleep(3500);
     // Confirm the panel is really open before returning.

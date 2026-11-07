@@ -7,6 +7,7 @@
  * reach back up for geometry.
  */
 
+export * from "./automations-panel";
 export * from "./connection-launcher";
 export * from "./remote-pi-shell";
 export * from "./right-rail";

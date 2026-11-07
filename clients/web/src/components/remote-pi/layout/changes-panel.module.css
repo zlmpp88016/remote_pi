@@ -1,0 +1,217 @@
+/*
+ * Changes dock panel (plan/78).
+ *
+ * Same rules as the other panels in this dock: ONE scroller (`.scroller`), the
+ * root fills its cell, and every colour is a real design token. A second
+ * `overflow: auto` here would nest scrollers inside the dock, which is the exact
+ * defect that produced a -2438px document offset when the Plan tab had it.
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3);
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  flex: none;
+}
+
+.headTitle {
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--dsw-radius-xs);
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.refresh:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.refresh:focus-visible {
+  outline: var(--dsw-focus-outline);
+  outline-offset: var(--dsw-focus-outline-offset);
+}
+
+/* The single scroll container. */
+.scroller {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: calc(var(--spacing) * 3);
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--spacing) * 2);
+  padding: calc(var(--spacing) * 4) calc(var(--spacing) * 3);
+  font-size: 0.75rem;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: calc(var(--spacing) * 1) calc(var(--spacing) * 3);
+  margin: 0 0 calc(var(--spacing) * 3);
+  font-size: 0.72rem;
+}
+
+.facts dt {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.facts dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mono {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  font-size: 0.7rem;
+  color: var(--dsw-alias-label-primary);
+}
+
+.dim {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.subject {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(var(--spacing) * 2);
+  margin-bottom: calc(var(--spacing) * 3);
+}
+
+.count {
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-secondary);
+  border: 1px solid var(--dsw-alias-border-l3);
+}
+
+.countWarn {
+  color: var(--dsw-alias-state-warn-primary);
+  border-color: var(--dsw-alias-state-warn-primary);
+}
+
+.truncated {
+  margin: 0 0 calc(var(--spacing) * 2);
+  font-size: 0.7rem;
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.clean {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  gap: calc(var(--spacing) * 2);
+  padding: 3px 2px;
+  min-width: 0;
+  border-radius: var(--dsw-radius-xs);
+}
+
+.row:hover {
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.badge {
+  flex: none;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 1px 5px;
+  border-radius: var(--dsw-radius-xs);
+  background: var(--dsw-alias-bg-layer-2);
+  border: 1px solid var(--dsw-alias-border-l4);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.toneNew {
+  color: var(--dsw-alias-state-success-primary);
+  border-color: var(--dsw-alias-state-success-primary);
+}
+
+.toneChanged {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.toneWarn {
+  color: var(--dsw-alias-state-warn-primary);
+  border-color: var(--dsw-alias-state-warn-primary);
+}
+
+/* Paths get the remaining width and ellipsize from the START-padding side rather
+ * than wrapping, so a deep path stays on one row like the plan list.
+ *
+ * `unicode-bidi: isolate` is a second line of defence behind `neutraliseBidi`:
+ * even a bidi character that slips through cannot reorder the text OUTSIDE this
+ * span (the badge, the counts, a neighbouring row). */
+.path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: isolate;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  font-size: 0.7rem;
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Explains git's collapsed-untracked-directory behaviour. Quiet: it is a note,
+ * not a warning — the collapsed row is correct, just easy to under-count. */
+.untrackedNote {
+  margin: 0 0 calc(var(--spacing) * 2);
+  font-size: 0.68rem;
+  color: var(--dsw-alias-label-tertiary);
+}

@@ -80,7 +80,7 @@ await sleep(1500);
 // Pick the Sessions tab (only when the section is not already mounted).
 await ev(`(() => {
   if (document.querySelector(${JSON.stringify(SESSION_SECTION)})) return true;
-  const t = [...document.querySelectorAll('button')].find(x => /^Sessions$/i.test((x.innerText || '').trim()));
+  const t = [...document.querySelectorAll('button')].find(x => /^会话$/i.test((x.innerText || '').trim()));
   if (t) t.click();
   return true;
 })()`);

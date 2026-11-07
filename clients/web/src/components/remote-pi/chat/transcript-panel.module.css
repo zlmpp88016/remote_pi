@@ -937,6 +937,35 @@
   }
 
   /*
+   * Stop — the same 34px slot and pill radius as Send, because it REPLACES Send
+   * while a turn is open; the control must not move under the user's finger.
+   * A red fill is the only signal that this action ends something rather than
+   * starts it, so it is deliberately not another shade of the accent blue.
+   */
+  .stopButton {
+    display: inline-flex;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    border-radius: var(--dsw-radius-pill);
+    background-color: var(--dsw-alias-state-error-primary, #d92d20);
+    font-size: 0;
+    color: #ffffff;
+    transition-property: background-color,opacity;
+    transition-timing-function: var(--dsw-ease-in-out);
+    transition-duration: var(--dsw-transition-duration-fast);
+  }
+
+  @media(hover:hover) {
+    .stopButton:hover {
+      opacity: .86;
+    }
+  }
+
+  /*
    * The statistics dock follows the INPUT's width, not the column's.
    *
    * `composerForm` centres itself at `min(860px, 100%)`; a sibling that only

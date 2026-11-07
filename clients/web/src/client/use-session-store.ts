@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { WireSessionEvent, WireSessionInfo } from "@/lib/remote-pi/protocol";
 import { sortSessions } from "@/lib/remote-pi/sessions";
+import { SESSIONS_FAILED, SESSIONS_STUCK_MS } from "./notices";
 
 /**
  * How many prefetched transcripts to keep.
@@ -183,6 +184,37 @@ export function useSessionStore(): SessionStore {
     const handle = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(handle);
   }, []);
+
+  /*
+   * THE STOP CONDITION. One invariant, no matter which path set `busy`.
+   *
+   * `busy` drives the panel's "Asking the host for this workspace's sessions…"
+   * line, and it is set by several unrelated actions: the list, a NEW session, a
+   * switch-triggered relist. Each of those used to be responsible for its own
+   * terminal state, and `session_new` simply did not have one — it set busy and
+   * armed nothing. When that reply was lost the panel stayed on "Asking…"
+   * FOREVER, and the Refresh button could not rescue it either, because it is
+   * `disabled={busy}`. The user's only escape was a page reload.
+   *
+   * Per-call-site timers cannot fix that class of bug: the next action added
+   * would forget again. So the guarantee lives here, where the flag itself
+   * lives: if `busy` is true this long, stop being busy and say so. A slow host
+   * still wins the race whenever it does answer, because every real reply sets
+   * `busy` false and this timer dies with the effect.
+   *
+   * It is a WATCHDOG, not a retry: retrying stays the caller's business, and the
+   * error is the honest outcome once nothing has come back.
+   */
+  useEffect(() => {
+    if (!busy) return undefined;
+    const handle = setTimeout(() => {
+      setBusy(false);
+      /* Keep an existing notice: a caller that already explained itself keeps
+       * the last word rather than being overwritten by this fallback. */
+      setNotice((prev) => prev ?? SESSIONS_FAILED);
+    }, SESSIONS_STUCK_MS);
+    return () => clearTimeout(handle);
+  }, [busy]);
 
   const applyList = useCallback((room: string, sessions: readonly WireSessionInfo[]) => {
     setByRoom((prev) => ({ ...prev, [room]: sortSessions(sessions) }));

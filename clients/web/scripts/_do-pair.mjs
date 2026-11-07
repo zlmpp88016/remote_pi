@@ -49,7 +49,7 @@ console.log("form:", filled);
 await sleep(1500);
 
 const clicked = await evaluate(`(() => {
-  const b = [...document.querySelectorAll("button")].find((x) => /^Connect$/.test((x.innerText || "").trim()));
+  const b = [...document.querySelectorAll("button")].find((x) => /^连接$/.test((x.innerText || "").trim()));
   if (b === undefined) return false;
   b.click();
   return true;

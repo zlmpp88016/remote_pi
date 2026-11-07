@@ -57,6 +57,25 @@ export interface WorkspaceSidebarProps {
   onStart: (cwd: string) => void;
   /** Revive a crashed/stopped workspace by cwd (`workspace_restart`). */
   onRestart: (cwd: string) => void;
+  /** Shut down a running workspace's Pi by cwd (`workspace_stop`). */
+  onStop: (cwd: string) => void;
+  /** Opens the dock on the Plugins tab. Omitted at rail width (no dock). */
+  onOpenPlugins?: (() => void) | undefined;
+  /** Opens the dock on the Automations tab. Absent when the host serves none. */
+  onOpenAutomations?: (() => void) | undefined;
+  /**
+   * Opens the dock on the Settings tab (plan/79).
+   *
+   * Omitted in exactly two cases, and the row's tooltip names which: the dock is
+   * unavailable at this width, or the host does not advertise `models_config`.
+   */
+  onOpenSettings?: (() => void) | undefined;
+  /** False keeps the row disabled even at a width that has a dock, and changes the
+   *  reason shown from "width" to "this host serves no settings surface". */
+  settingsAvailable?: boolean;
+  /** Opens the dock on the Models tab (plan/80 — split out of Settings). */
+  onOpenModels?: (() => void) | undefined;
+  modelsAvailable?: boolean;
   /**
    * Start a fresh AgentSession (`session_new`).
    *
@@ -93,6 +112,13 @@ export function WorkspaceSidebar({
   onRefresh,
   onStart,
   onRestart,
+  onStop,
+  onOpenPlugins,
+  onOpenAutomations,
+  onOpenSettings,
+  settingsAvailable = true,
+  onOpenModels,
+  modelsAvailable = true,
   onNewSession,
   canNewSession = true,
   newSessionBusy = false,
@@ -127,14 +153,14 @@ export function WorkspaceSidebar({
   /* Rail-only guidance: the 56px column hides the filter, Start/Restart and
      the row names, so screen readers need to be told where they went. */
   const expandHint = expansionAvailable
-    ? "Expand the sidebar to reach the workspace filter and the Start and Restart actions."
-    : "The sidebar stays collapsed at this width; the workspace filter and the Start and Restart actions need a wider frame.";
+    ? "展开侧栏后即可使用工作区筛选和启动、重启操作。"
+    : "该宽度下侧栏保持折叠；工作区筛选和启动、重启操作需要更宽的窗口。";
 
   return (
     <aside
       className={css.root}
       style={{ gridTemplateRows: "auto minmax(0,1fr) auto" }}
-      aria-label="Workspaces"
+      aria-label="工作区"
     >
       {/* ── head ─────────────────────────────────────────────────────────── */}
       <div className={rail ? css.brandRail : css.brandFull}>
@@ -165,9 +191,9 @@ export function WorkspaceSidebar({
             title={
               rail
                 ? expansionAvailable
-                  ? "Expand the sidebar (Ctrl/Cmd+B)"
-                  : "The sidebar cannot expand at this width"
-                : "Collapse the sidebar (Ctrl/Cmd+B)"
+                  ? "展开侧栏（Ctrl/Cmd+B）"
+                  : "该宽度下侧栏无法展开"
+                : "收起侧栏（Ctrl/Cmd+B）"
             }
             className={
               rail ? css.toggleRail : css.toggleFull
@@ -176,8 +202,8 @@ export function WorkspaceSidebar({
             <Icon name="panel" size={15} />
             <span className="sr-only">
               {rail
-                ? `Toggle the sidebar. ${expandHint}`
-                : "Toggle the sidebar"}
+                ? `切换侧栏. ${expandHint}`
+                : "切换侧栏"}
             </span>
           </button>
         </div>
@@ -201,7 +227,7 @@ export function WorkspaceSidebar({
             type="button"
             onClick={onNewSession}
             disabled={newSessionBusy || !canNewSession}
-            aria-label="New session"
+            aria-label="新建会话"
             /*
              * Advertised the way DSH does it: `aria-keyshortcuts` for assistive
              * tech and automation, plus a visible `<kbd>` in the hint so a
@@ -212,15 +238,15 @@ export function WorkspaceSidebar({
             aria-keyshortcuts="Control+N"
             title={
               !canNewSession
-                ? "New session — the host has no command context for this action."
+                ? "新建会话 — 主机没有可用于该操作的命令上下文。"
                 : newSessionBusy
-                  ? "New session — starting…"
-                  : "Start a fresh session in this workspace (Ctrl+N)"
+                  ? "新建会话 — 正在启动…"
+                  : "在该工作区新建会话（Ctrl+N）"
             }
             className={css.newSession}
           >
             <Icon name="plus" size={14} />
-            <span className={css.newSessionLabel}>New session</span>
+            <span className={css.newSessionLabel}>新建会话</span>
             <span className={css.newSessionKbd} aria-hidden="true">
               Ctrl+N
             </span>
@@ -235,34 +261,53 @@ export function WorkspaceSidebar({
          * architecture: their absence is what made our sidebar read as a
          * different product even with matching colours.
          *
-         * Both surfaces are genuinely absent from the web client, so they render
-         * as inert rows that state why rather than pretending to be clickable.
+         * BOTH are real surfaces now, so a disabled row must never claim the
+         * host lacks the capability: the only reason either callback is absent is
+         * that the dock itself is not available at the current width. Saying "the
+         * host exposes no automation surface" was outright false — the host ships
+         * `schedule` in HOST_CAPABILITIES and the tab works.
          */}
         {rail ? null : (
           <div className={css.panelList}>
+            {/* Plugins is a REAL surface: the host reports installed packages
+                and skills in `pi_surface_ok`, so this row opens that dock tab. */}
             <button
               type="button"
-              disabled
-              title="Plugins — the host exposes no plugin surface to the web client yet."
+              disabled={onOpenPlugins === undefined}
+              onClick={onOpenPlugins}
+              title={
+                onOpenPlugins === undefined
+                  ? "插件 — 打开右侧停靠栏以查看该工作区已安装的软件包和技能。该宽度下停靠栏不可用（低于 760px）。"
+                  : "插件 — 该工作区已安装的软件包和技能。"
+              }
               className={css.panelRow}
             >
               <Icon name="plug" size={16} className={css.panelGlyph} />
-              <span className={css.panelTitle}>Plugins</span>
-              <span className="sr-only">
-                Disabled — the host exposes no plugin surface to the web client yet.
-              </span>
+              <span className={css.panelTitle}>插件</span>
+              {onOpenPlugins === undefined ? (
+                <span className="sr-only">
+                  已禁用 — 该宽度下右侧停靠栏不可用（低于 760px）。插件会在该停靠栏中打开。
+                </span>
+              ) : null}
             </button>
             <button
               type="button"
-              disabled
-              title="Automations — the host exposes no automation surface to the web client yet."
+              disabled={onOpenAutomations === undefined}
+              onClick={onOpenAutomations}
+              title={
+                onOpenAutomations === undefined
+                  ? "自动化 — 打开右侧停靠栏以管理主机按计划运行的提示词。该宽度下停靠栏不可用（低于 760px）。"
+                  : "自动化 — 主机按计划运行的提示词。"
+              }
               className={css.panelRow}
             >
               <Icon name="clock" size={16} className={css.panelGlyph} />
-              <span className={css.panelTitle}>Automations</span>
-              <span className="sr-only">
-                Disabled — the host exposes no automation surface to the web client yet.
-              </span>
+              <span className={css.panelTitle}>自动化</span>
+              {onOpenAutomations === undefined ? (
+                <span className="sr-only">
+                  已禁用 — 该宽度下右侧停靠栏不可用（低于 760px）。自动化会在该停靠栏中打开。
+                </span>
+              ) : null}
             </button>
           </div>
         )}
@@ -280,14 +325,14 @@ export function WorkspaceSidebar({
            * stacked control rows where the reference has one.
            */
           <div className={css.sectionHead}>
-            <span className={css.sectionTitle}>Workspaces</span>
+            <span className={css.sectionTitle}>工作区</span>
             <label className={css.searchInline}>
               <Icon name="search" size={13} className={css.searchIcon} />
               <input
                 value={query}
                 onChange={(event) => onQueryChange(event.target.value)}
-                aria-label="Filter workspaces"
-                placeholder="Filter"
+                aria-label="筛选工作区"
+                placeholder="筛选"
                 autoComplete="off"
                 spellCheck={false}
                 className={css.searchInput}
@@ -299,15 +344,15 @@ export function WorkspaceSidebar({
               onClick={onRefresh}
               title={
                 refreshEnabled
-                  ? `Refresh — relist the host catalog. ${refreshCap.reason}`
+                  ? `刷新 — 重新列出主机目录。${refreshCap.reason}`
                   : workspacesBusy
-                    ? "Refresh — another workspace action is still running."
-                    : "Refresh — the catalog is already being listed."
+                    ? "刷新 — 另一个工作区操作仍在进行。"
+                    : "刷新 — 目录正在列出中。"
               }
               className={css.refreshSmall}
             >
               <Icon name="refresh" size={12} />
-              <span className="sr-only">Refresh the workspace catalog</span>
+              <span className="sr-only">刷新工作区目录</span>
             </button>
             <span>{visible.length}</span>
           </div>
@@ -322,13 +367,13 @@ export function WorkspaceSidebar({
               onClick={onRefresh}
               title={
                 refreshEnabled
-                  ? `Refresh — relist the host catalog. ${refreshCap.reason}`
-                  : "Refresh — a workspace action is still running."
+                  ? `刷新 — 重新列出主机目录。${refreshCap.reason}`
+                  : "刷新 — 有工作区操作仍在进行。"
               }
               className={css.railButton}
             >
               <Icon name="refresh" size={15} />
-              <span className="sr-only">Refresh the workspace catalog</span>
+              <span className="sr-only">刷新工作区目录</span>
             </button>
             {workspacesLoading ? (
               <Spinner />
@@ -347,7 +392,7 @@ export function WorkspaceSidebar({
                 title={
                   needle
                     ? `No workspace matches “${query.trim()}”.`
-                    : "No workspaces reported yet — browse the host filesystem in the dock and start a Pi."
+                    : "尚未报告任何工作区 — 在停靠栏中浏览主机文件系统并启动一个 Pi。"
                 }
                 className={css.railIdle}
               >
@@ -355,7 +400,7 @@ export function WorkspaceSidebar({
                 <span className="sr-only">
                   {needle
                     ? `No workspace matches “${query.trim()}”. Clear the filter to see every workspace this host returned.`
-                    : "No workspaces reported yet. Browse the host filesystem in the right dock and start a Pi to create one."}
+                    : "尚未报告任何工作区。在右侧停靠栏中浏览主机文件系统并启动 Pi 即可创建。"}
                 </span>
               </span>
             ) : null}
@@ -386,7 +431,7 @@ export function WorkspaceSidebar({
               const current = activeRoom === ws.room_id;
               const state = workspaceStates?.[ws.cwd] ?? null;
               const status = workspaceStatus(ws, state);
-              const { start, restart } = workspaceControls(ws, {
+              const { start, restart, stop } = workspaceControls(ws, {
                 busy: workspacesBusy,
                 state,
               });
@@ -455,21 +500,31 @@ export function WorkspaceSidebar({
                         type="button"
                         disabled={!start.enabled}
                         onClick={() => onStart(ws.cwd)}
-                        title={`Start — ${start.reason}`}
+                        title={`启动 — ${start.reason}`}
                         className={css.startButton}
                       >
                         <Icon name="spark" size={12} />
-                        <span className="sr-only">Start {ws.name}</span>
+                        <span className="sr-only">启动 {ws.name}</span>
                       </button>
                       <button
                         type="button"
                         disabled={!restart.enabled}
                         onClick={() => onRestart(ws.cwd)}
-                        title={`Restart — ${restart.reason}`}
+                        title={`重启 — ${restart.reason}`}
                         className={css.restartButton}
                       >
                         <Icon name="refresh" size={12} />
-                        <span className="sr-only">Restart {ws.name}</span>
+                        <span className="sr-only">重启 {ws.name}</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!stop.enabled}
+                        onClick={() => onStop(ws.cwd)}
+                        title={`停止 — ${stop.reason}`}
+                        className={css.stopWorkspaceButton}
+                      >
+                        <Icon name="stop" size={12} />
+                        <span className="sr-only">停止 {ws.name}</span>
                       </button>
                     </span>
                   </div>
@@ -499,11 +554,11 @@ export function WorkspaceSidebar({
           <button
             type="button"
             disabled
-            title="More — no further surfaces are exposed to the web client yet."
+            title="更多 — 目前未向 Web 客户端开放其他界面。"
             className={css.moreRow}
           >
             <Icon name="more" size={16} className={css.panelGlyph} />
-            <span className={css.panelTitle}>More</span>
+            <span className={css.panelTitle}>更多</span>
             <span className="sr-only">
               Disabled — no further surfaces are exposed to the web client yet.
             </span>
@@ -550,10 +605,10 @@ export function WorkspaceSidebar({
           aria-pressed={dockOpen}
           title={
             !dockAvailable
-              ? "The right dock is not available at this width (below 760px)."
+              ? "该宽度下右侧停靠栏不可用（低于 760px）。"
               : dockOpen
-                ? "Hide the right dock (Ctrl/Cmd+J)"
-                : "Show the right dock (Ctrl/Cmd+J)"
+                ? "收起右侧停靠栏（Ctrl/Cmd+J）"
+                : "显示右侧停靠栏（Ctrl/Cmd+J）"
           }
           className={
             rail ? css.dockButtonRail : css.dockButtonFull
@@ -562,26 +617,72 @@ export function WorkspaceSidebar({
           <Icon name="columns" size={16} />
           {rail ? null : (
             <>
-              <span>Right dock</span>
+              <span>右侧停靠栏</span>
               <kbd className={css.shortcut}>⌘J</kbd>
             </>
           )}
-          <span className="sr-only">Toggle the right dock</span>
+          <span className="sr-only">切换右侧停靠栏</span>
         </button>
 
+        {/*
+         * Plan/80 — Models is its own row. It was previously the whole of
+         * "Settings", which was a copy-vs-behaviour defect: the label promised
+         * preferences and the panel delivered one file. Settings now holds real
+         * preferences, and this row edits model providers.
+         */}
         <button
           type="button"
-          disabled
-          title="Settings — no settings surface is exposed to the web client yet."
-          className={
-            rail ? css.settingsButtonRail : css.settingsButtonFull
+          disabled={onOpenModels === undefined}
+          onClick={onOpenModels}
+          title={
+            onOpenModels === undefined
+              ? modelsAvailable
+                ? "模型 — 打开右侧停靠栏以编辑该主机的模型提供方和模型。该宽度下停靠栏不可用（低于 760px）。"
+                : "模型 — 该主机未向此客户端提供模型配置界面。"
+              : "模型 — 该主机的模型提供方和模型，保存回它自己的 models.json。"
           }
+          className={rail ? css.settingsButtonRail : css.settingsButtonFull}
+        >
+          <Icon name="cpu" size={16} />
+          {rail ? null : <span>模型</span>}
+          {onOpenModels === undefined ? (
+            <span className="sr-only">
+              已禁用 —{" "}
+              {modelsAvailable
+                ? "该宽度下右侧停靠栏不可用（低于 760px）。模型会在该停靠栏中打开。"
+                : "该主机未向此客户端提供模型配置界面。"}
+            </span>
+          ) : null}
+        </button>
+
+        {/*
+         * Plan/80 — Settings is now genuinely settings: appearance and behaviour.
+         * The row is disabled only when there is nothing to open, and the tooltip
+         * names the actual cause — width, or a host with no settings surface.
+         */}
+        <button
+          type="button"
+          disabled={onOpenSettings === undefined}
+          onClick={onOpenSettings}
+          title={
+            onOpenSettings === undefined
+              ? settingsAvailable
+                ? "设置 — 打开右侧停靠栏以调整外观与行为。该宽度下停靠栏不可用（低于 760px）。"
+                : "设置 — 该主机未向此客户端提供设置界面。"
+              : "设置 — 本浏览器与该主机的外观和行为。"
+          }
+          className={rail ? css.settingsButtonRail : css.settingsButtonFull}
         >
           <Icon name="settings" size={16} />
-          {rail ? null : <span>Settings</span>}
-          <span className="sr-only">
-            Disabled — no settings surface is exposed to the web client yet.
-          </span>
+          {rail ? null : <span>设置</span>}
+          {onOpenSettings === undefined ? (
+            <span className="sr-only">
+              已禁用 —{" "}
+              {settingsAvailable
+                ? "该宽度下右侧停靠栏不可用（低于 760px）。设置会在该停靠栏中打开。"
+                : "该主机未向此客户端提供设置界面。"}
+            </span>
+          ) : null}
         </button>
       </div>
     </aside>

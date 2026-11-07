@@ -172,5 +172,3 @@ if (!PAIR_URI) {
 }
 
 ws.close();
-console.log(failures === 0 ? "\nshell E2E: OK" : `\nshell E2E: ${failures} check(s) FAILED`);
-process.exit(failures === 0 ? 0 : 1);

@@ -19,7 +19,7 @@ export function Spinner({ size = 13 }: { size?: number }) {
       className={css.spinner}
       style={{ width: size, height: size }}
       role="status"
-      aria-label="Loading"
+      aria-label="加载中"
     />
   );
 }
@@ -81,7 +81,7 @@ export function EmptyState({
 
 /** Error state. `detail` is rendered as plain text — never as markup. */
 export function ErrorState({
-  title = "Something failed",
+  title = "出错了",
   detail,
   code,
   action,

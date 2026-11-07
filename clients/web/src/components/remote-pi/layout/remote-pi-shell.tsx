@@ -122,6 +122,28 @@ export function RemotePiShell({
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>("auto");
   const [dockOpen, setDockOpen] = useState(false);
   const [dockTab, setDockTab] = useState<RightRailProps["tab"]>("files");
+  /*
+   * Three dock surfaces load LAZILY and nothing was asking for them on tab open:
+   * Plan (fs_list over plan/), Plugins (pi_surface) and Changes (git status). Each
+   * rendered from an empty cache and looked broken until an unrelated action
+   * happened to populate it. The trigger belongs to the tab change, not to the
+   * panel that mounts after it.
+   */
+  const handleDockTabChange = useCallback(
+    (tab: RightRailProps["tab"]) => {
+      setDockTab(tab);
+      if (tab === "plan") dock.onPlanTabOpen?.();
+      if (tab === "plugins") dock.onPluginsRefresh?.();
+      if (tab === "changes") dock.onChangesRefresh?.();
+      /* Models and Settings read their own files (models.json / settings.json).
+       * Neither was re-read on tab open, so the panel rendered whatever the last
+       * fetch left behind — or its error state, when the first fetch predated the
+       * host surface being announced. */
+      if (tab === "models") dock.onModelsReload?.();
+      if (tab === "settings") dock.onSettingsReload?.();
+    },
+    [dock],
+  );
   const [dockWidth, setDockWidth] = useState(0);
   const [viewportWidth, setViewportWidth] = useState(0);
 
@@ -153,11 +175,11 @@ export function RemotePiShell({
      below 280px, never more than viewport - sidebar - 400px). */
   const openDock = useCallback(
     (tab?: RightRailProps["tab"]) => {
-      if (tab) setDockTab(tab);
+      if (tab) handleDockTabChange(tab);
       setDockOpen(true);
       setDockWidth(defaultDockWidth(geo));
     },
-    [geo],
+    [geo, handleDockTabChange],
   );
 
   const toggleDock = useCallback(() => {
@@ -255,29 +277,29 @@ export function RemotePiShell({
           <StatusPill
             label={
               view !== "host"
-                ? "offline"
+                ? "离线"
                 : host.stale === true
-                  ? "host not responding"
-                  : "host connected"
+                  ? "主机无响应"
+                  : "已连接主机"
             }
             tone={view !== "host" ? "idle" : host.stale === true ? "warn" : "ok"}
             title={
               view !== "host"
                 ? "No relay connection is open."
                 : host.stale === true
-                  ? `Relay ${host.relayUrl} · the connection is open but the host has not answered for over a minute. Reads, switching and chat will look like they do nothing.`
-                  : `Relay ${host.relayUrl} · room "host"${host.backend ? ` · Ed25519: ${host.backend}` : ""}`
+                  ? `中继 ${host.relayUrl} · 连接已打开，但主机已超过一分钟没有应答。读取、切换和对话看起来会像没有反应。`
+                  : `中继 ${host.relayUrl} · 房间 "host"${host.backend ? ` · Ed25519: ${host.backend}` : ""}`
             }
           />
           {view === "host" ? (
             <button
               type="button"
               onClick={() => setConfirmingUnpair(true)}
-              title="Unpair this host and clear the stored pairing"
+              title="解除该主机配对并清除已保存的配对信息"
               className={`${css.unpair} ${unpairArmed ? css.unpairArmed : css.unpairIdle}`}
             >
               <Icon name="plug" size={14} />
-              {unpairArmed ? "Confirm unpair" : "Unpair"}
+              {unpairArmed ? "确认解除" : "解除配对"}
             </button>
           ) : null}
         </span>
@@ -298,6 +320,16 @@ export function RemotePiShell({
             dockOpen={showDock}
             dockAvailable={geo.dockAvailable}
             onToggleDock={toggleDock}
+            /*
+             * These four rows are the sidebar's door into the dock. They were
+             * declared, rendered and PERMANENTLY DISABLED because nothing ever
+             * passed a handler — a dead control that explained itself with a
+             * width message the user could not act on at any width.
+             */
+            onOpenPlugins={geo.dockAvailable ? () => openDock("plugins") : undefined}
+            onOpenAutomations={geo.dockAvailable ? () => openDock("automations") : undefined}
+            onOpenModels={geo.dockAvailable ? () => openDock("models") : undefined}
+            onOpenSettings={geo.dockAvailable ? () => openDock("settings") : undefined}
           />
 
           {/* Center cell: the transcript stretches and the fixed security
@@ -319,7 +351,7 @@ export function RemotePiShell({
             <RightRail
               {...dock}
               tab={dockTab}
-              onTabChange={setDockTab}
+              onTabChange={handleDockTabChange}
               collapsed={false}
               onToggleCollapse={() => setDockOpen(false)}
               width={renderDockWidth}
@@ -331,7 +363,7 @@ export function RemotePiShell({
             <RightRail
               {...dock}
               tab={dockTab}
-              onTabChange={setDockTab}
+              onTabChange={handleDockTabChange}
               collapsed
               onToggleCollapse={toggleDock}
               width={RAIL_WIDTH}
@@ -371,8 +403,8 @@ export function RemotePiShell({
       ) : null}
       {confirmingUnpair ? (
         <Modal
-          title="Unpair this host?"
-          description={`This clears the stored pairing for ${host.hostname} on ${host.relayUrl}. The host stays reachable only by pairing again with a fresh code.`}
+          title="解除该主机配对？"
+          description={`这将清除 ${host.hostname} 在 ${host.relayUrl} 上已保存的配对。主机只有在用新的配对码重新配对后才能再次访问。`}
           onClose={() => setConfirmingUnpair(false)}
           footer={
             <>
@@ -386,14 +418,13 @@ export function RemotePiShell({
                   onUnpair();
                 }}
               >
-                Unpair
+                解除配对
               </Button>
             </>
           }
         >
           <p>
-            Every paired client keeps working until its current connection
-            drops; this device forgets the token immediately.
+            所有已配对的客户端会一直工作到当前连接断开；本设备会立即忘掉令牌。
           </p>
         </Modal>
       ) : null}

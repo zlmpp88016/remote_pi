@@ -12,6 +12,8 @@ export type ChatPhase =
   | 'awaiting_echo'
   | 'streaming'
   | 'completed'
+  /** The user stopped the turn. Distinct from `error`: nothing failed. */
+  | 'cancelled'
   | 'error'
   | 'timed_out'
   | 'disconnected';
@@ -104,6 +106,7 @@ export type ChatEvent =
   | { type: 'done'; roomId: string; id: string; usage?: WireUsage }
   | { type: 'error'; roomId: string; id: string; code: ChatErrorCode }
   | { type: 'timeout'; roomId: string; id: string }
+  | { type: 'cancelled'; roomId: string; id: string }
   | { type: 'disconnected'; roomId: string; id?: string }
   /** Pi announced a tool call. `argsText` is ALREADY stringified by the caller
    *  (the reducer never inspects or re-serializes host payloads). */
@@ -163,7 +166,7 @@ export type ChatItem =
 
 const CHAT_HISTORY_LIMIT = 100;
 
-const TERMINAL_PHASES: readonly ChatPhase[] = ['completed', 'error', 'timed_out', 'disconnected'];
+const TERMINAL_PHASES: readonly ChatPhase[] = ['completed', 'cancelled', 'error', 'timed_out', 'disconnected'];
 
 export const initialChatState: ChatState = { active: null, history: [], tools: [] };
 
@@ -292,6 +295,15 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
     case 'timeout':
       return settleActive(state, event.roomId, event.id, (turn) =>
         isOpenPhase(turn.phase) ? { ...turn, phase: 'timed_out', error: 'timeout' } : null,
+      );
+
+    /* The user stopped the turn. Guarded on `isOpenPhase` like every other
+       settle: a cancel frame that races a turn which already completed must be
+       inert, never rewrite a finished reply as "stopped". `error` stays null —
+       nothing failed, and a status the user caused must not read as a fault. */
+    case 'cancelled':
+      return settleActive(state, event.roomId, event.id, (turn) =>
+        isOpenPhase(turn.phase) ? { ...turn, phase: 'cancelled', error: null } : null,
       );
 
     case 'disconnected':

@@ -42,7 +42,7 @@ await evaluate(send, `(() => { const b=[...document.querySelectorAll("button")].
 await sleep(1000);
 await evaluate(send, `(() => { const d=[...document.querySelectorAll("button")].find(x=>(x.getAttribute("title")||"").startsWith("Show the right dock")); if(d)d.click(); })()`);
 await sleep(400);
-await evaluate(send, `(() => { const x=[...document.querySelectorAll("button")].find(b=>/^Sessions$/i.test((b.innerText||"").trim())); if(x)x.click(); })()`);
+await evaluate(send, `(() => { const x=[...document.querySelectorAll("button")].find(b=>/^会话$/i.test((b.innerText||"").trim())); if(x)x.click(); })()`);
 for (let i = 0; i < 250; i++) {
   const n = await evaluate(send, `document.querySelectorAll("section[aria-label=\\"Sessions\\"] button[aria-label^=\\"Read session\\"]").length`).catch(() => 0);
   if (Number(n) > 0) break;

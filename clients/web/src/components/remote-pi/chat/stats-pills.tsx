@@ -65,7 +65,7 @@ export const StatsPills = memo(function StatsPills({ activity, usage, compact = 
   if (activityLabel === "" && usageLabel === "") return null;
 
   return (
-    <div className={css.row} aria-label="Conversation statistics">
+    <div className={css.row} aria-label="对话统计">
       {activityLabel !== "" && (
         <span className={css.pill} data-stat="activity">
           <Icon name="gauge" size={13} />

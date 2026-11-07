@@ -21,6 +21,7 @@
  *     `dispose()` preserves the stored pairing for the next mount.
  */
 
+import { decideNotReadyRetry } from "./sessions-retry";
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 import type { SkillOption } from "@/components/remote-pi/chat";
@@ -30,10 +31,14 @@ import {
   bootstrapPairUri,
   fetchBootstrapCredentials,
 } from "@/lib/remote-pi/bootstrap-client";
-import { ActionRejectedError, WorkspaceRestartRejectedError, isWireImage, parsePairUri, type WireModel, type WireSessionEvent, type WireSessionInfo, type WireSkill, type PairTarget, type ServerMessage, type WorkspaceEntry } from "@/lib/remote-pi/protocol";
+import { ActionRejectedError, HOST_WEB_ROOM_ID, WorkspaceRestartRejectedError, isWireImage, parsePairUri, type WireModel, type WireSessionEvent, type WireSessionInfo, type WireSkill, type WirePackage, type PairTarget, type ServerMessage, type WorkspaceEntry, type ChangesSnapshotWire, type ChangesUnavailableReason, type ModelsDescribeOk, type ModelsOpWire, type SettingsDescribeOk, type SettingsOpWire } from "@/lib/remote-pi/protocol";
 import {
   RemotePiShell,
+  type PluginSkillRow,
   type RemotePiShellProps,
+  type WirePackageRow,
+  type AutomationFire,
+  type AutomationRow,
 } from "@/components/remote-pi/layout";
 import type {
   ModelOption,
@@ -48,7 +53,17 @@ import {
   formatTokens,
 } from "@/lib/remote-pi/usage-stats";
 
-import { ATTACH_MODEL_REQUIRED, ATTACH_VISION_REQUIRED, CHAT_TIMEOUT_MS, DEVICE_NAME, EMPTY_SESSIONS, EMPTY_SKILLS, FS_FAILED, FS_NAV_UNAVAILABLE, MODELS_FAILED, MODELS_FOR_LIVE_WORKSPACE, MODEL_NOT_CONNECTED, MODEL_SET_FAILED, RESTART_FAILED, REAUTH_REQUIRED, RELAY_REQUIRED, SEND_FAILED, SKILLS_FAILED, SKILL_FAILED, SESSIONS_FAILED, SESSIONS_FOR_LIVE_WORKSPACE, SESSIONS_LIST_TIMEOUT_MS, HOST_STALE_MS, SESSIONS_RELIST_ATTEMPTS, SESSIONS_RELIST_MS, SESSIONS_RETRY_BUDGET, SWITCH_RESPAWN_GRACE_MS, SWITCH_TIMEOUT_MS, SESSION_NEW_FAILED, SESSION_READ_FAILED, START_FAILED, STORAGE_WARNING, SWITCH_FAILED, THINKING_SET_FAILED, WORKSPACES_FAILED, ADD_FAILED, chatItemStatus, chatNoticeForTurn, isSuperseded, pairFailureText, phaseBusyLabel, relayNotice } from "./notices";
+import { joinRemotePath } from "@/lib/remote-pi/remote-path";
+import { ATTACH_MODEL_REQUIRED, ATTACH_VISION_REQUIRED, CHAT_TIMEOUT_MS, COMPOSER_WORKSPACE_NOT_RUNNING, STOP_FAILED, REMOVE_FAILED, DEVICE_NAME, EMPTY_SESSIONS, EMPTY_SKILLS, EMPTY_PACKAGES, EMPTY_PLUGIN_SKILLS, FS_FAILED, FS_NAV_UNAVAILABLE, PLAN_READ_FAILED, PLAN_REFUSED, PLAN_TRUNCATED, MODELS_FAILED, MODELS_FOR_LIVE_WORKSPACE, MODEL_NOT_CONNECTED, MODEL_SET_FAILED, RESTART_FAILED, REAUTH_REQUIRED, RELAY_REQUIRED, SEND_FAILED, SKILLS_FAILED, SKILL_FAILED, PACKAGE_FAILED, CHANGES_UNAVAILABLE, CHANGES_FAILED, SETTINGS_UNREADABLE, SETTINGS_SAVED, SETTINGS_ERROR, SETTINGS_UNAVAILABLE, SETTINGS_SURFACE_UNAVAILABLE, SCHEDULE_FAILED, SCHEDULE_NO_WORKSPACE, PACKAGE_OP_TIMEOUT_MS, PLUGINS_FOR_LIVE_WORKSPACE, SESSIONS_FAILED, SESSIONS_FOR_LIVE_WORKSPACE, SESSIONS_LIST_TIMEOUT_MS, HOST_STALE_MS, SESSIONS_RELIST_ATTEMPTS, SESSIONS_RELIST_MS, SESSIONS_RETRY_BUDGET, SESSIONS_NOT_READY_BUDGET, SESSION_NEW_TIMEOUT_MS, SWITCH_RESPAWN_GRACE_MS, SWITCH_TIMEOUT_MS, SESSION_NEW_FAILED, SESSION_READ_FAILED, START_FAILED, STORAGE_WARNING, SWITCH_FAILED, THINKING_SET_FAILED, WORKSPACES_FAILED, ADD_FAILED, chatItemStatus, chatNoticeForTurn, isSuperseded, pairFailureText, phaseBusyLabel, relayNotice } from "./notices";
+import { applyPreset, readStoredPreset, type ThemePreset } from "@/lib/theme-presets";
+import {
+  applyMode,
+  readStoredMode,
+  resolveMode,
+  watchSystemMode,
+  type ResolvedMode,
+  type ThemeMode,
+} from "@/lib/theme-mode";
 import { useAttachmentStore } from "./use-attachment-store";
 import { useChatStore } from "./use-chat-store";
 import { useConnectionStore } from "./use-connection-store";
@@ -57,6 +72,7 @@ import { useModelStore } from "./use-model-store";
 import { useSessionStore } from "./use-session-store";
 import { useSkillStore } from "./use-skill-store";
 import { useWorkspaceStore } from "./use-workspace-store";
+import { toAutomationRow } from "./automation-row";
 import { dispatchServerMessage, type DispatcherPorts } from "./dispatcher";
 import { fileToWireImage } from "./attachment";
 
@@ -87,6 +103,12 @@ function projectModelRow(
     ...(m.thinking_levels === undefined ? {} : { thinkingLevels: [...m.thinking_levels] }),
   };
 }
+
+/* No per-package in-flight set exists: the wire correlates these mutations by
+   one generic package_op_ok, so the panel shows a whole-surface busy state. */
+const EMPTY_BUSY_KEYS: ReadonlySet<string> = new Set<string>();
+
+const EMPTY_NAME_MAP: ReadonlyMap<string, string> = new Map();
 
 export function ConnectClient() {
   /* ── stores: one hook per business domain ────────────────────────────────
@@ -137,6 +159,21 @@ export function ConnectClient() {
   const setFsEntries = fsStore.actions.setEntries;
   const setFsLoaded = fsStore.actions.setLoaded;
   const fsListSeqRef = fsStore.actions.seq;
+  /* Plan/77 — the plan viewer reads ONE document at a time. Kept beside the fs
+   * store rather than inside it: a directory listing and a document read are
+   * different lifetimes, and merging them would let a stale listing blank the
+   * document the user is reading. */
+  const [planDoc, setPlanDoc] = useState<{
+    path: string;
+    content: string;
+    truncated: boolean;
+    bytes: number;
+  } | null>(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const planSeqRef = useRef(0);
+  const planListSeqRef = useRef(0);
+  const [planFiles, setPlanFiles] = useState<readonly string[]>([]);
 
   const modelBusy = modelStore.state.busy;
   const modelSwitchTo = modelStore.state.switchTo;
@@ -165,8 +202,37 @@ export function ConnectClient() {
   
   const skillsReqRef = skillStore.actions.surfaceReq;
   const skillInvokeRef = skillStore.actions.invokeReq;
+  const packageReqRef = skillStore.actions.packageReq;
+  /* Counts CONFIRMED installs so the panel can close its form on success.
+   * Incremented only on the accepted path, never on a refusal. */
+  const [pluginsInstalledAt, setPluginsInstalledAt] = useState(0);
+  /** True once a plugin mutation succeeded and a Pi restart is still owed. */
+  const [pluginsRestartPending, setPluginsRestartPending] = useState(false);
+
+  /* ── Automations ────────────────────────────────────────────────────────
+   * Host-room surface: tasks live in the daemon's cron registry, not in a
+   * workspace, so they are keyed by nothing — there is one list per host.
+   */
+  const [automationTasks, setAutomationTasks] = useState<readonly AutomationRow[]>([]);
+  const [automationNames, setAutomationNames] = useState<ReadonlyMap<string, string>>(EMPTY_NAME_MAP);
+  const [automationFires, setAutomationFires] = useState<readonly AutomationFire[]>([]);
+  const [automationsBusy, setAutomationsBusy] = useState(false);
+  const [automationNotice, setAutomationNotice] = useState<string | null>(null);
+  const [automationReason, setAutomationReason] = useState<string | null>(null);
+  /** Pending automations request, so a reply can be recognised and ignored when
+   *  a newer one superseded it. */
+  /* The fire subscription is installed once, at bind time, and must call the
+   * CURRENT refresh — capturing it directly would freeze the first render's
+   * closure and refresh against a stale adapter ref. */
+  const refreshAutomationsRef = useRef<() => void>(() => undefined);
+  /** The single armed package-mutation deadline, if any. */
+  const pkgWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skillsFetchedRef = skillStore.actions.fetched;
   const setSkillsByRoom = skillStore.actions.setByRoom;
+  const packagesByRoom = skillStore.state.packagesByRoom;
+  /** Stable empty lists: a new [] per render would defeat the memo boundaries. */
+  const [rawSkillsByRoom, setRawSkillsByRoom] = useState<Record<string, readonly WireSkill[]>>({});
+  const setPackagesByRoom = skillStore.actions.setPackagesByRoom;
 
   const sessionsByRoom = sessionStore.state.byRoom;
   const sessionsBusy = sessionStore.state.busy;
@@ -213,7 +279,7 @@ export function ConnectClient() {
    * Distinct from `switchLoading` on purpose: that flag clears when the switch is
    * ACKNOWLEDGED, which is before the Pi has actually restarted. This one stays
    * set until the transcript is genuinely hydrated, so the panel can say
-   * "Reopening this session…" for the whole window instead of showing an empty
+   * "正在重新打开该会话…" for the whole window instead of showing an empty
    * state that claims the session has no history.
    */
   const [resumingSession, setResumingSession] = useState(false);
@@ -226,6 +292,14 @@ export function ConnectClient() {
    * behind a ref that is assigned right after its definition.
    */
   const sessionsRetryLeftRef = useRef(SESSIONS_RETRY_BUDGET);
+  /* Set when a listing was attempted before the transport was ready. Kept
+   * separate from the reply timer so a not-yet-connected attempt cannot stack
+   * timers, and cleared on fire so the next attempt can arm a fresh one. */
+  const sessionsNotReadyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** How many "the transport is not up yet" retries remain. Separate from the
+   *  host-retry budget on purpose: those retries spend a real request, these do
+   *  not — but unbounded they became an infinite 800ms busy loop (measured). */
+  const sessionsNotReadyLeftRef = useRef(0);
   const requestSessionsRef = useRef<(adapterOverride?: RemotePiAdapter, isRetry?: boolean) => void>(() => {});
   const sessionReadReqRef = sessionStore.actions.readReq;
   const prefetchReqRef = sessionStore.actions.prefetchReq;
@@ -324,8 +398,60 @@ export function ConnectClient() {
     const adapter = override ?? bindingRef.current?.adapter ?? null;
     const roomId = activeRoomRef.current;
     if (adapter === null || roomId === null || adapter.getSnapshot().phase !== "connected") {
+      /*
+       * Not ready yet — PENDING, not failed.
+       *
+       * `openRoom` calls this immediately after setting `activeRoomRef`, which can
+       * be a tick before the transport finishes connecting. Returning silently
+       * there was the cause of "正在向主机请求该工作区的会话…"
+       * that never resolves: the one automatic request was dropped, no timer was
+       * armed, and nothing ever asked again — while a manual Reload worked fine
+       * because by then the connection was up.
+       *
+       * MEASURED BUG (fixed here): this branch armed an UNBOUNDED retry. Every
+       * retry that landed while the transport was still down re-entered this
+       * branch, set busy, and armed another 800ms timer — and because the retry is
+       * deliberately not charged to the host-retry budget (the host was never
+       * asked), nothing ever counted down. So a transport that stayed down left
+       * the panel on "Asking…" indefinitely, re-arming every 800ms forever, with
+       * the Refresh control disabled because it is `disabled={busy}`.
+       *
+       * `SESSIONS_NOT_READY_BUDGET` bounds it. When it runs out the panel says so
+       * and stops asking, which is the honest answer: nothing was ever sent, so
+       * there is no host failure to report, but there is also no point pretending
+       * we are still waiting on a request that does not exist.
+       *
+       * Only the TRANSPORT case is retried. With `roomId === null` there is no
+       * workspace selected at all, so arming a timer would be a busy loop over a
+       * request that cannot be addressed; the panel legitimately shows nothing
+       * until the user picks one, and `openRoom` asks again at that point.
+       */
+      if (adapter !== null && roomId !== null) {
+        setSessionsBusy(true);
+        /* The decision lives in a pure helper so its ONE invariant — bounded
+         * attempts, then a terminal state — is testable without a browser. */
+        const decision = decideNotReadyRetry(
+          sessionsNotReadyLeftRef.current,
+          SESSIONS_NOT_READY_BUDGET,
+        );
+        if (decision.kind === "give_up") {
+          setSessionsBusy(false);
+          setSessionsNotice(SESSIONS_FAILED);
+          return false;
+        }
+        sessionsNotReadyLeftRef.current = decision.used;
+        if (sessionsNotReadyTimerRef.current === null) {
+          sessionsNotReadyTimerRef.current = setTimeout(() => {
+            sessionsNotReadyTimerRef.current = null;
+            requestSessionsRef.current(undefined, true);
+          }, SESSIONS_RELIST_MS);
+        }
+      }
       return false;
     }
+    /* The transport came up: refill the not-ready budget so a later disconnect
+     * gets the same allowance rather than inheriting a spent one. */
+    sessionsNotReadyLeftRef.current = 0;
     if (sessionsReqRef.current !== null) return false;
     /*
      * A retry consumes the existing budget; only a FRESH request refills it.
@@ -548,7 +674,18 @@ export function ConnectClient() {
       attempts += 1;
       if (byRoomRef.current[roomId] !== before) return;  // refreshed
       if (attempts > SESSIONS_RELIST_ATTEMPTS) return;
-      requestSessions();
+      /*
+       * `true` = treat this as a RETRY, not a fresh user attempt.
+       *
+       * Without it every tick refilled `sessionsRetryLeftRef` back to
+       * SESSIONS_RETRY_BUDGET, so the budget could never be spent: the 2.5s
+       * timeout would decrement it and the next tick 800ms later would top it up
+       * again. The panel then stayed on "Asking…" for the whole 150-attempt
+       * window (2 minutes) instead of reaching its error state, which is exactly
+       * the "it never loads" report. This loop is background polling, so it must
+       * not hand itself fresh budget.
+       */
+      requestSessions(undefined, true);
       setTimeout(tick, SESSIONS_RELIST_MS);
     };
     setTimeout(tick, SWITCH_RESPAWN_GRACE_MS);
@@ -694,6 +831,26 @@ export function ConnectClient() {
         sessionNewReqRef.current = { id, room: roomId };
         setSessionsBusy(true);
         setSessionsNotice(null);
+        /*
+         * This path had NO timeout, and that was a real hang: `busy` stays true
+         * until a matching action_ok/action_error arrives, and the Refresh button
+         * is disabled while busy. A lost `session_new` (the host respawns its Pi
+         * and answers nothing during the window) therefore froze the whole
+         * Sessions surface with no way back except reloading the page.
+         *
+         * The store's watchdog would eventually cover it, but 150s of a dead
+         * panel is not an acceptable answer when the honest timeout is far
+         * shorter: a new session is created locally by the host, it does not
+         * need a respawn to answer. 10s is generous for that and matches the
+         * switch path's own budget.
+         */
+        setTimeout(() => {
+          const pending = sessionNewReqRef.current;
+          if (pending === null || pending.id !== id) return;
+          sessionNewReqRef.current = null;
+          setSessionsBusy(false);
+          setSessionsNotice(SESSION_NEW_FAILED);
+        }, SESSION_NEW_TIMEOUT_MS);
       } catch {
         setSessionsNotice(SESSION_NEW_FAILED);
       }
@@ -804,17 +961,29 @@ export function ConnectClient() {
   }, []);
 
   /** Projects a `pi_surface_ok` skill list onto the menu rows. */
-  const applySkills = useCallback((roomId: string, rows: readonly WireSkill[]) => {
-    setSkillsByRoom((prev) => ({
-      ...prev,
-      [roomId]: rows.map((s) => ({
-        name: s.name,
-        description: s.description,
-        source: s.source,
-        explicitOnly: s.disable_model_invocation,
-      })),
-    }));
-  }, []);
+  /**
+   * Projects a `pi_surface_ok` skill+package list onto the menu and dock rows.
+   *
+   * The RAW skill rows are kept alongside the projected menu options because the
+   * plugins dock needs `enabled` and `path`, which the slash menu does not use —
+   * and re-deriving them from the projection would silently drop the tri-state.
+   */
+  const applySkills = useCallback(
+    (roomId: string, rows: readonly WireSkill[], packages: readonly WirePackage[]) => {
+      setSkillsByRoom((prev) => ({
+        ...prev,
+        [roomId]: rows.map((s) => ({
+          name: s.name,
+          description: s.description,
+          source: s.source,
+          explicitOnly: s.disable_model_invocation,
+        })),
+      }));
+      setPackagesByRoom((prev) => ({ ...prev, [roomId]: packages }));
+      setRawSkillsByRoom((prev) => ({ ...prev, [roomId]: rows }));
+    },
+    [],
+  );
 
   /** Drops the chat transcript COMPLETELY: reducer reset (active + history),
    *  the pending turn timer, the draft and the in-panel query. Used where no
@@ -906,6 +1075,231 @@ export function ConnectClient() {
      every render — which dropped the `session_read_ok` reply between the click
      and its handler. The ports are read through a ref that is refreshed after
      each commit, so the callback itself never changes. */
+  /**
+   * `pi_surface` for the active room, forced.
+   *
+   * Distinct from `requestSkills` (which is lazy and fires at most once per room
+   * per connection): a mutation reply invalidates the cached list, so the rows
+   * must be re-read from the host. The `fetched` mark is cleared first, and a
+   * request already in flight is left alone — it will land with fresh data.
+   */
+  /*
+   * `force` skips the in-flight guard.
+   *
+   * A MUTATION reply invalidates whatever listing was in flight, so waiting for
+   * it is pointless: it describes the install state from BEFORE the change. And
+   * when that in-flight request is a stale one that will never be answered (the
+   * host went quiet), honouring the guard made Refresh a no-op forever — the
+   * user pressed it and nothing happened, with the panel stuck on "Installing…".
+   * The mutation already happened on disk, so the only correct action is to ask
+   * again immediately.
+   */
+  /* Only a package INSTALL advances the form-closing counter: update/remove
+   * act on rows the user can already see, so closing a form there would be
+   * motion without meaning. */
+  /**
+   * Every CONFIRMED plugin mutation ends the same way for the user: the change is
+   * written to settings, but the Pi process already loaded its extensions at
+   * startup, so nothing visibly changes until it restarts.
+   *
+   * `restartPending` is therefore set for install, remove, update AND
+   * enable/disable — all four rewrite what the next Pi will load. Saying it once,
+   * from one place, is why this lives here rather than in each handler: a new
+   * mutation added later inherits the sentence instead of forgetting it.
+   */
+  const handlePackageConfirmed = useCallback((op: string | undefined) => {
+    if (op === undefined) return;
+    setPluginsInstalledAt((n) => n + 1);
+    setPluginsRestartPending(true);
+  }, []);
+
+  /*
+   * ── Automations ──────────────────────────────────────────────────────────
+   *
+   * Host-room surface: the list is daemon-wide, so every refresh targets the
+   * host room rather than the active workspace's child room.
+   */
+  /*
+   * ── Automations ──────────────────────────────────────────────────────────
+   *
+   * Host-room surface: the list is daemon-wide, so every call targets the host
+   * room rather than a workspace child room.
+   *
+   * These are PROMISE calls, not fire-and-forget. The reply has to be correlated
+   * against a pending entry, and only the request path owns that bookkeeping plus
+   * a timeout. Fire-and-forget replies were delivered by the daemon and then
+   * dropped client-side, leaving the panel on "正在与主机通信…" forever.
+   */
+  const [changesSnapshot, setChangesSnapshot] = useState<ChangesSnapshotWire | null>(null);
+  const [changesBusy, setChangesBusy] = useState(false);
+  /** Closed reason from the host, or null when the snapshot succeeded. */
+  const [changesUnavailable, setChangesUnavailable] = useState<ChangesUnavailableReason | null>(null);
+  /** The client-authored sentence for the current failure. Never host text. */
+  const [changesReason, setChangesReason] = useState<string | null>(null);
+  /** Monotonic fence: only the newest Changes request may write state, so a slow
+   *  reply for a workspace the user already left cannot overwrite the current
+   *  one. A ref, not state — it must not trigger a render. */
+  const changesSeqRef = useRef(0);
+
+  /** Plan/79 — Model Providers: the host's models config, credentials stripped. */
+  const [modelsData, setModelsData] = useState<ModelsDescribeOk | null>(null);
+  const [modelsPhase, setModelsPhase] = useState<"idle" | "loading" | "saving">("idle");
+  /** Client-authored sentences. Host prose, errno and paths never reach the UI. */
+  const [modelsError, setModelsError] = useState<string | null>(null);
+  const [modelsSaved, setModelsSaved] = useState<string | null>(null);
+  /** Monotonic fence — same reasoning as `changesSeqRef`: `assertCurrent` proves
+   *  the connection, not which request this reply answers. */
+  const modelsSeqRef = useRef(0);
+
+  /** Plan/80 — Settings: the host settings.json whitelist projection. */
+  const [settingsData, setSettingsData] = useState<SettingsDescribeOk | null>(null);
+  const [settingsPhase, setSettingsPhase] = useState<"idle" | "loading" | "saving">("idle");
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSaved, setSettingsSaved] = useState<string | null>(null);
+  const settingsSeqRef = useRef(0);
+  /** Plan/80 — the browser-local visual preset (localStorage, never sent to a host). */
+  const [themePreset, setThemePreset] = useState<ThemePreset>(() => readStoredPreset());
+  /** Plan/81 — light/dark/system, persisted as the INTENT so `system` keeps following the OS. */
+  const [themeMode, setThemeMode] = useState<ThemeMode>(() => readStoredMode());
+  /** The concrete palette in effect; `system` resolves to one of these. */
+  const [resolvedMode, setResolvedMode] = useState<ResolvedMode>(() => resolveMode(readStoredMode()));
+
+  const refreshAutomations = useCallback(async () => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    if (adapter === null || adapter.getSnapshot().phase !== "connected") return;
+    setAutomationsBusy(true);
+    setAutomationNotice(null);
+    /*
+     * Retry once before reporting failure.
+     *
+     * The panel asks for the list as soon as it mounts, which can land while the
+     * transport is still finishing its handshake — the first request then times
+     * out even though every later one succeeds. One retry turns that startup race
+     * into a silent delay instead of a scary "could not complete" notice over an
+     * empty list.
+     */
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const reply = await adapter.listSchedules(HOST_WEB_ROOM_ID);
+        setAutomationTasks(reply.tasks.map(toAutomationRow));
+        setAutomationNames(new Map(Object.entries(reply.workspace_names)));
+        setAutomationReason(null);
+        setAutomationNotice(null);
+        setAutomationsBusy(false);
+        return;
+      } catch {
+        if (attempt === 1) {
+          setAutomationNotice(SCHEDULE_FAILED);
+          setAutomationsBusy(false);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    }
+  }, []);
+
+  /** Runs one mutation, then re-lists so the panel shows what the HOST reports. */
+  const runAutomationMutation = useCallback(async (mutate: () => Promise<unknown>) => {
+    try {
+      await mutate();
+    } catch {
+      setAutomationNotice(SCHEDULE_FAILED);
+      setAutomationsBusy(false);
+      return;
+    }
+    await refreshAutomations();
+  }, [refreshAutomations]);
+
+  const handleAutomationCreate = useCallback(
+    (input: {
+      schedule: string;
+      prompt: string;
+      tz: string | null;
+      skipIfBusy: boolean;
+      wake: boolean;
+      catchup: boolean;
+      daemonId: string | null;
+      model: { provider: string; id: string } | null;
+      freshSession: boolean;
+    }) => {
+      const adapter = bindingRef.current?.adapter ?? null;
+      if (adapter === null) return;
+      if (input.daemonId === null) {
+        setAutomationNotice(SCHEDULE_NO_WORKSPACE);
+        return;
+      }
+      void runAutomationMutation(() =>
+        adapter.addSchedule(HOST_WEB_ROOM_ID, {
+          daemonId: input.daemonId as string,
+          schedule: input.schedule,
+          prompt: input.prompt,
+          tz: input.tz,
+          skipIfBusy: input.skipIfBusy,
+          wake: input.wake,
+          catchup: input.catchup,
+          model: input.model,
+          freshSession: input.freshSession,
+        }),
+      );
+    },
+    [runAutomationMutation],
+  );
+
+  const handleAutomationSetEnabled = useCallback(
+    (id: string, enabled: boolean) => {
+      const adapter = bindingRef.current?.adapter ?? null;
+      if (adapter === null) return;
+      void runAutomationMutation(() => adapter.setScheduleEnabled(HOST_WEB_ROOM_ID, id, enabled));
+    },
+    [runAutomationMutation],
+  );
+
+  const handleAutomationRemove = useCallback(
+    (id: string) => {
+      const adapter = bindingRef.current?.adapter ?? null;
+      if (adapter === null) return;
+      void runAutomationMutation(() => adapter.removeSchedule(HOST_WEB_ROOM_ID, id));
+    },
+    [runAutomationMutation],
+  );
+
+  const handleAutomationRunNow = useCallback(
+    (id: string) => {
+      const adapter = bindingRef.current?.adapter ?? null;
+      if (adapter === null) return;
+      void runAutomationMutation(() => adapter.runScheduleNow(HOST_WEB_ROOM_ID, id));
+    },
+    [runAutomationMutation],
+  );
+
+  const refreshSurface = useCallback((force?: boolean) => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    const roomId = activeRoomRef.current;
+    if (adapter === null || roomId === null || adapter.getSnapshot().phase !== "connected") {
+      return;
+    }
+    if (force !== true && skillsReqRef.current !== null) return;
+    /* A forced refresh ABANDONS the stale request rather than queueing behind it:
+     * its reply, if it ever lands, is about a listing that predates the change. */
+    skillsReqRef.current = null;
+    skillsFetchedRef.current.delete(roomId);
+    try {
+      const id = adapter.listSkills(roomId);
+      skillsReqRef.current = { id, room: roomId };
+      skillsFetchedRef.current.add(roomId);
+      /* TRUE, not false: this IS an in-flight request, and the panel shows its
+       * spinner from this flag. Clearing it here meant a user pressing Refresh
+       * got no feedback at all — the button stayed enabled and nothing looked
+       * like it was happening. `pi_surface_ok` clears it on arrival. */
+      setSkillsBusy(true);
+      setSkillsNotice(null);
+    } catch {
+      skillsFetchedRef.current.delete(roomId);
+      setSkillsNotice(SKILLS_FAILED);
+      setSkillsBusy(false);
+    }
+  }, []);
+
   const portsRef = useRef<DispatcherPorts | null>(null) as MutableRefObject<DispatcherPorts | null>;
   portsRef.current = {
     activeRoomRef,
@@ -914,6 +1308,8 @@ export function ConnectClient() {
     thinkingReqRef,
     skillsReqRef,
     skillInvokeRef,
+    packageReqRef,
+    onPackageConfirmed: handlePackageConfirmed,
     sessionsReqRef,
     sessionReadReqRef,
     prefetchReqRef,
@@ -945,6 +1341,7 @@ export function ConnectClient() {
     resetChatState,
     runPrefetchNext,
     dispatchChat,
+    refreshSurface,
   };
 
   const onServerMessage = useCallback((msg: ServerMessage, room: string) => {
@@ -1081,7 +1478,29 @@ export function ConnectClient() {
       if (live.length === 1) openRoom(live[0]!.room_id);
     }
     // A same-connection child push (`workspace_state`) is NOT a chat edge: the
-    // transcript is left exactly as the reducer left it.
+    // transcript is left exactly as the reducer left it — EXCEPT when the
+    // active room's process is confirmed gone. Then the turn can never be
+    // answered, so it is settled as `disconnected` rather than left spinning.
+    const activeRoomNow = activeRoomRef.current;
+    if (
+      activeRoomNow !== null &&
+      chatStateRef.current.active !== null &&
+      activeRoomNow === chatStateRef.current.active.roomId
+    ) {
+      const ws = next.workspaces?.find((entry) => entry.room_id === activeRoomNow);
+      const observed = next.workspaceStates?.[ws?.cwd ?? ""]?.state;
+      /* `live:false` from the catalog and an explicit `stopped`/`crashed` push
+         are the only two ways the host says "no Pi is there" — anything else
+         (a stale catalog with no push yet) must not be read as a stop. */
+      const gone = ws?.live === false || observed === "stopped" || observed === "crashed";
+      if (gone) {
+        dispatchChat({
+          type: "disconnected",
+          roomId: activeRoomNow,
+          id: chatStateRef.current.active.id,
+        });
+      }
+    }
   }, [dispatchChat, resetChatState, runPrefetchModels, openRoom]);
 
   /** Settle every in-flight request that can no longer be answered.
@@ -1131,6 +1550,24 @@ export function ConnectClient() {
     const unsubs = [
       adapter.subscribe(onSnapshot),
       adapter.onServerMessage(onServerMessage),
+      /*
+       * Automations fires are a separate sink, not chat traffic. Prepending keeps
+       * the newest first and caps the buffer: this is a "what just ran" ticker,
+       * not a history — the full record is the host's fire log.
+       */
+      adapter.onScheduleFired((push) => {
+        setAutomationFires((prev) => [
+          {
+            jobId: push.job_id,
+            result: push.result,
+            firedAt: push.fired_at,
+            promptPreview: push.prompt_preview,
+          },
+          ...prev,
+        ].slice(0, 10));
+        // A fire changes last_run/last_status, so the visible rows are stale.
+        refreshAutomationsRef.current();
+      }),
       adapter.onDiagnostic((code) => {
         // A timeout means no reply is coming: release the spinners the reply
         // would have cleared, then surface the fixed sentence.
@@ -1141,6 +1578,50 @@ export function ConnectClient() {
     bindingRef.current = { adapter, unsubs };
     return adapter;
   }, [onServerMessage, onSnapshot, settlePendingRequests]);
+
+  /**
+   * Desktop deep link. The Electron shell dispatches `remote-pi:pair-uri` with a
+   * `remotepi://pair?…` payload when the OS hands it one (a clicked link, or a
+   * cold start via the link).
+   *
+   * This is the desktop's PRIMARY pairing path, not a convenience: the browser
+   * shortcut of fetching `/api/bootstrap` for zero-click pairing cannot work
+   * under `app://` — that request resolves to the SPA fallback and returns
+   * `index.html` instead of credentials.
+   *
+   * The flag on `window` tells the shell a listener exists, so it can dispatch
+   * immediately instead of waiting for a load event that already fired.
+   */
+  useEffect(() => {
+    const onPairUri = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      // Only the pairing scheme, and only the opaque string: the URI is parsed
+      // by the same validator as a pasted code, so nothing here is trusted.
+      if (typeof detail !== "string" || !detail.startsWith("remotepi://pair")) {
+        return;
+      }
+      setCode(detail);
+      /*
+       * Auto-submit, because clicking a `remotepi://` link IS the intent to pair.
+       * Leaving the filled field for a second click would make the primary
+       * desktop pairing path feel broken — the app appears after the click and
+       * just sits there.
+       *
+       * Deferred one frame: `setCode` has not flushed to the controlled input
+       * yet, and `handlePair` reads the field through form state.
+       */
+      window.setTimeout(() => {
+        const textarea = document.querySelector<HTMLTextAreaElement>("textarea");
+        textarea?.closest("form")?.requestSubmit();
+      }, 50);
+    };
+    (window as unknown as { __remotePiPairListener?: boolean }).__remotePiPairListener = true;
+    window.addEventListener("remote-pi:pair-uri", onPairUri);
+    return () => {
+      (window as unknown as { __remotePiPairListener?: boolean }).__remotePiPairListener = false;
+      window.removeEventListener("remote-pi:pair-uri", onPairUri);
+    };
+  }, [setCode]);
 
   /** Mount: subscribe, restore a stored pairing (the adapter reads storage
    *  itself), and on unmount release every subscription and dispose — the
@@ -1287,10 +1768,235 @@ export function ConnectClient() {
 
   const activeWorkspace = workspaces.find((ws) => ws.room_id === activeRoom) ?? null;
 
+  /**
+   * Changes (plan/78) — asks the host for this workspace's working-tree STATUS.
+   *
+   * Three outcomes are kept apart on purpose: a snapshot, a host-stated reason it
+   * could not read the tree, and "the request never left". Only the first shows
+   * file rows; the other two show a fixed sentence. In particular a non-repo is a
+   * FACT about the folder, not an error and not an empty clean tree — the
+   * acceptance workspace `4.1f` is exactly that case.
+   */
+  const refreshChanges = useCallback(async () => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    const workspace = activeWorkspace;
+    if (adapter === null || workspace === null) {
+      setChangesBusy(false);
+      return;
+    }
+    /*
+     * Staleness fence, keyed on the workspace.
+     *
+     * `adapter.assertCurrent` only proves the CONNECTION is still the same one;
+     * it says nothing about WHICH workspace was asked. Two quick workspace
+     * switches (A then B) both resolve as "current", so A's late reply would
+     * overwrite B's fresh answer — including A's late FAILURE clearing B's good
+     * data. A monotonic sequence number makes the newest request the only one
+     * allowed to write, whatever order the replies arrive in.
+     */
+    changesSeqRef.current += 1;
+    const seq = changesSeqRef.current;
+    setChangesBusy(true);
+    try {
+      const result = await adapter.changesSnapshot(workspace.cwd, workspace.daemon_id);
+      if (seq !== changesSeqRef.current) return;
+      if (result.ok) {
+        setChangesSnapshot(result.snapshot);
+        setChangesUnavailable(null);
+        setChangesReason(null);
+      } else {
+        /* Keep the previous rows off screen: a stale list beside a failure would
+         * claim the worktree still looks the way it did before. */
+        setChangesSnapshot(null);
+        setChangesUnavailable(result.reason);
+        setChangesReason(CHANGES_UNAVAILABLE[result.reason] ?? CHANGES_FAILED);
+      }
+    } catch {
+      if (seq !== changesSeqRef.current) return;
+      setChangesSnapshot(null);
+      setChangesUnavailable("unreadable");
+      setChangesReason(CHANGES_FAILED);
+    } finally {
+      if (seq === changesSeqRef.current) setChangesBusy(false);
+    }
+    /* `activeWorkspace` is a dependency because the workspace IS the question: if
+     * the user switches workspaces, the answer for the old one is meaningless and
+     * must not linger on screen. */
+  }, [activeWorkspace]);
+
+  /**
+   * Settings (plan/79) — reads the HOST's models.json.
+   *
+   * Not workspace-scoped: the file belongs to the machine, so the same answer is
+   * correct for every workspace on that host. The fence is still needed because a
+   * reconnect can produce two in-flight describes.
+   */
+  const refreshModels = useCallback(async () => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    if (adapter === null) {
+      setModelsPhase("idle");
+      return;
+    }
+    modelsSeqRef.current += 1;
+    const seq = modelsSeqRef.current;
+    setModelsPhase("loading");
+    setModelsError(null);
+    try {
+      const result = await adapter.describeModels();
+      if (seq !== modelsSeqRef.current) return;
+      setModelsData(result);
+      setModelsSaved(null);
+    } catch {
+      if (seq !== modelsSeqRef.current) return;
+      /* The adapter already refused any frame carrying a credential, so this is a
+       * transport or guard failure, never a partially-rendered secret. */
+      setModelsData(null);
+      setModelsError(SETTINGS_UNREADABLE);
+    } finally {
+      if (seq === modelsSeqRef.current) setModelsPhase("idle");
+    }
+  }, []);
+
+  /** Settings — writes path-addressed edits against the revision we were shown. */
+  const saveModels = useCallback(async (ops: ModelsOpWire[]) => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    const revision = modelsData?.revision ?? null;
+    if (adapter === null || revision === null) return;
+    setModelsPhase("saving");
+    setModelsError(null);
+    setModelsSaved(null);
+    try {
+      const result = await adapter.mutateModels(ops, revision);
+      if (!result.ok) {
+        setModelsError(SETTINGS_ERROR[result.reason] ?? SETTINGS_UNREADABLE);
+        return;
+      }
+      /* Re-read rather than patching locally: the host re-serialised the whole
+       * document, so the only honest source for the new state (and revision) is
+       * the host itself. */
+      const fresh = await adapter.describeModels();
+      setModelsData(fresh);
+      setModelsSaved(SETTINGS_SAVED);
+    } catch {
+      setModelsError(SETTINGS_UNREADABLE);
+      /* A refused save leaves the local form dirty on purpose: the user can fix
+       * the field and retry without losing what they typed. */
+    } finally {
+      setModelsPhase("idle");
+    }
+  }, [modelsData]);
+
+
+  /**
+   * Settings (plan/80) — reads the host's settings.json whitelist projection.
+   *
+   * Not workspace-scoped: the file belongs to the machine. The fence is still needed
+   * because a reconnect can produce two in-flight describes.
+   */
+  const refreshSettings = useCallback(async () => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    if (adapter === null) {
+      setSettingsPhase("idle");
+      return;
+    }
+    settingsSeqRef.current += 1;
+    const seq = settingsSeqRef.current;
+    setSettingsPhase("loading");
+    setSettingsError(null);
+    try {
+      const result = await adapter.describeSettings();
+      if (seq !== settingsSeqRef.current) return;
+      setSettingsData(result);
+      setSettingsSaved(null);
+    } catch {
+      if (seq !== settingsSeqRef.current) return;
+      setSettingsData(null);
+      setSettingsError(SETTINGS_UNREADABLE);
+    } finally {
+      if (seq === settingsSeqRef.current) setSettingsPhase("idle");
+    }
+  }, []);
+
+  /** Settings — writes whitelisted edits against the revision we were shown. */
+  const saveSettings = useCallback(async (ops: SettingsOpWire[]) => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    const revision = settingsData?.revision ?? null;
+    if (adapter === null || revision === null) return;
+    setSettingsPhase("saving");
+    setSettingsError(null);
+    setSettingsSaved(null);
+    try {
+      const result = await adapter.mutateSettings(ops, revision);
+      if (!result.ok) {
+        setSettingsError(SETTINGS_ERROR[result.reason] ?? SETTINGS_UNREADABLE);
+        return;
+      }
+      const fresh = await adapter.describeSettings();
+      setSettingsData(fresh);
+      setSettingsSaved(SETTINGS_SAVED);
+    } catch {
+      setSettingsError(SETTINGS_UNREADABLE);
+    } finally {
+      setSettingsPhase("idle");
+    }
+  }, [settingsData]);
+
+  /** Applies an appearance mode, persisting the INTENT (not the resolved palette). */
+  const handleModeChange = useCallback((mode: ThemeMode) => {
+    setResolvedMode(applyMode(mode));
+    setThemeMode(mode);
+    /* The preset's accent is calibrated per canvas, so switching the palette must
+     * re-resolve it — otherwise a dark-calibrated accent stays on the light theme
+     * (or vice versa) until the user re-picks the preset. */
+    setThemePreset((current) => {
+      applyPreset(current);
+      return current;
+    });
+  }, []);
+
+  /*
+   * Follow the OS while the intent is `system`.
+   *
+   * The mode is mirrored into a ref so the subscription callback reads the CURRENT
+   * intent without being torn down and rebuilt on every change. The write happens in
+   * an effect, not during render: assigning a ref while rendering is a side effect
+   * that the hooks rules reject (and that would misbehave under concurrent
+   * rendering).
+   */
+  const modeRef = useRef<ThemeMode>(themeMode);
+  useEffect(() => {
+    modeRef.current = themeMode;
+  }, [themeMode]);
+  useEffect(() => {
+    return watchSystemMode(
+      () => modeRef.current,
+      () => {
+        setResolvedMode(applyMode("system"));
+        /* An OS appearance flip changes the canvas, so the preset accent must be
+         * re-resolved for the new one. */
+        setThemePreset((current) => {
+          applyPreset(current);
+          return current;
+        });
+      },
+    );
+  }, []);
+
+  /** Applies a visual preset to this browser and persists it locally. */
+  const handlePresetChange = useCallback((preset: ThemePreset) => {
+    applyPreset(preset);
+    setThemePreset(preset);
+  }, []);
   /* The dock is the only consumer of `fs_nav`; it receives a boolean plus a
      FIXED reason, never the raw capability list. */
   const fsAvailable = host?.capabilities?.includes("fs_nav") === true;
   const fsAvailableReason = fsAvailable ? null : FS_NAV_UNAVAILABLE;
+
+  /* Plan/79 — Model Providers needs `models_config` on the host. */
+  const modelsAvailable = host?.capabilities?.includes("models_config") === true;
+  /* Plan/80 — Settings needs `settings` on the host. Kept as a separate capability
+   * because the two files have different threat models. */
+  const settingsAvailable = host?.capabilities?.includes("settings") === true;
 
   const resetUi = useCallback(() => {
     activeRoomRef.current = null;
@@ -1404,6 +2110,79 @@ export function ConnectClient() {
     }
   }
 
+  /** Plan/77 — list this workspace plan/ so the Plan tab can offer documents.
+   *
+   * The listing is a SEPARATE read from the Files tab: sharing one fs store
+   * would let browsing a directory blank the plan picker, and the plan/
+   * listing must survive a Files-tab navigation. Errors here are silent on
+   * purpose — an absent plan/ directory is a normal state, and the dock has
+   * its own empty state naming what it looked at. */
+  async function handlePlanTabOpen() {
+    const adapter = bindingRef.current?.adapter;
+    if (!adapter) return;
+    const cwd = activeWorkspace?.cwd;
+    if (typeof cwd !== "string" || cwd === "") return;
+    const owner = makeOwner(adapter);
+    const token = ++planListSeqRef.current;
+    try {
+      const list = await adapter.fsList(joinRemotePath(cwd, "plan"));
+      if (token !== planListSeqRef.current || !owner.current()) return;
+      const docs = list.entries
+        .filter((entry) => entry.kind === "file" && entry.name.endsWith(".md"))
+        .map((entry) => joinRemotePath(list.path, entry.name))
+        .sort((a, b) => a.localeCompare(b));
+      setPlanFiles(docs);
+    } catch {
+      if (token !== planListSeqRef.current || !owner.current()) return;
+      /* No plan/ directory, or the host refused: both are ordinary. The dock
+       * states what it looked at rather than reporting a fault. */
+      setPlanFiles([]);
+    }
+  }
+  /** Plan/77 — read ONE allowlisted document for the Plan viewer.
+   *
+   * Same fencing discipline as handleFsList: a monotonically increasing token
+   * plus the adapter owner check, so a reply that arrives after the credential
+   * changed (or after the user picked another file) is dropped instead of
+   * overwriting what is on screen.
+   *
+   * Failure text is chosen HERE, not taken from the host: a refusal carries a
+   * typed `not_allowed` code, and echoing host prose would leak absolute paths. */
+  async function handleReadPlan(path: string) {
+    const adapter = bindingRef.current?.adapter;
+    if (!adapter) return;
+    /* The workspace root is part of the FENCE, not a convenience: the host
+     * measures its allowlist against it, so a read can never reach another
+     * workspace's files. Without it the host would have nothing to fence
+     * against but its own cwd. */
+    const cwd = activeWorkspace?.cwd;
+    if (typeof cwd !== "string" || cwd === "") return;
+    const owner = makeOwner(adapter);
+    const token = ++planSeqRef.current;
+    setPlanError(null);
+    setPlanLoading(true);
+    setPlanDoc(null);
+    try {
+      const doc = await adapter.readFile(path, cwd);
+      if (token !== planSeqRef.current || !owner.current()) return;
+      setPlanDoc({
+        path: doc.path,
+        content: doc.content,
+        truncated: doc.truncated,
+        bytes: doc.bytes,
+      });
+    } catch (err) {
+      if (token !== planSeqRef.current || !owner.current() || isSuperseded(err)) return;
+      setPlanDoc(null);
+      if (err instanceof ActionRejectedError) {
+        setPlanError(err.code === "not_allowed" ? PLAN_REFUSED : PLAN_READ_FAILED);
+      } else {
+        setPlanError(PLAN_READ_FAILED);
+      }
+    } finally {
+      if (token === planSeqRef.current && owner.current()) setPlanLoading(false);
+    }
+  }
   /** Manual path entry: the typed value is only a REQUEST. It never becomes
    *  the host-canonical path on its own — the rows, the parent and the loaded
    *  flag are dropped, any in-flight reply is fenced off, and only the next
@@ -1479,6 +2258,33 @@ export function ConnectClient() {
     }
   }
 
+  /**
+   * Drop a path from the host catalog (`workspace_remove`).
+   *
+   * Removes from the CATALOG only: a Pi already running in that directory keeps
+   * running, so the host's own `live` flag is what the UI keeps reading. The
+   * relist is what makes the row disappear — the reply carries no echo.
+   */
+  async function handleRemove(path: string) {
+    const adapter = bindingRef.current?.adapter;
+    if (!adapter) return;
+    const owner = makeOwner(adapter);
+    const token = ++workspaceSeqRef.current;
+    setLocalError(null);
+    setWorkspacesBusy(true);
+    try {
+      await adapter.removeWorkspace(path);
+      if (token !== workspaceSeqRef.current || !owner.current()) return;
+      await adapter.refreshWorkspaces();
+      if (token !== workspaceSeqRef.current || !owner.current()) return;
+    } catch (err) {
+      if (token !== workspaceSeqRef.current || !owner.current() || isSuperseded(err)) return;
+      setLocalError(err instanceof ActionRejectedError ? err.safeMessage : REMOVE_FAILED);
+    } finally {
+      if (token === workspaceSeqRef.current && owner.current()) setWorkspacesBusy(false);
+    }
+  }
+
   /** Revive a crashed/stopped workspace in place. The ok carries no room, so
    *  the transcript is NOT switched here — only the catalog is relisted. */
   async function handleRestart(cwd: string) {
@@ -1500,6 +2306,33 @@ export function ConnectClient() {
           ? err.safeMessage
           : RESTART_FAILED,
       );
+    } finally {
+      if (token === workspaceSeqRef.current && owner.current()) setWorkspacesBusy(false);
+    }
+  }
+
+  /**
+   * Shut down a running workspace's Pi in place.
+   *
+   * Relists afterwards for the same reason restart does: the catalog's `live`
+   * flag is what the composer's own gate reads, and a stale `live: true` would
+   * leave the composer open on a room whose process is gone.
+   */
+  async function handleStop(cwd: string) {
+    const adapter = bindingRef.current?.adapter;
+    if (!adapter) return;
+    const owner = makeOwner(adapter);
+    const token = ++workspaceSeqRef.current;
+    setWorkspacesError(null);
+    setWorkspacesBusy(true);
+    try {
+      await adapter.stopWorkspace(cwd);
+      if (token !== workspaceSeqRef.current || !owner.current()) return;
+      await adapter.refreshWorkspaces();
+      if (token !== workspaceSeqRef.current || !owner.current()) return;
+    } catch (err) {
+      if (token !== workspaceSeqRef.current || !owner.current() || isSuperseded(err)) return;
+      setWorkspacesError(err instanceof ActionRejectedError ? err.safeMessage : STOP_FAILED);
     } finally {
       if (token === workspaceSeqRef.current && owner.current()) setWorkspacesBusy(false);
     }
@@ -1558,6 +2391,18 @@ export function ConnectClient() {
     // An image alone is a valid message (plan/30 sends `text` plus the image);
     // only an empty draft WITH no attachment is a no-op.
     if (adapter === null || roomId === null || (text === "" && image === null) || !connected) return;
+    /*
+     * No model, no send — enforced HERE as well as in the composer's disabled
+     * state.
+     *
+     * The composer lock is the visible half; this is the half a second caller
+     * cannot bypass. Retry, a slash-command invocation and any future
+     * programmatic submit all funnel through `sendChat`, and a turn opened with
+     * no active model produces exactly the reported symptom: the user's message
+     * lands in the transcript, the turn stays open, and nothing ever streams
+     * back. Cheaper to refuse than to explain a turn that cannot finish.
+     */
+    if (activeModel === null) return;
     if (!canSubmit(chatStateRef.current)) return;
     let id: string;
     try {
@@ -1724,6 +2569,10 @@ export function ConnectClient() {
      fixed sentence for the room's latest settled turn, and `retryAvailable`
      offers the ONE explicit retry. */
   const chatBusy = !canSubmit(chatState);
+  /* The turn a Stop control would act on: only an OPEN turn has something to
+     abort. A settled turn is offered `Retry` instead — the two affordances are
+     mutually exclusive by construction. */
+  const openTurn = chatState.active;
   const roomTurns = chatState.history.filter((turn) => turn.roomId === activeRoom);
   const latestTurn = roomTurns.length > 0 ? roomTurns[roomTurns.length - 1] : null;
   const retryableTurn =
@@ -1826,11 +2675,61 @@ export function ConnectClient() {
      onto a list that can never arrive. */
   const skills: readonly SkillOption[] =
     activeRoom === null ? EMPTY_SKILLS : (skillsByRoom[activeRoom] ?? EMPTY_SKILLS);
+  /* The Plugins dock reads the RAW rows: it needs `enabled` (a tri-state the slash
+     menu does not use) and the full package list. An absent room/projection is an
+     empty list, never a fabricated one. */
+  const activePackages: readonly WirePackageRow[] =
+    activeRoom === null
+      ? EMPTY_PACKAGES
+      : (packagesByRoom[activeRoom] ?? EMPTY_PACKAGES).map((p) => ({
+          source: p.source,
+          scope: p.scope,
+          resources: p.resources,
+          /* The README is the only way a user can learn what a plugin does
+           * before installing or keeping it, so it is carried through verbatim.
+           * A host that omits it yields null, which the panel renders as
+           * "ships no README" rather than a blank document. */
+          readme: p.readme ?? null,
+          readmePath: p.readme_path ?? null,
+          readmeTruncated: p.readme_truncated === true,
+          /* Tri-state on purpose: `undefined` from an older host becomes null,
+           * meaning "the host did not say". Collapsing that to false would show
+           * every plugin on an older host as switched off. */
+          enabled: typeof p.enabled === "boolean" ? p.enabled : null,
+        }));
+  const activePluginSkills: readonly PluginSkillRow[] =
+    activeRoom === null
+      ? EMPTY_PLUGIN_SKILLS
+      : (rawSkillsByRoom[activeRoom] ?? EMPTY_PLUGIN_SKILLS).map((s) => ({
+          name: s.name,
+          description: s.description,
+          source: s.source,
+          enabled: s.enabled,
+        }));
+  /*
+   * INERT reasons only — never a transient notice.
+   *
+   * `disabledReason` means "this surface cannot be used at all": no connection,
+   * or no live workspace to ask. A failed operation is `notice`, which is shown
+   * and cleared on the next action. Conflating the two meant one failure set
+   * `disabledReason`, which disables the search box, every row button, the
+   * skill toggles AND the install gate — leaving the user with no way to retry
+   * short of a reload. The tail is therefore `null`: a live, connected surface
+   * is usable no matter what the last operation did.
+   */
   const skillsDisabledReason = !connected
     ? MODEL_NOT_CONNECTED
     : activeRoom === null || !(activeWorkspace?.live ?? false)
       ? MODELS_FOR_LIVE_WORKSPACE
-      : skillsNotice;
+      : null;
+
+  /* Plugins get their OWN sentence: the model picker's "List the workspace's
+   * models" is meaningless on a page about extensions. */
+  const pluginsDisabledReason = !connected
+    ? MODEL_NOT_CONNECTED
+    : activeRoom === null || !(activeWorkspace?.live ?? false)
+      ? PLUGINS_FOR_LIVE_WORKSPACE
+      : null;
 
   /* ── sessions (plan/67 + plan/71) ──────────────────────────────────────────
      Same gating as the skills surface. Reading a session needs a live Pi (it
@@ -1976,6 +2875,161 @@ export function ConnectClient() {
     }
   }, []);
 
+  /*
+   * A package mutation must always reach a terminal state.
+   *
+   * The host answers these with the generic action_ok/action_error, which
+   * `packageReqRef` correlates. But a forwarded request can also go
+   * UNANSWERED — the child Pi is respawning, or the forward is dropped — and
+   * then no reply ever arrives to correlate. Because `busy` disables every
+   * control in the panel (including Install), that state has no escape but a
+   * reload.
+   *
+   * So each mutation arms a bounded watchdog. It only clears the flag if THIS
+   * request is still the pending one, so a late-but-real reply always wins.
+   */
+  const armPackageWatchdog = useCallback(
+    (id: string) => {
+      /* One timer at a time: a new mutation supersedes the previous deadline
+       * rather than leaving several pending. */
+      if (pkgWatchdogRef.current !== null) clearTimeout(pkgWatchdogRef.current);
+      pkgWatchdogRef.current = setTimeout(() => {
+        pkgWatchdogRef.current = null;
+        const pending = packageReqRef.current;
+        /* Only THIS request may be timed out: a reply that already landed, or a
+         * newer mutation, must not be clobbered by an old deadline. */
+        if (pending === null || pending.id !== id) return;
+        packageReqRef.current = null;
+        setSkillsBusy(false);
+        setSkillsNotice(PACKAGE_FAILED);
+      }, PACKAGE_OP_TIMEOUT_MS);
+    },
+    [packageReqRef],
+  );
+
+  /* A pending deadline belongs to the connection that started it. Unmounting
+   * with one armed would fire a setState on a dead component 45 s later. */
+  useEffect(
+    () => () => {
+      if (pkgWatchdogRef.current !== null) clearTimeout(pkgWatchdogRef.current);
+      pkgWatchdogRef.current = null;
+    },
+    [],
+  );
+
+  /** `skill_set_enabled` — persist one skill's enabled state on the host. */
+  const handleSkillToggle = useCallback((name: string, enabled: boolean) => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    const roomId = activeRoomRef.current;
+    if (adapter === null || roomId === null) return;
+    setSkillsBusy(true);
+    setSkillsNotice(null);
+    try {
+      const id = adapter.setSkillEnabled(roomId, name, enabled);
+      packageReqRef.current = { id, room: roomId, op: "skill" };
+      armPackageWatchdog(id);
+    } catch {
+      setSkillsBusy(false);
+      setSkillsNotice(SKILL_FAILED);
+    }
+  }, []);
+
+  /** `package_update` — reconcile one package source. */
+  const handlePackageUpdate = useCallback((source: string) => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    const roomId = activeRoomRef.current;
+    if (adapter === null || roomId === null) return;
+    setSkillsBusy(true);
+    setSkillsNotice(null);
+    try {
+      const id = adapter.updatePackage(roomId, source);
+      packageReqRef.current = { id, room: roomId, op: "update" };
+      armPackageWatchdog(id);
+    } catch {
+      setSkillsBusy(false);
+      setSkillsNotice(PACKAGE_FAILED);
+    }
+  }, []);
+
+  /**
+   * `package_install` — install a plugin.
+   *
+   * The third-party acknowledgement is a REQUIRED parameter rather than a
+   * default, because the host refuses the request without it and because
+   * installing runs someone else's code. The panel only calls this from behind
+   * a checkbox, so the `true` here records that the user was told.
+   *
+   * A failure keeps the user in the install view (the panel owns that decision)
+   * and surfaces a fixed sentence: the raw host error is never rendered.
+   */
+  const handlePackageInstall = useCallback((source: string, scope: "user" | "project") => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    const roomId = activeRoomRef.current;
+    if (adapter === null || roomId === null) return;
+    setSkillsBusy(true);
+    setSkillsNotice(null);
+    try {
+      const id = adapter.installPackage(roomId, source, { confirmThirdParty: true, scope });
+      packageReqRef.current = { id, room: roomId, op: "install" };
+      armPackageWatchdog(id);
+    } catch {
+      setSkillsBusy(false);
+      setSkillsNotice(PACKAGE_FAILED);
+    }
+  }, []);
+
+  /** `pi_surface` — re-read plugins after a mutation or on demand. */
+  const handlePluginsRefresh = useCallback(() => {
+    setSkillsNotice(null);
+    /* FORCED: opening the tab is a deliberate act and the moment the user
+     * expects current data. Passing nothing made this a no-op whenever a stale
+     * request was already in flight, so the tab opened onto an empty cache. */
+    refreshSurface(true);
+  }, [refreshSurface]);
+
+  /** `package_remove` — drop one package's settings entry. */
+  const handlePackageRemove = useCallback((source: string, scope: "user" | "project") => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    const roomId = activeRoomRef.current;
+    if (adapter === null || roomId === null) return;
+    setSkillsBusy(true);
+    setSkillsNotice(null);
+    try {
+      const id = adapter.removePackage(roomId, source, scope);
+      packageReqRef.current = { id, room: roomId, op: "remove" };
+      armPackageWatchdog(id);
+    } catch {
+      setSkillsBusy(false);
+      setSkillsNotice(PACKAGE_FAILED);
+    }
+  }, []);
+
+  /**
+   * `package_set_enabled` — reversible on/off that keeps the code installed.
+   *
+   * Same correlation shape as the other mutations (one generic ack, tracked by
+   * id, with a watchdog for a reply that never comes), but its OWN op value so
+   * a confirmation can be attributed without guessing.
+   */
+  const handlePackageSetEnabled = useCallback(
+    (source: string, scope: "user" | "project", enabled: boolean) => {
+      const adapter = bindingRef.current?.adapter ?? null;
+      const roomId = activeRoomRef.current;
+      if (adapter === null || roomId === null) return;
+      setSkillsBusy(true);
+      setSkillsNotice(null);
+      try {
+        const id = adapter.setPackageEnabled(roomId, source, scope, enabled);
+        packageReqRef.current = { id, room: roomId, op: "set_enabled" };
+        armPackageWatchdog(id);
+      } catch {
+        setSkillsBusy(false);
+        setSkillsNotice(PACKAGE_FAILED);
+      }
+    },
+    [],
+  );
+
   /** `skill_invoke` — runs a skill the host reported. The provider/name came
    *  from `pi_surface_ok`, so it is echoed verbatim. The draft is cleared here
    *  because the composer handed over to a command, not a message; the skill's
@@ -1994,9 +3048,9 @@ export function ConnectClient() {
     }
   }, []);
 
-  const ATTACH_TOO_LARGE = "That image is too large. Pick one under 8 MB.";
-  const ATTACH_NOT_IMAGE = "That file is not an image.";
-  const ATTACH_READ_FAILED = "Could not read that image.";
+  const ATTACH_TOO_LARGE = "图片过大，请选择小于 8 MB 的图片。";
+  const ATTACH_NOT_IMAGE = "该文件不是图片。";
+  const ATTACH_READ_FAILED = "无法读取该图片。";
 
   /**
    * Downscale + re-encode a picked file in the browser so the inline base64
@@ -2030,6 +3084,27 @@ export function ConnectClient() {
     },
     [],
   );
+
+  /**
+   * Stop the in-flight turn.
+   *
+   * `target_id` is the ACTIVE turn's own id — the same id the reducer keys on, so
+   * the `cancelled` frame correlates. The reducer settles the turn when the host
+   * confirms; nothing here guesses locally, because a cancel the host refused
+   * (no active context) must leave the turn visibly running rather than claim a
+   * stop that did not happen.
+   */
+  const handleCancel = () => {
+    const adapter = bindingRef.current?.adapter ?? null;
+    const roomId = activeRoomRef.current;
+    const turn = chatStateRef.current.active;
+    if (adapter === null || roomId === null || turn === null) return;
+    try {
+      adapter.cancelTurn(roomId, turn.id);
+    } catch {
+      setLocalError(SEND_FAILED);
+    }
+  };
 
   /** Retry the latest SETTLED turn of the current room. Only a turn the host
    *  may already have seen is offered (`timed_out` / `error` / `disconnected`),
@@ -2123,6 +3198,7 @@ export function ConnectClient() {
       onRefresh: () => void handleRefresh(),
       onStart: (cwd) => void handleStart(cwd),
       onRestart: (cwd) => void handleRestart(cwd),
+      onStop: (cwd) => void handleStop(cwd),
       /*
        * Offered whenever the host listed at least one workspace.
        *
@@ -2138,6 +3214,14 @@ export function ConnectClient() {
     transcript: {
       workspaceName: activeWorkspace?.name ?? host?.daemon.hostname ?? null,
       workspacePath: activeWorkspace?.cwd ?? null,
+      workspaceLive: activeWorkspace?.live ?? false,
+      workspaceNotRunningReason: COMPOSER_WORKSPACE_NOT_RUNNING,
+      /* Sending needs a MODEL, not just a live workspace: without one the turn
+       * opened and could never stream a reply. `modelPending` is the catalog
+       * still arriving (a wait); a resolved catalog with nothing active is a
+       * choice the user still owes (a block). Both keep the composer locked. */
+      modelPending: modelBusy && activeModel === null,
+      modelSelected: activeModel !== null,
       host: {
         hostname: host?.daemon.hostname ?? paired?.name ?? "host",
         daemonVersion: host?.daemon.version,
@@ -2154,6 +3238,11 @@ export function ConnectClient() {
       activityStats,
       usageStats,
       chatBusy,
+      /* The Stop affordance is offered for an OPEN turn only — this is the same
+         condition `chatBusy` derives from, kept separate so the panel never has
+         to infer it. */
+      cancelAvailable: openTurn !== null,
+      onCancel: handleCancel,
       chatNotice,
       retryAvailable,
       onRetry: handleRetry,
@@ -2209,9 +3298,107 @@ export function ConnectClient() {
       fsLoading,
       fsError,
       fsLoaded,
+      planDoc,
+      planLoading,
+      planError,
+      planTruncatedNotice: PLAN_TRUNCATED,
+      onReadPlan: (path: string) => void handleReadPlan(path),
+      /* Clearing the document is a VIEW change, not a transport concern: the
+       * panel calls this to go back to its list. */
+      onClosePlan: () => setPlanDoc(null),
+      planFiles,
+      onPlanTabOpen: () => void handlePlanTabOpen(),
       onList: (path) => void handleFsList(path),
       onStart: (cwd) => void handleStart(cwd),
       onAdd: (cwd) => void handleAdd(cwd),
+      onRemove: (path) => void handleRemove(path),
+      packages: activePackages,
+      pluginSkills: activePluginSkills,
+      packagesBusy: skillsBusy,
+      /* Inert-only, so a transient failure never disables the panel. */
+      packagesReason: pluginsDisabledReason,
+      packagesNotice: skillsNotice,
+      /* No per-package correlation exists on the wire for these mutations: they
+         all answer with the generic package_op_ok/action_error, so the whole
+         panel is busy while one is in flight. An empty set is the honest answer
+         and the panel already renders a global busy state. */
+      packagesBusyKeys: EMPTY_BUSY_KEYS,
+      onPackageInstall: handlePackageInstall,
+      onPluginsRefresh: handlePluginsRefresh,
+      pluginsInstalledAt,
+      onPackageUpdate: handlePackageUpdate,
+      onPackageRemove: handlePackageRemove,
+      onPackageSetEnabled: handlePackageSetEnabled,
+      pluginsRestartPending,
+      /* Automations — host-room scheduled tasks (plan/39 cron). */
+      automations: automationTasks,
+      automationFires,
+      automationReason,
+      automationNotice,
+      automationsBusy,
+      automationWorkspaceNames: automationNames,
+      /*
+       * Fall back to the FIRST known workspace when none is on screen.
+       *
+       * A task is bound to one workspace, so the create form needs a target even
+       * before the user has selected anything. Without this fallback the form
+       * silently refused to submit (daemonId === null) and the panel looked
+       * broken rather than empty.
+       */
+      automationActiveDaemonId:
+        activeWorkspace?.daemon_id ?? workspaces[0]?.daemon_id ?? null,
+      /*
+       * Reuses the composer's model catalog verbatim.
+       *
+       * Deliberately not a separate fetch: the user is choosing from the same set
+       * they already pick from when chatting, and a second source could disagree
+       * with it — offering a model the workspace cannot actually run.
+       */
+      automationModelOptions: pickerOptions,
+      /*
+       * Plan/78 — Changes. `changesUnavailable` is passed as the closed reason
+       * while `changesReason` carries the client-authored sentence, so the panel
+       * can distinguish "host said it cannot" from "request never left" without
+       * ever seeing host prose.
+       */
+      changesSnapshot,
+      changesBusy,
+      changesUnavailable,
+      changesReason,
+      onChangesRefresh: refreshChanges,
+      modelsData,
+      modelsPhase,
+      modelsError,
+      modelsSaved,
+      modelsDisabledReason: modelsAvailable ? null : SETTINGS_UNAVAILABLE,
+      modelsHostName: host?.daemon.hostname ?? null,
+      onModelsReload: () => void refreshModels(),
+      onModelsSave: (ops) => void saveModels(ops),
+      settingsData,
+      settingsPhase,
+      settingsError,
+      settingsSaved,
+      settingsDisabledReason: settingsAvailable ? null : SETTINGS_SURFACE_UNAVAILABLE,
+      settingsHostName: host?.daemon.hostname ?? null,
+      onSettingsReload: () => void refreshSettings(),
+      onSettingsSave: (ops) => void saveSettings(ops),
+      themeMode,
+      resolvedMode,
+      onThemeModeChange: handleModeChange,
+      themePresetId: themePreset.id,
+      onThemePresetChange: handlePresetChange,
+      changesDisabledReason:
+        activeWorkspace === null
+          ? "选择工作区以读取其工作树。"
+          : activeWorkspace.live
+            ? null
+            : "该工作区未运行，无法读取其工作树。",
+      onAutomationCreate: handleAutomationCreate,
+      onAutomationSetEnabled: handleAutomationSetEnabled,
+      onAutomationRemove: handleAutomationRemove,
+      onAutomationRunNow: handleAutomationRunNow,
+      onAutomationsRefresh: refreshAutomations,
+      onSkillToggle: handleSkillToggle,
       showHidden,
       onShowHiddenChange: handleShowHiddenChange,
       fsAvailable,

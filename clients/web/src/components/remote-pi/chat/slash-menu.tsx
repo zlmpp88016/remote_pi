@@ -77,7 +77,7 @@ export function SlashMenu({
   return (
     <div
       role="listbox"
-      aria-label="Skills"
+      aria-label="技能"
       ref={listRef}
       className={css.menu}
     >
@@ -98,8 +98,8 @@ export function SlashMenu({
       ) : skills.length === 0 ? (
         <p className={css.note}>
           {busy
-            ? "Asking the host for this workspace's skills…"
-            : "The host reported no skills for this workspace."}
+            ? "正在向主机询问该工作区的技能…"
+            : "主机报告该工作区没有可用技能。"}
         </p>
       ) : matches.length === 0 ? (
         <p className={css.note}>

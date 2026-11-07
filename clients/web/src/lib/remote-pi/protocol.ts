@@ -383,6 +383,199 @@ export interface FsListOk extends ServerMessage {
   entries: FsEntry[];
 }
 
+/** Plan/77 — one allowlisted text file.
+ *
+ * `content` is whatever the host returned and is rendered as MARKDOWN, never as
+ * HTML: the fence lives on the host, so nothing here re-validates the path.
+ * `truncated` means `content` is the head of a larger file; `bytes` is the real
+ * size, so the UI can say how much was withheld instead of pretending the
+ * document ended there. */
+export interface FsReadOk extends ServerMessage {
+  type: "fs_read_ok";
+  path: string;
+  content: string;
+  truncated: boolean;
+  bytes: number;
+}
+
+/*
+ * Plan/78 — Changes snapshot.
+ *
+ * STATUS only: paths are repo-relative and there is no file body anywhere in
+ * this shape. A diff verb was considered and rejected, because a diff IS the
+ * content of arbitrary worktree files and would widen a pairing token's grant
+ * from "a few allowlisted documents" to "everything you ever edited" — the
+ * exact hole `fs_read`'s allowlist exists to keep closed.
+ */
+export interface ChangesEntryWire {
+  /** Repo-relative, forward-slashed. Never absolute. */
+  rel: string;
+  /** Index column from `git status --porcelain` (`.MADRCU?!`). */
+  x: string;
+  /** Worktree column, same vocabulary. */
+  y: string;
+  renamed: boolean;
+}
+
+export interface ChangesSnapshotWire {
+  is_repo: true;
+  branch: string | null;
+  head: { sha7: string; subject: string } | null;
+  ahead: number | null;
+  behind: number | null;
+  entries: ChangesEntryWire[];
+  total: { staged: number; unstaged: number; untracked: number; conflicted: number };
+  truncated: boolean;
+}
+
+export interface ChangesSnapshotOk extends ServerMessage {
+  type: "changes_snapshot_ok";
+  snapshot: ChangesSnapshotWire;
+}
+
+/* ── Plan/79 — host models.json ────────────────────────────────────────────────
+ *
+ * Mirrors the server contract as a deliberate subset with its own strict guards.
+ * The single most important property here is NEGATIVE: no credential may appear in
+ * any of these shapes, and the guard below asserts that rather than trusting the
+ * host to have stripped it.
+ */
+
+/** Path segments address the JSON structure, never a filesystem path. */
+export type ModelsOpWire =
+  | { op: "set"; path: (string | number)[]; value: unknown }
+  | { op: "insert"; path: (string | number)[]; value: unknown }
+  | { op: "remove"; path: (string | number)[] }
+  | { op: "unset"; path: (string | number)[] };
+
+export interface ModelsFileState {
+  exists: boolean;
+  parseable: boolean;
+  writable: boolean;
+  /** Owner-only permissions. Plaintext keys live in this file. */
+  mode_safe: boolean;
+}
+
+/** Existence only: no value, no mask, no length. */
+export type ModelsSecrets = Record<string, { has_key: boolean }>;
+
+export interface ModelsDescribeOk extends ServerMessage {
+  type: "models_describe_ok";
+  revision: string;
+  file: ModelsFileState;
+  config: Record<string, unknown>;
+  secrets: ModelsSecrets;
+}
+
+export interface ModelsMutateOk extends ServerMessage {
+  type: "models_mutate_ok";
+  revision: string;
+}
+
+/** Closed set. The client owns the sentence, so no errno or stack reaches the UI. */
+export type ModelsErrorReason =
+  | "not_found"
+  | "corrupted"
+  | "permission"
+  | "conflict"
+  | "invalid"
+  | "verify_failed"
+  | "unsupported";
+
+export interface ModelsError extends ServerMessage {
+  type: "models_error";
+  reason: ModelsErrorReason;
+}
+
+/* ── Plan/80 — host settings.json ─────────────────────────────────────────────
+ *
+ * A POSITIVE whitelist mirrored on both sides. `packages` on the real machine
+ * contains absolute host paths, so it has no type here at all: the client could not
+ * render it even if a host bug sent it.
+ */
+
+export type SettingsField =
+  | "theme"
+  | "hideThinkingBlock"
+  | "retry.enabled"
+  | "retry.maxRetries"
+  | "retry.baseDelayMs"
+  | "retry.provider.maxRetryDelayMs";
+
+export type SettingsOpWire =
+  | { op: "set"; path: SettingsField | string[]; value: unknown }
+  | { op: "unset"; path: SettingsField | string[] };
+
+export interface SettingsFileState {
+  exists: boolean;
+  parseable: boolean;
+  writable: boolean;
+}
+
+export interface SettingsAppearance {
+  /** Read-only here: selects a pi TUI theme. The browser-local visual presets are
+   *  a different concept and never write this value. */
+  theme: string | null;
+  hide_thinking_block: boolean | null;
+}
+
+export interface SettingsBehaviour {
+  retry_enabled: boolean | null;
+  retry_max_retries: number | null;
+  retry_base_delay_ms: number | null;
+  retry_provider_max_retry_delay_ms: number | null;
+}
+
+export interface SettingsDescribeOk extends ServerMessage {
+  type: "settings_describe_ok";
+  revision: string;
+  file: SettingsFileState;
+  appearance: SettingsAppearance;
+  behaviour: SettingsBehaviour;
+}
+
+export interface SettingsMutateOk extends ServerMessage {
+  type: "settings_mutate_ok";
+  revision: string;
+}
+
+export type SettingsErrorReason =
+  | "not_found"
+  | "corrupted"
+  | "permission"
+  | "conflict"
+  | "invalid"
+  | "invalid_field"
+  | "unsupported"
+  | "verify_failed";
+
+export interface SettingsError extends ServerMessage {
+  type: "settings_error";
+  reason: SettingsErrorReason;
+}
+
+/** Why a snapshot could not be taken. Closed set — the client owns the wording,
+ *  so no host text ever reaches the screen. `unreadable` means the repository IS
+ *  there and could not be read (permissions, dubious owner, locked index, corrupt
+ *  store); it is deliberately distinct from `not_a_repo`, because telling a user
+ *  their folder is not a repository when it is one is a lie about their own
+ *  workspace. */
+export type ChangesUnavailableReason =
+  | "not_a_repo"
+  | "git_missing"
+  | "timeout"
+  /** The workspace folder itself is gone (deleted, or an unmounted network drive).
+   *  Distinct from `git_missing`: git may be fine, there is nothing at that path. */
+  | "workspace_missing"
+  /** The repository exists but could not be read: permissions, dubious owner, a
+   *  locked index, a corrupt store. Distinct from `not_a_repo` because telling a
+   *  user their folder is not a repository when it is one is a lie. */
+  | "unreadable";
+
+export interface ChangesSnapshotUnavailable extends ServerMessage {
+  type: "changes_snapshot_unavailable";
+  reason: ChangesUnavailableReason;
+}
 export interface WorkspaceStartOk extends ServerMessage {
   type: "workspace_start_ok";
   cwd: string;
@@ -414,10 +607,172 @@ export interface WorkspaceStatePush {
   restarts: number;
 }
 
+/**
+ * Automations — one scheduled task as the host described it.
+ *
+ * The derived fields (`kind`, `time`, `weekdays`, `every_*`) come from the host's
+ * projection of the AUTHORITATIVE `schedule` expression and are `null` when the
+ * expression does not imply them. Rendering `null` as zero would describe a rule
+ * the host never stored, so the type keeps the distinction visible.
+ */
+export interface WireScheduleTask {
+  id: string;
+  daemon_id: string;
+  schedule: string;
+  kind: string;
+  every_minutes: number | null;
+  every_hours: number | null;
+  time: string | null;
+  weekdays: number[] | null;
+  tz: string | null;
+  prompt: string;
+  enabled: boolean;
+  skip_if_busy: boolean;
+  wake: boolean;
+  catchup: boolean;
+  created_at: string;
+  last_run: string | null;
+  last_status: string | null;
+  next_run: string | null;
+  /** Pinned model, or null when the task inherits the session's model. */
+  model: { provider: string; id: string; name: string | null } | null;
+  /** True when each fire opens its own session instead of the live one. */
+  fresh_session: boolean;
+}
+
+/** `schedule_list_ok`, and the base for the other three OK replies. */
+export interface ScheduleListOk {
+  type: "schedule_list_ok";
+  in_reply_to: string;
+  tasks: WireScheduleTask[];
+  workspace_names: Record<string, string>;
+}
+
+/**
+ * Validates one task row.
+ *
+ * Strict on the six fields the UI cannot render without (`id`, `daemon_id`,
+ * `schedule`, `prompt`, `enabled`), and lenient on the derived/optional ones: a
+ * host that omits `next_run` is telling us it does not know, which is a fact
+ * worth keeping rather than a frame worth rejecting.
+ */
+export function isWireScheduleTask(value: unknown): value is WireScheduleTask {
+  if (!isJsonObject(value)) return false;
+  if (typeof value.id !== "string" || value.id === "") return false;
+  if (typeof value.daemon_id !== "string" || value.daemon_id === "") return false;
+  if (typeof value.schedule !== "string" || value.schedule === "") return false;
+  if (typeof value.prompt !== "string") return false;
+  if (typeof value.enabled !== "boolean") return false;
+  /* Nullable-but-present-when-known fields: each must be the right type or null. */
+  const maybeString = (v: unknown): boolean => v === null || v === undefined || typeof v === "string";
+  const maybeNumber = (v: unknown): boolean => v === null || v === undefined || (typeof v === "number" && Number.isFinite(v));
+  if (!maybeString(value.next_run) || !maybeString(value.last_run) || !maybeString(value.last_status)) return false;
+  if (!maybeString(value.tz) || !maybeString(value.time) || !maybeString(value.kind)) return false;
+  if (!maybeNumber(value.every_minutes) || !maybeNumber(value.every_hours)) return false;
+  if (value.weekdays !== null && value.weekdays !== undefined) {
+    if (!Array.isArray(value.weekdays)) return false;
+    if (!value.weekdays.every((d) => typeof d === "number")) return false;
+  }
+  /*
+   * Model pin: strictly validated, because a half-read pin would render as
+   * "inherits" while the daemon actually pinned something — the user would see
+   * the wrong cost story on their own screen.
+   *
+   * Absent is tolerated (an older daemon simply does not send it) and means
+   * inherit, which is also what `null` means.
+   */
+  const model = value.model;
+  if (model !== null && model !== undefined) {
+    if (!isJsonObject(model)) return false;
+    if (typeof model.provider !== "string" || model.provider === "") return false;
+    if (typeof model.id !== "string" || model.id === "") return false;
+    if (model.name !== null && model.name !== undefined && typeof model.name !== "string") return false;
+  }
+  if (value.fresh_session !== undefined && typeof value.fresh_session !== "boolean") return false;
+  return true;
+}
+
+export function isScheduleListOk(value: unknown): value is ScheduleListOk {
+  if (!isServerMessage(value)) return false;
+  if (value.type !== "schedule_list_ok") return false;
+  const rec = value as unknown as Record<string, unknown>;
+  if (typeof rec.in_reply_to !== "string") return false;
+  if (!Array.isArray(rec.tasks)) return false;
+  if (!rec.tasks.every(isWireScheduleTask)) return false;
+  if (!isJsonObject(rec.workspace_names)) return false;
+  return true;
+}
+
+/**
+ * Automations — the outcome vocabulary of one scheduled fire.
+ *
+ * CLOSED, and verified against the host's own records. A frame carrying anything
+ * outside this set is REFUSED rather than displayed: the host only ever writes
+ * these six values, so an unknown one means the frame is malformed or from a
+ * host we do not understand — and inventing a label for it would tell the user
+ * something that is not true.
+ */
+export const SCHEDULE_RESULTS = [
+  "delivered",
+  "deliver_failed",
+  "woke_and_delivered",
+  "skipped_busy",
+  "skipped_down",
+  "skipped_disabled",
+] as const;
+
+export type ScheduleResult = (typeof SCHEDULE_RESULTS)[number];
+
+/**
+ * `schedule_fired` — an UNSOLICITED host push. Like `workspace_state` it has no
+ * `id` and no `in_reply_to`: nobody requested this occurrence.
+ *
+ * `prompt_preview` is host-truncated and is only an identifier; the full prompt
+ * lives in the task row and the transcript. It is deliberately NOT rendered as
+ * the reminder body.
+ */
+export interface ScheduleFiredPush {
+  type: "schedule_fired";
+  job_id: string;
+  daemon_id: string;
+  result: ScheduleResult;
+  fired_at: string;
+  prompt_preview: string;
+}
+
 /** `workspace_restart {id, cwd}` — request body (remote-pi types.ts:254). */
 export interface WorkspaceRestartRequest extends ClientMessage {
   type: "workspace_restart";
   cwd: string;
+}
+
+/** `workspace_stop {id, cwd}` — shut down a live workspace (remote-pi
+ *  types.ts:248). A supervisor verb: answered on the HOST room. */
+export interface WorkspaceStopRequest extends ClientMessage {
+  type: "workspace_stop";
+  cwd: string;
+}
+
+/** `workspace_stop_ok {in_reply_to, cwd, daemon_id}` — the host's own success
+ *  frame (NOT the generic `action_ok`), naming what it actually stopped. */
+export interface WorkspaceStopOk extends ServerMessage {
+  type: "workspace_stop_ok";
+  cwd: string;
+  daemon_id: string;
+}
+
+/** Strict guard for `workspace_stop_ok`: both echoed fields are mandatory, so a
+ *  malformed frame cannot be mistaken for a completed stop. */
+export function isWorkspaceStopOk(value: unknown): value is WorkspaceStopOk {
+  if (!isServerMessage(value) || value.type !== "workspace_stop_ok") return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.cwd === "string" && typeof v.daemon_id === "string";
+}
+
+/** `workspace_remove {id, path}` — drop a path from the host catalog. */
+export interface WorkspaceRemoveRequest extends ClientMessage {
+  type: "workspace_remove";
+  path: string;
 }
 
 /** `workspace_restart_ok {in_reply_to, cwd, daemon_id}` — deliberately NO
@@ -901,15 +1256,71 @@ export interface WireSkill {
   disable_model_invocation: boolean;
 }
 
+/** One installed Pi package, as the host reported it (`pi_surface_ok.packages`).
+ *  `source` is the configured source string (an npm spec or a path); `scope` is
+ *  which settings file it came from; `resources` lists the resource kinds the
+ *  package contributes. Nothing here is interpreted — the rows are rendered as
+ *  text and only `source`/`scope` are ever sent back.
+ *
+ *  `readme` is the package's own documentation, read by the host from the
+ *  directory it installed the package into. It is OPTIONAL because an older
+ *  host omits it, and `null` is meaningful: the package ships no README. The
+ *  UI distinguishes "not provided" from an empty document. */
+export interface WirePackage {
+  source: string;
+  scope: "user" | "project";
+  resources: string[];
+  readme?: string | null;
+  readme_path?: string | null;
+  readme_truncated?: boolean;
+  /**
+   * Whether this package's resources will actually load.
+   *
+   * Absent is NOT "disabled": an older host does not report it, and a package
+   * whose state cannot be determined must not be drawn as switched off.
+   */
+  enabled?: boolean;
+}
+
 /**
  * `pi_surface_ok {in_reply_to, runtime, skills, packages}` — reply to
- * `pi_surface`. Only `skills` is consumed today; `runtime`/`packages` are
- * carried so the shape matches the host contract and a future surface can use
- * them without a protocol change.
+ * `pi_surface`.
+ *
+ * `packages` and `runtime` are OPTIONAL by design, not by accident: the host
+ * sends all four fields, but an older/other host may omit them, and treating
+ * "absent" as "invalid" would throw away the skills list that IS present. A
+ * missing list is read as empty by the consumers, never as a parse failure.
  */
 export interface PiSurfaceOk extends ServerMessage {
   type: "pi_surface_ok";
   skills: WireSkill[];
+  packages?: WirePackage[];
+  runtime?: Record<string, unknown>;
+}
+
+/** One package row, validated field by field.
+ *
+ *  The README fields are validated LENIENTLY and never required: a host that
+ *  does not send them is still a valid host, and one malformed README must not
+ *  discard the rest of the row (which carries `source`/`scope`, the only fields
+ *  anything is ever sent back to the host with). */
+export function isWirePackage(value: unknown): value is WirePackage {
+  if (!isJsonObject(value)) return false;
+  if (
+    !(
+      typeof value.source === "string" && value.source !== "" &&
+      (value.scope === "user" || value.scope === "project") &&
+      Array.isArray(value.resources) &&
+      value.resources.every((r) => typeof r === "string")
+    )
+  ) {
+    return false;
+  }
+  if (value.readme !== undefined && value.readme !== null && typeof value.readme !== "string") return false;
+  if (value.readme_path !== undefined && value.readme_path !== null && typeof value.readme_path !== "string") return false;
+  if (value.readme_truncated !== undefined && typeof value.readme_truncated !== "boolean") return false;
+  if (value.enabled !== undefined && typeof value.enabled !== "boolean") return false;
+  return true;
 }
 
 /** `skill_invoke {id, name, args?}` — run one installed skill. */
@@ -928,6 +1339,97 @@ export interface SkillInvokeOk extends ServerMessage {
   name: string;
 }
 
+/**
+ * `cancel {id, target_id}` — stop the in-flight turn in a workspace.
+ *
+ * Addressed to the CHILD room (the Pi process that is generating), proxied with
+ * the same `host_forward` envelope as chat. `target_id` names the turn, which is
+ * the id the client already holds for its active turn.
+ */
+export interface CancelRequest extends ClientMessage {
+  type: "cancel";
+  target_id: string;
+}
+
+/**
+ * `cancelled {in_reply_to, target_id}` — the abort landed.
+ *
+ * The two ids are NOT interchangeable: `in_reply_to` is the `cancel` request's
+ * own id, while `target_id` is the turn that was stopped. Only `target_id`
+ * matches the turn the client is tracking, so a consumer that correlates on
+ * `in_reply_to` finds nothing and the turn stays open forever.
+ */
+export interface CancelledMsg extends ServerMessage {
+  type: "cancelled";
+  target_id: string;
+}
+
+/** Strict guard for `cancelled`: a non-blank `target_id` is mandatory, because
+ *  an uncorrelatable abort is indistinguishable from a turn that never stopped. */
+export function isCancelledMsg(value: unknown): value is CancelledMsg {
+  if (!isServerMessage(value) || value.type !== "cancelled") return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.target_id === "string" && v.target_id !== "";
+}
+
+/** `skill_set_enabled {id, name, enabled}` — persist a skill's enabled state by
+ *  writing an exclusion pattern, so the app and `pi config` share one source of
+ *  truth. Answered with `skill_set_enabled_ok`. */
+export interface SkillSetEnabledRequest extends ClientMessage {
+  type: "skill_set_enabled";
+  name: string;
+  enabled: boolean;
+}
+
+/** `skill_set_enabled_ok {in_reply_to, name, enabled}` — the pattern was written. */
+export interface SkillSetEnabledOk extends ServerMessage {
+  type: "skill_set_enabled_ok";
+  name: string;
+  enabled: boolean;
+}
+
+/** `package_remove {id, source, scope?}` / `package_update {id, source?}`.
+ *  `package_install` is deliberately NOT modelled: it sends third-party code
+ *  into the host's Pi and requires `confirm_third_party`, so the web client
+ *  does not offer it rather than offering it half-safely. */
+export interface PackageRemoveRequest extends ClientMessage {
+  type: "package_remove";
+  source: string;
+  scope?: "user" | "project";
+}
+
+export interface PackageUpdateRequest extends ClientMessage {
+  type: "package_update";
+  source?: string;
+}
+
+/** `package_op_ok {in_reply_to, op, source, scope}` — one shared ack for the
+ *  three package operations. */
+export interface PackageOpOk extends ServerMessage {
+  type: "package_op_ok";
+  op: "install" | "remove" | "update" | "set_enabled";
+  source: string;
+  scope: "user" | "project" | null;
+}
+
+/** Guard for `skill_set_enabled_ok`: both echoed fields are mandatory. */
+export function isSkillSetEnabledOk(value: unknown): value is SkillSetEnabledOk {
+  if (!isServerMessage(value) || value.type !== "skill_set_enabled_ok") return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.name === "string" && v.name !== "" && typeof v.enabled === "boolean";
+}
+
+/** Guard for `package_op_ok`: the op must be one of the closed vocabulary. */
+export function isPackageOpOk(value: unknown): value is PackageOpOk {
+  if (!isServerMessage(value) || value.type !== "package_op_ok") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    (v.op === "install" || v.op === "remove" || v.op === "update" || v.op === "set_enabled") &&
+    typeof v.source === "string" &&
+    (v.scope === "user" || v.scope === "project" || v.scope === null)
+  );
+}
+
 /** Strict per-entry check for a skill row: every documented field, correct
  *  type. `enabled` is deliberately `boolean | null` (null = undetermined, not
  *  false). */
@@ -943,11 +1445,16 @@ export function isWireSkill(value: unknown): value is WireSkill {
   );
 }
 
-/** `pi_surface_ok` guard: the reply type plus an all-valid skill list. */
+/** `pi_surface_ok` guard: the reply type plus an all-valid skill list.
+ *  `packages` is validated only when PRESENT — see `PiSurfaceOk`. */
 export function isPiSurfaceOk(value: unknown): value is PiSurfaceOk {
   if (!isServerMessage(value) || value.type !== "pi_surface_ok") return false;
   const v = value as Record<string, unknown>;
-  return Array.isArray(v.skills) && v.skills.every(isWireSkill);
+  if (!Array.isArray(v.skills) || !v.skills.every(isWireSkill)) return false;
+  if (v.packages !== undefined) {
+    if (!Array.isArray(v.packages) || !v.packages.every(isWirePackage)) return false;
+  }
+  return true;
 }
 
 /** `skill_invoke_ok` guard: the echoed skill name must be a non-blank string. */
@@ -1069,7 +1576,11 @@ export type FsErrorCode =
   | "not_found"
   | "not_a_directory"
   | "permission_denied"
-  | "spawn_failed";
+  | "spawn_failed"
+  /* plan/77 — fs_read refusals. `not_allowed` is the allowlist fence saying no;
+     `not_a_file` is a directory where a document was expected. */
+  | "not_allowed"
+  | "not_a_file";
 
 /** Fixed text per allow-listed `action_error` code. */
 export const ACTION_ERROR_MESSAGES: Readonly<Record<FsErrorCode, string>> = {
@@ -1077,6 +1588,8 @@ export const ACTION_ERROR_MESSAGES: Readonly<Record<FsErrorCode, string>> = {
   not_a_directory: "Path is not a directory.",
   permission_denied: "The host cannot read this path.",
   spawn_failed: "The host could not start this workspace.",
+  not_allowed: "The host refused to read this file.",
+  not_a_file: "That path is not a file.",
 };
 
 /** Text used for any `action_error` code outside the allow-list. */
@@ -1085,7 +1598,8 @@ export const ACTION_ERROR_FALLBACK = "The host rejected this action.";
 export function isFsErrorCode(value: unknown): value is FsErrorCode {
   return (
     value === "not_found" || value === "not_a_directory" ||
-    value === "permission_denied" || value === "spawn_failed"
+    value === "permission_denied" || value === "spawn_failed" ||
+    value === "not_allowed" || value === "not_a_file"
   );
 }
 
@@ -1138,6 +1652,7 @@ export type ActionErrorCode = FsErrorCode | "unknown";
  *  action (or smuggling a token/path there) gets the generic label. */
 export const SAFE_ACTION_NAMES = [
   "fs_list",
+  "fs_read",
   "workspace_list",
   "workspace_start",
   "workspace_add",
@@ -1314,6 +1829,194 @@ export function isFsListOk(value: unknown): value is FsListOk {
     );
 }
 
+export function isFsReadOk(value: unknown): value is FsReadOk {
+  if (!isServerMessage(value) || value.type !== "fs_read_ok") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.path === "string" &&
+    typeof v.content === "string" &&
+    typeof v.truncated === "boolean" &&
+    typeof v.bytes === "number" &&
+    Number.isFinite(v.bytes)
+  );
+}
+
+/**
+ * Validates a Changes snapshot before it can reach the panel.
+ *
+ * Strict on purpose: the whole point of this surface is that it tells the truth
+ * about a worktree, so a malformed entry must fail closed rather than render a
+ * half-understood row. `rel` is additionally refused when it looks absolute —
+ * that is the one field that could leak the host's directory layout, and catching
+ * it here means a host bug cannot turn into a path disclosure.
+ */
+export function isChangesSnapshotOk(value: unknown): value is ChangesSnapshotOk {
+  if (!isServerMessage(value) || value.type !== "changes_snapshot_ok") return false;
+  /* The payload lives under `snapshot`, NOT on the envelope. Reading the
+   * envelope as if it were the snapshot silently rejects every real frame
+   * (measured: the panel showed "could not read" while the host was
+   * answering correctly on every field). */
+  const snap = (value as Record<string, unknown>).snapshot;
+  if (!isJsonObject(snap)) return false;
+  if (snap.is_repo !== true) return false;
+  const maybeString = (x: unknown): boolean => x === null || typeof x === "string";
+  const maybeNum = (x: unknown): boolean => x === null || (typeof x === "number" && Number.isFinite(x));
+  if (!maybeString(snap.branch) || !maybeNum(snap.ahead) || !maybeNum(snap.behind)) return false;
+  if (snap.head !== null) {
+    if (!isJsonObject(snap.head)) return false;
+    if (typeof snap.head.sha7 !== "string" || typeof snap.head.subject !== "string") return false;
+  }
+  if (typeof snap.truncated !== "boolean") return false;
+  const total = snap.total;
+  if (!isJsonObject(total)) return false;
+  for (const k of ["staged", "unstaged", "untracked", "conflicted"]) {
+    const n = total[k];
+    if (typeof n !== "number" || !Number.isFinite(n) || n < 0) return false;
+  }
+  if (!Array.isArray(snap.entries)) return false;
+  return snap.entries.every((e) => {
+    if (!isJsonObject(e)) return false;
+    if (typeof e.rel !== "string" || e.rel === "") return false;
+    /* Refuse an absolute or drive-qualified path outright: `rel` is the one
+     * field that could disclose the host's directory layout, so a host bug
+     * cannot turn into a path leak. */
+    if (e.rel.startsWith("/") || /^[A-Za-z]:/.test(e.rel) || e.rel.startsWith("\\")) return false;
+    /* `..` is harmless while this path is only ever RENDERED, but this guard is
+     * the gate any future "open this file" or "show this diff" action must pass
+     * through. Rejecting traversal here means such a feature cannot be added by
+     * accident without clearing this fence first. A NUL is refused because it
+     * truncates paths in most native layers. */
+    if (e.rel.includes("\u0000")) return false;
+    if (e.rel.split("/").includes("..")) return false;
+    if (typeof e.x !== "string" || e.x.length !== 1) return false;
+    if (typeof e.y !== "string" || e.y.length !== 1) return false;
+    if (typeof e.renamed !== "boolean") return false;
+    return true;
+  });
+}
+/** Validates the failure frame. The reason must be one of the closed set, so an
+ *  unknown value cannot smuggle host prose into a client-authored sentence. */
+export function isChangesSnapshotUnavailable(value: unknown): value is ChangesSnapshotUnavailable {
+  if (!isServerMessage(value) || value.type !== "changes_snapshot_unavailable") return false;
+  const reason = (value as Record<string, unknown>).reason;
+  return reason === "not_a_repo" || reason === "git_missing" || reason === "timeout" ||
+    reason === "workspace_missing" || reason === "unreadable";
+}
+
+/**
+ * Validates the models-config describe payload — and REFUSES any frame that
+ * carries a credential.
+ *
+ * The negative assertion is the point of this function. The host strips secrets
+ * before serialising, but a guard that only checks shape would happily accept a
+ * frame where that stripping regressed, and the key would land in the browser, the
+ * DOM, and every devtools session. Re-checking here means a host-side bug cannot
+ * become a client-side disclosure: the frame is rejected instead of rendered.
+ *
+ * `apiKey` is matched in every casing because the host's own predicate is
+ * case-insensitive, so accepting a `ApiKey`-shaped field would be a gap.
+ */
+export function isModelsDescribeOk(value: unknown): value is ModelsDescribeOk {
+  if (!isServerMessage(value) || value.type !== "models_describe_ok") return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.revision !== "string" || v.revision === "") return false;
+  if (!isJsonObject(v.file)) return false;
+  for (const k of ["exists", "parseable", "writable", "mode_safe"]) {
+    if (typeof v.file[k] !== "boolean") return false;
+  }
+  if (!isJsonObject(v.config)) return false;
+  if (!isJsonObject(v.secrets)) return false;
+  for (const entry of Object.values(v.secrets)) {
+    if (!isJsonObject(entry) || typeof entry.has_key !== "boolean") return false;
+  }
+  /*
+   * The negative fence. Serialising the config is the cheapest way to inspect every
+   * nesting level at once, which is exactly what a per-field check would miss.
+   *
+   * It inspects `config` ONLY. An earlier version serialised the whole frame, and
+   * the `secrets` keys are path strings like `providers.my-newapi.apiKey` — so the
+   * honest payload matched the pattern and every real frame was rejected, leaving
+   * the panel permanently empty while the host answered correctly. The fence must
+   * guard the payload that could carry a VALUE, not the index that names where one
+   * lives.
+   */
+  const wire = JSON.stringify(v.config);
+  if (/api[_-]?key|"token"|"secret"|"password"/i.test(wire)) return false;
+  return true;
+}
+
+export function isModelsMutateOk(value: unknown): value is ModelsMutateOk {
+  if (!isServerMessage(value) || value.type !== "models_mutate_ok") return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.revision === "string" && v.revision !== "";
+}
+
+const MODELS_ERROR_REASONS: readonly ModelsErrorReason[] = [
+  "not_found", "corrupted", "permission", "conflict", "invalid", "verify_failed", "unsupported",
+];
+
+export function isModelsError(value: unknown): value is ModelsError {
+  if (!isServerMessage(value) || value.type !== "models_error") return false;
+  const reason = (value as Record<string, unknown>).reason;
+  return typeof reason === "string" && (MODELS_ERROR_REASONS as readonly string[]).includes(reason);
+}
+
+/**
+ * Validates the settings describe payload.
+ *
+ * The negative assertion here guards a different leak than the models one: the
+ * settings FILE contains `packages` with absolute host paths and `extensions`. The
+ * host projects a whitelist, but if that projection regressed the frame would carry
+ * the user's directory layout. So any payload that serialises to something
+ * resembling those keys, or to a path, is refused rather than rendered.
+ */
+export function isSettingsDescribeOk(value: unknown): value is SettingsDescribeOk {
+  if (!isServerMessage(value) || value.type !== "settings_describe_ok") return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.revision !== "string" || v.revision === "") return false;
+  if (!isJsonObject(v.file)) return false;
+  for (const k of ["exists", "parseable", "writable"]) {
+    if (typeof v.file[k] !== "boolean") return false;
+  }
+  if (!isJsonObject(v.appearance)) return false;
+  const theme = v.appearance.theme;
+  if (theme !== null && typeof theme !== "string") return false;
+  const hide = v.appearance.hide_thinking_block;
+  if (hide !== null && typeof hide !== "boolean") return false;
+  if (!isJsonObject(v.behaviour)) return false;
+  for (const k of [
+    "retry_enabled",
+    "retry_max_retries",
+    "retry_base_delay_ms",
+    "retry_provider_max_retry_delay_ms",
+  ]) {
+    const f = v.behaviour[k];
+    if (f !== null && typeof f !== "boolean" && typeof f !== "number") return false;
+  }
+  /* The negative fence. `packages`/`extensions` are arrays of host paths in the real
+   * file; a projection regression must yield a dropped frame, not a leak. */
+  const wire = JSON.stringify({ appearance: v.appearance, behaviour: v.behaviour });
+  if (/packages|extensions|lastChangelogVersion/i.test(wire)) return false;
+  if (/[A-Za-z]:\\\\|\/Users\/|\/home\//.test(wire)) return false;
+  return true;
+}
+
+export function isSettingsMutateOk(value: unknown): value is SettingsMutateOk {
+  if (!isServerMessage(value) || value.type !== "settings_mutate_ok") return false;
+  const v = value as Record<string, unknown>;
+  return typeof v.revision === "string" && v.revision !== "";
+}
+
+const SETTINGS_ERROR_REASONS: readonly SettingsErrorReason[] = [
+  "not_found", "corrupted", "permission", "conflict", "invalid", "invalid_field", "unsupported", "verify_failed",
+];
+
+export function isSettingsError(value: unknown): value is SettingsError {
+  if (!isServerMessage(value) || value.type !== "settings_error") return false;
+  const reason = (value as Record<string, unknown>).reason;
+  return typeof reason === "string" && (SETTINGS_ERROR_REASONS as readonly string[]).includes(reason);
+}
+
 export function isWorkspaceStartOk(value: unknown): value is WorkspaceStartOk {
   return isServerMessage(value) && value.type === "workspace_start_ok" &&
     hasStringFields(value as Record<string, unknown>, ["cwd", "room_id", "daemon_id"]);
@@ -1353,6 +2056,27 @@ export function isWorkspaceStatePush(value: unknown): value is WorkspaceStatePus
   if (!isWorkspaceState(value.state)) return false;
   if (value.last_error !== null && typeof value.last_error !== "string") return false;
   return typeof value.restarts === "number" && Number.isInteger(value.restarts) && value.restarts >= 0;
+}
+
+/**
+ * Strict `schedule_fired` PUSH guard.
+ *
+ * Mirrors `isWorkspaceStatePush` for the same reason: a push that carried an
+ * `id`/`in_reply_to` could settle a pending host RPC it has nothing to do with.
+ * Beyond that it enforces the two facts the UI would otherwise render wrong —
+ * a result inside the closed vocabulary, and a preview that is actually a
+ * string (an absent preview must not become the literal "undefined").
+ */
+export function isScheduleFiredPush(value: unknown): value is ScheduleFiredPush {
+  if (!isJsonObject(value)) return false;
+  if (value.type !== "schedule_fired") return false;
+  if ("id" in value || "in_reply_to" in value) return false;
+  if (typeof value.job_id !== "string" || value.job_id === "") return false;
+  if (typeof value.daemon_id !== "string" || value.daemon_id === "") return false;
+  if (typeof value.result !== "string") return false;
+  if (!(SCHEDULE_RESULTS as readonly string[]).includes(value.result)) return false;
+  if (typeof value.fired_at !== "string" || value.fired_at === "") return false;
+  return typeof value.prompt_preview === "string";
 }
 
 export function isActionError(value: unknown): value is ActionError {

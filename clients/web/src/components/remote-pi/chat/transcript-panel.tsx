@@ -7,7 +7,7 @@
  * AGENT half goes through `./markdown`, which is the single audited place wire
  * text becomes markup: no raw HTML, protocol-checked links, plain code blocks.
  */
-import { useCallback, useEffect, memo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, memo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { Icon } from "../core/icons";
 import { Slot } from "../core/slots";
@@ -30,8 +30,9 @@ const EMPTY_SKILLS: readonly SkillOption[] = [];
 
 /** Minimal per-turn status the panel may draw. Optional and text-free: it
  *  carries no error code and no wire string, so a turn that did not finish is
- *  reported as such instead of being drawn as a live stream. */
-export type ChatItemStatus = "streaming" | "complete" | "failed";
+ *  reported as such instead of being drawn as a live stream. `cancelled` is
+ *  kept separate from `failed`: the user stopped it deliberately. */
+export type ChatItemStatus = "streaming" | "complete" | "cancelled" | "failed";
 
 /** `ChatItem` plus that optional status; a plain `ChatItem` stays assignable,
  *  so the existing mapping keeps working unchanged. */
@@ -64,29 +65,35 @@ type TranscriptAgentItem = Extract<TranscriptChatItem, { kind: "agent" }>;
 const CHAT_STATUS_LABEL: Record<ChatItemStatus, string> = {
   streaming: "streaming…",
   complete: "complete",
+  cancelled: "stopped by you",
   failed: "did not finish",
 };
 
 /* Fixed, client-authored composer reasons: a locked composer always says WHY,
    and the text never comes from the host. */
 const COMPOSER_BUSY_REASON =
-  "A turn is still in flight — wait for it to finish before sending another.";
-const COMPOSER_NO_WORKSPACE_REASON = "Select a workspace on the left before sending a message.";
+  "A turn is still in flight — press Stop to end it, or wait for it to finish.";
+const COMPOSER_NO_WORKSPACE_REASON = "请先在左侧选择工作区再发送消息。";
+/* A running workspace is NOT enough: with no active model the turn opens, the
+   user's text appears in the transcript, and no reply can ever stream back. */
+const COMPOSER_MODEL_REQUIRED =
+  "发送前请先选择模型 — 工作区正在运行，但尚未激活任何模型。";
+const COMPOSER_MODELS_PENDING = "正在加载该工作区的模型…";
 
 /** Fixed retry warning: retry is explicit and one-shot, so the risk is stated
  *  next to the button instead of being hidden. */
-const RETRY_WARNING = "Retry sends a new request and may run the task twice.";
+const RETRY_WARNING = "重试会重新发起请求，任务可能执行两次。";
 
 /** Fixed, client-authored reason for an inert empty-state Browse action: below
  *  the dock breakpoint there is no dock to open, so the button states that
  *  instead of dropping the next action silently. */
 const BROWSE_UNAVAILABLE_REASON =
-  "The file dock is not available at this width — widen the window to browse the host filesystem.";
+  "该宽度下文件停靠栏不可用 — 请加宽窗口以浏览主机文件系统。";
 
 /** Uniform tail for a disabled composer control's description: the reason says
  *  WHY the surface is absent, this says that the control is inert. Fixed
  *  client text, never host text. */
-const DISABLED_CONTROL_SUFFIX = "Disabled — this control is not wired.";
+const DISABLED_CONTROL_SUFFIX = "已禁用 — 该控件尚未接线。";
 
 /** Fixed label for an agent item: the status wins when supplied, otherwise the
  *  legacy `done` flag. Never wire text. */
@@ -178,6 +185,21 @@ const AgentRow = memo(function AgentRow({ item }: { item: TranscriptAgentItem })
 export interface TranscriptPanelProps {
   workspaceName: string | null;
   workspacePath: string | null;
+  /**
+   * Whether the model surface is ready to send with.
+   *
+   * `modelPending` distinguishes "the catalog is still arriving" from "the
+   * catalog arrived and nothing is active": the first is a wait, the second is a
+   * choice the user still has to make. Both block the composer.
+   */
+  modelPending: boolean;
+  modelSelected: boolean;
+  /** True when the selected workspace has a live Pi that can answer a message.
+   *  The composer is locked otherwise: sending into a stopped workspace left the
+   *  turn open forever, because the process that would have echoed it was gone. */
+  workspaceLive: boolean;
+  /** Fixed reason shown when `workspaceLive` is false. */
+  workspaceNotRunningReason: string;
   host: { hostname: string; daemonVersion?: string; backend?: string };
   streaming: boolean;
   chat: readonly TranscriptChatItem[];
@@ -191,6 +213,10 @@ export interface TranscriptPanelProps {
   chatNotice: string | null;
   /** True while the reducer owns an open turn: the composer is locked. */
   chatBusy: boolean;
+  /** True when an open turn exists that a Stop control can abort. */
+  cancelAvailable: boolean;
+  /** Stops the open turn. The transcript settles only when the host confirms. */
+  onCancel: () => void;
   /** True when the latest settled turn may be re-sent as a NEW request. */
   retryAvailable: boolean;
   /** Explicit, user-driven retry. There is no automatic resend anywhere. */
@@ -316,6 +342,10 @@ function AnchorRail({ count }: { count: number }) {
 export function TranscriptPanel({
   workspaceName,
   workspacePath,
+  modelPending,
+  modelSelected,
+  workspaceLive,
+  workspaceNotRunningReason,
   host,
   streaming,
   chat,
@@ -324,6 +354,8 @@ export function TranscriptPanel({
   onSend,
   chatNotice,
   chatBusy,
+  cancelAvailable,
+  onCancel,
   retryAvailable,
   onRetry,
   onBrowseFiles,
@@ -331,7 +363,6 @@ export function TranscriptPanel({
   resuming,
   activityStats,
   usageStats,
-  tools,
   attachmentAllowed,
   attachmentDisabledReason,
   attachment,
@@ -359,13 +390,26 @@ export function TranscriptPanel({
 }: TranscriptPanelProps) {
   const hasTurns = chat.length > 0;
   const userTurns = chat.filter((item) => item.kind === "user").length;
-  /* Composer lock: the reducer's own busy flag first, then the absence of a
-     selected workspace. The reason is fixed client text, never a guess. */
+  /* Composer lock, in order of what the user must fix first:
+     busy turn -> no workspace -> workspace not running -> no model.
+     The reason is fixed client text, never a guess.
+
+     A MODEL IS REQUIRED. Without this step a running workspace with no active
+     model left the composer unlocked, so the message posted, the transcript
+     showed the user's text, and the turn sat there forever: there was no model
+     to stream a reply from. The workspace being live is necessary but NOT
+     sufficient to send. */
   const composerReason = chatBusy
     ? COMPOSER_BUSY_REASON
     : workspacePath === null
       ? COMPOSER_NO_WORKSPACE_REASON
-      : null;
+      : !workspaceLive
+        ? workspaceNotRunningReason
+        : modelPending
+          ? COMPOSER_MODELS_PENDING
+          : !modelSelected
+            ? COMPOSER_MODEL_REQUIRED
+            : null;
   const composerEnabled = composerReason === null;
   const showRetry = retryAvailable && !chatBusy;
   /* The attach control is inert unless the ACTIVE model accepts images; the
@@ -382,6 +426,9 @@ export function TranscriptPanel({
      CSS (it turns off `overflow-anchor` so the browser does not fight the
      programmatic scroll), and the same flag shows the jump-to-latest button. */
   const follow = useScrollFollow();
+  /* The composer form, so a keypress can dispatch the SAME submit path the Send
+     button uses instead of a second copy of the send logic. */
+  const composerFormRef = useRef<HTMLFormElement | null>(null);
 
   /* ── slash menu ───────────────────────────────────────────────────────────
      The composer owns the trigger because it owns the draft text. A `/` at the
@@ -429,8 +476,31 @@ export function TranscriptPanel({
     return true;
   }
 
+  /* Enter sends, Shift+Enter inserts a newline.
+   *
+   * The submit goes through the FORM's own `onSubmit` (`requestSubmit`), never a
+   * second copy of the send logic: `handleSend` owns the single-flight guard,
+   * the local echo, the timeout and the draft clear, and duplicating any of it
+   * here would let the two paths disagree.
+   *
+   * A disabled Send button is the same statement the user already sees, so the
+   * key is swallowed rather than silently doing nothing — and `requestSubmit`
+   * is skipped entirely while the composer is locked, because it would
+   * otherwise fire the submit handler on a form the user was told is closed. */
+  function submitFromKeyboard(): void {
+    const form = composerFormRef.current;
+    if (form === null || !composerEnabled) return;
+    form.requestSubmit();
+  }
+
   function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (!slashOpen) return;
+    if (!slashOpen) {
+      if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+        event.preventDefault();
+        submitFromKeyboard();
+      }
+      return;
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       if (slashMatches.length === 0) return;
       event.preventDefault();
@@ -457,7 +527,14 @@ export function TranscriptPanel({
          the menu has said so. */
       if (skillsBusy && skills.length === 0 && skillsDisabledReason === null) {
         event.preventDefault();
+        return;
       }
+      /* A real list is present but does not match the query: the menu has said
+         so, and the user pressed Enter meaning to send. Fall through to the
+         normal send path (Tab keeps its list-navigation meaning and stops). */
+      if (event.key === "Tab") return;
+      event.preventDefault();
+      submitFromKeyboard();
     }
   }
 
@@ -470,7 +547,7 @@ export function TranscriptPanel({
             className={css.sessionName}
             style={{ fontFamily: "var(--ff-display)" }}
           >
-            {workspaceName ?? "No workspace selected"}
+            {workspaceName ?? "未选择工作区"}
           </b>
           {/* Secondary label: dropped when the frame is compact so the header
               never stacks into an unreadable sliver. */}
@@ -491,12 +568,12 @@ export function TranscriptPanel({
               title={`Connected to the host room${host.backend ? ` · Ed25519: ${host.backend}` : ""}`}
             />
             {streaming ? (
-              <StatusPill label="streaming" tone="busy" title="A reply is arriving" />
+              <StatusPill label="streaming" tone="busy" title="回复正在到达" />
             ) : null}
           </span>
         )}
 
-        {/* Target ring. "Chat" is the only wired target; "Trajectory" is
+        {/* Target ring. "Chat" is the only wired target; "轨迹" is
             declared and inert because the host exposes no per-event records. */}
         <span className={css.viewToggle}>
           <span className={css.viewTabActive}>
@@ -510,7 +587,7 @@ export function TranscriptPanel({
             className={css.viewTabDisabled}
           >
             <Icon name="branch" size={14} />
-            {compact ? null : "Trajectory"}
+            {compact ? null : "轨迹"}
             <span className="sr-only">{capability("trajectory").reason}</span>
           </button>
         </span>
@@ -572,13 +649,13 @@ export function TranscriptPanel({
                */
               <EmptyState
                 icon="cpu"
-                title="Reopening this session…"
-                detail="The workspace's Pi is restarting to open this session. Its history appears here as soon as it is back — nothing was lost."
+                title="正在重新打开该会话…"
+                detail="该工作区的 Pi 正在重启以打开此会话。恢复后历史会立即显示 — 没有丢失任何内容。"
               />
             ) : (
               <EmptyState
                 icon="cpu"
-                title="What should the agent work on?"
+                title="让代理做什么？"
                 detail={`This workspace has no turns yet. Pick a workspace on the left, or browse the host filesystem in the right dock and start a Pi in a directory. The host is ${host.hostname}.`}
                 action={
                   <button
@@ -589,7 +666,7 @@ export function TranscriptPanel({
                     className={css.browseButton}
                   >
                     <Icon name="folder" size={15} />
-                    Browse the host filesystem
+                    浏览主机文件系统
                     {browseFilesAvailable ? null : (
                       <span className="sr-only"> — {BROWSE_UNAVAILABLE_REASON}</span>
                     )}
@@ -608,8 +685,8 @@ export function TranscriptPanel({
             <button
               type="button"
               onClick={follow.toBottom}
-              aria-label="Jump to the latest content"
-              title="Jump to the latest content"
+              aria-label="跳到最新内容"
+              title="跳到最新内容"
               className={css.jumpButton}
             >
               <Icon name="chevD" size={15} />
@@ -625,7 +702,7 @@ export function TranscriptPanel({
         {showNotice ? (
           <div
             role="note"
-            aria-label="Chat status"
+            aria-label="对话状态"
             className={css.noticeBox}
           >
             {chatNotice !== null ? (
@@ -646,7 +723,7 @@ export function TranscriptPanel({
                   className={css.retryButton}
                 >
                   <Icon name="refresh" size={14} />
-                  Retry
+                  重试
                 </button>
                 <span
                   id="transcript-retry-warning"
@@ -659,6 +736,7 @@ export function TranscriptPanel({
           </div>
         ) : null}
         <form
+          ref={composerFormRef}
           onSubmit={onSend}
           className={css.composerForm}
         >
@@ -687,7 +765,7 @@ export function TranscriptPanel({
             rows={1}
             disabled={!composerEnabled}
             aria-disabled={!composerEnabled}
-            aria-label="Message to the agent"
+            aria-label="发给代理的消息"
             aria-describedby="transcript-composer-status"
             title={composerReason ?? undefined}
             /*
@@ -697,8 +775,8 @@ export function TranscriptPanel({
              */
             placeholder={
               composerEnabled
-                ? "Describe a task — the agent works in the session's workspace…"
-                : "Message the agent…"
+                ? "描述任务 — 代理会在会话所属工作区中执行…"
+                : "给代理发消息…"
             }
             spellCheck={false}
             className={css.composerInput}
@@ -719,8 +797,8 @@ export function TranscriptPanel({
             <label
               title={
                 attachment !== null
-                  ? "Attachments — one image is attached"
-                  : (attachmentDisabledReason ?? "Attach one image to this message")
+                  ? "附件 — 已附加一张图片"
+                  : (attachmentDisabledReason ?? "为此消息附加一张图片")
               }
               className={`${css.attachLabel} ${attachDisabled ? css.attachDisabled : css.attachEnabled}`}
             >
@@ -728,7 +806,7 @@ export function TranscriptPanel({
                 type="file"
                 accept="image/*"
                 className="sr-only"
-                aria-label="Attachments"
+                aria-label="附件"
                 aria-describedby="composer-capability-upload"
                 disabled={attachDisabled}
                 onChange={(event) => {
@@ -743,7 +821,7 @@ export function TranscriptPanel({
                 <span
                   role="button"
                   tabIndex={0}
-                  aria-label="Remove the attached image"
+                  aria-label="移除已附加的图片"
                   onClick={(event) => {
                     event.preventDefault();
                     onRemoveAttachment();
@@ -763,7 +841,7 @@ export function TranscriptPanel({
             <button
               type="button"
               disabled
-              aria-label="Tool cards"
+              aria-label="工具卡片"
               aria-describedby="composer-capability-tools"
               title={`Tool cards — ${capability("tools").reason}`}
               className={css.toolsButtonDisabled}
@@ -777,7 +855,7 @@ export function TranscriptPanel({
                  icon) is what makes the skills menu discoverable. */
               disabled={!composerEnabled || draft !== ""}
               onClick={() => onDraftChange("/")}
-              aria-label="Slash commands — list this workspace's skills"
+              aria-label="斜杠命令 — 列出该工作区的技能"
               aria-describedby="composer-capability-palette"
               title={`Slash commands — ${capability("palette").reason}`}
               className={css.slashButton}
@@ -814,17 +892,37 @@ export function TranscriptPanel({
               }
               onThinkingChange={onThinkingChange}
             />
-            <button
-              type="submit"
-              disabled={!composerEnabled || draft.trim().length === 0}
-              aria-describedby="transcript-composer-status"
-              title={composerReason ?? "Send the message"}
-              className={css.sendButton}
-            >
-              <Icon name="send" size={15} />
-              Send
-              <span className="sr-only">Send the message</span>
-            </button>
+            {/* The primary action is ONE slot that swaps identity with the turn
+                state: Stop while a turn is open, Send otherwise. Keeping them
+                in the same position means the control the user reaches for is
+                always where they left it, and it removes the previous dead end
+                where an in-flight turn could only be escaped by reloading.
+                Stop carries no confirmation: re-sending is one keystroke. */}
+            {cancelAvailable ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                aria-describedby="transcript-composer-status"
+                title="停止这轮对话 — 代理停止生成，已产出的回复会保留。"
+                className={css.stopButton}
+              >
+                <Icon name="stop" size={15} />
+                停止
+                <span className="sr-only">停止当前回合</span>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!composerEnabled || draft.trim().length === 0}
+                aria-describedby="transcript-composer-status"
+                title={composerReason ?? "发送消息"}
+                className={css.sendButton}
+              >
+                <Icon name="send" size={15} />
+                发送
+                <span className="sr-only">发送消息</span>
+              </button>
+            )}
           </div>
           {/* Persistent descriptions for the three disabled composer
               controls above. Kept in the DOM while the buttons are disabled
@@ -832,7 +930,7 @@ export function TranscriptPanel({
               how the fixed reason stays reachable for AT). */}
           <span id="composer-capability-upload" className="sr-only">
             {attachmentDisabledReason ??
-              "Attach one image to this message inline. Disabled while the selected model does not accept images."}
+              "为此消息附加一张图片。所选模型不支持图片时不可用。"}
           </span>
           <span id="composer-capability-tools" className="sr-only">
             {capability("tools").reason} {DISABLED_CONTROL_SUFFIX}
@@ -864,7 +962,7 @@ export function TranscriptPanel({
             ? attachmentNotice
             : composerReason !== null
               ? composerReason
-              : "Use Send to submit. Enter/Shift+Enter editing is not wired to the composer yet."}
+              : "回车发送 · Shift+回车换行。回复会流式写入上方记录。"}
         </p>
       </div>
         </>

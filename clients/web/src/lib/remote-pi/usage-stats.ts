@@ -11,15 +11,7 @@
  * (`packages/client/ui-chat/src/client/chat/StatsPills.tsx`): turns/steps plus a
  * decode-speed reading, and a token total plus a cache-hit share.
  */
-import type { WireSessionEvent, WireUsage } from "./protocol";
-
-/** One assistant step's timing, used to separate decode time from wall time. */
-interface StepTiming {
-  /** When the user message that opened the turn arrived. */
-  turnStartTs: number | null;
-  /** Timestamp of this assistant message. */
-  ts: number;
-}
+import type { WireSessionEvent } from "./protocol";
 
 export interface UsageTotals {
   /** Assistant messages, i.e. model round-trips. */

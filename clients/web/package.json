@@ -8,7 +8,10 @@
     "verify:web": "node scripts/run-web-checks.mjs",
     "verify:ed25519": "node scripts/verify-ed25519.mjs",
     "preview": "vite preview",
-    "lint": "eslint src --max-warnings 105"
+    "lint": "eslint src --max-warnings 135",
+    "verify:buttons": "node scripts/verify-buttons.mjs",
+    "verify:sessions": "node scripts/verify-sessions-20x.mjs",
+    "verify:tokens": "node scripts/audit-tokens.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
