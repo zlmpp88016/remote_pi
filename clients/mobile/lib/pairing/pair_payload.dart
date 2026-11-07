@@ -54,7 +54,20 @@ class PairPayload {
       // rm is optional too — legacy remote-pi didn't emit it, and
       // the app falls back to 'main' / discovery in that case.
       if (t == null || epk == null || n == null) return null;
-      if (base64Url.decode(_pad(t)).length != 16) return null;
+      /*
+       * `t` is OPAQUE to the client — the host compares it against the record it
+       * issued. It used to be validated as "16 bytes of base64url" because that
+       * is what `randomBytes(16).toString('base64url')` produces, but an operator
+       * may now pin a human-chosen code (`set-pairing-code FIXED-4180`, 4-128
+       * chars of A-Z a-z 0-9 - _), and those are not 16 bytes of base64url.
+       *
+       * Rejecting them here was a real defect: the code the server printed as
+       * valid was refused by the app before a single byte went out, with the
+       * useless message "this is not a Remote Pi pairing code". The charset and
+       * length bound below are the ones the server enforces on the way in; the
+       * authority on whether a token is ACCEPTED is the host's `consume()`.
+       */
+      if (!RegExp(r'^[A-Za-z0-9_-]{4,128}$').hasMatch(t)) return null;
       if (base64Url.decode(_pad(epk)).length != 32) return null;
       return PairPayload(
         token: t,

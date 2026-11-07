@@ -31,14 +31,33 @@ void main() {
           reason: 'no r= present — app uses its configured relay');
     });
 
-    test('rejects when t is missing or wrong length', () {
+    test('rejects when t is missing or malformed', () {
       final missingT =
           'remotepi://pair?epk=$goodEpk&n=$sessionName';
       expect(PairPayload.tryParse(missingT), isNull);
 
-      final badT = 'remotepi://pair?t=AAAA&epk=$goodEpk&n=$sessionName';
+      /* Too short for the charset rule the server enforces on input. */
+      final badT = 'remotepi://pair?t=abc&epk=$goodEpk&n=$sessionName';
       expect(PairPayload.tryParse(badT), isNull);
+
+      /* Characters a code never carries — they would break the URI. */
+      final badChars =
+          'remotepi://pair?t=has%20space&epk=$goodEpk&n=$sessionName';
+      expect(PairPayload.tryParse(badChars), isNull);
     });
+
+    test(
+      'accepts a HUMAN-CHOSEN fixed code (set-pairing-code), not just 16-byte '
+      'base64url — the server prints these, so the app must take them',
+      () {
+        const fixedCode = 'FIXED-4180';
+        final raw = 'remotepi://pair?t=$fixedCode&epk=$goodEpk&n=$sessionName';
+        final qr = PairPayload.tryParse(raw);
+        expect(qr, isNotNull,
+            reason: 'a configured code is not 16 bytes of base64url');
+        expect(qr!.token, fixedCode);
+      },
+    );
 
     test('rejects when epk has wrong byte length', () {
       final raw =

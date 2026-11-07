@@ -100,6 +100,7 @@ openspec
 # Ficam locais — o que interessa do aceite vai para o commit como assercao de
 # teste, nao como PNG.
 **/_android-evidence/
+**/_evidence/
 **/_e2e-evidence/
 docs/截图/
 docs/截图-*.zip
