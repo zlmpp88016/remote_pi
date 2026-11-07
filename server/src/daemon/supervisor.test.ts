@@ -50,6 +50,14 @@ async function ask<R = ControlReply<unknown>>(req: ControlRequest): Promise<R> {
 beforeEach(async () => {
   testHome = mkdtempSync(join(tmpdir(), "pi-sv-"));
   process.env["REMOTE_PI_HOME"] = testHome;
+  /*
+   * A scratch home isolates the state FILES but not the IPC ADDRESS: on Windows
+   * the supervisor pipe is `remote-pi-supervisor-<user>`, machine-global, so
+   * these tests could only ever run on a box with no dev supervisor up —
+   * `SupervisorAlreadyRunningError` otherwise. `REMOTE_PI_INSTANCE` folds a name
+   * into the pipe, which is what makes the suite runnable beside a live one.
+   */
+  process.env["REMOTE_PI_INSTANCE"] = `test-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
   supervisor = new Supervisor({
     skipHost: true,
     // Point at a non-existent extension. The supervisor will try to
@@ -73,6 +81,7 @@ afterEach(async () => {
     supervisor = null;
   }
   delete process.env["REMOTE_PI_HOME"];
+  delete process.env["REMOTE_PI_INSTANCE"];
   try { rmSync(testHome, { recursive: true, force: true }); } catch { /* best-effort */ }
 });
 

@@ -71,7 +71,16 @@ export function wantsDirect(args: readonly string[]): boolean {
 
 /** Where the port/discovery file lives. */
 function stateFilePath(): string {
-  return join(homedir(), ".pi", "remote", "direct.json");
+  /*
+   * `REMOTE_PI_HOME` first, exactly like every other state file (registry,
+   * workspaces, pairing, supervisor UDS). This one used bare `homedir()`, so a
+   * second instance started with a redirected home still wrote its port into the
+   * developer's real `~/.pi/remote/direct.json` — the two stacks then overwrote
+   * each other's discovery file, which is precisely the isolation the redirect
+   * was supposed to buy.
+   */
+  const home = process.env["REMOTE_PI_HOME"] || homedir();
+  return join(home, ".pi", "remote", "direct.json");
 }
 
 /**

@@ -29,6 +29,28 @@ describe("ipcAddress", () => {
   });
 
   test("Windows → falls back to 'user' when username is empty", () => {
-    expect(ipcAddress("supervisor", "/x", "win32", "")).toBe("\\\\.\\pipe\\remote-pi-supervisor-user");
+    expect(ipcAddress("supervisor", "/x", "win32", "", "")).toBe("\\\\.\\pipe\\remote-pi-supervisor-user");
+  });
+
+  /*
+   * `REMOTE_PI_INSTANCE` is what lets a SECOND stack run beside the dev one.
+   * Without it the Windows pipe name carries only suffix+user, so two
+   * supervisors collide no matter which `REMOTE_PI_HOME` each was built from.
+   */
+  test("an instance name keeps two stacks off each other's address", () => {
+    expect(ipcAddress("supervisor", "/x", "win32", "u", ".staging"))
+      .toBe("\\\\.\\pipe\\remote-pi-supervisor.staging-u");
+    // POSIX: the suffix goes before `.sock`, so stale-socket globs still match.
+    expect(ipcAddress("supervisor", "/h/.pi/remote/supervisor.sock", "darwin", "u", ".staging"))
+      .toBe("/h/.pi/remote/supervisor.staging.sock");
+    // A path without `.sock` still gets a distinct address rather than colliding.
+    expect(ipcAddress("broker", "/h/broker", "linux", "u", ".staging")).toBe("/h/broker.staging");
+  });
+
+  test("no instance name → exactly today's addresses", () => {
+    expect(ipcAddress("supervisor", "/h/supervisor.sock", "darwin", "u", ""))
+      .toBe("/h/supervisor.sock");
+    expect(ipcAddress("supervisor", "/x", "win32", "u", ""))
+      .toBe("\\\\.\\pipe\\remote-pi-supervisor-u");
   });
 });

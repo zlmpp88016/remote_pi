@@ -32,19 +32,45 @@ function safe(s: string): string {
 }
 
 /**
+ * Discriminator for a SECOND stack on the same machine (`REMOTE_PI_INSTANCE`).
+ *
+ * `REMOTE_PI_HOME` already isolates the state files, but the IPC names are not
+ * derived from it: on Windows the pipe carries the suffix plus the user name
+ * only, so two supervisors built from different homes collide on
+ * `remote-pi-supervisor-<user>` and the second refuses to start. The same
+ * collision reaches brokers and cwd locks, letting a child of instance B talk
+ * to instance A's broker.
+ *
+ * Folding the instance into the ADDRESS keeps the stacks apart in every layer.
+ * Unset → empty suffix → today's names, so existing installs are untouched.
+ */
+function instanceSuffix(): string {
+  const raw = (process.env["REMOTE_PI_INSTANCE"] ?? "").trim();
+  return raw === "" ? "" : `.${safe(raw)}`;
+}
+
+/**
  * Resolve a local-IPC address. On Windows returns a per-user named pipe
  * (`\\.\pipe\remote-pi-<suffix>-<user>`); on POSIX returns `filePath` (the
  * filesystem UDS path) unchanged.
+ *
+ * With `REMOTE_PI_INSTANCE` set, the instance is folded into the address on both
+ * platforms (`…-supervisor.<instance>-<user>`, `supervisor.<instance>.sock`).
  */
 export function ipcAddress(
   suffix: string,
   filePath: string,
   plat: Plat = osPlatform(),
   user?: string,
+  instance: string = instanceSuffix(),
 ): string {
   if (plat === "win32") {
     const u = safe((user ?? userInfo().username) || "user");
-    return `\\\\.\\pipe\\remote-pi-${safe(suffix)}-${u}`;
+    return `\\\\.\\pipe\\remote-pi-${safe(suffix)}${instance}-${u}`;
   }
-  return filePath;
+  if (instance === "") return filePath;
+  // POSIX: keep the `.sock` extension so existing globs/cleanup still match.
+  const cut = filePath.lastIndexOf(".sock");
+  if (cut < 0) return `${filePath}${instance}`;
+  return `${filePath.slice(0, cut)}${instance}${filePath.slice(cut)}`;
 }
