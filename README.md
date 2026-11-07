@@ -40,27 +40,29 @@ remote-pi-server install         # user-level service, survives logout; one UAC 
 remote-pi-server daemon status   # confirm it is running
 ```
 
-The log (`~/.pi/remote/supervisord.log`) should contain:
+The log (`~/.pi/remote/supervisord.log`) should contain these two lines:
 
 ```
-[pi-supervisord] direct mode — local relay at http://127.0.0.1:4124 (no community relay)
+[pi-supervisord] direct mode — embedded relay on http://127.0.0.1:4124 (no community relay)
+[pi-supervisord] reachable from the network at http://192.168.1.7:4124 — pair from any device with the code below
 ```
 
-That line is the whole point: self-contained mode, **zero public-network traffic**. The
-service unit `install` writes carries no relay arguments and inherits this default.
+That is self-contained mode, **zero public-network traffic**; the second line is this
+machine's address on your network. The service unit `install` writes carries no
+relay arguments and inherits this default.
 
 ### Connect a client
 
-**Browser:** open `http://127.0.0.1:4124/remote-pi/connect`. **Type nothing** — the page pairs
-itself over the same origin.
+The server listens on **every interface**, and its pairing code carries the machine's own
+LAN address — so any device on the same Wi-Fi connects directly. No tunnel, no config, no
+address to type.
 
-**Phone:** install the app, then Settings → Add pairing. The relay address field needs **nothing
-from you** — pasting the code fills it in. Only two situations need a second look:
+**Browser:** open `http://127.0.0.1:4124/remote-pi/connect` on this machine, or
+`http://<this machine's IP>:4124/remote-pi/connect` anywhere else. **Type nothing** —
+the page pairs itself over the same origin.
 
-| Situation | What you do |
-| --- | --- |
-| Phone plugged into the machine over USB | run `adb reverse tcp:4124 tcp:4124`, then **just paste the code** |
-| Phone on another device (Wi-Fi or the internet) | set up the tunnel in "Reaching the server from elsewhere" first, then **just paste the code** |
+**Phone:** install the app, then Settings → Add pairing. **Just paste the code**; the relay
+address field fills itself in.
 
 Get the pairing code on the server:
 
@@ -68,8 +70,20 @@ Get the pairing code on the server:
 remote-pi-server pair
 ```
 
-Paste the whole `remotepi://pair?…` string into the app's **pairing code** box. The relay
-address **auto-fills from the code** (`r=`); you only touch it to point somewhere else.
+```
+remotepi://pair?t=…&epk=…&n=…&rm=host&r=http%3A%2F%2F192.168.1.7%3A4124
+                                                 └─ this machine's LAN address, included for you
+```
+
+**Want a code that never changes** (same string every time, no terminal to read):
+
+```bash
+remote-pi-server set-pairing-code "my-code-123"
+remote-pi-server restart-supervisor
+```
+
+`pair` now prints `t=my-code-123` every time, including after a restart. Port and
+bind work the same way: `set-port 8080`, `set-bind 127.0.0.1`.
 
 ### That is it
 
@@ -93,30 +107,30 @@ No Docker, no separate web host, no relay deployment, no `set-relay`.
 
 ## Optional: reaching the server from elsewhere
 
-`direct` binds `127.0.0.1` only, deliberately — nothing is exposed on the network unless you
-open it. To reach it from another device, put a tunnel in front (frp / nginx / cloudflared /
-SSH `-L`), then tell the server two things:
+**Nothing to configure on a LAN** — the server binds every interface and the pairing code
+carries its own address, so a device on the same Wi-Fi just connects.
 
-```bash
-remote-pi-server set-public-relay "https://pi.example.com"   # what a PHONE should dial
-remote-pi-server allow-host       "pi.example.com"           # hostname the origin gate accepts
-remote-pi-server restart-supervisor
+Only a device on a *different* network needs a tunnel in front (frp / nginx / cloudflared /
+SSH `-L`). The one extra piece of information is then "which address should the phone
+dial", because the machine cannot know its own public name:
+
+```json
+// ~/.pi/remote/config.json — affects the PAIRING CODE only, never how the host dials itself
+{ "publicRelay": "https://pi.example.com" }
 ```
 
-They solve **two independent problems**, and missing either one fails:
+Restart the supervisor and `remote-pi-server pair` emits codes carrying that address.
+Remove the line to clear it.
 
-| Missing | Symptom |
-| --- | --- |
-| `set-public-relay` | the code carries `127.0.0.1`, so a remote phone dials **its own** localhost and times out |
-| `allow-host` (when the tunnel forwards a name) | the proxy gets `403` before any page is served — the gate accepts only loopback and IP literals by default |
-
-`set-public-relay` **affects only the pairing code**; the host keeps dialling its own address
-and never loops out over the internet. Clear them with `set-public-relay -` / `allow-host -`.
+**The origin gate needs no configuration.** Bound to a real interface it accepts any `Host`
+(the phone's IP, the tunnel's hostname, anything) and refuses only cross-site requests, which
+is an `Origin` check independent of the name. The strict allowlist comes back only when you
+narrow the server to loopback with `set-bind 127.0.0.1`.
 
 Point the tunnel at loopback, **never** at `0.0.0.0`:
 
 ```toml
-# type = tcp → reach it as http://PUBLIC_IP:7000, no allow-host needed
+# type = tcp → reach it as http://PUBLIC_IP:7000
 [[proxies]]
 name = "remote-pi"
 type = "tcp"
@@ -124,7 +138,7 @@ localIP = "127.0.0.1"
 localPort = 4124
 remotePort = 7000
 
-# type = http → reach it by name, allow-host required
+# type = http → reach it by name, needs the publicRelay above
 [[proxies]]
 name = "remote-pi"
 type = "http"
@@ -132,11 +146,6 @@ localIP = "127.0.0.1"
 localPort = 4124
 customDomains = ["pi.example.com"]
 ```
-
-> **A LAN IP will not work.** `http://192.168.x.x:4124` is not a secure context, so the browser
-> withholds `crypto.subtle` and the Ed25519 handshake fails outright. That is a platform rule,
-> not an implementation gap. LAN access needs HTTPS (a self-signed certificate cannot be
-> clicked through on a WebSocket), which in practice means the tunnel above.
 
 ## Optional: self-hosted or community relay
 

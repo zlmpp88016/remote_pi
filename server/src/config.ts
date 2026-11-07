@@ -9,7 +9,7 @@ import os from "node:os";
  * `REMOTE_PI_HOME` like every other state file (registry, workspaces, pairing,
  * supervisor UDS). It used to be `os.homedir()` captured at import time, which
  * meant a second instance started with a redirected home still read and WROTE
- * the developer's real config — `set-public-relay` aimed at a staging stack
+ * the developer's real config — a config write aimed at a staging stack
  * silently rewrote the dev stack's relay. `pairing/storage.ts` documents the
  * same trap; this is the remaining copy of it.
  */

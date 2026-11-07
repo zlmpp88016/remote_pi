@@ -39,27 +39,26 @@ remote-pi-server install      # 用户级服务，注销后仍活；Windows 首�
 remote-pi-server daemon status   # 确认在跑
 ```
 
-日志（`~/.pi/remote/supervisord.log`）里应该有这一行：
+日志（`~/.pi/remote/supervisord.log`）里应该有这两行：
 
 ```
-[pi-supervisord] direct mode — local relay at http://127.0.0.1:4124 (no community relay)
+[pi-supervisord] direct mode — embedded relay on http://127.0.0.1:4124 (no community relay)
+[pi-supervisord] reachable from the network at http://192.168.1.7:4124 — pair from any device with the code below
 ```
 
-看到它就说明是自包含模式，**全程零公网流量**。`install` 写出来的服务单元不带任何
-relay 参数，直接继承这个默认。
+看到它就说明是自包含模式，**全程零公网流量**；第二行是这台机器在局域网里的地址。
+`install` 写出来的服务单元不带任何 relay 参数，直接继承这个默认。
 
 ### 连 client
 
-**浏览器**：直接打开 `http://127.0.0.1:4124/remote-pi/connect`。**不用填任何东西** ——
-页面会同源配对，自己连上。
+server 默认监听**所有网卡**，配对码里带的就是它的局域网地址，所以同一个 Wi-Fi 下的
+任何设备都能直接连 —— 不用隧道、不用改配置、不用填地址。
 
-**手机**：装 App 后打开「设置 → 添加配对」。中继地址那一栏**不用填** —— 粘进配对码
-就会自动填好。只有两种场景需要你多看一眼：
+**浏览器**：在这台机器上打开 `http://127.0.0.1:4124/remote-pi/connect`，
+或者在别的设备上打开 `http://<这台机器的 IP>:4124/remote-pi/connect`。
+**不用填任何东西** —— 页面会同源配对，自己连上。
 
-| 场景 | 你要做的 |
-| --- | --- |
-| 手机插 USB 连电脑 | 先 `adb reverse tcp:4124 tcp:4124`，然后**只粘配对码** |
-| 手机在别的设备上（Wi-Fi/外网） | 先按「跨网访问」配好隧道，再**只粘配对码** |
+**手机**：装 App 后打开「设置 → 添加配对」，**只粘配对码**，中继地址那一栏会自动填好。
 
 配对码在 server 那台机器上取：
 
@@ -67,8 +66,20 @@ relay 参数，直接继承这个默认。
 remote-pi-server pair
 ```
 
-把整串 `remotepi://pair?…` 粘进 App 的**配对码**框。**中继地址会自动从配对码里填进来**
-（`r=` 参数），只有要连别处时才需要手动改。
+```
+remotepi://pair?t=…&epk=…&n=…&rm=host&r=http%3A%2F%2F192.168.1.7%3A4124
+                                                 └─ 本机局域网地址，自动带上
+```
+
+**想要一个固定的配对码**（每次都是同一串，不用去终端看）：
+
+```bash
+remote-pi-server set-pairing-code "my-code-123"
+remote-pi-server restart-supervisor
+```
+
+现在 `pair` 每次都输出 `t=my-code-123`，重启后也一样。改端口/网卡同理：
+`set-port 8080` / `set-bind 127.0.0.1`。
 
 ### 这样就完了
 
@@ -89,32 +100,29 @@ remote-pi-server pair
 
 ---
 
-## 可选：跨网访问
+## 可选：从外网访问
 
-`direct` 只绑 `127.0.0.1`，这是有意的 —— 不显式打开就不会意外暴露在网络上。
-让外网/局域网的手机连进来，前面挂一层隧道（frp / nginx / cloudflared / SSH `-L`），
-再告诉 server 两件事：
+**局域网不需要任何配置** —— server 默认绑所有网卡，配对码里带的就是本机 IP，
+同一个 Wi-Fi 下的手机/浏览器直接连。
 
-```bash
-remote-pi-server set-public-relay "https://pi.example.com"   # 手机该拨的地址
-remote-pi-server allow-host       "pi.example.com"           # 同源门禁放行的域名
-remote-pi-server restart-supervisor
+只有「设备不在同一个网络」时才需要一层隧道（frp / nginx / cloudflared / SSH `-L`）。
+这时唯一的额外信息是「手机该拨哪个地址」，因为隧道对外的域名/IP 本机自己不知道：
+
+```json
+// ~/.pi/remote/config.json — 只影响配对码，不影响宿主自己连本机
+{ "publicRelay": "https://pi.example.com" }
 ```
 
-这两条解的是**两个独立问题**，缺一个都会失败：
+设完重启 supervisor，生成的新码就会带这个地址。清空：把这一行删掉。
 
-| 少了什么 | 症状 |
-| --- | --- |
-| 不设 `set-public-relay` | 配对码里是 `127.0.0.1`，外网手机去连**它自己**的 localhost，超时 |
-| 不设 `allow-host`（隧道转发域名时） | 代理在任何页面返回前就收到 `403` —— 同源门禁默认只认 loopback 和 IP 字面量 |
-
-`set-public-relay` **只影响配对码**，宿主自己仍连本机，不会绕公网。清空用
-`set-public-relay -` / `allow-host -`。
+**同源门禁不需要配置。** 绑定在真实网卡上时它接受任意 `Host`（手机的 IP、
+隧道的域名都行），只拒绝跨站请求 —— 那道检查走 `Origin`，与域名无关。
+只有把 server 缩回 `127.0.0.1`（`set-bind 127.0.0.1`）时才恢复严格白名单。
 
 隧道指向本机，**不要**指 `0.0.0.0`：
 
 ```toml
-# type = tcp → 用 http://公网IP:7000 访问，不需要 allow-host
+# type = tcp → 用 http://公网IP:7000 访问
 [[proxies]]
 name = "remote-pi"
 type = "tcp"
@@ -122,7 +130,7 @@ localIP = "127.0.0.1"
 localPort = 4124
 remotePort = 7000
 
-# type = http → 用域名访问，需要 allow-host
+# type = http → 用域名访问，需要上面那段 publicRelay
 [[proxies]]
 name = "remote-pi"
 type = "http"
@@ -131,10 +139,9 @@ localPort = 4124
 customDomains = ["pi.example.com"]
 ```
 
-> **局域网 IP 直接连会失败。** `http://192.168.x.x:4124` 不是 secure context，
-> 浏览器不提供 `crypto.subtle`，Ed25519 握手直接失败。这是浏览器规范约束，不是实现
-> 缺陷。局域网访问需要套 HTTPS（自签证书在 WebSocket 上没法让用户点「继续」），
-> 实际做法就是上面这层隧道。
+> **为什么不用「绑定到局域网 IP」了？** 因为不需要。`direct` 现在默认就在所有网卡上，
+> 局域网是开箱可用的；唯一需要显式配置的场景是隧道，而那是域名/公网地址的问题，
+> 不是绑定地址的问题。
 
 ## 可选：自建或社区中继
 
