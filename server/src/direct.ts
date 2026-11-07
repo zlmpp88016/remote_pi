@@ -6,7 +6,7 @@ import { hostPairing } from "./pairing/host_pairing.js";
 import { getOrCreateEd25519Keypair } from "./pairing/storage.js";
 import { hostSessionName } from "./daemon/host_control.js";
 import { logRelayEvent } from "./log.js";
-import { resolveAllowedHosts } from "./config.js";
+import { resolveAllowedHosts, resolveBindHost, resolvePort } from "./config.js";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -142,7 +142,8 @@ export function resolveDirectPort(args: readonly string[] = []): number {
     const parsed = Number.parseInt(fromEnv, 10);
     if (Number.isInteger(parsed) && parsed >= 0) return parsed;
   }
-  return DEFAULT_DIRECT_PORT;
+  /* Config `port` is the third tier; `resolvePort()` owns env → config → default. */
+  return resolvePort();
 }
 
 /**
@@ -346,6 +347,12 @@ export async function ensureDirectRelay(
   const server = await startSameOriginServer({
     staticDir: webDist,
     port,
+    /*
+     * Every interface by default, so a phone on the same Wi-Fi can paste the
+     * code and connect with no tunnel, no env var and no hostname allowlist.
+     * `REMOTE_PI_BIND` / config `bind` still narrows it to `127.0.0.1`.
+     */
+    host: resolveBindHost(),
     allowedHosts: resolveAllowedHosts(),
     /*
      * Origins may differ from hosts: `localhost:3010` is a HOST of the vite dev

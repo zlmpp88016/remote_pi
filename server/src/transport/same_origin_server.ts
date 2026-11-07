@@ -185,8 +185,18 @@ export async function startSameOriginServer(
   const address = server.address();
   if (typeof address === "object" && address !== null) boundIp = address.address;
   const port = typeof address === "object" && address !== null ? address.port : options.port;
-  const url = `http://${host}:${port}`;
-  logRelayEvent(`same-origin: serving ${staticRoot} at ${url}`);
+  /*
+   * The DIAL address, not the bind address.
+   *
+   * `0.0.0.0` means "every interface"; it is not something a client can connect
+   * to. Anything on this machine that needs to reach the server (the host bridge,
+   * the SSE relay client) must use loopback, so a wildcard bind is reported as
+   * `127.0.0.1` — while the LAN literal a phone should dial comes from
+   * `resolvePublicRelayUrl()`.
+   */
+  const dialHost = isWildcardBind(host) ? "127.0.0.1" : host;
+  const url = `http://${dialHost}:${port}`;
+  logRelayEvent(`same-origin: serving ${staticRoot} at ${url} (bound ${host}:${port})`);
 
   return {
     url,
@@ -232,7 +242,25 @@ function checkRequest(
   const hostname = hostHeader === undefined ? null : hostnameOf(hostHeader);
   if (hostname === null) return { ok: false, status: 400, reason: "Bad Host" };
 
-  const knownHost = isLoopback(hostname) || isIpLiteral(hostname) || allowedHosts.has(hostname);
+  /*
+   * Host admission depends on what the operator asked for.
+   *
+   * Bound to LOOPBACK, a foreign-looking `Host` is how DNS rebinding reaches a
+   * local-only service, so only loopback / IP literals / an explicit allowlist
+   * pass.
+   *
+   * Bound to a real interface, the operator has already chosen to be reachable
+   * from the network — a phone will send `Host: 192.168.1.7:4124`, a tunneler
+   * sends `Host: pi.example.com`, and there is nothing to protect by refusing
+   * either. What still matters, and is still enforced below, is that a
+   * *web page from another site* cannot drive the daemon; that check is
+   * `Origin` + Fetch Metadata, and it does not depend on the hostname.
+   */
+  const knownHost =
+    !boundToLoopback ||
+    isLoopback(hostname) ||
+    isIpLiteral(hostname) ||
+    allowedHosts.has(hostname);
   if (!knownHost) return { ok: false, status: 403, reason: "Untrusted Host" };
 
   const fetchSite = req.headers["sec-fetch-site"];
@@ -281,6 +309,11 @@ function checkRequest(
  */
 function isLoopbackAddress(address: string): boolean {
   return address === "127.0.0.1" || address === "::1" || address === "::ffff:127.0.0.1";
+}
+
+/** `0.0.0.0` / `::` — "every interface", which is a bind spec, not a dial target. */
+function isWildcardBind(address: string): boolean {
+  return address === "0.0.0.0" || address === "::" || address === "[::]";
 }
 
 function isDesktopShellOrigin(origin: string, boundToLoopback: boolean): boolean {

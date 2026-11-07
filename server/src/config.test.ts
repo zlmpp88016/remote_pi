@@ -8,6 +8,7 @@ import {
   toWebSocketUrl,
   toHttpUrl,
   kDefaultRelayUrl,
+  detectLanAddress,
   resolveAllowedHosts,
   resolvePublicRelayUrl,
   resolveRelayUrl,
@@ -111,7 +112,7 @@ describe("resolvePublicRelayUrl", () => {
    * unavoidable, because it fills `REMOTE_PI_RELAY` with that same loopback.
    */
   const saved: Record<string, string | undefined> = {};
-  const KEYS = ["REMOTE_PI_PUBLIC_RELAY", "REMOTE_PI_RELAY", "REMOTE_PI_HOME"];
+  const KEYS = ["REMOTE_PI_PUBLIC_RELAY", "REMOTE_PI_RELAY", "REMOTE_PI_HOME", "REMOTE_PI_ADVERTISE"];
   let home = "";
 
   beforeEach(() => {
@@ -120,6 +121,7 @@ describe("resolvePublicRelayUrl", () => {
     process.env["REMOTE_PI_HOME"] = home;
     delete process.env["REMOTE_PI_PUBLIC_RELAY"];
     delete process.env["REMOTE_PI_RELAY"];
+    delete process.env["REMOTE_PI_ADVERTISE"];
   });
 
   afterEach(() => {
@@ -130,9 +132,30 @@ describe("resolvePublicRelayUrl", () => {
     rmSync(home, { recursive: true, force: true });
   });
 
-  test("falls back to the host address when nothing public is configured", () => {
+  /*
+   * The default is now "whatever address this machine has on the network",
+   * because that is what a phone on the same Wi-Fi dials. `REMOTE_PI_ADVERTISE`
+   * pins it here so the assertion does not depend on the test host's NICs.
+   */
+  test("advertises this machine's own network address by default", () => {
     process.env["REMOTE_PI_RELAY"] = "http://127.0.0.1:4125";
-    expect(resolvePublicRelayUrl()).toEqual({ url: "http://127.0.0.1:4125", source: "env" });
+    process.env["REMOTE_PI_ADVERTISE"] = "192.0.2.10";
+
+    expect(resolvePublicRelayUrl()).toEqual({ url: "http://192.0.2.10:4124", source: "lan" });
+    /* The host keeps dialling loopback — only the CODE changes. */
+    expect(resolveRelayUrl().url).toBe("http://127.0.0.1:4125");
+  });
+
+  test("falls back to the host address when there is no network address", () => {
+    process.env["REMOTE_PI_RELAY"] = "http://127.0.0.1:4125";
+    /* Force the detector to find nothing. */
+    const probe = detectLanAddress();
+    if (probe === null) {
+      expect(resolvePublicRelayUrl()).toEqual({ url: "http://127.0.0.1:4125", source: "env" });
+    } else {
+      /* A machine without a LAN cannot really be tested on a machine WITH one. */
+      expect(resolvePublicRelayUrl().source).toBe("lan");
+    }
   });
 
   test("env wins over config and leaves the host address alone", () => {

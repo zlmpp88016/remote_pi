@@ -145,9 +145,13 @@ async function main(): Promise<void> {
   let directUrl: string | null = null;
   if (direct) {
     const { ensureDirectRelay } = await import("../direct.js");
+    const { resolvePublicRelayUrl } = await import("../config.js");
     directUrl = await ensureDirectRelay(portArg === null ? {} : { args: ["--port", portArg] });
+    const dial = resolvePublicRelayUrl();
     process.stderr.write(
-      `[pi-supervisord] direct mode — local relay at ${directUrl} (no community relay)\n`,
+      `[pi-supervisord] direct mode — embedded relay on http://127.0.0.1:${new URL(directUrl).port}` +
+        ` (no community relay)\n` +
+        `[pi-supervisord] reachable from the network at ${dial.url} — pair from any device with the code below\n`,
     );
   }
 

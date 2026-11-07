@@ -111,11 +111,21 @@ export function bootstrapCookie(nonce: string): string {
 /**
  * Validate a bootstrap attempt.
  *
- * Three independent conditions, because each alone is bypassable:
+ * Two conditions, both of which a foreign page cannot satisfy:
  *
- *   1. a `SameSite=Strict` cookie this process signed (proves a same-origin load),
- *   2. `Sec-Fetch-Site: same-origin` (a browser-set header a page cannot forge),
- *   3. `Origin` absent or matching the request host (defence in depth).
+ *   1. a `SameSite=Strict` cookie this process signed — the browser only sends
+ *      it back to the origin that set it, and only for a request that origin
+ *      itself initiated. A cross-site request never carries it.
+ *   2. `Origin`, when present, must be this same origin.
+ *
+ * `Sec-Fetch-Site: same-origin` is NOT required, and that is deliberate: Chrome
+ * omits Fetch Metadata headers entirely outside a secure context, so requiring
+ * it made `/api/bootstrap` answer 403 to every page served over plain HTTP on a
+ * LAN address — i.e. exactly the `http://192.168.x.x:4124` case this is for.
+ * Dropping the requirement costs nothing, because the cookie rule already
+ * covers the attack it was guarding: `SameSite=Strict` is enforced by the
+ * browser, not by the page, and `Origin` still rejects a cross-origin caller
+ * that somehow obtains a cookie.
  *
  * @param req - the incoming request.
  * @param hostHeader - the value of the request's `Host` header.
@@ -129,7 +139,11 @@ export function consumeBootstrap(
 ): boolean {
   if (hostHeader === undefined) return false;
 
-  if (req.headers["sec-fetch-site"] !== "same-origin") return false;
+  /*
+   * `cross-site` is a hard refusal; absent / `same-origin` / `none` all pass and
+   * fall through to the cookie check, which is the real gate.
+   */
+  if (req.headers["sec-fetch-site"] === "cross-site") return false;
 
   const origin = req.headers.origin;
   if (typeof origin === "string" && origin !== "null") {

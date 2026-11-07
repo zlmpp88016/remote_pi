@@ -56,14 +56,14 @@ describe("bootstrap gate", () => {
     ).toBe(false);
   });
 
-  test("rejects a valid cookie when Sec-Fetch-Site is absent", () => {
-    /*
-     * Independent of the Origin check: this request sends NO Origin, so nothing
-     * else can mask the missing Fetch Metadata header. Without this case the
-     * fetch-site check could be deleted and the suite would stay green.
-     */
-    expect(consumeBootstrap(req({ cookie: freshCookie() }), "127.0.0.1:4124", NO_ORIGINS)).toBe(
-      false,
+  /*
+   * Fetch Metadata is absent outside a secure context, which is the normal case
+   * for a LAN address (`http://192.168.x.x:4124`). The cookie is the real gate:
+   * `SameSite=Strict` means only the origin that received it can send it back.
+   */
+  test("accepts a valid cookie when Sec-Fetch-Site is absent", () => {
+    expect(consumeBootstrap(req({ cookie: freshCookie() }), "192.168.1.7:4124", NO_ORIGINS)).toBe(
+      true,
     );
   });
 

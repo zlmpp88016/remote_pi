@@ -75,25 +75,135 @@ export function base64UrlToBase64(value: string): string {
   return std;
 }
 
-// ── SHA-512 via SubtleCrypto (shared by both backends) ─────────────────────
+// ── SHA-512 (SubtleCrypto when available, pure TS otherwise) ───────────────
 
 type Digest = (bytes: Uint8Array) => Promise<Uint8Array>;
 
-function subtle(): SubtleCrypto {
+function subtleOrNull(): SubtleCrypto | null {
   const c = (globalThis as { crypto?: Crypto }).crypto;
-  if (!c || !c.subtle) {
+  return c && c.subtle ? c.subtle : null;
+}
+
+function subtle(): SubtleCrypto {
+  const api = subtleOrNull();
+  if (!api) {
     throw new Ed25519UnavailableError(
       "SubtleCrypto unavailable (insecure context?) — " +
         "the web client needs HTTPS or localhost.",
     );
   }
-  return c.subtle;
+  return api;
 }
 
+/**
+ * SHA-512 for both backends.
+ *
+ * SubtleCrypto first, pure TS second. The fallback is not a nicety: opening the
+ * page at `http://192.168.x.x:4124` — which is exactly what "connect from any
+ * IP" means — is NOT a secure context, so `crypto.subtle` is `undefined` there
+ * and Ed25519 has no hash at all. Without this the LAN path cannot pair.
+ */
 function sha512Digest(): Digest {
-  const api = subtle();
-  return async (bytes: Uint8Array) =>
-    new Uint8Array(await api.digest("SHA-512", bytes as BufferSource));
+  const api = subtleOrNull();
+  if (api) {
+    return async (bytes: Uint8Array) =>
+      new Uint8Array(await api.digest("SHA-512", bytes as BufferSource));
+  }
+  return async (bytes: Uint8Array) => sha512Pure(bytes);
+}
+
+/*
+ * SHA-512 (FIPS 180-4) in plain TypeScript.
+ *
+ * BigInt rather than 32-bit word pairs: a pairing does a handful of hashes, so
+ * the constant-factor cost is irrelevant, while hand-rolled 64-bit carry logic
+ * is exactly the kind of code that is subtly wrong and hard to see. The K table
+ * is derived from its cube roots instead of pasted as an 80-entry hex blob,
+ * so the source stays reviewable.
+ */
+const MASK64 = (1n << 64n) - 1n;
+
+const SHA512_K: readonly bigint[] = (() => {
+  const out: bigint[] = [];
+  for (let n = 2; out.length < 80; n += 1) {
+    let prime = true;
+    for (let d = 2; d * d <= n; d += 1) if (n % d === 0) { prime = false; break; }
+    if (!prime) continue;
+    /* floor(frac(cbrt(n)) * 2^64) — computed in BigInt for exactness. */
+    const root = bigCbrt(BigInt(n) << 192n);
+    out.push(root & MASK64);
+  }
+  return out;
+})();
+
+/** Integer cube root of a non-negative BigInt (Newton). */
+function bigCbrt(value: bigint): bigint {
+  if (value < 2n) return value;
+  let x = 1n << BigInt(Math.ceil(value.toString(2).length / 3) + 1);
+  for (;;) {
+    const next = (2n * x + value / (x * x)) / 3n;
+    if (next >= x) break;
+    x = next;
+  }
+  return x;
+}
+
+function rotr64(x: bigint, n: bigint): bigint {
+  return ((x >> n) | (x << (64n - n))) & MASK64;
+}
+
+function sha512Pure(message: Uint8Array): Uint8Array {
+  const bitLen = BigInt(message.length) * 8n;
+  const padded = Math.ceil((message.length + 17) / 128) * 128;
+  const buf = new Uint8Array(padded);
+  buf.set(message);
+  buf[message.length] = 0x80;
+  const dv = new DataView(buf.buffer);
+  dv.setBigUint64(padded - 16, 0n, false);
+  dv.setBigUint64(padded - 8, bitLen, false);
+
+  let h0 = 0x6a09e667f3bcc908n, h1 = 0xbb67ae8584caa73bn;
+  let h2 = 0x3c6ef372fe94f82bn, h3 = 0xa54ff53a5f1d36f1n;
+  let h4 = 0x510e527fade682d1n, h5 = 0x9b05688c2b3e6c1fn;
+  let h6 = 0x1f83d9abfb41bd6bn, h7 = 0x5be0cd19137e2179n;
+
+  const w = new Array<bigint>(80);
+  for (let off = 0; off < padded; off += 128) {
+    for (let i = 0; i < 16; i += 1) w[i] = dv.getBigUint64(off + i * 8, false);
+    for (let i = 16; i < 80; i += 1) {
+      const s0 = rotr64(w[i - 15], 1n) ^ rotr64(w[i - 15], 8n) ^ (w[i - 15] >> 7n);
+      const s1 = rotr64(w[i - 2], 19n) ^ rotr64(w[i - 2], 61n) ^ (w[i - 2] >> 6n);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) & MASK64;
+    }
+
+    let [a, b, c, d, e, f, g, h] = [h0, h1, h2, h3, h4, h5, h6, h7];
+    for (let i = 0; i < 80; i += 1) {
+      const S1 = rotr64(e, 14n) ^ rotr64(e, 18n) ^ rotr64(e, 41n);
+      const ch = (e & f) ^ (~e & g & MASK64);
+      const t1 = (h + S1 + ch + SHA512_K[i] + w[i]) & MASK64;
+      const S0 = rotr64(a, 28n) ^ rotr64(a, 34n) ^ rotr64(a, 39n);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) & MASK64;
+      h = g; g = f; f = e;
+      e = (d + t1) & MASK64;
+      d = c; c = b; b = a;
+      a = (t1 + t2) & MASK64;
+    }
+    h0 = (h0 + a) & MASK64; h1 = (h1 + b) & MASK64;
+    h2 = (h2 + c) & MASK64; h3 = (h3 + d) & MASK64;
+    h4 = (h4 + e) & MASK64; h5 = (h5 + f) & MASK64;
+    h6 = (h6 + g) & MASK64; h7 = (h7 + h) & MASK64;
+  }
+
+  const out = new Uint8Array(64);
+  const odv = new DataView(out.buffer);
+  [h0, h1, h2, h3, h4, h5, h6, h7].forEach((v, i) => odv.setBigUint64(i * 8, v, false));
+  return out;
+}
+
+/** Exposed for the test suite: the constant table must match FIPS 180-4. */
+export function sha512PureForTest(bytes: Uint8Array): Uint8Array {
+  return sha512Pure(bytes);
 }
 
 // ── capability detection ────────────────────────────────────────────────────

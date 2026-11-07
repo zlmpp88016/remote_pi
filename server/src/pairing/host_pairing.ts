@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { TOKEN_TTL_MS } from "./qr.js";
+import { resolveFixedPairingCode } from "../config.js";
 
 /**
  * Plan/69 W1 — the HOST-side pairing token, issued and consumed by the
@@ -76,8 +77,16 @@ export class HostPairingSession {
   /**
    * Issues a fresh token, invalidating any previous one (rotate semantics).
    * `ttlMs` is honored verbatim — callers clamp it (see `clampPairTtlMs`).
+   *
+   * A configured FIXED code wins over rotation: the operator declared that this
+   * is the code, so issuing a random one underneath would make the code on their
+   * screen stop working. `--rotate` therefore cannot defeat a fixed code, which
+   * is the correct trade: rotating is a way to forget devices, not a way to
+   * override an explicit setting.
    */
   async issue(opts: { ephemeral?: boolean; ttlMs?: number } = {}): Promise<HostPairingRecord> {
+    const fixed = resolveFixedPairingCode();
+    if (fixed !== null) return this._adoptFixed(fixed);
     const ephemeral = opts.ephemeral === true;
     const record: HostPairingRecord = {
       token: randomBytes(16).toString("base64url"),
@@ -90,17 +99,17 @@ export class HostPairingSession {
     return record;
   }
 
-  /** Reads the active record, or null when absent/corrupt. Never issues. */
+  /**
+   * Reads the active record, or null when absent/corrupt. Never issues.
+   *
+   * A configured fixed code is materialized here so `pair` and the browser both
+   * see it without anyone having run `pair` first — that is what makes "set the
+   * code in the config, start the server, connect" work on a fresh install.
+   */
   async show(): Promise<HostPairingRecord | null> {
-    return this._serialize(async () => {
-      try {
-        const raw = await readFile(pairingPathInternal(), "utf8");
-        const parsed = JSON.parse(raw) as unknown;
-        return _isRecord(parsed) ? parsed : null;
-      } catch {
-        return null;
-      }
-    });
+    const fixed = resolveFixedPairingCode();
+    if (fixed !== null) return this._adoptFixed(fixed);
+    return this._serialize(() => this._read());
   }
 
   /**
@@ -111,13 +120,34 @@ export class HostPairingSession {
    */
   async consume(token: string): Promise<HostTokenStatus> {
     return this._serialize(async () => {
-      const rec = await this._read();
+      const fixed = resolveFixedPairingCode();
+      const rec = fixed !== null ? await this._writeFixed(fixed) : await this._read();
       if (!rec || rec.token !== token) return "unknown";
       if (rec.consumed) return "consumed";
       if (rec.expires_at !== null && Date.now() > rec.expires_at) return "expired";
       if (!rec.persistent) await this._write({ ...rec, consumed: true });
       return "ok";
     });
+  }
+
+  /** Persist (and return) the operator's fixed code, reusing the file so
+   *  `pairing.json` stays the single record the whole stack reads. */
+  private async _adoptFixed(token: string): Promise<HostPairingRecord> {
+    return this._serialize(() => this._writeFixed(token));
+  }
+
+  private async _writeFixed(token: string): Promise<HostPairingRecord> {
+    const existing = await this._read();
+    if (existing !== null && existing.token === token && existing.persistent) return existing;
+    const record: HostPairingRecord = {
+      token,
+      expires_at: null,
+      persistent: true,
+      consumed: false,
+      issued_at: new Date().toISOString(),
+    };
+    await this._write(record);
+    return record;
   }
 
   private async _read(): Promise<HostPairingRecord | null> {

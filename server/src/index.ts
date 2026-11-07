@@ -167,6 +167,10 @@ import {
   loadConfig,
   resolveRelayUrl,
   resolvePublicRelayUrl,
+  resolveFixedPairingCode,
+  resolvePort,
+  resolveBindHost,
+  kDefaultPort,
   saveConfig,
   isValidRelayUrl,
   isWebSocketScheme,
@@ -6068,65 +6072,62 @@ if (_isDirectRun()) {
       }
       process.exit(1);
     }
-  } else if (subcmd === "set-relay") {
-    const raw = (cliArgs[0] ?? "").trim();
-    if (!raw) {
-      console.log(`Usage: set-relay <url> (default: ${kDefaultRelayUrl})`);
-    } else if (isWebSocketScheme(raw)) {
-      console.log(`Use http:// or https://. The extension converts to WebSocket automatically.`);
-    } else if (!isValidRelayUrl(raw)) {
-      console.log(`Invalid URL: ${raw}. Must start with http:// or https://`);
-    } else {
-      saveConfig({ relay: raw });
-      console.log(`Relay set to ${raw}`);
-    }
-  } else if (subcmd === "set-public-relay") {
+  } else if (subcmd === "set-pairing-code") {
     /*
-     * Behind a tunnel the host dials its own loopback while phones must dial the
-     * public address. Two addresses, one setting (`relay`) — so this is the
-     * second one, and only the PAIRING CODE reads it.
+     * A fixed code is what "install it, connect from any device" needs: the same
+     * code works across restarts, so nobody has to read a terminal before the
+     * first connection. `-` clears it and returns to a generated token.
      */
     const raw = (cliArgs[0] ?? "").trim();
     if (!raw) {
-      console.log("Usage: set-public-relay <url>   (empty string clears it)");
-    } else if (isWebSocketScheme(raw)) {
-      console.log(`Use http:// or https://. The client converts to WebSocket automatically.`);
-    } else if (raw !== "-" && !isValidRelayUrl(raw)) {
-      console.log(`Invalid URL: ${raw}. Must start with http:// or https://`);
-    } else {
-      /* `-` clears it: back to "same as the host address", the untunnelled case. */
-      saveConfig({ publicRelay: raw === "-" ? undefined : raw });
+      const current = resolveFixedPairingCode();
       console.log(
-        raw === "-"
-          ? "Public relay cleared — pairing codes name the host's own address again."
-          : `Public relay set to ${raw} — pairing codes will carry it. The host keeps dialling its own address.`,
-      );
-    }
-  } else if (subcmd === "allow-host") {
-    /*
-     * A tunneler that forwards a NAME (frp `type = http`, nginx `server_name`,
-     * cloudflared) sends `Host: pi.example.com`, which the same-origin gate
-     * rejects with 403 — the bind address stays 127.0.0.1, so nothing looks
-     * wrong until the phone gets a 403. Persisting the name here makes it
-     * survive a restart instead of living in the shell that started the host.
-     */
-    const raw = (cliArgs[0] ?? "").trim().toLowerCase();
-    const current = loadConfig().allowedHosts ?? [];
-    if (!raw) {
-      console.log(
-        current.length === 0
-          ? "No extra allowed hosts (loopback and IP literals are always accepted)."
-          : `Allowed hosts: ${current.join(", ")}\nUsage: allow-host <name>   |   allow-host -   (clears the list)`,
+        current === null
+          ? "No fixed pairing code (a random one is generated and persisted)."
+          : `Fixed pairing code: ${current}\nUsage: set-pairing-code <code>   |   set-pairing-code -   (back to generated)`,
       );
     } else if (raw === "-") {
-      saveConfig({ allowedHosts: undefined });
-      console.log("Allowed hosts cleared — loopback and IP literals only.");
-    } else if (/[\s/,:>\\]/.test(raw)) {
-      console.log(`Invalid host "${raw}": pass a bare hostname (no scheme, port or slash).`);
+      saveConfig({ pairingCode: undefined });
+      console.log("Fixed pairing code cleared — a generated token is used again.");
+    } else if (!/^[A-Za-z0-9_-]{4,128}$/.test(raw)) {
+      console.log("Invalid code: use 4-128 characters of A-Z a-z 0-9 - _ (it travels inside a URI).");
     } else {
-      const next = [...new Set([...current, raw])];
-      saveConfig({ allowedHosts: next });
-      console.log(`Allowed hosts: ${next.join(", ")} (restart the supervisor to apply)`);
+      saveConfig({ pairingCode: raw });
+      console.log(
+        `Fixed pairing code set to ${raw}. Restart the supervisor to apply; \`remote-pi-server pair\` will show it.`,
+      );
+    }
+  } else if (subcmd === "set-port") {
+    const raw = (cliArgs[0] ?? "").trim();
+    const parsed = Number.parseInt(raw, 10);
+    if (!raw) {
+      console.log(`Port: ${resolvePort()}\nUsage: set-port <1-65535>   |   set-port -   (back to 4124)`);
+    } else if (raw === "-") {
+      saveConfig({ port: undefined });
+      console.log(`Port reset to the default (${kDefaultPort}).`);
+    } else if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+      console.log(`Invalid port: ${raw}.`);
+    } else {
+      saveConfig({ port: parsed });
+      console.log(`Port set to ${parsed}. Restart the supervisor to apply.`);
+    }
+  } else if (subcmd === "set-bind") {
+    /*
+     * `0.0.0.0` (the default) accepts a connection from any IP. Narrowing it is
+     * a deliberate choice to keep the port private, so it is a separate command
+     * rather than a flag on the default path.
+     */
+    const raw = (cliArgs[0] ?? "").trim();
+    if (!raw) {
+      console.log(
+        `Bind: ${resolveBindHost()} (0.0.0.0 = any IP)\nUsage: set-bind <addr>   |   set-bind -   (back to 0.0.0.0)`,
+      );
+    } else if (raw === "-") {
+      saveConfig({ bind: undefined });
+      console.log("Bind reset to 0.0.0.0 — reachable from any IP.");
+    } else {
+      saveConfig({ bind: raw });
+      console.log(`Bind set to ${raw}. Restart the supervisor to apply.`);
     }
   } else if (subcmd === "create") {
     // Standalone: `remote-pi-server create <cwd> [--name "X"]`. The shell already
@@ -6234,13 +6235,11 @@ if (_isDirectRun()) {
       "Pairing (no Pi required — talks to the supervisor):",
       "  pair [--rotate] [--ephemeral]   Print the host pairing code (remotepi://pair?…, rm=host)",
       "",
-      "Config:",
-      "  set-relay <url>                 Set the relay URL (http:// or https://)",
-      "  set-public-relay <url>          Address PAIRING CODES carry, for hosts behind a tunnel",
-      "                                  (frp/nginx/cloudflared). The host keeps dialling its own.",
-      "                                  Pass '-' to clear it.",
-      "  allow-host <name>               Extra hostname the same-origin gate accepts —",
-      "                                  required when a tunnel forwards a name. '-' clears.",
+      "Config (~/.pi/remote/config.json):",
+      "  set-relay <url>                 Point at an EXTERNAL relay (http:// or https://)",
+      "  set-pairing-code <code>         Fixed pairing code; '-' returns to a generated one",
+      "  set-port <n>                    Port for the embedded relay + web client (4124)",
+      "  set-bind <addr>                 Interface to listen on (0.0.0.0 = everywhere, the default)",
       "",
       "Debug:",
       "  --log <off|summary|full>        Log relay traffic to stderr (any command)",
