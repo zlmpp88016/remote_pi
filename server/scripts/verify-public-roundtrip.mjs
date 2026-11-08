@@ -119,6 +119,12 @@ async function call(id, message, timeoutMs = 15_000) {
  * Each probe is a command the real clients send, and the assertion is on the
  * reply TYPE the host bridge defines — so a probe cannot pass by accident.
  */
+/*
+ * Only HOST-DIRECT commands (kHostDirectTypes in the app's host_proxy.dart):
+ * these are the ones the daemon answers on room `host`. Child-addressed ones —
+ * `session_list`, `session_switch` — are proxied to a workspace Pi and would
+ * look like a dead tunnel here even when everything works.
+ */
 const probes = [
   {
     id: "probe-hello",
