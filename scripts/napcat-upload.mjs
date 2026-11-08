@@ -23,7 +23,14 @@
 // justamente para manter os caminhos fora do shell.
 //
 // Config (env sobrescreve):
-//   NAPCAT_ENDPOINT   default http://127.0.0.1:3001
+//   NAPCAT_ENDPOINT   default http://127.0.0.1:3101
+
+// The 3101 default is deliberate: NapCat ships configured on 3001, which is the
+// port this repo's server must own whenever the frp tunnel is up (the tunnel
+// maps 3001 -> 58300 by name, so the local port is not ours to choose). Leaving
+// NapCat on 3001 meant the tunnel won the bind and every upload failed with
+// "resposta nao e JSON (HTTP 405)" — an HTML page answering an OneBot call.
+// NapCat's onebot11 config was moved to 3101 to end the collision.
 //   NAPCAT_TOKEN      default 8250u-napcat-token   (token LOCAL do NapCat)
 //   NAPCAT_GROUP_ID   default 317661279            (grupo "三班")
 //   NAPCAT_FOLDER     default remote-pi.app.ios    (pasta no grupo; vazio = raiz)
@@ -36,7 +43,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-const DEFAULT_ENDPOINT = "http://127.0.0.1:3001";
+const DEFAULT_ENDPOINT = "http://127.0.0.1:3101";
 const DEFAULT_TOKEN = "8250u-napcat-token";
 const DEFAULT_GROUP_ID = 317661279; // "三班"
 const DEFAULT_FOLDER = "remote-pi.app.ios";
