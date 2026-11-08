@@ -1,12 +1,16 @@
 /*
- * End-to-end check for the LAN case: a plain-HTTP page on a non-loopback
- * address is NOT a secure context, so `crypto.subtle` is absent. Pairing must
- * still complete through the pure-TS Ed25519 backend.
+ * End-to-end browser check for a plain-HTTP entry point.
  *
- * Usage: node scripts/verify-lan-connect.mjs http://192.168.1.7:4124/remote-pi/connect
+ * A non-loopback `http://` origin is NOT a secure context, so `crypto.subtle`
+ * is absent and pairing must complete through the pure-TS Ed25519 backend. That
+ * is true both on a LAN address and through a tunnel forwarding a public IP, so
+ * this one script covers both.
+ *
+ * Usage: node scripts/verify-browser-connect.mjs http://192.168.1.7:4124/remote-pi/connect
+ *        node scripts/verify-browser-connect.mjs http://203.0.113.5:58300/remote-pi/connect
  *
  * Exits non-zero on any failure, so it doubles as the acceptance check for
- * "a device on the LAN can pair with nothing but the address".
+ * "a device can pair with nothing but the address".
  */
 import { spawn } from "node:child_process";
 import { mkdtempSync } from "node:fs";

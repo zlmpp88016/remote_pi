@@ -148,16 +148,32 @@ async function main(): Promise<void> {
     const { resolveBindHost, resolvePublicRelayUrl } = await import("../config.js");
     directUrl = await ensureDirectRelay(portArg === null ? {} : { args: ["--port", portArg] });
     const dial = resolvePublicRelayUrl();
+    const bind = resolveBindHost();
+    const loopbackOnly = bind === "127.0.0.1" || bind === "::1" || bind === "localhost";
     /*
-     * Only claim "reachable" when it actually is. Bound to loopback there is no
-     * network address, and announcing one would send people to a URL that
-     * refuses the connection.
+     * Two independent facts, so do not conflate them:
+     *
+     *   - "is it reachable off this machine?" is decided by the BIND address.
+     *   - "what address should a device dial?" is decided by the pairing code,
+     *     which may be a publicRelay the operator configured (a tunnel) rather
+     *     than a detected LAN literal.
+     *
+     * Keying the message off `dial.source` alone printed "loopback only" on a
+     * `0.0.0.0` bind that WAS reachable, purely because the dial address came
+     * from config instead of from interface detection.
      */
-    const reach =
-      dial.source === "lan"
-        ? `[pi-supervisord] reachable from the network at ${dial.url} — pair from any device with the code below\n`
-        : `[pi-supervisord] loopback only (${resolveBindHost()}) — pair from this machine, ` +
-          `or \`set-bind 0.0.0.0\` to allow other devices\n`;
+    let reach: string;
+    if (loopbackOnly) {
+      reach =
+        `[pi-supervisord] loopback only (${bind}) — pair from this machine, ` +
+        `or \`set-bind 0.0.0.0\` to allow other devices\n`;
+    } else if (dial.source === "lan") {
+      reach = `[pi-supervisord] reachable from the network at ${dial.url} — pair from any device with the code below\n`;
+    } else {
+      reach =
+        `[pi-supervisord] reachable at ${dial.url} (configured) — ` +
+        `the code carries this address; forward that port here (${bind}:${new URL(directUrl).port})\n`;
+    }
     process.stderr.write(
       `[pi-supervisord] direct mode — embedded relay on http://127.0.0.1:${new URL(directUrl).port}` +
         ` (no community relay)\n` +
