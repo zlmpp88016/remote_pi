@@ -1,6 +1,5 @@
 import 'package:mobile/data/transport/epk_encoding.dart';
 import 'package:mobile/pairing/storage.dart';
-import 'package:mobile/protocol/protocol.dart' show RoomInfo;
 import 'package:mobile/routing/adaptive.dart';
 import 'package:mobile/ui/core/copy.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
@@ -301,9 +300,9 @@ class HomePage extends StatelessWidget {
       ),
     );
 
-    final visible = vm.visibleItems;
+    final visible = vm.visibleServers();
     if (visible.isEmpty) {
-      // Items exist, but none match this tab → per-tab empty state beneath
+      // Servers exist, but none match this tab → per-tab empty state beneath
       // the tabs (which stay visible so the user can switch back).
       return SliverMainAxisGroup(
         slivers: [
@@ -316,19 +315,14 @@ class HomePage extends StatelessWidget {
       );
     }
 
-    // Build the per-peer groups over the VISIBLE items: each group is
-    // [header, tile, tile, …]. Plan-18 follow-up — always include a header
-    // even when there's a single Mac, per the mock. A peer with no visible
-    // item in this filter contributes no header (the `lastEpk` cursor only
-    // advances on rows we actually render).
+    /*
+     * One row per SERVER. There is no section header any more: a header exists
+     * to group rows belonging to one machine, and now the row IS the machine.
+     * Keeping the header would just repeat the name twice.
+     */
     final children = <Widget>[];
-    String? lastEpk;
-    for (final it in visible) {
-      if (it.peer.remoteEpk != lastEpk) {
-        children.add(PeerSectionHeader(peer: it.peer));
-        lastEpk = it.peer.remoteEpk;
-      }
-      children.add(_buildItemRowAt(context, vm, state, it));
+    for (final srv in visible) {
+      children.add(_buildServerRowAt(context, vm, srv));
     }
     return SliverMainAxisGroup(
       slivers: [
@@ -346,198 +340,34 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildItemRowAt(
+  Widget _buildServerRowAt(
     BuildContext context,
     HomeViewModel vm,
-    HomeList state,
-    HomeItem it,
+    HomeServer srv,
   ) {
     final colors = context.colors;
-    final isLive = vm.isRoomLive(it.peer.remoteEpk, it.room.roomId);
-    final isReconnecting = !vm.isRelayConnected;
-    final isWorking = vm.isRoomWorking(it.peer.remoteEpk, it.room.roomId);
-    // Plan/tablet — highlight the open session, but only in the two-pane
-    // layout (on phone the list is covered by the pushed chat, so a
-    // persistent highlight would be meaningless).
     final isSelected =
         isWideLayout(context) &&
-        context.watch<SessionSelection>().matches(
-          it.peer.remoteEpk,
-          it.room.roomId,
-        );
+        context.watch<SessionSelection>().current?.epk == srv.peer.remoteEpk;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SessionTile(
-          peer: it.peer,
-          isLive: isLive,
-          isReconnecting: isReconnecting,
-          isWorking: isWorking,
+        ServerTile(
+          server: srv,
+          isReconnecting: !vm.isRelayConnected,
           isSelected: isSelected,
-          room: it.room,
-          onOpen: () => _open(context, vm, it.peer, it.room),
-          onLongPress: () => _showSessionMenu(context, vm, it, isLive: isLive),
+          onOpen: () => _openWorkspaces(context, vm, srv.peer),
         ),
         Divider(color: colors.border, height: 1),
       ],
     );
   }
 
+
   // ---------------------------------------------------------------------------
   // Long-press menu (preserved from prior plan-17 wiring)
   // ---------------------------------------------------------------------------
 
-  void _showSessionMenu(
-    BuildContext context,
-    HomeViewModel vm,
-    HomeItem it, {
-    required bool isLive,
-  }) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: context.colors.bg,
-      builder: (sheetCtx) {
-        final colors = sheetCtx.colors;
-        return SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: Icon(LucideIcons.folderOpen, color: colors.accent),
-                title: Text(
-                  HomeCopy.openAnotherFolder,
-                  style: TextStyle(color: colors.text),
-                ),
-                subtitle: Text(
-                  HomeCopy.workspacesHint,
-                  style: TextStyle(color: colors.muted, fontSize: 11),
-                ),
-                onTap: () {
-                  Navigator.of(sheetCtx).pop();
-                  _openWorkspaces(context, vm, it.peer);
-                },
-              ),
-              ListTile(
-                leading: Icon(LucideIcons.pencil, color: colors.accent),
-                title: Text(
-                  HomeCopy.renameSession,
-                  style: TextStyle(color: colors.text),
-                ),
-                onTap: () {
-                  Navigator.of(sheetCtx).pop();
-                  _promptRename(context, vm, it);
-                },
-              ),
-              ListTile(
-                leading: Icon(
-                  LucideIcons.trash2,
-                  color: isLive ? colors.muted : colors.error,
-                ),
-                enabled: !isLive,
-                title: Text(
-                  HomeCopy.deleteSession,
-                  style: TextStyle(color: isLive ? colors.muted : colors.text),
-                ),
-                subtitle: isLive
-                    ? Text(
-                        HomeCopy.deleteOnlyOffline,
-                        style: TextStyle(color: colors.muted, fontSize: 11),
-                      )
-                    : null,
-                onTap: isLive
-                    ? null
-                    : () {
-                        Navigator.of(sheetCtx).pop();
-                        _confirmDelete(context, vm, it);
-                      },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _promptRename(
-    BuildContext context,
-    HomeViewModel vm,
-    HomeItem it,
-  ) async {
-    final controller = TextEditingController(text: it.room.name ?? '');
-    final result = await showDialog<String?>(
-      context: context,
-      builder: (dCtx) {
-        final colors = dCtx.colors;
-        return AlertDialog(
-          backgroundColor: colors.bg,
-          title: Text(HomeCopy.renameSession, style: TextStyle(color: colors.text)),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            style: TextStyle(color: colors.text, fontFamily: kMonoFamily),
-            decoration: InputDecoration(
-              hintText: it.room.cwd ?? 'Session',
-              hintStyle: TextStyle(color: colors.muted),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: colors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: colors.accent),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dCtx).pop(null),
-              child: Text('Cancel', style: TextStyle(color: colors.muted)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dCtx).pop(controller.text.trim()),
-              child: Text('保存', style: TextStyle(color: colors.accent)),
-            ),
-          ],
-        );
-      },
-    );
-    if (result == null) return;
-    await vm.renameRoom(it.peer.remoteEpk, it.room.roomId, result);
-  }
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    HomeViewModel vm,
-    HomeItem it,
-  ) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dCtx) {
-        final colors = dCtx.colors;
-        return AlertDialog(
-          backgroundColor: colors.bg,
-          title: Text(HomeCopy.deleteTitle, style: TextStyle(color: colors.text)),
-          content: Text(
-            HomeCopy.deleteBody,
-            style: TextStyle(color: colors.muted, fontSize: 12),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dCtx).pop(false),
-              child: Text('Cancel', style: TextStyle(color: colors.muted)),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(dCtx).pop(true),
-              child: Text('Delete', style: TextStyle(color: colors.error)),
-            ),
-          ],
-        );
-      },
-    );
-    if (ok != true) return;
-    await vm.deleteRoom(it.peer.remoteEpk, it.room.roomId);
-  }
-
-  /// Plan/67 — open the workdir picker for [peer].
-  ///
   /// `workspace_list`/`workspace_start` are addressed to the machine's
   /// `host` room, and the transport carries ONE destination peer + room at
   /// a time — so point it at [peer] first. Without this the request would
@@ -559,53 +389,6 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  static Future<void> _open(
-    BuildContext context,
-    HomeViewModel vm,
-    PeerRecord peer,
-    RoomInfo room,
-  ) async {
-    // Sets prefs (selectedPeerEpk + room) + switchRoom so a fresh
-    // ChatViewModel binds to this session.
-    await vm.openSession(peer.remoteEpk, roomId: room.roomId);
-    if (!context.mounted) return;
-    final title = _titleFor(peer, room);
-    // Plan/32g — the device (Mac) name we already know here. The Chat AppBar's
-    // line 2 renders this immediately instead of flickering empty/room-title
-    // until the PeerRecord loads async.
-    final device = _deviceFor(peer);
-    // Plan/32g — the live state of this tile (the green dot). Passed so the
-    // Chat AppBar's status dot starts correct instead of flashing
-    // "reconnecting" before the runtime is read.
-    final online = vm.isRoomLive(peer.remoteEpk, room.roomId);
-    // Mark the UI selection — drives the tablet detail pane AND the
-    // highlighted tile. Set AFTER openSession so the detail's fresh
-    // ChatViewModel reads the already-updated prefs.
-    context.read<SessionSelection>().select(
-      peer.remoteEpk,
-      room.roomId,
-      title,
-      device,
-      online,
-    );
-    // Phone: full-screen chat (root push → native back/swipe). Tablet:
-    // the detail pane reacts to the selection above — no nav needed.
-    if (!isWideLayout(context)) {
-      context.push(
-        '/sessions',
-        extra: {
-          'epk': peer.remoteEpk,
-          'roomId': room.roomId,
-          'cwd': room.cwd,
-          'title': title,
-          'device': device,
-          'online': online,
-        },
-      );
-    }
-  }
-
-  /// Plan/32g — the paired-device label for the Chat AppBar's line 2
   /// (nickname → sessionName → epk prefix). Mirrors [ChatPage]'s own peer
   /// resolution so there's no change when the PeerRecord finishes loading.
   static String _deviceFor(PeerRecord peer) =>
@@ -614,26 +397,6 @@ class HomePage extends StatelessWidget {
       : peer.sessionName.isNotEmpty
       ? peer.sessionName
       : peer.remoteEpk.substring(0, 8);
-
-  /// Plan/24-fix-title: the peer/room label we already know here, so the
-  /// Chat AppBar doesn't show '—' / 'Remote Pi' until the ChatViewModel
-  /// loads the PeerRecord + the first room_meta_updated arrives. Prefers
-  /// room.name (per-cwd title) → cwd tail → nickname → sessionName.
-  static String _titleFor(PeerRecord peer, RoomInfo room) {
-    final roomCwdTail = room.cwd
-        ?.split('/')
-        .where((s) => s.isNotEmpty)
-        .lastOrNull;
-    return (room.name?.isNotEmpty ?? false)
-        ? room.name!
-        : (roomCwdTail != null && roomCwdTail.isNotEmpty)
-        ? roomCwdTail
-        : (peer.nickname?.isNotEmpty ?? false)
-        ? peer.nickname!
-        : peer.sessionName.isNotEmpty
-        ? peer.sessionName
-        : peer.remoteEpk.substring(0, 8);
-  }
 }
 
 /// Plan-17 follow-up — soft empty state for paired-but-no-rooms.

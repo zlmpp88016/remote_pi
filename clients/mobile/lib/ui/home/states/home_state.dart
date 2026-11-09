@@ -58,6 +58,54 @@ class HomeItem {
   int get hashCode => Object.hash(peer.remoteEpk, room);
 }
 
+/// One row on Home: a paired SERVER, not a folder on it.
+///
+/// The app has three layers — server (room) → workspace (folder on it) →
+/// session — and this is the outermost. It used to render a row per
+/// (peer, room) pair, which put two layers in one list: the user could not tell
+/// whether the dot meant "this machine is up" or "this folder is live", and
+/// counting those rows produced numbers that read as "8 Pis?" for one machine.
+///
+/// [workspaceCount] is a SUB-label here, never a status: how many folders a
+/// machine runs says nothing about whether it is reachable.
+class HomeServer {
+  final PeerRecord peer;
+
+  /// Whether this SERVER is reachable right now.
+  final bool online;
+
+  /// How many workspaces this server currently reports, and how many of those
+  /// are live. Shown only as a secondary line.
+  final int workspaceCount;
+  final int liveCount;
+
+  const HomeServer({
+    required this.peer,
+    required this.online,
+    required this.workspaceCount,
+    required this.liveCount,
+  });
+
+  /// Display name: nickname → sessionName → epk prefix.
+  String get displayName {
+    if (peer.nickname != null && peer.nickname!.isNotEmpty) return peer.nickname!;
+    if (peer.sessionName.isNotEmpty) return peer.sessionName;
+    return peer.remoteEpk;
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is HomeServer &&
+      other.peer.remoteEpk == peer.remoteEpk &&
+      other.online == online &&
+      other.workspaceCount == workspaceCount &&
+      other.liveCount == liveCount;
+
+  @override
+  int get hashCode =>
+      Object.hash(peer.remoteEpk, online, workspaceCount, liveCount);
+}
+
 /// Paired peers + their live rooms + presence. Items are derived from
 /// `roomsByPeer`: a peer with no announced rooms yet still gets one
 /// synthetic item (`roomId='main'`) so the user can enter chat — that

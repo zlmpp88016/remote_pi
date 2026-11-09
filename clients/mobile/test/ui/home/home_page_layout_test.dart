@@ -40,8 +40,9 @@ import 'package:mobile/protocol/protocol.dart';
 import 'package:mobile/routing/adaptive.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:mobile/ui/home/home_page.dart';
+import 'package:mobile/ui/home/states/home_state.dart';
 import 'package:mobile/ui/home/viewmodels/home_viewmodel.dart';
-import 'package:mobile/ui/home/widgets/session_tile.dart';
+import 'package:mobile/ui/home/widgets/server_tile.dart';
 import 'package:mobile/ui/sessions/session_list_page.dart';
 import 'package:mobile/ui/sessions/viewmodels/session_list_viewmodel.dart';
 import 'package:mobile/ui/update/viewmodels/update_banner_viewmodel.dart';
@@ -69,6 +70,7 @@ const _iPadLandscape = Size(1366, 1024);
 const _documentedMaxContentWidth = 460.0;
 
 const _kSessionsMarker = 'ROUTE:SESSIONS';
+const _kWorkspacesMarker = 'ROUTE:WORKSPACES';
 const _kChatMarker = 'ROUTE:CHAT';
 
 const _epk = 'Bz02uLi';
@@ -347,6 +349,18 @@ GoRouter _homeRouter() => GoRouter(
   routes: [
     GoRoute(path: '/', builder: (_, _) => const HomePage()),
     GoRoute(
+      path: '/workspaces',
+      builder: (_, state) => Scaffold(
+        body: Center(
+          child: Text(
+            // O epk viaja no `extra`; imprimir aqui prova que a rota recebeu o
+            // servidor tocado e não outro qualquer.
+            '$_kWorkspacesMarker:${(state.extra as Map?)?['epk']}',
+          ),
+        ),
+      ),
+    ),
+    GoRoute(
       path: '/sessions',
       builder: (_, _) =>
           const Scaffold(body: Center(child: Text(_kSessionsMarker))),
@@ -430,10 +444,14 @@ void main() {
     GoogleFonts.config.allowRuntimeFetching = true;
   });
 
-  group('HomePage — destaque da sessão só nos dois painéis (:350)', () {
+  group('HomePage — destaque do servidor só nos dois painéis', () {
     // A seleção é marcada ANTES do pump; só o tamanho varia. Se a guarda
-    // `isWideLayout` de :350 sumir, o celular passa a acender o destaque e os
-    // dois primeiros casos falham.
+    // `isWideLayout` sumir, o celular passa a acender o destaque e os dois
+    // primeiros casos falham.
+    //
+    // O destaque agora é por SERVIDOR: o Home lista máquinas, então a marca
+    // que importa é "esta máquina é a que o painel detail está mostrando",
+    // não uma sessão dentro dela.
     Future<void> assertSelected(
       WidgetTester tester,
       Size size,
@@ -443,10 +461,10 @@ void main() {
       rig.sel.select(_epk, _roomId, 'proj', 'Mac', true);
       await _pumpHome(tester, size, rig);
 
-      final tiles = find.byType(SessionTile);
-      expect(tiles, findsOneWidget, reason: 'um tile para a room anunciada');
+      final tiles = find.byType(ServerTile);
+      expect(tiles, findsOneWidget, reason: 'uma linha por servidor pareado');
       expect(
-        tester.widget<SessionTile>(tiles).isSelected,
+        tester.widget<ServerTile>(tiles).isSelected,
         expected,
         reason: 'isSelected em ${size.width}x${size.height}',
       );
@@ -476,82 +494,72 @@ void main() {
     });
   });
 
-  group('HomePage — navegação do tile (:543)', () {
+  group('HomePage — navegação do servidor', () {
     // A asserção roda DENTRO do helper, com a árvore montada: o desmonte
     // (pumpWidget(SizedBox)) precisa vir antes do fim do teste por causa do
     // check de timers pendentes, e depois dele não há mais árvore para
     // consultar.
-    Future<void> tapTile(
+    //
+    // Home é a camada EXTERNA de servidor → workspace → sessão, então tocar uma
+    // linha leva ao picker de workspaces daquela máquina — em QUALQUER largura.
+    // Antes desta mudança a mesma linha abria a sessão (e no tablet nem
+    // navegava); essa distinção deixou de existir porque a linha já não é uma
+    // sessão.
+    Future<void> tapServer(
       WidgetTester tester,
       Size size, {
-      required bool expectPush,
       required String reason,
     }) async {
       final rig = await _homeRig(tester);
       await _pumpHome(tester, size, rig);
-      await tester.tap(find.byType(SessionTile));
-      // `_open` é async (await vm.openSession antes do push) e a cadeia
-      // precisa do event loop REAL; dentro do relógio falso ela fica
-      // pendurada e o push nunca chega a acontecer.
+      await tester.tap(find.byType(ServerTile));
+      // `_openWorkspaces` é async (await vm.focusPeer antes do push) e a cadeia
+      // precisa do event loop REAL; dentro do relógio falso ela fica pendurada
+      // e o push nunca chega a acontecer.
       await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 50)),
       );
       await _settle(tester);
 
-      if (expectPush) {
-        expect(
-          find.text(_kSessionsMarker),
-          findsOneWidget,
-          reason: reason,
-        );
-      } else {
-        expect(find.text(_kSessionsMarker), findsNothing, reason: reason);
-        expect(
-          find.byType(SessionTile),
-          findsOneWidget,
-          reason: 'deve continuar na Home — $reason',
-        );
-      }
+      expect(
+        find.text('$_kWorkspacesMarker:$_epk'),
+        findsOneWidget,
+        reason: reason,
+      );
 
       await tester.pumpWidget(const SizedBox());
       rig.dispose();
     }
 
-    _testWidgets('iPhone: empurra /sessions', (tester) async {
-      await tapTile(
+    _testWidgets('iPhone: empurra /workspaces', (tester) async {
+      await tapServer(
         tester,
         _iPhonePortrait,
-        expectPush: true,
-        reason: 'celular navega para a lista de sessões',
+        reason: 'a camada do meio lista os工作空间 da máquina',
       );
     });
 
-    _testWidgets('iPhone paisagem: ainda empurra', (tester) async {
-      await tapTile(
+    _testWidgets('iPhone paisagem: também empurra', (tester) async {
+      await tapServer(
         tester,
         _iPhoneLandscape,
-        expectPush: true,
-        reason: 'largura grande não faz dele um tablet',
+        reason: 'largura grande não muda a camada que a linha representa',
       );
     });
 
-    _testWidgets('iPad: NÃO empurra — o painel detail reage à seleção', (
-      tester,
-    ) async {
-      await tapTile(
+    _testWidgets('iPad: empurra /workspaces igualmente', (tester) async {
+      await tapServer(
         tester,
         _iPadPortrait,
-        expectPush: false,
-        reason: 'o detail pane reage à seleção, sem navegar',
+        reason: 'a lista de máquinas navega nos dois painéis',
       );
     });
 
-    _testWidgets('iPad paisagem: NÃO empurra', (tester) async {
-      await tapTile(
+    _testWidgets('iPad paisagem: empurra /workspaces', (tester) async {
+      await tapServer(
         tester,
         _iPadLandscape,
-        expectPush: false,
-        reason: 'dois painéis — o chat já está visível',
+        reason: 'idem — a profundidade é decidida pela camada, não pela largura',
       );
     });
   });
@@ -624,17 +632,43 @@ void main() {
       );
     });
 
-    // Com peer e nenhuma room, `counts.all == 0` → _LonelyEmptyState (:598).
-    _testWidgets('iPad: limite aplicado em _LonelyEmptyState (:598)', (
-      tester,
-    ) async {
-      await assertClamped(
-        tester,
-        _iPadPortrait,
-        HomeCopy.nothingHere,
-        withPeer: true,
-        withRoom: false,
-      );
+    // Com peer e nenhuma room, a Home lista a MÁQUINA mesmo assim — agora em
+    // estado vazio de workspaces. Antes do layout de três camadas isto caía no
+    // _LonelyEmptyState ("这里还没有内容…"), porque `counts.all` contava
+    // (peer, room) e um servidor sem pasta valia zero. Na camada de servidor
+    // essa pergunta deixou de fazer sentido: uma máquina pareada sem workdir
+    // aberto é um fato a mostrar, não uma ausência.
+    _testWidgets('iPad: servidor sem workspace ainda é listado', (tester) async {
+      final rig = await _homeRig(tester, withRoom: false);
+      try {
+        _useSize(tester, _iPadPortrait);
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: _homeProviders(rig),
+            child: MaterialApp.router(
+              theme: buildDarkTheme(),
+              routerConfig: _homeRouter(),
+            ),
+          ),
+        );
+        await _settle(tester);
+
+        // O filtro padrão é "online", e um servidor sem nenhum workspace vivo
+        // não é online — então a lista aparece vazia nessa aba. A aba "todos"
+        // é onde a máquina sem pastas aparece, que é a asserção deste teste.
+        rig.vm.setFilter(HomeFilter.all);
+        await _settle(tester);
+
+        expect(find.byType(ServerTile), findsOneWidget);
+        expect(
+          find.text(HomeCopy.nothingHere),
+          findsNothing,
+          reason: 'um servidor sem pasta não é a Home vazia',
+        );
+      } finally {
+        await tester.pumpWidget(const SizedBox());
+        rig.dispose();
+      }
     });
   });
 

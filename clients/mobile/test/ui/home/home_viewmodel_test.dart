@@ -467,12 +467,98 @@ void main() {
     /*
      * NOTE — the two-server case is intentionally NOT asserted here.
      *
-     * `roomsByPeer` comes from `ConnectionManager.roomsSnapshot`, which only
-     * carries peers the manager has a live subscription for. With the current
-     * single-connection model a second server's rooms cannot materialise in
-     * Home at all, so a "2 servers, 1 online" test would be asserting pooling
-     * behaviour that does not exist yet (that is a separate task). The counting
-     * RULE itself is covered above, where one peer owns several rooms.
+     * `roomsByPeer` comes from `ConnectionManager.roomsSnapshot`. The pool now
+     * lets several servers be connected at once, so a two-server case is no
+     * longer hypothetical — it is covered by the `visibleServers` group below.
      */
+  });
+
+  /*
+   * Home is the OUTERMOST layer of server → workspace → session, so it lists
+   * MACHINES, one row each. It used to list (peer, room) pairs, which put two
+   * layers in one list: eight folders on one machine became eight rows, and the
+   * status dot could not honestly mean "this machine is up".
+   */
+  group('HomeViewModel — visibleServers (camada do servidor)', () {
+    test('one row per server, however many workspaces it runs', () async {
+      final storage = _FakeStorage([_peerA]);
+      final prefs = Preferences(_FakeSecureStorage());
+      final vm = HomeViewModel(storage, prefs, _conn(storage: storage));
+      await Future<void>.delayed(Duration.zero);
+
+      final s = vm.state as HomeList;
+      vm.emit(
+        s.copyWith(
+          roomsByPeer: {
+            'epk_A': const [
+              RoomInfo(roomId: 'r1', startedAt: 1, cwd: '/a'),
+              RoomInfo(roomId: 'r2', startedAt: 2, cwd: '/b'),
+              RoomInfo(roomId: 'r3', startedAt: 3, cwd: '/c'),
+            ],
+          },
+          filter: HomeFilter.all,
+        ),
+      );
+
+      final servers = vm.visibleServers();
+      // Three workspaces, ONE machine.
+      expect(servers, hasLength(1));
+      expect(servers.single.workspaceCount, 3);
+      expect(vm.counts.all, 1, reason: 'o badge conta servidores, não pastas');
+
+      vm.dispose();
+    });
+
+    test('two paired servers are two rows', () async {
+      final storage = _FakeStorage([_peerA, _peerB]);
+      final prefs = Preferences(_FakeSecureStorage());
+      final vm = HomeViewModel(storage, prefs, _conn(storage: storage));
+      await Future<void>.delayed(Duration.zero);
+
+      vm.emit((vm.state as HomeList).copyWith(filter: HomeFilter.all));
+      final servers = vm.visibleServers();
+      expect(servers.map((s) => s.peer.remoteEpk).toSet(), {
+        'epk_A',
+        'epk_B',
+      });
+      // Neither has a live workspace, so both are offline here.
+      expect(servers.every((s) => !s.online), isTrue);
+      expect(vm.counts, (all: 2, online: 0, offline: 2));
+
+      vm.dispose();
+    });
+
+    test('a server with no workspace still gets a row', () async {
+      final storage = _FakeStorage([_peerA]);
+      final prefs = Preferences(_FakeSecureStorage());
+      final vm = HomeViewModel(storage, prefs, _conn(storage: storage));
+      await Future<void>.delayed(Duration.zero);
+
+      vm.emit((vm.state as HomeList).copyWith(filter: HomeFilter.all));
+      final servers = vm.visibleServers();
+      expect(servers, hasLength(1));
+      expect(servers.single.workspaceCount, 0);
+      expect(servers.single.liveCount, 0);
+
+      vm.dispose();
+    });
+
+    test('the online tab shows only servers that are up', () async {
+      final storage = _FakeStorage([_peerA, _peerB]);
+      final prefs = Preferences(_FakeSecureStorage());
+      final vm = HomeViewModel(storage, prefs, _conn(storage: storage));
+      await Future<void>.delayed(Duration.zero);
+
+      final s = vm.state as HomeList;
+      // Nothing live → the online tab is empty even though servers exist.
+      vm.emit(s.copyWith(filter: HomeFilter.online));
+      expect(vm.visibleServers(), isEmpty);
+
+      // …and the offline tab has both.
+      vm.emit((vm.state as HomeList).copyWith(filter: HomeFilter.offline));
+      expect(vm.visibleServers(), hasLength(2));
+
+      vm.dispose();
+    });
   });
 }

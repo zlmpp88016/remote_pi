@@ -197,14 +197,83 @@ class HomeViewModel extends ViewModel<HomeState> {
   /// Plan-38 Fase 3 — per-tab counts for the filter badges. Independent of
   /// the active tab (each badge always shows its own slice's size).
   ///
-  /// Counted in SERVERS, matching [visibleItems]'s per-server filter and the
-  /// one-row-per-server list this iteration moves to.
+  /// Counted in SERVERS, matching [visibleServers] and the one-row-per-server
+  /// list this iteration moves to.
   ({int all, int online, int offline}) get counts {
     final s = state;
     if (s is! HomeList) return (all: 0, online: 0, offline: 0);
-    final peers = _distinctPeerKeys(s.items(normalizeEpk: normalizeEpkForLookup));
-    final online = peers.where(_peerOnline).length;
-    return (all: peers.length, online: online, offline: peers.length - online);
+    final servers = visibleServers(
+      filter: (all: true, online: true, offline: true),
+    );
+    final online = servers.where((srv) => srv.online).length;
+    return (
+      all: servers.length,
+      online: online,
+      offline: servers.length - online,
+    );
+  }
+
+  /// The servers (peers) to render on Home, one per pairing, in the order the
+  /// list already established.
+  ///
+  /// This is the OUTER layer of room → workspace → session: Home answers "which
+  /// machines am I paired with and are they up", and the folders each machine
+  /// runs belong to the NEXT screen. Rendering a row per (peer, room) mixed two
+  /// layers and made "is this machine online" unanswerable per row.
+  ///
+  /// A server is listed even when it currently runs no workspaces — the same
+  /// reasoning as [counts]: an offline machine with nothing open is a fact the
+  /// user needs, not an absence. Use [workspaceCount] for the sub-label.
+  ///
+  /// [filter] narrows which liveness slices are kept; all three flags on means
+  /// "every paired server" (used by [counts] to derive the badge numbers from
+  /// the same single source as the list).
+  List<HomeServer> visibleServers({
+    ({bool all, bool online, bool offline})? filter,
+  }) {
+    final s = state;
+    if (s is! HomeList) return const [];
+    final want = filter ?? _filterSlices(s.filter);
+    final out = <HomeServer>[];
+    for (final peer in s.peers) {
+      final key = normalizeEpkForLookup(peer.remoteEpk);
+      final online = _peerOnline(key);
+      if (online && !want.online) continue;
+      if (!online && !want.offline) continue;
+      final rooms = s.roomsByPeer[key] ?? const <RoomInfo>[];
+      final live = [
+        for (final r in rooms)
+          if (_conn.isRoomLive(peer.remoteEpk, r.roomId)) r,
+      ];
+      out.add(
+        HomeServer(
+          peer: peer,
+          online: online,
+          workspaceCount: rooms.length,
+          liveCount: live.length,
+        ),
+      );
+    }
+    out.sort(
+      (a, b) =>
+          _serverLabel(a).toLowerCase().compareTo(_serverLabel(b).toLowerCase()),
+    );
+    return out;
+  }
+
+  static ({bool all, bool online, bool offline}) _filterSlices(
+    HomeFilter f,
+  ) => switch (f) {
+    HomeFilter.all => (all: true, online: true, offline: true),
+    HomeFilter.online => (all: false, online: true, offline: false),
+    HomeFilter.offline => (all: false, online: false, offline: true),
+  };
+
+  static String _serverLabel(HomeServer s) {
+    final p = s.peer;
+    if (p.nickname != null && p.nickname!.isNotEmpty) return p.nickname!;
+    if (p.sessionName.isNotEmpty) return p.sessionName;
+    return p.remoteEpk;
   }
 
   /// Remember which (peer, room) the user picked. Falls back to
