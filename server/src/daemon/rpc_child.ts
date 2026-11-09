@@ -73,6 +73,23 @@ export const EXIT_DAEMON_FRESH_SESSION = 42;
  */
 export const EXIT_DAEMON_SWITCH_SESSION = 43;
 
+/**
+ * Daemon refused to start because another live agent already owns this
+ * (cwd, name).
+ *
+ * This is the single-process-per-workspace rule working as intended — the
+ * kernel-level lock in `session/cwd_lock.ts` refused a second agent for the
+ * same folder — but it used to exit 0, which the supervisor reads as "stopped
+ * cleanly". The user then saw a daemon that simply would not run, with no
+ * reason anywhere: `workspace_state.last_error` stayed null because nothing
+ * crashed.
+ *
+ * A dedicated code lets the supervisor record WHY without treating it as a
+ * crash (it must NOT auto-restart: the lock is still held, so every retry
+ * would fail the same way).
+ */
+export const EXIT_DAEMON_LOCK_HELD = 44;
+
 /** Name of the staged switch target inside `REMOTE_PI_HOME`. */
 export const PENDING_SWITCH_FILE = "pending-session-switch.json";
 

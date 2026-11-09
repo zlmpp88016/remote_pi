@@ -2974,7 +2974,12 @@ class WorkspaceState extends ServerMessage {
   final String cwd;
   final WorkspaceStateValue state;
 
-  /// Why the workspace crashed; `null` in every non-crashed state.
+  /// Why the workspace is not running, or `null` when there is nothing to say.
+  ///
+  /// Not limited to crashes: a refused start is a CLEAN exit (another live agent
+  /// already owns the folder), so the state reads `stopped` while this still
+  /// carries the reason. Gating the message on `crashed` hid the only
+  /// explanation the user would get for a workspace that refuses to run.
   final String? lastError;
 
   /// How many times the supervisor respawned this workspace.

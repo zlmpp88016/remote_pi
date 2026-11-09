@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import { createConnection } from "node:net";
 import { join } from "node:path";
@@ -427,5 +427,80 @@ describe("Supervisor — pairing ops (plan/69)", () => {
 
     const r2 = await ask({ op: "pair_show", ephemeral: true }) as ControlReply<{ token: string }>;
     expect(r2.data!.token).not.toBe(r.data!.token);
+  });
+});
+
+/*
+ * One Pi process per workspace.
+ *
+ * The rule itself has existed for a while and is already enforced twice: the
+ * daemon id is `sha256(canonicalCwd)[:8]` (so one folder cannot register two
+ * agents — this was a real bug, fixed by switching to `realpathSync.native`),
+ * and `acquireCwdLock` refuses a second live agent for the same (cwd, name)
+ * with a kernel-level UDS bind.
+ *
+ * What was missing is the REASON reaching the user. The child refused and
+ * exited 0, which the supervisor reads as "stopped cleanly": no `last_error`,
+ * no explanation, and a daemon that simply would not run. Worse, any naive
+ * retry would be pointless — the lock is still held.
+ */
+describe("Supervisor — one Pi process per workspace", () => {
+  test("a lock-held exit records the reason and does NOT auto-restart", async () => {
+    const cwd = join(testHome, "ws-lock");
+    mkdirSync(cwd, { recursive: true });
+    const reg = await ask({ op: "register", cwd }) as ControlReply<{ id: string }>;
+    const id = reg.data!.id;
+    // `register` only writes the registry; a slot (and its child) exists once
+    // something asks the supervisor to START it.
+    await ask({ op: "start", id });
+
+    const children = (supervisor as unknown as {
+      children: Map<string, {
+        lastError: string | null;
+        restartAttempt: number;
+        child: { state: string; spawn: () => void; noteRestart: () => void };
+        restartTimer: unknown;
+      }>;
+    }).children;
+    const slot = children.get(id);
+    expect(slot).toBeDefined();
+
+    let spawnedAgain = 0;
+    const originalSpawn = slot!.child.spawn;
+    slot!.child.spawn = () => { spawnedAgain += 1; };
+
+    (supervisor as unknown as {
+      _onChildExit: (id: string, evt: { code: number | null; signal: null; isCrash: boolean }) => void;
+    })._onChildExit(id, { code: 44 /* EXIT_DAEMON_LOCK_HELD */, signal: null, isCrash: false });
+
+    // The reason must survive where the app can read it.
+    expect(slot!.lastError).toContain("already owns this folder");
+    // And it must not spin: a retry would hit the same held lock forever.
+    expect(spawnedAgain).toBe(0);
+    expect(slot!.restartTimer).toBeNull();
+    expect(slot!.restartAttempt).toBe(0);
+
+    slot!.child.spawn = originalSpawn;
+  });
+
+  test("the same cwd cannot be registered twice — one folder, one agent", async () => {
+    const cwd = join(testHome, "ws-dup");
+    mkdirSync(cwd, { recursive: true });
+    const a = await ask({ op: "register", cwd }) as ControlReply<{ id: string }>;
+    expect(a.ok).toBe(true);
+
+    // A second registration for the SAME folder is refused outright, not
+    // silently deduped: one cwd means one daemon id, so a duplicate entry could
+    // only ever have produced a second Pi process for one directory (a real bug
+    // before `canonicalCwd` was used).
+    const b = await ask({ op: "register", cwd }) as ControlReply<{ id: string }>;
+    expect(b.ok).toBe(false);
+    expect(b.error).toContain("already registered");
+    expect(b.data).toBeUndefined();
+
+    const listed = await ask({ op: "list" }) as ControlReply<{
+      daemons: Array<{ id: string }>;
+    }>;
+    expect(listed.data!.daemons.filter((d) => d.id === a.data!.id)).toHaveLength(1);
   });
 });

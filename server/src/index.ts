@@ -143,6 +143,7 @@ import { callSupervisor, supervisorOnline, SupervisorOfflineError } from "./daem
 import type { ControlRequest, DaemonInfo } from "./daemon/control_protocol.js";
 import {
   EXIT_DAEMON_FRESH_SESSION,
+  EXIT_DAEMON_LOCK_HELD,
   EXIT_DAEMON_SWITCH_SESSION,
   stagePendingSwitchTarget,
 } from "./daemon/rpc_child.js";
@@ -3015,6 +3016,19 @@ async function _cmdRootInner(
           : `[remote-pi-server] Could not start: too many agents named "${requestedName}" already running in this folder.`,
         "warning",
       );
+      /*
+       * Daemon mode: this refusal is TERMINAL, not a transient failure.
+       *
+       * Exiting 0 told the supervisor "stopped cleanly", so no `last_error`
+       * was recorded and the app showed a daemon that simply would not run,
+       * with no reason anywhere. Signal it explicitly so the supervisor can
+       * report "another agent already owns this folder" — and so it does NOT
+       * auto-restart into the same refusal (the lock is still held, so every
+       * retry fails identically).
+       */
+      if (process.env["REMOTE_PI_DAEMON"] === "1") {
+        process.exitCode = EXIT_DAEMON_LOCK_HELD;
+      }
       return;
     }
   }

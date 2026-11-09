@@ -174,6 +174,31 @@ void main() {
     expect(ws.restarts, 2);
   });
 
+  /*
+   * The one-process-per-workspace refusal is a CLEAN exit — the child declines to
+   * start because another live agent already owns the folder — so the wire state
+   * reads `stopped`, not `crashed`. The reason still has to survive: it is the
+   * only thing that tells the user why the workspace will not run.
+   */
+  test('a stopped workspace still carries its reason (refused start)', () async {
+    final r = await _rig();
+    addTearDown(r.conn.dispose);
+    addTearDown(r.vm.dispose);
+
+    r.ch.push(
+      _state(
+        _cwdA,
+        WorkspaceStateValue.stopped,
+        lastError: 'another Pi agent already owns this folder',
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+
+    final ws = _ready(r.vm).statesByCwd[_cwdA]!;
+    expect(ws.state, WorkspaceStateValue.stopped);
+    expect(ws.lastError, contains('already owns this folder'));
+  });
+
   test('o push seguinte (running) substitui o crashed — app não fabrica', () async {
     final r = await _rig();
     addTearDown(r.conn.dispose);

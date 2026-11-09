@@ -10,6 +10,7 @@ import { resolvePublicRelayUrl } from "../config.js";
 import { ipcAddress, usesNamedPipe } from "../session/ipc.js";
 import {
   EXIT_DAEMON_FRESH_SESSION,
+  EXIT_DAEMON_LOCK_HELD,
   EXIT_DAEMON_SWITCH_SESSION,
   RpcChild,
   type RpcChildExitEvent,
@@ -836,6 +837,26 @@ export class Supervisor {
           ? `killed by signal ${evt.signal}`
           : `exited with code ${evt.code ?? "null"}`);
     }
+    /*
+     * The one-process-per-workspace rule refusing this start.
+     *
+     * Checked BEFORE the clean-exit branch on purpose: the child exits 0 for
+     * this, so `isCrash` is false and the code below would return with
+     * `last_error` left null — the user then saw a daemon that would not run,
+     * with no explanation anywhere. It must also NOT be retried: the lock is
+     * still held by a live process, so every respawn fails identically and only
+     * burns the crash budget and the log.
+     */
+    if (evt.code === EXIT_DAEMON_LOCK_HELD) {
+      slot.lastError =
+        "another Pi agent already owns this folder — stop it, then start this workspace again";
+      process.stderr.write(
+        `[remote-pi-supervisord] ${id} refused to start: the workspace lock is held by another live agent\n`,
+      );
+      this._pushWorkspaceState(id);
+      return;
+    }
+
     // Plan/69 — every exit is a transition (crash → `crashed` + last_error;
     // clean stop → `stopped`), pushed BEFORE any restart decision so the app
     // sees the down state even when a backoff respawn follows immediately.

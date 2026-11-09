@@ -377,8 +377,15 @@ class _WorkspaceCard extends StatelessWidget {
               ],
             ],
           ),
-          // Crashed: last_error + one-tap restart (plan/69).
-          if (crashed) ...[
+          // A recorded failure is shown whenever there IS one, not only when
+          // the state reads `crashed`.
+          //
+          // The one-process-per-workspace refusal is a CLEAN exit (the child
+          // declines to start because another live agent owns the folder), so the
+          // state is `stopped` — and gating the message on `crashed` hid the only
+          // explanation the user would ever get for a workspace that refuses to
+          // run. The reason is the useful part; the label already says stopped.
+          if (crashed || lc?.lastError?.isNotEmpty == true) ...[
             const SizedBox(height: 8),
             Text(
               lc?.lastError?.isNotEmpty == true
