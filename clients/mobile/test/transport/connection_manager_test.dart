@@ -1499,6 +1499,44 @@ void _registerRoomsTests() {
         cm.dispose();
       },
     );
+
+    /*
+     * `host` is the CONTROL plane. `pair_ok` reports it (the room the daemon
+     * answers pair_request on) and an older build persisted it as the peer's
+     * workspace room, so every child-addressed request went to a room where
+     * nothing answers — the user saw each session time out after 12 s.
+     */
+    test("stored roomId host is not treated as a workspace binding", () async {
+      final ch = _ControllableChannel();
+      const hostBound = PeerRecord(
+        remoteEpk: "epk_test",
+        sessionName: "test session",
+        relayUrl: "ws://localhost:8080",
+        pairedAt: "2026-01-01T00:00:00Z",
+        roomId: kHostRoomId,
+      );
+      final cm = ConnectionManager(
+        factory: (_, _) async => ch,
+        storage: _FakeStorage([hostBound]),
+        emitDebounce: Duration.zero,
+      );
+      await cm.connectTo(hostBound);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(cm.activeRoomId, isNot(kHostRoomId),
+          reason: "session traffic must never be addressed to the host room");
+
+      ch.pushControl(const RoomAnnounced(
+        peer: "epk_test",
+        roomId: "real-room",
+        startedAt: 1,
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(cm.activeRoomId, "real-room");
+      expect(cm.activePeer?.roomId, "real-room");
+
+      cm.dispose();
+    });
   });
 }
-

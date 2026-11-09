@@ -536,7 +536,11 @@ class ConnectionManager extends Service {
       // canonical room. Assigning the implicit `main` here would make
       // `_maybeAdoptLegacyRoom` treat it as already bound.
       _activePeer = peer;
-      final boundRoom = peer.roomId ?? 'main';
+      // A record bound to `host` is stale, not a workspace choice: connecting
+      // to the control plane for session traffic is a guaranteed timeout. Treat
+      // it as unbound so discovery can adopt the real room.
+      final stored = peer.roomId;
+      final boundRoom = (stored == null || stored == kHostRoomId) ? 'main' : stored;
       if (boundRoom != _activeRoomId) {
         _activeRoomId = boundRoom;
       }
@@ -1036,7 +1040,15 @@ class ConnectionManager extends Service {
     final active = _activePeer;
     if (active == null) return;
     if (toStandardB64(active.remoteEpk) != peerKey) return;
-    if (active.roomId != null) {
+    if (discoveredRoom == kHostRoomId) return;
+    /*
+     * `host` is the control plane, not a workspace, so a record bound to it is
+     * NOT an explicit workspace selection — it is a stale binding written by an
+     * older build (`pair_ok` reports `room_id: "host"`). Letting it block
+     * discovery is what pinned every request to a room that cannot answer
+     * `session_list`; the user saw each session time out after 12 s.
+     */
+    if (active.roomId != null && active.roomId != kHostRoomId) {
       return; // explicit room selection — discovery must not override it
     }
     _activeRoomId = discoveredRoom;

@@ -3,9 +3,14 @@
 //
 // The daemon-issued code carries `rm=host` and its `pair_ok` echoes
 // `room_id: "host"` ("the app addresses every subsequent inner to the host
-// room" — server/src/daemon/host_control.ts). These tests pin that
-// end to end: the pairing transport is pointed at the host room and the
-// persisted PeerRecord carries `host` as its room.
+// room" — server/src/daemon/host_control.ts). Pairing therefore MUST target
+// the host room.
+//
+// Persisting it as the peer's room is a different question, and doing so was a
+// real defect: `host` is the control plane, so every later child-addressed
+// request (session_list, session_read, …) went to a room where nothing answers
+// it and the app sat on its 12 s timeout — "every session is broken". The
+// record is left UNBOUND so room discovery can adopt the real workspace.
 
 import 'dart:async';
 import 'dart:convert';
@@ -128,16 +133,17 @@ void main() {
       currentRelayUrl: 'ws://localhost',
     );
 
-    // The pairing flow addressed the HOST room…
+    // The pairing flow addressed the HOST room — pair_request only exists there.
     expect(transport.roomsSelected, ['host']);
-    // …and the persisted record keeps addressing the host room.
-    expect(result.peer.roomId, 'host');
+    // …but the record is left UNBOUND: `host` is the control plane, and
+    // binding session traffic to it times out every request.
+    expect(result.peer.roomId, isNull);
     expect(result.peer.remoteEpk, payload.epk);
     expect(result.hostnameHint, 'Mac do User');
-    expect(storage.saved?.roomId, 'host');
+    expect(storage.saved?.roomId, isNull);
   });
 
-  test('pair_ok sem room_id cai no rm do código (host)', () async {
+  test('pair_ok sem room_id também não vincula o peer ao host', () async {
     final payload = PairPayload.tryParse(_hostCode)!;
     final appSide = _Q();
     final hostSide = _Q();
@@ -169,7 +175,8 @@ void main() {
       currentRelayUrl: 'ws://localhost',
     );
 
-    expect(result.peer.roomId, 'host');
+    // Falling back to the code's `rm=host` is the same trap as above.
+    expect(result.peer.roomId, isNull);
   });
 
   test('token inválido continua gerando pair_error tipado', () async {

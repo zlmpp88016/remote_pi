@@ -12,7 +12,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:mobile/data/transport/relay_config.dart';
-import 'package:mobile/protocol/protocol.dart' show PairOk;
+import 'package:mobile/protocol/protocol.dart' show PairOk, kHostRoomId;
 import 'package:mobile/protocol/uuid7.dart';
 
 import 'pair_payload.dart';
@@ -131,6 +131,19 @@ Future<PairingResult> performPairing({
     final piRoomId = piEchoedRoom
         ? pairOk.roomId
         : (qr.roomId ?? 'main');
+    /*
+     * `host` is the CONTROL plane, not a workspace.
+     *
+     * The daemon answers `pair_request` on room `host` and reports that same
+     * room back (host_control.ts). Persisting it as this peer's workspace room
+     * made every later child-addressed request go to `host`, where nothing can
+     * answer `session_list` — the phone then sat on a 12 s timeout for every
+     * session it tried to open.
+     *
+     * Storing `null` instead keeps `_maybeAdoptLegacyRoom` armed, so the real
+     * room is adopted from the first `rooms`/`room_announced` the relay pushes.
+     */
+    final isHostRoom = piRoomId == kHostRoomId;
     final peer = PeerRecord(
       remoteEpk: qr.epk,
       sessionName: pairOk.sessionName,
@@ -139,7 +152,7 @@ Future<PairingResult> performPairing({
       // for new QRs (no `r`) it's the currently configured relay.
       relayUrl: qr.relayUrl ?? currentRelayUrl,
       pairedAt: DateTime.now().toUtc().toIso8601String(),
-      roomId: piRoomId,
+      roomId: isHostRoom ? null : piRoomId,
       // Plan/27 Wave A — null when remote-pi hasn't been upgraded
       // yet to publish `harness` in pair_ok.
       harness: pairOk.harness,

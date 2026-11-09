@@ -56,6 +56,7 @@ import {
   handleScheduleSetEnabled,
 } from "./schedule_handlers.js";
 import { logRelayEvent } from "../log.js";
+import { roomIdFor } from "../rooms.js";
 
 export interface HostBridgeOptions {
   fleet: FleetOps;
@@ -233,6 +234,17 @@ function readInnerRequestId(ct: string): string | null {
   try {
     const inner = JSON.parse(Buffer.from(ct, "base64").toString("utf8")) as { id?: unknown };
     return typeof inner.id === "string" && inner.id !== "" ? inner.id : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The forwarded payload's own `type`, so an unroutable reply can name the
+ *  action the client asked for instead of a generic placeholder. */
+function readInnerRequestType(ct: string): string | null {
+  try {
+    const inner = JSON.parse(Buffer.from(ct, "base64").toString("utf8")) as { type?: unknown };
+    return typeof inner.type === "string" && inner.type !== "" ? inner.type : null;
   } catch {
     return null;
   }
@@ -664,6 +676,41 @@ export class HostBridge {
    */
   private _forwardToChild(inner: Extract<ClientMessage, { type: "host_forward" }>, from?: string): void {
     if (!this.relay || this.ownPubkey === null) return;
+    /*
+     * A `host_forward` addressed to the host room has no child to reach: the
+     * bridge would re-emit it to `(own, "host")`, which is this very
+     * connection, and the relay drops it as `dest not found`. The client then
+     * waits out its request timeout with no answer and no reason.
+     *
+     * This is not a hypothetical: `pair_ok` reports `room_id: "host"` (that is
+     * the room the CONTROL plane answers on), the app persists it, and every
+     * subsequent child-addressed request went to `host`. Symptom on the phone
+     * was "every session times out".
+     *
+     * Resolve the intended workspace from the fleet instead of silently
+     * dropping: exactly one live room → that room; none → a typed reason the
+     * client can show. Guessing among SEVERAL live rooms is refused on purpose
+     * — routing a command to the wrong workspace is worse than an error.
+     */
+    if (inner.room === HOST_ROOM_ID || inner.room === "" ) {
+      const resolved = this._resolveChildRoomForHostRoom();
+      if (typeof resolved === "string") {
+        if (from) {
+          const pendingId = readInnerRequestId(inner.ct) ?? inner.id;
+          this._rememberPendingRequest(pendingId, from, resolved);
+        }
+        logRelayEvent(`proxy → child room=${resolved} (host_forward asked for the host room; only live workspace)`);
+        const outer: OuterEnvelope = { peer: this.ownPubkey, room: resolved, ct: inner.ct };
+        try {
+          this.relay.send(JSON.stringify(outer));
+        } catch {
+          /* reconnect will recover */
+        }
+        return;
+      }
+      this._rejectUnroutableForward(inner, from, resolved.error);
+      return;
+    }
     if (from) {
       this._rememberActivePeer(from);
       // Record the INNER request id, not `inner.id`.
@@ -684,6 +731,64 @@ export class HostBridge {
     } catch {
       /* reconnect will recover */
     }
+  }
+
+  /**
+   * Which child room a host-room-addressed forward should reach.
+   *
+   * Returns the room id when the answer is unambiguous, otherwise
+   * `{error}` describing why routing was refused — the caller turns that into
+   * a typed reply so the client stops waiting.
+   *
+   * Unambiguous means exactly ONE live workspace. Zero live is a real state
+   * (everything stopped), and several live is exactly the case where picking
+   * one would silently drive the wrong workspace.
+   */
+  private _resolveChildRoomForHostRoom(): string | { error: string } {
+    let entries;
+    try {
+      entries = this.opts.fleet.list();
+    } catch {
+      return { error: "no_workspace" };
+    }
+    const live = entries.filter((e) => e.live);
+    if (live.length === 1) return roomIdFor(live[0].cwd, live[0].name);
+    if (live.length === 0) {
+      // Fall back to a single registered (not running) workspace ONLY when it
+      // is the sole entry: the app may be about to start it, and addressing the
+      // deterministic room id is what `workspace_start` would produce anyway.
+      if (entries.length === 1) return roomIdFor(entries[0].cwd, entries[0].name);
+      return { error: "no_live_workspace" };
+    }
+    return { error: "ambiguous_workspace" };
+  }
+
+  /**
+   * Answer a `host_forward` that cannot be routed, instead of dropping it.
+   *
+   * Silence is the reason this bug was invisible for so long: the client sat on
+   * a 12 s timeout with nothing to show the user. A typed reply costs one frame
+   * and turns "every session is broken" into a sentence.
+   *
+   * Deliberately `action_error` rather than a new message type: it already
+   * carries `in_reply_to` + `action`, every client decodes it, and the request's
+   * own type is recoverable from the forwarded payload.
+   */
+  private _rejectUnroutableForward(
+    inner: Extract<ClientMessage, { type: "host_forward" }>,
+    from: string | undefined,
+    reason: string,
+  ): void {
+    const requestId = readInnerRequestId(inner.ct) ?? inner.id;
+    const action = readInnerRequestType(inner.ct) ?? "host_forward";
+    logRelayEvent(`proxy ✗ room=${inner.room} reason=${reason} (answered, not dropped)`);
+    if (!from) return;
+    this._reply(from, {
+      type: "action_error",
+      in_reply_to: requestId,
+      action: action as never,
+      error: reason,
+    });
   }
 
   /**

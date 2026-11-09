@@ -368,3 +368,89 @@ describe("plan/69 — HostBridge workspace_state push", () => {
     }
   });
 });
+
+/*
+ * A `host_forward` addressed to room `host` used to be re-emitted to
+ * `(own, "host")` — this very connection — and dropped by the relay as
+ * `dest not found`. The client then waited out its timeout with nothing to
+ * show, which is exactly the "every session is broken" symptom on the phone
+ * after pairing (pair_ok reports `room_id: "host"` and the app persists it).
+ */
+describe("plan/69 — host_forward addressed to the host room resolves to the workspace", () => {
+  test("exactly one live workspace → the payload is re-emitted to that child room", async () => {
+    const { bridge, relay } = await bootBridge(fleetStub({ live: true }), async () => [
+      { remote_epk: APP_A },
+    ]);
+    try {
+      const innerCt = Buffer.from(JSON.stringify({ type: "session_list", id: "s1" })).toString("base64");
+      deliver(relay, APP_A, { type: "host_forward", id: "fwd-h", room: "host", ct: innerCt });
+
+      expect(relay.outbound).toHaveLength(1);
+      const line = JSON.parse(relay.outbound[0]!) as { peer: string; room?: string; ct: string };
+      expect(line.peer).toBe(ownPubkey);
+      // NOT "host": that is the control plane, and re-emitting there is a
+      // guaranteed drop. The deterministic child room is the only answer.
+      expect(line.room).not.toBe("host");
+      expect(line.room).toMatch(/^[A-Za-z0-9_-]{12}$/);
+      expect(line.ct).toBe(innerCt);
+    } finally {
+      await bridge.stop();
+    }
+  });
+
+  test("no live workspace and no single candidate → a typed action_error, never silence", async () => {
+    const two = (): FleetOps => ({
+      list: () => [
+        { id: "a", cwd: "/tmp/a", name: "a", live: false, source: "added" },
+        { id: "b", cwd: "/tmp/b", name: "b", live: false, source: "added" },
+      ],
+      ensure: (cwd) => ({ ok: true, id: "a", cwd, name: "a" }),
+      start: () => ({ ok: true, started: true }),
+      stop: async () => ({ ok: true, stopped: true }),
+      addWorkspace: (cwd) => ({ ok: true, cwd, added: true }),
+      removeWorkspace: (cwd) => ({ ok: true, cwd, removed: true }),
+    });
+    const { bridge, relay } = await bootBridge(two(), async () => [{ remote_epk: APP_A }]);
+    try {
+      const innerCt = Buffer.from(JSON.stringify({ type: "session_list", id: "s2" })).toString("base64");
+      deliver(relay, APP_A, { type: "host_forward", id: "fwd-h2", room: "host", ct: innerCt });
+
+      expect(relay.outbound).toHaveLength(1);
+      const f = decodeOutbound(relay.outbound[0]!);
+      expect(f.peer).toBe(APP_A);
+      expect(f.room).toBe("host");
+      expect(f.inner).toMatchObject({
+        type: "action_error",
+        in_reply_to: "s2",
+        action: "session_list",
+      });
+    } finally {
+      await bridge.stop();
+    }
+  });
+
+  test("several live workspaces → refused, because routing to the wrong one is worse", async () => {
+    const two: FleetOps = {
+      list: () => [
+        { id: "a", cwd: "/tmp/a", name: "a", live: true, source: "daemon" },
+        { id: "b", cwd: "/tmp/b", name: "b", live: true, source: "daemon" },
+      ],
+      ensure: (cwd) => ({ ok: true, id: "a", cwd, name: "a" }),
+      start: () => ({ ok: true, started: true }),
+      stop: async () => ({ ok: true, stopped: true }),
+      addWorkspace: (cwd) => ({ ok: true, cwd, added: true }),
+      removeWorkspace: (cwd) => ({ ok: true, cwd, removed: true }),
+    };
+    const { bridge, relay } = await bootBridge(two, async () => [{ remote_epk: APP_A }]);
+    try {
+      const innerCt = Buffer.from(JSON.stringify({ type: "session_list", id: "s3" })).toString("base64");
+      deliver(relay, APP_A, { type: "host_forward", id: "fwd-h3", room: "host", ct: innerCt });
+
+      expect(relay.outbound).toHaveLength(1);
+      const f = decodeOutbound(relay.outbound[0]!);
+      expect(f.inner).toMatchObject({ type: "action_error", error: "ambiguous_workspace" });
+    } finally {
+      await bridge.stop();
+    }
+  });
+});
