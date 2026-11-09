@@ -356,26 +356,34 @@ void main() {
       ch.pushControl(const RoomEnded(peer: 'epk_A', roomId: 'r2', sinceTs: 3));
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
-      // Sanity — one live, one cached/offline.
+      // Sanity — one live room, one cached/offline room.
       expect(vm.isRoomLive('epk_A', 'r1'), isTrue);
       expect(vm.isRoomLive('epk_A', 'r2'), isFalse);
 
-      // Counts are independent of the selected tab.
-      expect(vm.counts, (all: 2, online: 1, offline: 1));
+      /*
+       * Liveness is counted per SERVER, not per workspace.
+       *
+       * Both rooms belong to `epk_A`. The server is online because at least one
+       * of its rooms is live, so the badges read 1 — not 2. Counting (peer,room)
+       * pairs is what made a single machine report "8 online" on the phone.
+       */
+      expect(vm.counts, (all: 1, online: 1, offline: 0));
 
-      // Default tab is Online → only the live room is visible.
+      // Default tab is Online → both of that SERVER's workspaces are shown.
+      // A peer is online or offline as a whole; splitting its own rows across
+      // two tabs would contradict "online describes the room".
       expect((vm.state as HomeList).filter, HomeFilter.online);
-      expect(vm.visibleItems.map((i) => i.room.roomId).toList(), ['r1']);
+      expect(vm.visibleItems.map((i) => i.room.roomId).toList(), ['r1', 'r2']);
 
-      // Offline → only the cached room.
+      // Offline → this server is online, so nothing is listed.
       vm.setFilter(HomeFilter.offline);
       expect((vm.state as HomeList).filter, HomeFilter.offline);
-      expect(vm.visibleItems.map((i) => i.room.roomId).toList(), ['r2']);
+      expect(vm.visibleItems, isEmpty);
 
       // All → both (sorted), and the counts are unchanged.
       vm.setFilter(HomeFilter.all);
       expect(vm.visibleItems.map((i) => i.room.roomId).toList(), ['r1', 'r2']);
-      expect(vm.counts, (all: 2, online: 1, offline: 1));
+      expect(vm.counts, (all: 1, online: 1, offline: 0));
 
       vm.dispose();
       await conn.disconnect();
@@ -420,16 +428,14 @@ void main() {
     });
 
     /*
-     * BASELINE — pins the CURRENT semantics, which the user reported as wrong.
+     * The bug the user reported as "8 online — 8 Pis?", fixed.
      *
-     * `counts` tallies (peer, room) pairs, i.e. WORKSPACES. One machine running
-     * several workspaces therefore reports "8 online" on the phone, which the
-     * user read as "8 Pis?" and correctly called meaningless: liveness belongs
-     * to the SERVER (the room), not to how many folders it happens to have
-     * open. Passo 3a changes this to per-peer counting; this test exists so that
-     * change is a deliberate, visible diff instead of a silent behaviour shift.
+     * `counts` used to tally (peer, room) pairs, i.e. WORKSPACES, so one machine
+     * running eight workspaces reported "8 online". Liveness belongs to the
+     * SERVER (the room): it has a live connection or it does not, regardless of
+     * how many folders it happens to have open.
      */
-    test('BASELINE: counts tally workspaces, not servers (one peer, two rooms)',
+    test('counts tally SERVERS, not workspaces (one peer, two live rooms)',
         () async {
       final ch = _ControllableChannel();
       final storage = _FakeStorage([_peerA]);
@@ -452,10 +458,21 @@ void main() {
       );
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
-      // Current (wrong) semantics: two workspaces ⇒ "2 online" for ONE server.
-      expect(vm.counts, (all: 2, online: 2, offline: 0));
+      // ONE server online — not two.
+      expect(vm.counts, (all: 1, online: 1, offline: 0));
 
       vm.dispose();
     });
+
+    /*
+     * NOTE — the two-server case is intentionally NOT asserted here.
+     *
+     * `roomsByPeer` comes from `ConnectionManager.roomsSnapshot`, which only
+     * carries peers the manager has a live subscription for. With the current
+     * single-connection model a second server's rooms cannot materialise in
+     * Home at all, so a "2 servers, 1 online" test would be asserting pooling
+     * behaviour that does not exist yet (that is a separate task). The counting
+     * RULE itself is covered above, where one peer owns several rooms.
+     */
   });
 }

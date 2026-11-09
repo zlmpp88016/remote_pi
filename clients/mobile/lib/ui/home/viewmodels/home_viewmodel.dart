@@ -141,35 +141,70 @@ class HomeViewModel extends ViewModel<HomeState> {
     emit(s.copyWith(filter: filter));
   }
 
-  /// `true` when `(epk, roomId)` is live on the relay AND the relay itself
-  /// is reachable. The single source of truth for the Online/Offline split.
-  /// [ConnectionManager.isRoomLive] is already gated on `StatusOnline`, so
-  /// the `_relayConnected &&` is belt-and-suspenders that also documents
-  /// intent: "online" requires a live relay.
-  bool _online(HomeItem it) =>
-      _relayConnected && _conn.isRoomLive(it.peer.remoteEpk, it.room.roomId);
-
   /// Plan-38 Fase 3 — the items the current [HomeList.filter] keeps. A pure
   /// view over `state.items()`; returns `const []` outside a list state.
+  ///
+  /// The filter is applied PER SERVER: a peer is online or offline as a whole,
+  /// so both tabs show every workspace of the peers that qualify. Filtering
+  /// each ROW on its own room would put two rows of the SAME server in
+  /// opposite tabs, which contradicts "online/offline describes the room".
   List<HomeItem> get visibleItems {
     final s = state;
     if (s is! HomeList) return const [];
     final all = s.items(normalizeEpk: normalizeEpkForLookup);
-    return switch (s.filter) {
-      HomeFilter.all => all,
-      HomeFilter.online => all.where(_online).toList(),
-      HomeFilter.offline => all.where((i) => !_online(i)).toList(),
-    };
+    if (s.filter == HomeFilter.all) return all;
+    final wantOnline = s.filter == HomeFilter.online;
+    final keep = _distinctPeerKeys(all)
+        .where((key) => _peerOnline(key) == wantOnline)
+        .toSet();
+    return all
+        .where((it) => keep.contains(normalizeEpkForLookup(it.peer.remoteEpk)))
+        .toList();
+  }
+
+  /// `true` when the SERVER behind this peer is online — i.e. it has at least
+  /// one live room.
+  ///
+  /// Liveness belongs to the server, not to how many folders it happens to have
+  /// open. The badges used to count `(peer, room)` pairs, so one machine running
+  /// eight workspaces reported "8 online", which the user read as "8 Pis?" and
+  /// rightly called meaningless. Counting distinct peers is the only number that
+  /// matches what the list shows: one entry per server.
+  bool _peerOnline(String epk) {
+    if (!_relayConnected) return false;
+    final s = state;
+    if (s is! HomeList) return false;
+    final rooms = s.roomsByPeer[normalizeEpkForLookup(epk)] ??
+        const <RoomInfo>[];
+    for (final room in rooms) {
+      if (_conn.isRoomLive(epk, room.roomId)) return true;
+    }
+    return false;
+  }
+
+  /// Distinct peers present in [all], in list order. Counting this (rather than
+  /// the flattened items) is what makes "online" mean "servers online".
+  List<String> _distinctPeerKeys(List<HomeItem> all) {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final it in all) {
+      final key = normalizeEpkForLookup(it.peer.remoteEpk);
+      if (seen.add(key)) out.add(key);
+    }
+    return out;
   }
 
   /// Plan-38 Fase 3 — per-tab counts for the filter badges. Independent of
   /// the active tab (each badge always shows its own slice's size).
+  ///
+  /// Counted in SERVERS, matching [visibleItems]'s per-server filter and the
+  /// one-row-per-server list this iteration moves to.
   ({int all, int online, int offline}) get counts {
     final s = state;
     if (s is! HomeList) return (all: 0, online: 0, offline: 0);
-    final all = s.items(normalizeEpk: normalizeEpkForLookup);
-    final online = all.where(_online).length;
-    return (all: all.length, online: online, offline: all.length - online);
+    final peers = _distinctPeerKeys(s.items(normalizeEpk: normalizeEpkForLookup));
+    final online = peers.where(_peerOnline).length;
+    return (all: peers.length, online: online, offline: peers.length - online);
   }
 
   /// Remember which (peer, room) the user picked. Falls back to
