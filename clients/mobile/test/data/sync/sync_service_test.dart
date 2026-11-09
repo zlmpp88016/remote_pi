@@ -118,6 +118,13 @@ void main() {
       ),
     );
     await _settle(); // _onlineActivated → activate(epk) settles
+    // The relay announces the room as soon as the Pi subscribes, so a real
+    // client always has it. Without this the rig would look permanently
+    // offline and `requestSync` would defer every frame it is asked to send.
+    ch.pushControl(
+      RoomAnnounced(peer: epk, roomId: 'main', startedAt: 1, cwd: '/proj'),
+    );
+    await _settle();
     return (conn: conn, ch: ch, sync: sync, epk: epk);
   }
 
@@ -842,6 +849,56 @@ void main() {
 
       expect(messages(s.epk), isEmpty);
 
+      s.conn.dispose();
+      s.sync.dispose();
+    },
+  );
+
+  test(
+    'a session_sync nobody answers is retried instead of lost silently',
+    () async {
+      // The public-relay failure that made `/resume` show an empty chat: the
+      // switch acked, the daemon exited to be respawned, and the sync sent
+      // into that gap vanished. A live channel plus a live room announcement is
+      // NOT proof that the Pi behind it can answer.
+      final s = await setup();
+      final before = s.ch.sent.whereType<SessionSync>().length;
+      await Future<void>.delayed(const Duration(seconds: 5));
+      expect(
+        s.ch.sent.whereType<SessionSync>().length,
+        greaterThan(before + 1),
+        reason: 'silence must be retried, not left as an empty screen',
+      );
+      s.conn.dispose();
+      s.sync.dispose();
+    },
+  );
+
+  test(
+    'an answered session_sync stops the retries',
+    () async {
+      final s = await setup();
+      // The sync is armed by a 200 ms debounce; wait for it to actually leave.
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      // Answer whatever id is outstanding, the way the Pi does.
+      final sync = s.ch.sent.whereType<SessionSync>().last;
+      s.ch.push(
+        SessionHistory(
+          inReplyTo: sync.id,
+          sessionStartedAt: 0,
+          events: const [],
+          eos: true,
+          truncated: false,
+        ),
+      );
+      await _settle();
+      final settled = s.ch.sent.whereType<SessionSync>().length;
+      await Future<void>.delayed(const Duration(seconds: 5));
+      expect(
+        s.ch.sent.whereType<SessionSync>().length,
+        settled,
+        reason: 'a transcript arrived; do not keep polling',
+      );
       s.conn.dispose();
       s.sync.dispose();
     },

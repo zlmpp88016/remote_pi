@@ -98,10 +98,16 @@ class _FakeStorage extends PairingStorage {
 /// silent when [answerSessionList] is false — that is what the old code walked
 /// into and what the 12 s timeout was made of.
 class _Channel implements IChannel, IControlLink {
-  _Channel({this.startError, this.answerSessionList = true});
+  _Channel({this.startError, this.answerSessionList = true, this.silentAttempts = 0});
 
   final String? startError;
   bool answerSessionList;
+
+  /// Number of `session_list` requests to swallow before answering. A cold
+  /// start answers exactly this way: the room is announced (so it IS live) a
+  /// full 13 s before the Pi behind it can reply.
+  int silentAttempts;
+  int _sessionListTries = 0;
 
   final _server = StreamController<ServerMessage>.broadcast();
   final _control = StreamController<ControlInbound>.broadcast();
@@ -155,6 +161,8 @@ class _Channel implements IChannel, IControlLink {
         }
       case SessionList(:final id):
         if (!answerSessionList) return; // the silent room: no reply at all
+        _sessionListTries += 1;
+        if (_sessionListTries <= silentAttempts) return; // still booting
         _server.add(
           SessionListOk(
             inReplyTo: id,
@@ -199,11 +207,13 @@ class _Channel implements IChannel, IControlLink {
 Future<({ConnectionManager conn, _Channel ch})> _rig({
   String? startError,
   bool answerSessionList = true,
+  int silentAttempts = 0,
   bool roomLive = false,
 }) async {
   final ch = _Channel(
     startError: startError,
     answerSessionList: answerSessionList,
+    silentAttempts: silentAttempts,
   );
   final conn = ConnectionManager(
     factory: (_, _) async => ch,
@@ -256,6 +266,42 @@ void main() {
         reason: 'the start answered, so the list must load',
       );
     });
+
+    test('a cold start retries until the Pi answers, instead of giving up', () async {
+      // Measured on the public frp path: `workspace_start_ok` returns in ~250 ms
+      // and the relay announces the room immediately, but the Pi behind it only
+      // answers `session_list` after ~13.7 s. A room that is live is therefore
+      // NOT a room that can answer — the old code treated the announcement as
+      // the gate and reported a timeout for a workspace that was coming up.
+      final r = await _rig(silentAttempts: 3);
+      addTearDown(r.conn.dispose);
+      addTearDown(r.ch.close);
+
+      final vm = SessionListViewModel(
+        SessionCatalog(r.conn),
+        r.conn,
+        Preferences(_FakeSecureStorage()),
+        epk: _epk,
+        roomId: 'stale-room',
+        cwd: '/proj',
+      );
+      addTearDown(vm.dispose);
+
+      // 3 silent attempts x (4 s timeout + 500 ms pause), then the answer.
+      // That is longer than the old single 12 s budget, which is the point.
+      await Future<void>.delayed(const Duration(seconds: 16));
+
+      expect(
+        vm.state,
+        isA<SessionListReady>(),
+        reason: 'a slow boot is not a dead workspace',
+      );
+      expect(
+        r.ch.sent.where((t) => t == 'session_list').length,
+        greaterThan(1),
+        reason: 'giving up after the first silence is the bug being fixed',
+      );
+    }, timeout: const Timeout(Duration(seconds: 90)));
 
     test('a refused start surfaces a reason instead of a 12 s timeout', () async {
       // The daemon refuses when another Pi already owns the folder.

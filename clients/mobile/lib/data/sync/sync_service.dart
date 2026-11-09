@@ -71,6 +71,21 @@ class SyncService extends Service {
 
   bool _pendingSyncRequest = false;
   Timer? _syncDebounce;
+  Timer? _pendingSyncRetry;
+
+  /// The `session_sync` we are waiting on, and the head start it got.
+  ///
+  /// `isRoomLive` cannot be trusted around a `session_switch`: the Pi stages
+  /// the target, acks, exits and is respawned by the supervisor, and the relay
+  /// keeps announcing the room for a while after it stopped listening. Sending
+  /// into that window loses the frame with no error at all — which is exactly
+  /// how the chat ended up permanently empty after resuming a session. So the
+  /// send is not the end of the story: a silence longer than the observed
+  /// cold-start latency is retried until the transcript arrives.
+  String? _awaitingSyncId;
+  DateTime? _awaitingSyncSince;
+  static const _syncNoAnswerRetry = Duration(seconds: 3);
+  static const _syncDeadline = Duration(seconds: 40);
 
   // Whether the active session's agent is currently producing a reply. Spans
   // the WHOLE turn (send/echo → agent_done), not just the token-streaming
@@ -140,6 +155,9 @@ class SyncService extends Service {
     _roomsSub = _conn.roomsStream.listen((_) {
       _writeRuntime();
       _syncTurnStateFromRoomMeta();
+      // A deferred sync is waiting for exactly this: the room coming back
+      // (usually the daemon that `session_switch` restarted).
+      if (_pendingSyncRequest) requestSync();
     });
     _presenceSub = _conn.presenceStream.listen((_) => _writeRuntime());
     _onStatus(_conn.status); // replay current
@@ -440,12 +458,61 @@ class SyncService extends Service {
 
   void requestSync() {
     final ch = _conn.channel;
-    if (ch == null || _activeEpk == null) {
+    final epk = _activeEpk;
+    if (ch == null || epk == null) {
       _pendingSyncRequest = true;
       return;
     }
+    // A live channel is not a live ROOM. `session_switch` restarts the daemon
+    // (stage → ack → exit → supervisor respawn), and in that window the room is
+    // gone while the websocket stays up. Sending then loses the frame silently:
+    // nothing answers, nothing errors, and the chat sits empty forever because
+    // a pending flag was never set either.
+    if (!_conn.isRoomLive(epk, _activeRoomId)) {
+      _pendingSyncRequest = true;
+      _armPendingSyncRetry();
+      return;
+    }
     _pendingSyncRequest = false;
-    ch.send(SessionSync(id: _newId()));
+    _pendingSyncRetry?.cancel();
+    _pendingSyncRetry = null;
+    final id = _newId();
+    _awaitingSyncId = id;
+    _awaitingSyncSince = DateTime.now();
+    ch.send(SessionSync(id: id));
+    _armPendingSyncRetry();
+  }
+
+  /// Retries a `session_sync` that never came back, and flushes a deferred one
+  /// once the room returns. Both cases are the same symptom from the user's
+  /// side — an empty chat that never fills.
+  void _armPendingSyncRetry() {
+    if (_pendingSyncRetry != null) return;
+    _pendingSyncRetry = Timer(const Duration(seconds: 1), () {
+      _pendingSyncRetry = null;
+      if (_pendingSyncRequest) {
+        requestSync();
+        return;
+      }
+      final since = _awaitingSyncSince;
+      if (_awaitingSyncId == null || since == null) return;
+      final waited = DateTime.now().difference(since);
+      if (waited > _syncDeadline) {
+        // Give up quietly: the chat keeps whatever it has, and the next real
+        // turn or reopen will try again. Endless retrying would outlive the
+        // screen that asked.
+        _awaitingSyncId = null;
+        _awaitingSyncSince = null;
+        return;
+      }
+      if (waited >= _syncNoAnswerRetry) {
+        debugPrint('[sync] session_sync unanswered for $waited — retrying');
+        _pendingSyncRequest = true;
+        requestSync();
+        return;
+      }
+      _armPendingSyncRetry();
+    });
   }
 
   /// Plan 01 — fetch the page older than what is on screen.
@@ -790,6 +857,12 @@ class SyncService extends Service {
         }
 
       case SessionHistory():
+        // Any answer settles the outstanding sync, whatever its id: the retry
+        // only needs to know that the room is talking again.
+        _awaitingSyncId = null;
+        _awaitingSyncSince = null;
+        _pendingSyncRetry?.cancel();
+        _pendingSyncRetry = null;
         // Plan 01 — a response to an `older` page request must MERGE in front
         // of the window; a response to a plain sync replaces it. Either way
         // the cursor advances, and a fresh sync supersedes any page request
@@ -1508,6 +1581,7 @@ class SyncService extends Service {
   void dispose() {
     _flushTimer?.cancel();
     _syncDebounce?.cancel();
+    _pendingSyncRetry?.cancel();
     _workingOffTimer?.cancel();
     _cancelAllSendTimers();
     _connSub?.cancel();

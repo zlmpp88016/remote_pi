@@ -5,7 +5,11 @@ sealed class SessionListState {
 }
 
 class SessionListLoading extends SessionListState {
-  const SessionListLoading();
+  /// Why this is slow, when there is something to say. A cold start spends up
+  /// to half a minute waiting for a Pi that is booting; an empty spinner looks
+  /// exactly like the hang this screen used to have.
+  final String? message;
+  const SessionListLoading({this.message});
 }
 
 class SessionListError extends SessionListState {

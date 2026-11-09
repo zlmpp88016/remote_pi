@@ -59,10 +59,11 @@ class SessionCatalog {
 
   static const _timeout = Duration(seconds: 12);
 
-  Future<SessionListOk> listSessions() {
+  Future<SessionListOk> listSessions({Duration? timeout}) {
     return _expect<SessionListOk>(
       SessionList(id: uuid7()),
       (id, msg) => msg is SessionListOk && msg.inReplyTo == id,
+      timeout: timeout,
     );
   }
 
@@ -476,8 +477,9 @@ class SessionCatalog {
 
   Future<T> _expect<T extends ServerMessage>(
     ClientMessage request,
-    bool Function(String id, ServerMessage msg) match,
-  ) async {
+    bool Function(String id, ServerMessage msg) match, {
+    Duration? timeout,
+  }) async {
     final ch = _conn.channel;
     if (ch == null) {
       throw const WorkspaceControlFailure('offline');
@@ -495,7 +497,7 @@ class SessionCatalog {
     });
     try {
       await ch.send(request);
-      return await done.future.timeout(_timeout);
+      return await done.future.timeout(timeout ?? _timeout);
     } finally {
       await sub.cancel();
     }

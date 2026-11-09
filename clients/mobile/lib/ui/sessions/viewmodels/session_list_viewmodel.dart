@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:mobile/data/preferences/preferences.dart';
 import 'package:mobile/data/sessions/session_catalog.dart';
 import 'package:mobile/data/transport/connection_manager.dart';
@@ -36,33 +38,68 @@ class SessionListViewModel extends ViewModel<SessionListState> {
       // in `extra` (e.g. after a rename), which would silently address a room
       // that does not exist.
       var room = roomId;
+      var starting = false;
       if (!_conn.isRoomLive(epk, roomId) && cwd != null) {
+        starting = true;
+        emit(const SessionListLoading(message: '正在启动工作区…'));
         try {
           final started = await _catalog.startWorkspace(cwd: cwd);
           room = started.roomId;
         } on WorkspaceControlFailure catch (e) {
           // Host down, folder gone, or the daemon refused to start (another Pi
           // owns the folder). Say so now: falling through to `listSessions()`
-          // would replace a precise reason with a generic 12 s timeout.
+          // would replace a precise reason with a generic timeout.
           emit(SessionListError(_startHuman(e)));
-          return;
-        }
-        // The daemon needs a moment to subscribe to the relay, and the room is
-        // not addressable before that — poll instead of paying a full timeout.
-        for (var i = 0; i < 40 && !_conn.isRoomLive(epk, room); i += 1) {
-          await Future<void>.delayed(const Duration(milliseconds: 250));
-        }
-        if (!_conn.isRoomLive(epk, room)) {
-          emit(SessionListError(_startHuman(const WorkspaceControlFailure('spawn_failed'))));
           return;
         }
       }
       _conn.switchRoom(room);
       await _prefs.setSelectedRoom(epk: epk, roomId: room);
-      final ok = await _catalog.listSessions();
+      // "The room is live" is NOT "the room can answer". The Pi registers its
+      // room on the relay as soon as it subscribes, but the handler that
+      // answers `session_list` only exists once Pi has finished booting.
+      // Measured over the public frp path: the room is announced immediately and
+      // the first `session_list` answer arrives ~13.7 s later, against ~100 ms
+      // for a room that is warm. So the budget is a boot budget, not a liveness
+      // test: keep retrying on short slices until the deadline. A warm room
+      // answers on the first slice and never notices this.
+      if (starting) {
+        emit(const SessionListLoading(message: '等工作区就绪…'));
+      }
+      final ok = await _retryOnTimeout(
+        () => _catalog.listSessions(timeout: const Duration(seconds: 3)),
+      );
       emit(SessionListReady(sessions: ok.sessions, currentId: ok.currentId));
+    } on TimeoutException {
+      // Past the deadline. Say the workspace is not answering rather than
+      // dumping a raw `TimeoutException` on the user.
+      emit(const SessionListError('这个工作区没有响应。稍后重试，或先重启该工作区。'));
     } catch (e) {
       emit(SessionListError(e.toString()));
+    }
+  }
+
+  /// Retries [call] on request timeout until a boot-sized deadline expires.
+  ///
+  /// Both calls on this screen address a room that may be mid-boot: the relay
+  /// announces a room as soon as its Pi subscribes, but the command handlers
+  /// only exist once Pi has finished starting. Measured over the public frp
+  /// path: ~13.7 s from `workspace_start_ok` to the first `session_list`
+  /// answer, against ~100 ms for a warm room. One generous timeout cannot
+  /// cover that gap without also making a genuinely dead room hang for half a
+  /// minute, so retry on short slices and let the deadline decide.
+  Future<T> _retryOnTimeout<T>(
+    Future<T> Function() call, {
+    Duration deadline = const Duration(seconds: 30),
+  }) async {
+    final end = DateTime.now().add(deadline);
+    while (true) {
+      try {
+        return await call();
+      } on TimeoutException {
+        if (DateTime.now().isAfter(end)) rethrow;
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+      }
     }
   }
 
@@ -88,7 +125,12 @@ class SessionListViewModel extends ViewModel<SessionListState> {
     emit(s.copyWith(switching: true));
     try {
       _conn.switchRoom(roomId);
-      await _catalog.switchSession(sessionId);
+      // `session_switch` takes the same road as `session_list`: the daemon
+      // either switches in-process or stages the target and exits so the
+      // supervisor can reopen it with `--session`. That exit window is
+      // routinely longer than one request timeout over the public relay, and a
+      // timed-out switch used to end as `TimeoutException` on screen.
+      await _retryOnTimeout(() => _catalog.switchSession(sessionId));
       await _prefs.setSelectedRoom(epk: epk, roomId: roomId);
       // `switching` gates every row (`ListTile(enabled: !switching)`), so
       // leaving it true after a successful switch disables the whole list

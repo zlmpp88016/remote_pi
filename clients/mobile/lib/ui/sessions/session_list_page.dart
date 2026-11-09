@@ -42,8 +42,17 @@ class SessionListPage extends StatelessWidget {
         ),
       ),
       body: switch (state) {
-        SessionListLoading() => Center(
-          child: CircularProgressIndicator(color: colors.accent),
+        SessionListLoading(:final message) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: colors.accent),
+              if (message != null) ...[
+                const SizedBox(height: 16),
+                Text(message, style: TextStyle(color: colors.muted)),
+              ],
+            ],
+          ),
         ),
         SessionListError(:final message) => Center(
           child: Padding(
