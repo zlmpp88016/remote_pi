@@ -63,7 +63,10 @@ else
     if [ -x "$candidate" ]; then GH_BIN="$candidate"; break; fi
   done
 fi
-gh() { "$GH_BIN" "$@"; }
+# `command` bypasses this function. Without it, `GH_BIN=gh` resolves to this
+# very function and recurses until the shell dies with SIGSEGV (rc 139) —
+# silently, so the script looks like it succeeded without doing anything.
+gh() { command "$GH_BIN" "$@"; }
 
 if [ -z "$GH_BIN" ]; then
   echo "erro: gh CLI nao encontrado. Instale: https://cli.github.com" >&2
