@@ -18,7 +18,7 @@ vi.mock("@earendil-works/pi-coding-agent", () => ({
   SessionManager: { list: (...args: unknown[]) => listMock(...args) },
 }));
 
-const { listWorkspaceSessions } = await import("./sessions.js");
+const { listWorkspaceSessionsDirect } = await import("./sessions.js");
 
 describe("listWorkspaceSessions — BASELINE field mapping", () => {
   test("maps an SDK row to the wire shape the client decodes", async () => {
@@ -33,7 +33,7 @@ describe("listWorkspaceSessions — BASELINE field mapping", () => {
       },
     ]);
 
-    const rows = await listWorkspaceSessions("/home/u/proj");
+    const rows = await listWorkspaceSessionsDirect("/home/u/proj");
 
     expect(rows).toHaveLength(1);
     expect(rows[0]).toEqual({
@@ -51,7 +51,7 @@ describe("listWorkspaceSessions — BASELINE field mapping", () => {
       { id: "s1", path: "/p/s1.jsonl", name: "n", modified: 1794071162089, cwd: "/c" },
     ]);
 
-    const rows = await listWorkspaceSessions("/c");
+    const rows = await listWorkspaceSessionsDirect("/c");
     expect(rows[0]!.mtime).toBe(1794071162089);
   });
 
@@ -60,7 +60,7 @@ describe("listWorkspaceSessions — BASELINE field mapping", () => {
       { id: "s1", path: "/p/s1.jsonl", name: "n", modified: 1, cwd: "/c" },
     ]);
 
-    const rows = await listWorkspaceSessions("/c");
+    const rows = await listWorkspaceSessionsDirect("/c");
     expect(rows[0]!.preview).toBeUndefined();
   });
 
@@ -70,13 +70,13 @@ describe("listWorkspaceSessions — BASELINE field mapping", () => {
       { id: "s1", path: "/p/s1.jsonl", name: "n", modified: 1, firstMessage: long, cwd: "/c" },
     ]);
 
-    const rows = await listWorkspaceSessions("/c");
+    const rows = await listWorkspaceSessionsDirect("/c");
     expect(rows[0]!.preview).toHaveLength(200);
   });
 
   test("an empty SDK result maps to an empty list", async () => {
     listMock.mockResolvedValueOnce([]);
-    await expect(listWorkspaceSessions("/c")).resolves.toEqual([]);
+    await expect(listWorkspaceSessionsDirect("/c")).resolves.toEqual([]);
   });
 
   test("cwd falls back to the requested cwd when the SDK row omits it", async () => {
@@ -84,13 +84,13 @@ describe("listWorkspaceSessions — BASELINE field mapping", () => {
       { id: "s1", path: "/p/s1.jsonl", name: "n", modified: 1 },
     ]);
 
-    const rows = await listWorkspaceSessions("/requested/cwd");
+    const rows = await listWorkspaceSessionsDirect("/requested/cwd");
     expect(rows[0]!.cwd).toBe("/requested/cwd");
   });
 
   test("the cwd argument is what gets scanned", async () => {
     listMock.mockResolvedValueOnce([]);
-    await listWorkspaceSessions("/some/where");
+    await listWorkspaceSessionsDirect("/some/where");
     expect(listMock).toHaveBeenCalledWith("/some/where");
   });
 });
