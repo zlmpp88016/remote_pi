@@ -245,8 +245,6 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 120));
 
-      await Future<void>.delayed(const Duration(milliseconds: 120));
-
       expect(
         r.ch.sent,
         contains('workspace_start'),
@@ -324,6 +322,30 @@ void main() {
       // The real test of the flag: a second pick must not be refused.
       final again = await vm.pick('s1');
       expect(again, isTrue, reason: 'the second pick must not be gated out');
+    });
+
+    test('a switch that outlives its view model does not throw', () async {
+      // `switchSession` can take a while; the user may leave the screen first.
+      // `emit` is a no-op after dispose, so the reset must be safe — this pins
+      // that down instead of trusting it.
+      final r = await _rig(roomLive: true);
+      addTearDown(r.conn.dispose);
+      addTearDown(r.ch.close);
+
+      final vm = SessionListViewModel(
+        SessionCatalog(r.conn),
+        r.conn,
+        Preferences(_FakeSecureStorage()),
+        epk: _epk,
+        roomId: _room,
+        cwd: '/proj',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(vm.state, isA<SessionListReady>());
+
+      final pending = vm.pick('s1');
+      vm.dispose(); // gone before the switch resolves
+      await expectLater(pending, completes);
     });
   });
 }
