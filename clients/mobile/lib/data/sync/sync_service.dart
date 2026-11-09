@@ -515,6 +515,41 @@ class SyncService extends Service {
     await ch.send(SessionClone(id: _newId(), fence: fence));
   }
 
+  /// Plan/28 — `session_switch` acked: the room is unchanged but the Pi is now
+  /// on a DIFFERENT session, so every row we hold belongs to the one we just
+  /// left.
+  ///
+  /// Without this the chat kept rendering the previous session (or an empty
+  /// list, for a session whose rows were never synced) and nothing ever asked
+  /// for the new transcript: `activate()` short-circuits on an unchanged
+  /// `(epk, room)`, and no status edge fires because the connection never
+  /// dropped. The screen stayed wrong until the app was restarted.
+  Future<void> switchedSession() async {
+    final epk = _activeEpk;
+    if (epk == null) return;
+    final room = _activeRoomId;
+    // Streaming/working state belonged to the session we left; an in-flight
+    // send's timer would attribute its reply to the wrong session.
+    _cancelAllSendTimers();
+    _discardStreamingState();
+    _setQueuedMessages(const []);
+    _setWorking(false);
+    _resetPaging();
+    await _enqueue(() async {
+      if (_activeEpk != epk || _activeRoomId != room) return;
+      final box = await _boxes.msgsBox(epk, room);
+      await box.clear();
+      _idToSeq.clear();
+      _nextSeq = 0;
+      _indexLoaded = true;
+      final idx = _boxes.sessionsIndexBox();
+      await idx.delete(LocalBoxes.sessionKey(epk, room));
+    });
+    // Pull the NEW session's transcript. `_indexLoaded` is now true, so this
+    // is a real fetch rather than a short-circuited activation.
+    requestSync();
+  }
+
   /// Plan/28 — `session_new` acked: wipe the active session's rows + index.
   Future<void> clearActiveSession() async {
     final epk = _activeEpk;
@@ -818,6 +853,13 @@ class SyncService extends Service {
           _runtimeStatusController.add(status);
         }
 
+      case SessionSwitchOk():
+        // The Pi moved to a different session in the SAME room. Drop the rows
+        // we still hold and fetch the new transcript; nothing else observes
+        // this frame, so without it the chat keeps showing the old session.
+        // ignore: discarded_futures
+        switchedSession();
+
       case TreeSnapshotOk(:final snapshot):
         if (!_treeSnapshotController.isClosed) {
           _treeSnapshotController.add(snapshot);
@@ -858,7 +900,6 @@ class SyncService extends Service {
       case ActionOk():
       case ModelsList():
       case SessionListOk():
-      case SessionSwitchOk():
       case SessionSwitchError():
       case WorkspaceListOk():
       case WorkspaceStartOk():

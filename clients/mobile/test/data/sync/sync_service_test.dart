@@ -793,6 +793,61 @@ void main() {
   });
 
   test(
+    'switchedSession wipes the old rows AND asks for the new transcript',
+    () async {
+      final s = await setup();
+      s.ch.push(UserInput(id: 'u1', text: 'old session text'));
+      await _settle();
+      expect(messages(s.epk), hasLength(1));
+      expect(s.sync.isWorking, isTrue);
+      final sentBefore = s.ch.sent.whereType<SessionSync>().length;
+
+      await s.sync.switchedSession();
+      await _settle();
+
+      // The previous session's row must not survive: it would be attributed to
+      // the session we just moved to.
+      expect(messages(s.epk), isEmpty);
+      expect(s.sync.isWorking, isFalse);
+      expect(s.sync.streaming, isNull);
+      // …and the new one must actually be requested. This is the half that was
+      // missing: the switch succeeded and the screen stayed on the old rows.
+      expect(
+        s.ch.sent.whereType<SessionSync>().length,
+        greaterThan(sentBefore),
+        reason: 'a switch must pull the new transcript, not just drop the old',
+      );
+
+      s.conn.dispose();
+      s.sync.dispose();
+    },
+  );
+
+  test(
+    'an inbound session_switch_ok triggers the wipe without any UI call',
+    () async {
+      // The frame is what the Pi answers; nothing else in the app reads it, so
+      // this asserts the wiring rather than the method.
+      final s = await setup();
+      s.ch.push(UserInput(id: 'u1', text: 'old session text'));
+      await _settle();
+      expect(messages(s.epk), hasLength(1));
+
+      s.ch.push(SessionSwitchOk(
+        inReplyTo: 'x',
+        sessionId: 'newsession',
+        sessionStartedAt: 0,
+      ));
+      await _settle();
+
+      expect(messages(s.epk), isEmpty);
+
+      s.conn.dispose();
+      s.sync.dispose();
+    },
+  );
+
+  test(
     'clearActiveSession wipes rows, index, and in-memory turn state',
     () async {
       final s = await setup();
