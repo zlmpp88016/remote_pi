@@ -16,7 +16,7 @@
 # Usage: clean-shots.sh [maxAgeMinutes] [keep]
 set -uo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MAX_AGE_MIN="${1:-45}"
 KEEP="${2:-5}"
 
