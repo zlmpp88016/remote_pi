@@ -1,10 +1,17 @@
 // Relay endpoint resolution.
 //
-// The app always connects to a SINGLE relay at a time, regardless of
-// how many peers it's paired with. The URL is resolved from:
+// The relay BELONGS TO EACH PAIRING: `PeerRecord.relayUrl` is what an actual
+// connection uses, so pairing two servers on two different relays is well
+// defined (each record remembers its own address). This module supplies:
 //
-//   1. `prefs.relayUrl` (user override, set via Settings or onboarding)
-//   2. `kDefaultRelayUrl` (the public community relay)
+//   1. `prefs.relayUrl` / `kDefaultRelayUrl` — the PREFILL for a NEW pairing,
+//      and the relay the mesh HTTP client talks to.
+//   2. [resolveRelayUrl] as the fallback for a record whose relay was never
+//      recorded (records written before this field was populated).
+//
+// It used to be a single global applied to EVERY connection, which made
+// "which relay is this pairing on?" unanswerable as soon as a second server was
+// added — the field the user could edit had no way to say who it belonged to.
 //
 // Canonical scheme on storage is `http://` or `https://` — this is
 // the form the user types and what we keep in Preferences. The WebSocket
@@ -13,16 +20,24 @@
 // schemes are NOT accepted on input — the app is pre-release and
 // historical persisted values get re-set by the user during the
 // onboarding gate.
-//
-// `peer.relayUrl` is kept on PeerRecord for legacy QR code payloads but
-// is no longer consulted when opening a connection — the resolution is
-// global, not per-peer.
 
 import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/pairing/storage.dart';
 
 /// Public community relay. Hardcoded; not configurable at build time
 /// to keep the onboarding flow deterministic.
 const String kDefaultRelayUrl = 'https://relay.880160.xyz';
+
+/// The relay a connection to [peer] must use.
+///
+/// The pairing owns its relay; the app-wide default is only a fallback for a
+/// record that never recorded one (written before the field was populated).
+/// Extracted from the connection factory so the decision itself is testable
+/// without an injector, an owner key or a live socket.
+String relayUrlForPeer(PeerRecord peer, Preferences prefs) {
+  final stored = peer.relayUrl.trim();
+  return stored.isNotEmpty ? stored : resolveRelayUrl(prefs);
+}
 
 /// User-facing message returned when [isValidRelayUrl] rejects a value.
 /// Surfaced verbatim by Settings and Onboarding — keep stable for
@@ -37,8 +52,11 @@ const String kRelayUrlInvalidGeneric =
     'Enter a valid URL starting with https:// (or http:// for local '
     'relays).';
 
-/// Returns the effective relay URL the app should connect to.
-/// Falls back to [kDefaultRelayUrl] when no user override is set.
+/// Returns the effective DEFAULT relay URL for new pairings (and the mesh
+/// HTTP client). Falls back to [kDefaultRelayUrl] when no user override is set.
+///
+/// NOT what an existing pairing connects through — that is
+/// `PeerRecord.relayUrl`, which is authoritative per server.
 /// Always returns an `http(s)://` URL — caller is responsible for
 /// applying [toWsRelayUrl] when opening a WebSocket.
 String resolveRelayUrl(Preferences prefs) =>

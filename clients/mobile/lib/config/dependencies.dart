@@ -252,10 +252,10 @@ Future<IChannel> _productionConnectionFactory(
   // its retry/backoff path, which is observable as `StatusRetrying` and
   // renders a "reconnecting" banner rather than an empty spinner.
   const wsConnectTimeout = Duration(seconds: 10);
-  // Resolve the GLOBAL relay URL (plan 14): user override > default.
-  // `peer.relayUrl` is kept on PeerRecord for legacy QR payloads but is
-  // no longer consulted when opening a connection.
-  final relayUrl = resolveRelayUrl(_injector.get<Preferences>());
+  // The relay belongs to the PAIRING, not to the app. `relayUrlForPeer` reads
+  // the address recorded on the PeerRecord and only falls back to the global
+  // default for records that never recorded one.
+  final relayUrl = relayUrlForPeer(peer, _injector.get<Preferences>());
   final transport =
       await WsTransport.connect(
         relayUrl: relayUrl,

@@ -1,4 +1,5 @@
 import 'package:mobile/pairing/storage.dart';
+import 'package:mobile/ui/core/copy.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -97,12 +98,21 @@ class PeerListItem extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                  // Plan-17 follow-up — relay URL removed from the
-                  // tile (it's the same for every peer post-plan-14
-                  // global-relay refactor, so it added no signal).
-                  // If/when the protocol surfaces platform (Mac /
-                  // Linux / Windows / Pi OS), render it here; until
-                  // then this slot stays empty.
+                  // The relay is per-pairing, so it finally carries signal:
+                  // it answers "which address am I reaching THIS machine
+                  // through?". It used to be hidden because one global relay
+                  // made it identical on every row.
+                  const SizedBox(height: 4),
+                  Text(
+                    '${AppSettingsCopy.relayOfPairing}: '
+                    '${peer.relayUrl.isEmpty ? AppSettingsCopy.relayNotRecorded : peer.relayUrl}',
+                    style: TextStyle(
+                      fontFamily: kMonoFamily,
+                      fontSize: 11,
+                      color: colors.muted,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   if (_platformLabel(peer) != null) ...[
                     const SizedBox(height: 4),
                     Text(

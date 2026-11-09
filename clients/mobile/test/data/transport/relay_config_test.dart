@@ -1,4 +1,5 @@
 import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/pairing/storage.dart';
 import 'package:mobile/data/transport/relay_config.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -127,6 +128,47 @@ void main() {
 
     test('kDefaultRelayUrl is https://', () {
       expect(kDefaultRelayUrl, startsWith('https://'));
+    });
+  });
+
+  /*
+   * The relay is a property of the PAIRING (the user's question: "is this
+   * middleman the first machine or the second?"). The app-wide default is only
+   * a fallback, so a record carrying its own address is never redirected to the
+   * shared one.
+   */
+  group('relay_config — relayUrlForPeer', () {
+    PeerRecord peerWith(String relay) => PeerRecord(
+      remoteEpk: 'epk-1',
+      sessionName: 'Pi',
+      relayUrl: relay,
+      pairedAt: '2026-01-01T00:00:00Z',
+    );
+
+    test('uses the address recorded on the pairing', () async {
+      final p = Preferences(_FakeStore());
+      await p.setRelayUrl('https://app-default.example.com');
+      expect(
+        relayUrlForPeer(peerWith('https://its-own.example.com'), p),
+        'https://its-own.example.com',
+      );
+    });
+
+    test('two pairings do not share a relay', () async {
+      final p = Preferences(_FakeStore());
+      await p.setRelayUrl('https://app-default.example.com');
+      expect(relayUrlForPeer(peerWith('https://one.example.com'), p),
+          'https://one.example.com');
+      expect(relayUrlForPeer(peerWith('https://two.example.com'), p),
+          'https://two.example.com');
+    });
+
+    test('falls back to the default only when the record has none', () async {
+      final p = Preferences(_FakeStore());
+      expect(relayUrlForPeer(peerWith(''), p), kDefaultRelayUrl);
+      await p.setRelayUrl('https://app-default.example.com');
+      expect(relayUrlForPeer(peerWith('   '), p),
+          'https://app-default.example.com');
     });
   });
 }

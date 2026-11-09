@@ -114,42 +114,18 @@ class _RelaySection extends StatefulWidget {
   State<_RelaySection> createState() => _RelaySectionState();
 }
 
+/*
+ * The relay is a property of EACH PAIRING, not a global app setting.
+ *
+ * This used to be an editable field feeding `Preferences.relayUrl`, applied to
+ * every connection. That only made sense while exactly one server could be
+ * paired: once a second machine is added, "the" relay is unanswerable — the
+ * user's own words were "does this middleman belong to the first machine or the
+ * second?". The connection now reads the relay recorded on the PeerRecord, and
+ * this section is reduced to what remains true: a prefill for the NEXT pairing,
+ * plus a per-pairing (read-only) address rendered next to each pairing.
+ */
 class _RelaySectionState extends State<_RelaySection> {
-  late final TextEditingController _ctrl;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    final vm = context.read<SettingsViewModel>();
-    _ctrl = TextEditingController(text: vm.relayUrlOverride);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final vm = context.read<SettingsViewModel>();
-    final messenger = ScaffoldMessenger.of(context);
-    final err = await vm.saveRelayUrl(_ctrl.text);
-    if (!mounted) return;
-    setState(() => _error = err);
-    if (err == null) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            AppSettingsCopy.relayUpdated,
-            style: TextStyle(fontFamily: kMonoFamily),
-          ),
-          duration: Duration(seconds: 2),
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<SettingsViewModel>();
@@ -157,91 +133,44 @@ class _RelaySectionState extends State<_RelaySection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionHeader('中继'),
+        const _SectionHeader(AppSettingsCopy.defaultRelay),
         Padding(
-          padding: const EdgeInsets.fromLTRB(18, 4, 18, 8),
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                controller: _ctrl,
+              Text(
+                vm.effectiveRelayUrl,
                 style: context.typo.mono.copyWith(
                   fontSize: 13,
                   color: colors.text,
                 ),
-                decoration: InputDecoration(
-                  isDense: true,
-                  hintText: 'https://my-relay.example.com',
-                  hintStyle: context.typo.mono.copyWith(
-                    color: colors.muted,
-                    fontSize: 12,
-                  ),
-                  helperText: '${AppSettingsCopy.currentRelay}: ${vm.effectiveRelayUrl}',
-                  helperStyle: context.typo.mono.copyWith(
-                    fontSize: 10,
-                    color: colors.muted,
-                  ),
-                  errorText: _error,
-                  errorStyle: context.typo.mono.copyWith(
-                    fontSize: 10,
-                    color: colors.error,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 10,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: colors.border),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: colors.accent),
-                  ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                AppSettingsCopy.defaultRelayDetail,
+                style: context.typo.sansBody.copyWith(
+                  fontSize: 12,
+                  color: colors.muted,
+                  height: 1.4,
                 ),
               ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    FilledButton(
-                      onPressed: _save,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: colors.accent,
-                        foregroundColor: colors.onAccent,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 18,
-                          vertical: 10,
-                        ),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(6)),
-                        ),
-                      ),
-                      child: Text(
-                        '保存',
-                        style: const TextStyle(
-                          fontFamily: kMonoFamily,
-                          fontSize: 13,
-                        ),
+              if (vm.relayUrlOverride != kDefaultRelayUrl) ...[
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () => vm.saveRelayUrl(kDefaultRelayUrl),
+                    child: Text(
+                      AppSettingsCopy.defaultRelayReset,
+                      style: const TextStyle(
+                        fontFamily: kMonoFamily,
+                        fontSize: 13,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    TextButton(
-                      onPressed: () {
-                        _ctrl.text = kDefaultRelayUrl;
-                        _save();
-                      },
-                      child: Text(
-                        AppSettingsCopy.useDefaultRelay,
-                        style: const TextStyle(
-                          fontFamily: kMonoFamily,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),

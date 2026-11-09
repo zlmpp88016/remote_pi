@@ -257,14 +257,20 @@ abstract final class AppSettingsCopy {
   static const title = '设置';
   static const pairings = '配对';
   static const addPairing = '添加配对';
-  static const relayUpdated = '中继已更新';
-  static const currentRelay = '当前';
-  static const useDefaultRelay = '使用默认中继';
   static const textSize = '文字大小';
   static const hideToolCalls = '在对话中隐藏工具调用';
   static const hideToolCallsDetail = '只显示你的消息与助手的回复。';
   static const noPairings = '还没有配对';
   static const noPairingsHint = '点 + 配对一台新的主机。';
+
+  // 中继归属每个配对自身，不是 App 的全局设置。#34 删掉可编辑的全局输入框后，
+  // 这里只剩「新增配对时的预填地址」以及每个配对各自的（只读）地址。
+  static const defaultRelay = '新配对默认中继';
+  static const defaultRelayDetail =
+      '只用于新增配对时预填地址。已有配对各自记住自己的中继，改这里不会影响它们。';
+  static const defaultRelayReset = '恢复默认';
+  static const relayOfPairing = '中继';
+  static const relayNotRecorded = '未记录（该配对建立时未保存地址）';
 }
 
 /// 会话列表主页（App 的第一个界面）。
