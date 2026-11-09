@@ -418,5 +418,44 @@ void main() {
 
       vm.dispose();
     });
+
+    /*
+     * BASELINE — pins the CURRENT semantics, which the user reported as wrong.
+     *
+     * `counts` tallies (peer, room) pairs, i.e. WORKSPACES. One machine running
+     * several workspaces therefore reports "8 online" on the phone, which the
+     * user read as "8 Pis?" and correctly called meaningless: liveness belongs
+     * to the SERVER (the room), not to how many folders it happens to have
+     * open. Passo 3a changes this to per-peer counting; this test exists so that
+     * change is a deliberate, visible diff instead of a silent behaviour shift.
+     */
+    test('BASELINE: counts tally workspaces, not servers (one peer, two rooms)',
+        () async {
+      final ch = _ControllableChannel();
+      final storage = _FakeStorage([_peerA]);
+      final conn = ConnectionManager(
+        factory: (_, _) async => ch,
+        storage: storage,
+        emitDebounce: Duration.zero,
+      );
+      final prefs = Preferences(_FakeSecureStorage());
+      final vm = HomeViewModel(storage, prefs, conn);
+      await conn.connectTo(_peerA);
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      // TWO live workspaces on the SAME server.
+      ch.pushControl(
+        const RoomAnnounced(peer: 'epk_A', roomId: 'r1', startedAt: 1),
+      );
+      ch.pushControl(
+        const RoomAnnounced(peer: 'epk_A', roomId: 'r2', startedAt: 2),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      // Current (wrong) semantics: two workspaces ⇒ "2 online" for ONE server.
+      expect(vm.counts, (all: 2, online: 2, offline: 0));
+
+      vm.dispose();
+    });
   });
 }
