@@ -398,6 +398,63 @@ describe("plan/69 — host_forward addressed to the host room resolves to the wo
     }
   });
 
+  /*
+   * Pin the CONTRACT of the reply's `room`, because getting it wrong re-breaks
+   * the clients in a way that looks exactly like the original bug.
+   *
+   * Both shipping clients reject a `host_message` whose `room` is the host
+   * room: web's `proxyRoomFor` refuses `HOST_ROOM` outright, and the app's
+   * `demuxInbound` drops any frame whose room differs from its `activeRoom`
+   * (which the fixed build sets to a real workspace). So the reply must carry
+   * the RESOLVED child room — echoing back the `host` the client asked for
+   * would be discarded by every fixed client and the request would time out
+   * again, now caused by the correction itself.
+   *
+   * The honest consequence: a build that still pins `activeRoom` to `host`
+   * cannot consume this reply. Routing fixes the SILENCE; such a build needs
+   * the client-side half. That is why both halves shipped together.
+   */
+  test("the reply is labelled with the resolved child room, never the host room", async () => {
+    const { bridge, relay } = await bootBridge(fleetStub({ live: true }), async () => [
+      { remote_epk: APP_A },
+    ]);
+    try {
+      const innerCt = Buffer.from(JSON.stringify({ type: "session_list", id: "s4" })).toString("base64");
+      deliver(relay, APP_A, { type: "host_forward", id: "fwd-h4", room: "host", ct: innerCt });
+
+      const forward = JSON.parse(relay.outbound[0]!) as { room?: string };
+      const childRoom = forward.room!;
+
+      // The child answers on its own key; the relay rewrites the envelope with
+      // the sender's identity, which is how the bridge recognises it.
+      deliverOuter(relay, {
+        peer: ownPubkey,
+        room: childRoom,
+        ct: Buffer.from(
+          JSON.stringify({ type: "session_list_ok", in_reply_to: "s4", sessions: [] }),
+        ).toString("base64"),
+      });
+
+      const reply = relay.outbound
+        .map((line) => JSON.parse(line) as { room?: string; ct: string })
+        .map((line) => {
+          const inner = JSON.parse(Buffer.from(line.ct, "base64").toString("utf8")) as {
+            type?: string;
+            room?: string;
+          };
+          return { outerRoom: line.room, inner };
+        })
+        .find((f) => f.inner.type === "host_message");
+
+      expect(reply).toBeDefined();
+      // The frame `demuxInbound` / `proxyRoomFor` actually reads.
+      expect(reply!.inner.room).toBe(childRoom);
+      expect(reply!.inner.room).not.toBe("host");
+    } finally {
+      await bridge.stop();
+    }
+  });
+
   test("no live workspace and no single candidate → a typed action_error, never silence", async () => {
     const two = (): FleetOps => ({
       list: () => [

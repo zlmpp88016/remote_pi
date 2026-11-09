@@ -697,6 +697,20 @@ export class HostBridge {
       if (typeof resolved === "string") {
         if (from) {
           const pendingId = readInnerRequestId(inner.ct) ?? inner.id;
+          /*
+           * Record the RESOLVED room, not the `host` the client asked for.
+           *
+           * Both shipping clients reject a `host_message` whose `room` is the
+           * host room: web's `proxyRoomFor` refuses `HOST_ROOM` outright, and
+           * the app's `demuxInbound` drops any frame whose room is not its
+           * `activeRoom` (which the fixed build sets to a real workspace).
+           * Echoing the request's room here would therefore re-break the very
+           * clients this routing exists to serve.
+           *
+           * Consequence, stated plainly: a build that still pins `activeRoom`
+           * to `host` cannot consume this reply. The routing fix is what stops
+           * the SILENCE; such a build needs the client-side half of the fix.
+           */
           this._rememberPendingRequest(pendingId, from, resolved);
         }
         logRelayEvent(`proxy → child room=${resolved} (host_forward asked for the host room; only live workspace)`);
