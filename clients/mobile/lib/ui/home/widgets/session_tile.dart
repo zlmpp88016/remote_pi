@@ -178,16 +178,24 @@ class _TitleBlock extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 3),
-        // Subtitle = the Pi-extension's model (when surfaced via
-        // `room_announced` / `room_meta_updated`), else the legacy
-        // "Last paired" timestamp so the row keeps a stable height.
+        // Subtitle answers the only question this layer asks: "which folder is
+        // this?" It used to fall back to `peer.pairedAt` — a PEER-level value —
+        // so every workspace of one server rendered the identical
+        // "上次配对: 2d ago", which the user rightly called redundant.
+        // `room.cwd` is the per-workspace answer and was already on hand.
         Builder(builder: (_) {
           final model = room?.model;
           final hasModel = model != null && model.isNotEmpty;
+          final cwd = room?.cwd;
+          final hasCwd = cwd != null && cwd.isNotEmpty;
+          // Model, when the Pi reports one, is the more specific fact; the cwd
+          // is what the row ALWAYS has. Never a timestamp: it is not a property
+          // of a workspace.
+          final subtitle = hasModel
+              ? _truncateModel(model)
+              : (hasCwd ? cwd : '—');
           return Text(
-            hasModel
-                ? _truncateModel(model)
-                : '上次配对：${_relativeTime(peer.pairedAt)}',
+            subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
@@ -239,16 +247,4 @@ String _initial(String name) {
   final trimmed = name.trim();
   if (trimmed.isEmpty) return '?';
   return trimmed.characters.first.toUpperCase();
-}
-
-String _relativeTime(String isoUtc) {
-  final parsed = DateTime.tryParse(isoUtc);
-  if (parsed == null) return isoUtc;
-  final now = DateTime.now().toUtc();
-  final diff = now.difference(parsed);
-  if (diff.inSeconds < 60) return 'just now';
-  if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-  if (diff.inHours < 24) return '${diff.inHours}h ago';
-  if (diff.inDays < 30) return '${diff.inDays}d ago';
-  return isoUtc.substring(0, 10);
 }
