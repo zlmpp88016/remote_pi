@@ -99,6 +99,8 @@ PlainPeerChannel _makeChannel() {
 void main() {
   // Plan 17 — rooms suite registered alongside the rest.
   _registerRoomsTests();
+  // Several paired servers connected at once.
+  _registerPoolTests();
 
   group('ConnectionManager', () {
     test('boot() → StatusNoPeer when storage is empty', () async {
@@ -1537,6 +1539,153 @@ void _registerRoomsTests() {
       expect(cm.activePeer?.roomId, "real-room");
 
       cm.dispose();
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Several paired servers at once (per-peer connection pool)
+// ---------------------------------------------------------------------------
+
+void mainConnectionPool() {}
+
+void _registerPoolTests() {
+  PeerRecord peer(String epk) => PeerRecord(
+    remoteEpk: epk,
+    sessionName: 'Pi $epk',
+    relayUrl: 'ws://localhost:8080',
+    pairedAt: '2026-01-01T00:00:00Z',
+  );
+
+  /// One channel per peer, so a test can lose A while B keeps working.
+  ({ConnectionManager cm, Map<String, _ControllableChannel> chans}) pool() {
+    final chans = <String, _ControllableChannel>{};
+    final cm = ConnectionManager(
+      factory: (p, _) async => chans[p.remoteEpk] = _ControllableChannel(),
+      storage: _FakeStorage([]),
+      emitDebounce: Duration.zero,
+    );
+    return (cm: cm, chans: chans);
+  }
+
+  group('ConnectionManager — per-peer pool', () {
+    test('A losing its channel does not mark B offline', () async {
+      final p = pool();
+      addTearDown(p.cm.dispose);
+
+      await p.cm.connectTo(peer('epkA'));
+      await p.cm.connectTo(peer('epkB'));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(p.cm.isConnected('epkA'), isTrue);
+      expect(p.cm.isConnected('epkB'), isTrue);
+
+      // A's socket dies.
+      await p.chans['epkA']!.closeStream();
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+
+      // A is no longer online (it is retrying)...
+      expect(p.cm.isConnected('epkA'), isFalse);
+      // ...but B is untouched. Before the pool existed, one `_status` field
+      // meant this assertion could not even be expressed.
+      expect(p.cm.isConnected('epkB'), isTrue);
+      expect(p.cm.statusFor('epkB'), isA<StatusOnline>());
+    });
+
+    test('switching focus keeps both servers online', () async {
+      final p = pool();
+      addTearDown(p.cm.dispose);
+
+      await p.cm.connectTo(peer('epkA'));
+      await p.cm.connectTo(peer('epkB'));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      final chA = p.chans['epkA']!;
+
+      // Focus back to A.
+      await p.cm.switchTo(peer('epkA'));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(p.cm.activePeer?.remoteEpk, 'epkA');
+      expect(p.cm.isConnected('epkA'), isTrue);
+      // Crucially, B was NOT torn down by the switch.
+      expect(p.cm.isConnected('epkB'), isTrue);
+      // And A kept the SAME channel — no reconnect on focus change.
+      expect(identical(p.chans['epkA'], chA), isTrue);
+    });
+
+    test('disconnect() closes only the focused server', () async {
+      final p = pool();
+      addTearDown(p.cm.dispose);
+
+      await p.cm.connectTo(peer('epkA'));
+      await p.cm.connectTo(peer('epkB'));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      await p.cm.switchTo(peer('epkA'));
+
+      await p.cm.disconnect();
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(p.cm.isConnected('epkA'), isFalse);
+      expect(p.cm.activePeer, isNull);
+      expect(p.cm.isConnected('epkB'), isTrue);
+    });
+
+    test('the cap evicts the least-recently-used, never the focused one',
+        () async {
+      final p = pool();
+      addTearDown(p.cm.dispose);
+
+      // Fill to the cap (4), touching them in order A → D.
+      for (final epk in ['epkA', 'epkB', 'epkC', 'epkD']) {
+        await p.cm.connectTo(peer(epk));
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      expect(p.cm.connectedEpks, hasLength(4));
+
+      // Re-touch B and make A the focused server, so C is now the coldest.
+      await p.cm.switchTo(peer('epkB'));
+      await p.cm.switchTo(peer('epkA'));
+
+      // A fifth server must evict exactly one.
+      await p.cm.connectTo(peer('epkE'));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      expect(p.cm.connectedEpks, hasLength(ConnectionManager.maxLiveConnections));
+      // C was least recently used → gone.
+      expect(p.cm.isConnected('epkC'), isFalse);
+      // The newcomer is in, and it is what the user is now looking at, so it
+      // must never be its own eviction victim.
+      expect(p.cm.isConnected('epkE'), isTrue);
+      expect(p.cm.activePeer?.remoteEpk, 'epkE');
+      // The most recently touched of the old four survived; only the coldest
+      // went.
+      expect(p.cm.isConnected('epkA'), isTrue);
+      expect(p.cm.isConnected('epkB'), isTrue);
+      expect(p.cm.isConnected('epkD'), isTrue);
+    });
+
+    test('a room of a non-focused server still reports live', () async {
+      final p = pool();
+      addTearDown(p.cm.dispose);
+
+      await p.cm.connectTo(peer('epkA'));
+      await p.cm.connectTo(peer('epkB'));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+
+      // Relay fans out B's rooms over the channel we hold.
+      p.chans['epkB']!.pushControl(const RoomAnnounced(
+        peer: 'epkB',
+        roomId: 'b-room',
+        name: 'b work',
+        cwd: '/b',
+        startedAt: 1000,
+      ));
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+
+      // A is focused; B's room is nonetheless genuinely live.
+      expect(p.cm.activePeer?.remoteEpk, 'epkB');
+      expect(p.cm.isRoomLive('epkB', 'b-room'), isTrue);
     });
   });
 }

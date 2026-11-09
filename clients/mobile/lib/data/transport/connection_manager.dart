@@ -99,11 +99,68 @@ class CancelToken {
 // ConnectionManager
 // ---------------------------------------------------------------------------
 
+/// One connection to one paired server.
+///
+/// Everything that describes "how the link to THIS server is doing" lives here,
+/// and nowhere else. The manager used to keep exactly one of each of these
+/// fields, so a client could only ever hold one server at a time — switching
+/// pairs meant tearing the previous connection down. Keying them per peer is
+/// what lets several servers stay connected in the background.
+///
+/// Machine-wide state (presence, rooms, lifecycle pushes) deliberately stays on
+/// the manager: it is already keyed by epk and concerns every server at once.
+class _PeerConn {
+  _PeerConn(this.peer);
+
+  PeerRecord peer;
+
+  ConnectionStatus status = const StatusNoPeer();
+
+  /// Destination room on this server. 'main' is the implicit default and
+  /// matches the per-cwd room a Pi opens.
+  String activeRoomId = 'main';
+
+  Timer? retryTimer;
+  Timer? pingTimer;
+  CancelToken? connectCancel;
+  StreamSubscription<ServerMessage>? channelSub;
+  StreamSubscription<ControlInbound>? controlSub;
+  int missedPings = 0;
+  int retryAttempt = 0;
+  bool connectInFlight = false;
+
+  /// Monotonic recency stamp, bumped whenever the user touches this server.
+  /// Drives eviction when the live-connection cap is reached.
+  int lastUsed = 0;
+
+  String get key => toStandardB64(peer.remoteEpk);
+
+  bool get isOnline => status is StatusOnline;
+
+  IChannel? get channel =>
+      status is StatusOnline ? (status as StatusOnline).channel : null;
+}
+
 class ConnectionManager extends Service {
   final ConnectionFactory _factory;
   final PairingStorage _storage;
 
+  /// Live connections, one per paired server, keyed by STANDARD base64 epk
+  /// (the same key convention as the presence/rooms maps).
+  final Map<String, _PeerConn> _connections = <String, _PeerConn>{};
+
+  /// The server the UI is currently showing. Null when nothing is selected.
+  String? _focusedKey;
+  int _useSeq = 0;
+
+  /// How many servers may stay connected at once. Every connection holds a
+  /// WebSocket plus its own ping timer, so an unbounded pool would grow with the
+  /// pairing list. The focused server is never evicted.
+  static const int maxLiveConnections = 4;
+
   final _statusController = StreamController<ConnectionStatus>.broadcast();
+  final _statusesController =
+      StreamController<Map<String, ConnectionStatus>>.broadcast();
   // Presence (plano 12): map per remote_epk + a broadcast stream the UI
   // listens to. The map is emitted whole on every change for simple
   // diffing on the consumer side.
@@ -137,30 +194,13 @@ class ConnectionManager extends Service {
 
   /// Peer (remoteEpk) the current [_workspaceStates] belong to.
   String? _workspaceStatePeer;
-  ConnectionStatus _status = const StatusNoPeer();
-  PeerRecord? _activePeer;
-  // Plan 17 — active room on the destination Pi. 'main' is the implicit
-  // default and matches the per-cwd room a Pi opens.
-  String _activeRoomId = 'main';
 
-  Timer? _retryTimer;
-  Timer? _pingTimer;
-  // Plan-18 follow-up — watchdog timer that periodically checks for
-  // "stuck offline" state (active peer set but status not online and
-  // no retry / connect in flight). When detected, forces a fresh
-  // _scheduleRetry. Belt-and-suspenders against any code path that
-  // accidentally drops the retry chain.
+  /// Watchdog: periodically revives every peer whose retry chain went quiet
+  /// while it should still be reconnecting. One timer for the whole pool.
   Timer? _watchdogTimer;
-  CancelToken? _connectCancel;
-  StreamSubscription<ServerMessage>? _channelSub;
-  StreamSubscription<ControlInbound>? _controlSub;
-  // List currently subscribed for presence (so reconnect can replay it).
+
+  /// List currently subscribed for presence (so reconnect can replay it).
   List<String> _subscribedEpks = const [];
-  int _missedPings = 0;
-  int _retryAttempt = 0;
-  // Tracks the last-running connect token so the watchdog can tell
-  // whether a connect is in flight (without poking at the live token).
-  bool _connectInFlight = false;
 
   // Debounce timers — relay's control-frame firehose (peer_online +
   // presence + rooms snapshots, often dozens per second when multiple
@@ -184,33 +224,76 @@ class ConnectionManager extends Service {
     _startWatchdog();
   }
 
-  /// Plan-18 follow-up — periodically checks for stuck offline state
-  /// and forces a reconnect attempt. Runs every 15s. Cheap; only
-  /// fires the actual `_scheduleRetry` when the conditions match.
+  /// Revives any peer whose retry chain went quiet while it should still be
+  /// reconnecting. One timer drives the whole pool; each peer is judged on its
+  /// OWN state, so one stuck peer never masks (or revives) another.
   void _startWatchdog() {
     _watchdogTimer?.cancel();
     _watchdogTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      final peer = _activePeer;
-      if (peer == null) return;
-      if (_status is StatusOnline) return;
-      if (_connectInFlight) return;
-      if (_retryTimer != null) return;
-      // We SHOULD be reconnecting but nothing's scheduled and no
-      // attempt is in flight. Kick the retry chain.
-      _scheduleRetry(peer);
+      for (final conn in _connections.values.toList()) {
+        if (conn.isOnline) continue;
+        if (conn.connectInFlight) continue;
+        if (conn.retryTimer != null) continue;
+        // This peer SHOULD be reconnecting but nothing is scheduled and no
+        // attempt is in flight. Kick only its own retry chain.
+        _scheduleRetry(conn);
+      }
     });
   }
 
-  ConnectionStatus get status => _status;
+  _PeerConn? get _focused {
+    final key = _focusedKey;
+    return key == null ? null : _connections[key];
+  }
+
+  /// Whether at least one server has an open relay link. Room liveness is a
+  /// property of the relay session, not of one particular peer's connection.
+  bool get _hasLiveLink {
+    for (final c in _connections.values) {
+      if (c.isOnline) return true;
+    }
+    return false;
+  }
+
+  /// The focused server's status. `StatusNoPeer` when nothing is selected.
+  ConnectionStatus get status => _focused?.status ?? const StatusNoPeer();
+
+  /// Focused-server status changes.
   Stream<ConnectionStatus> get statusStream => _statusController.stream;
 
-  IChannel? get channel =>
-      _status is StatusOnline ? (_status as StatusOnline).channel : null;
+  /// The focused server's channel, when it is online.
+  IChannel? get channel => _focused?.channel;
 
-  /// The peer this manager is currently driving (online, connecting, or
-  /// retrying). Null when there is no active peer (NoPeer / Offline-noRetry
-  /// / fresh after disconnect()).
-  PeerRecord? get activePeer => _activePeer;
+  /// Status of ONE server, online or not. This is the accessor the UI needs
+  /// once several servers can be connected at once — `status` only ever
+  /// describes whichever one the user is currently looking at.
+  ConnectionStatus statusFor(String epk) =>
+      _connections[toStandardB64(epk)]?.status ?? const StatusNoPeer();
+
+  /// Per-server status snapshot (standard-base64 epk → status).
+  Map<String, ConnectionStatus> get statusesSnapshot => Map.unmodifiable({
+    for (final e in _connections.entries) e.key: e.value.status,
+  });
+
+  /// Every per-server status change, as a whole-map snapshot (same diffing
+  /// contract as [presenceStream] / [roomsStream]).
+  Stream<Map<String, ConnectionStatus>> get statusesStream =>
+      _statusesController.stream;
+
+  /// Whether a specific server currently has an open connection.
+  bool isConnected(String epk) =>
+      _connections[toStandardB64(epk)]?.isOnline ?? false;
+
+  /// Peers (url-safe, as stored) that currently have a live connection.
+  List<String> get connectedEpks => [
+    for (final c in _connections.values)
+      if (c.isOnline) c.peer.remoteEpk,
+  ];
+
+  /// The server the UI is currently driving (online, connecting, or
+  /// retrying). Null when nothing is selected. Other connected servers keep
+  /// running in the background.
+  PeerRecord? get activePeer => _focused?.peer;
 
   // ---- Presence (plano 12) -------------------------------------------------
 
@@ -246,24 +329,42 @@ class ConnectionManager extends Service {
   List<RoomInfo> roomsFor(String epk) =>
       List.unmodifiable(_roomsByPeer[toStandardB64(epk)] ?? const []);
 
-  /// Active destination room (the Pi-side room id). 'main' = default.
-  String get activeRoomId => _activeRoomId;
+  /// Active destination room on the FOCUSED server (the Pi-side room id).
+  /// 'main' = default.
+  String get activeRoomId => _focused?.activeRoomId ?? 'main';
+
+  /// Destination room for ONE server, without changing focus.
+  String roomIdFor(String epk) =>
+      _connections[toStandardB64(epk)]?.activeRoomId ?? 'main';
 
   /// Switch the destination room WITHOUT closing the current WS. The
   /// outer envelope's `room` field on subsequent sends will carry this
   /// value. Use when the user taps a different Pi cwd on Home.
+  ///
+  /// Applies to the FOCUSED server: `switchRoom` is the "user picked a cwd on
+  /// this machine" gesture, so it belongs to whichever server they are
+  /// looking at. Use [switchRoomFor] to move another server's cursor.
   void switchRoom(String roomId) {
-    if (roomId == _activeRoomId) {
-      return;
-    }
-    _activeRoomId = roomId;
-    final active = _activePeer;
-    if (active != null) {
-      _activePeer = active.copyWith(roomId: roomId);
-    }
+    final conn = _focused;
+    if (conn == null) return;
+    _switchRoomOn(conn, roomId);
+  }
+
+  /// Same gesture, addressed to a specific server.
+  void switchRoomFor(String epk, String roomId) {
+    final conn = _connections[toStandardB64(epk)];
+    if (conn == null) return;
+    _switchRoomOn(conn, roomId);
+  }
+
+  void _switchRoomOn(_PeerConn conn, String roomId) {
+    if (roomId == conn.activeRoomId) return;
+    conn.activeRoomId = roomId;
+    conn.peer = conn.peer.copyWith(roomId: roomId);
+    conn.lastUsed = ++_useSeq;
     // Push down to the underlying WS transport so outbound envelopes
     // get the right `room` value.
-    final cur = _status;
+    final cur = conn.status;
     if (cur is StatusOnline) {
       _propagateActiveRoom(roomId, cur.channel);
     }
@@ -350,9 +451,7 @@ class ConnectionManager extends Service {
 
   /// Current online channel cast to its control side, when supported.
   IControlLink? get _controlLink {
-    final s = _status;
-    if (s is! StatusOnline) return null;
-    final ch = s.channel;
+    final ch = _focused?.channel;
     return ch is IControlLink ? ch as IControlLink : null;
   }
 
@@ -371,15 +470,13 @@ class ConnectionManager extends Service {
     // pushes a fresh snapshot. Idempotent so reentrant boots are
     // harmless.
     await _restoreCachedRooms();
-    if (_activePeer != null) {
-      final peers = await _storage.listPeers();
+    final peers = await _storage.listPeers();
+    if (_focused != null) {
       subscribeToPeers(peers.map((p) => p.remoteEpk).toList());
       return;
     }
-    if (_status is StatusOnline) return;
-    final peers = await _storage.listPeers();
     if (peers.isEmpty) {
-      _emit(const StatusNoPeer());
+      _emitFocus(const StatusNoPeer());
       return;
     }
     // IMPORTANT: route through `subscribeToPeers` so the epks land in
@@ -405,20 +502,32 @@ class ConnectionManager extends Service {
     await _connect(target);
   }
 
-  // Connect to a specific peer (used after fresh pairing).
+  // Connect to a specific peer (used after fresh pairing). Opens (or reuses)
+  // that server's own connection and focuses it — every OTHER server keeps its
+  // connection and timers untouched.
   Future<void> connectTo(PeerRecord peer) => _connect(peer);
 
-  /// Idempotent switch to another paired peer. If `peer` already matches
-  /// [activePeer] AND we are Online, no-op. Otherwise tears down the
-  /// current channel WITHOUT emitting a transient `StatusNoPeer` (plano
-  /// 13) and starts a fresh connection — the visible transition becomes
-  /// `Online → Connecting → Online`, never landing on NoPeer.
+  /// Idempotent switch to another paired peer. If [peer] is already focused
+  /// AND online, no-op — but when it is connected and merely unfocused this
+  /// only moves the focus, closing nothing. A server with no connection yet
+  /// gets one, while every other server keeps running.
   Future<void> switchTo(PeerRecord peer) async {
-    final fromEpk = _activePeer?.remoteEpk;
-    if (fromEpk == peer.remoteEpk && _status is StatusOnline) {
+    final key = toStandardB64(peer.remoteEpk);
+    final existing = _connections[key];
+    if (existing != null) {
+      _focusedKey = key;
+      existing.lastUsed = ++_useSeq;
+      if (existing.isOnline) {
+        // Already connected: focus it and leave the channel alone. This is the
+        // whole point of the pool — the connection being left must survive.
+        _emitFocus(existing.status);
+        if (!_roomsController.isClosed) _roomsController.add(_roomsSnapshot());
+        return;
+      }
+      // Present but down (retrying / no peer): reconnect it in place.
+      await _connect(peer);
       return;
     }
-    await _teardownActive(emitNoPeer: false);
     await _connect(peer);
   }
 
@@ -426,76 +535,105 @@ class ConnectionManager extends Service {
   // pairing handshake). Skips the factory entirely — the channel is already
   // connected and ready for use.
   void adopt(IChannel channel, PeerRecord peer) {
-    _cancelRetry();
-    _cancelPing();
-    _connectCancel?.cancel();
-    _channelSub?.cancel();
-    _channelSub = null;
-    _controlSub?.cancel();
-    _controlSub = null;
-    if (_status is StatusOnline) {
-      final old = (_status as StatusOnline).channel;
+    final key = toStandardB64(peer.remoteEpk);
+    final conn = _ensureConn(peer);
+    _focusedKey = key;
+    conn.lastUsed = ++_useSeq;
+    // Replace only THIS server's live channel; other peers are untouched.
+    final previous = conn.channel;
+    _cancelRetry(conn);
+    _cancelPing(conn);
+    conn.connectCancel?.cancel();
+    conn.channelSub?.cancel();
+    conn.channelSub = null;
+    conn.controlSub?.cancel();
+    conn.controlSub = null;
+    if (previous != null && !identical(previous, channel)) {
       // ignore: unawaited_futures
       Future(() async {
         try {
-          await old.close();
+          await previous.close();
         } catch (_) {}
       });
     }
-    _retryAttempt = 0;
-    _missedPings = 0;
-    _activePeer = peer;
-    _emit(StatusOnline(channel));
-    _startPing(peer, channel);
-    _watchChannel(peer, channel);
-    _watchControl(channel);
+    conn.retryAttempt = 0;
+    conn.missedPings = 0;
+    conn.peer = peer;
+    conn.status = StatusOnline(channel);
+    _emitFocus(conn.status);
+    _startPing(conn);
+    _watchChannel(conn, channel);
+    _watchControl(conn, channel);
     _replaySubscriptions();
     _helloHost(peer, channel);
+    _enforceConnectionCap(keep: key);
   }
 
-  // Permanently disconnect and go to NoPeer.
-  Future<void> disconnect() => _teardownActive(emitNoPeer: true);
+  /// Close the FOCUSED server's connection and clear focus. Other connected
+  /// servers keep running (use [disconnectPeer] to close a specific one).
+  Future<void> disconnect() async {
+    final conn = _focused;
+    _focusedKey = null;
+    if (conn != null) {
+      await _teardown(conn);
+      _connections.remove(conn.key);
+      _emitStatuses();
+    }
+    _emitFocus(const StatusNoPeer());
+  }
 
-  /// Shared implementation between [disconnect] and [switchTo]. When
-  /// [emitNoPeer] is false (switch path), the `_status` is left as-is so
-  /// a subsequent `_connect` can emit `StatusConnecting` directly,
-  /// avoiding the visible Online → NoPeer → Connecting flicker that used
-  /// to trip up `ChatViewModel._bootstrap`.
-  Future<void> _teardownActive({required bool emitNoPeer}) async {
-    _cancelRetry();
-    _cancelPing();
-    _connectCancel?.cancel();
-    _channelSub?.cancel();
-    _channelSub = null;
-    _controlSub?.cancel();
-    _controlSub = null;
-    if (_status is StatusOnline) {
-      await (_status as StatusOnline).channel.close();
+  /// Close one server's connection, clearing focus only if it pointed there.
+  Future<void> disconnectPeer(String epk) async {
+    final key = toStandardB64(epk);
+    final conn = _connections[key];
+    if (conn == null) return;
+    final wasFocused = _focusedKey == key;
+    await _teardown(conn);
+    _connections.remove(key);
+    _emitStatuses();
+    if (wasFocused) {
+      _focusedKey = null;
+      _emitFocus(const StatusNoPeer());
     }
-    if (emitNoPeer) {
-      _activePeer = null;
-      _emit(const StatusNoPeer());
+  }
+
+  /// Releases everything ONE connection owns. Never touches another peer's
+  /// timers, subscriptions or status.
+  Future<void> _teardown(_PeerConn conn) async {
+    _cancelRetry(conn);
+    _cancelPing(conn);
+    conn.connectCancel?.cancel();
+    await conn.channelSub?.cancel();
+    conn.channelSub = null;
+    await conn.controlSub?.cancel();
+    conn.controlSub = null;
+    final ch = conn.channel;
+    conn.status = const StatusNoPeer();
+    if (ch != null) {
+      try {
+        await ch.close();
+      } catch (_) {}
     }
-    // When emitNoPeer is false, `_connect` will immediately overwrite
-    // `_activePeer` and emit `StatusConnecting`, so we deliberately leave
-    // the state alone here.
   }
 
   @override
   void dispose() {
-    _cancelRetry();
-    _cancelPing();
+    for (final conn in _connections.values.toList()) {
+      _cancelRetry(conn);
+      _cancelPing(conn);
+      conn.connectCancel?.cancel();
+      conn.channelSub?.cancel();
+      conn.controlSub?.cancel();
+    }
+    _connections.clear();
     _watchdogTimer?.cancel();
     _watchdogTimer = null;
     _presenceEmitTimer?.cancel();
     _presenceEmitTimer = null;
     _roomsEmitTimer?.cancel();
     _roomsEmitTimer = null;
-    _channelSub?.cancel();
-    _channelSub = null;
-    _controlSub?.cancel();
-    _controlSub = null;
     _statusController.close();
+    _statusesController.close();
     _presenceController.close();
     _hostHelloController.close();
     _workspaceStatesController.close();
@@ -503,49 +641,91 @@ class ConnectionManager extends Service {
 
   // ---------------------------------------------------------------------------
 
+  /// The connection for [peer], creating an idle one when absent.
+  _PeerConn _ensureConn(PeerRecord peer) =>
+      _connections.putIfAbsent(toStandardB64(peer.remoteEpk), () => _PeerConn(peer));
+
+  /// Drops the least-recently-used connection that is not [keep]. Only peers
+  /// with a live channel are candidates: evicting a retrying one would defeat
+  /// its own retry chain for no resource saving.
+  void _enforceConnectionCap({required String keep}) {
+    while (_connections.length > maxLiveConnections) {
+      _PeerConn? victim;
+      for (final e in _connections.entries) {
+        if (e.key == keep) continue;
+        if (!e.value.isOnline) continue;
+        if (victim == null || e.value.lastUsed < victim.lastUsed) victim = e.value;
+      }
+      if (victim == null) return;  // nothing safe to evict
+      _cancelRetry(victim);
+      _cancelPing(victim);
+      victim.connectCancel?.cancel();
+      victim.channelSub?.cancel();
+      victim.controlSub?.cancel();
+      final ch = victim.channel;
+      victim.status = const StatusNoPeer();
+      _connections.remove(victim.key);
+      if (ch != null) {
+        // ignore: unawaited_futures
+        Future(() async {
+          try {
+            await ch.close();
+          } catch (_) {}
+        });
+      }
+      _emitStatuses();
+    }
+  }
+
   Future<void> _connect(PeerRecord peer) async {
-    _cancelRetry();
-    _cancelPing();
-    _connectCancel?.cancel();
-    _channelSub?.cancel();
-    _channelSub = null;
-    _controlSub?.cancel();
-    _controlSub = null;
+    final key = toStandardB64(peer.remoteEpk);
+    // Captured BEFORE `_ensureConn`: it creates the connection with this very
+    // `peer`, so afterwards the stored record always "matches" and could not
+    // tell a fresh connect from a reconnect.
+    final existing = _connections[key];
+    final reconnecting = existing != null && existing.peer.roomId != null;
+    final conn = _ensureConn(peer);
+    _focusedKey = key;
+    conn.lastUsed = ++_useSeq;
+    _cancelRetry(conn);
+    _cancelPing(conn);
+    conn.connectCancel?.cancel();
+    conn.channelSub?.cancel();
+    conn.channelSub = null;
+    conn.controlSub?.cancel();
+    conn.controlSub = null;
 
     final token = CancelToken();
-    _connectCancel = token;
-    _connectInFlight = true;
+    conn.connectCancel = token;
+    conn.connectInFlight = true;
     // Plan 17 fix — set the destination room from the persisted
     // PeerRecord BEFORE emitting StatusOnline so the very first send
     // after connect goes to the right (peer, room) on the relay. If
     // the PeerRecord predates this fix (`roomId == null`), we keep
-    // `_activeRoomId = 'main'` and rely on the discovery flow in
+    // `activeRoomId = 'main'` and rely on the discovery flow in
     // `_onControl` to learn the real room from a subsequent
-    // `room_announced` push and then update _activeRoomId + persist.
+    // `room_announced` push and then update the room + persist.
     //
     // Same-peer reconnect (WS retry after backgrounding): the `peer`
     // argument is often a stale capture from `_watchChannel` while
-    // `switchRoom` already moved `_activeRoomId` for the cwd the user
+    // `switchRoom` already moved the room for the cwd the user
     // is viewing. Trust the live selection — never clobber it from a
     // lagging peer.roomId (fixes header=cwd-A, messages/sync=cwd-B).
-    final samePeer = _activePeer?.remoteEpk == peer.remoteEpk;
-    if (samePeer && _activePeer?.roomId != null) {
-      _activePeer = peer.copyWith(roomId: _activeRoomId);
+    if (reconnecting) {
+      conn.peer = peer.copyWith(roomId: conn.activeRoomId);
     } else {
       // Keep a legacy peer unbound until room discovery can persist its
       // canonical room. Assigning the implicit `main` here would make
       // `_maybeAdoptLegacyRoom` treat it as already bound.
-      _activePeer = peer;
+      conn.peer = peer;
       // A record bound to `host` is stale, not a workspace choice: connecting
       // to the control plane for session traffic is a guaranteed timeout. Treat
       // it as unbound so discovery can adopt the real room.
       final stored = peer.roomId;
       final boundRoom = (stored == null || stored == kHostRoomId) ? 'main' : stored;
-      if (boundRoom != _activeRoomId) {
-        _activeRoomId = boundRoom;
-      }
+      conn.activeRoomId = boundRoom;
     }
-    _emit(const StatusConnecting());
+    _setStatus(conn, const StatusConnecting());
 
     try {
       final ch = await _factory(peer, token);
@@ -553,33 +733,35 @@ class ConnectionManager extends Service {
         await ch.close();
         return;
       }
-      _missedPings = 0;
+      conn.missedPings = 0;
       // Push down the active room to the WS so the outer envelope
       // carries it from frame 1 (factory creates a fresh WsTransport
-      // every reconnect — default _activeRoom='main' unless we set).
-      _propagateActiveRoom(_activeRoomId, ch);
-      _emit(StatusOnline(ch));
-      _startPing(peer, ch);
-      _watchChannel(peer, ch);
-      _watchControl(ch);
+      // every reconnect — default activeRoom='main' unless we set).
+      _propagateActiveRoom(conn.activeRoomId, ch);
+      conn.status = StatusOnline(ch);
+      _emitFocus(conn.status);
+      _startPing(conn);
+      _watchChannel(conn, ch);
+      _watchControl(conn, ch);
       _replaySubscriptions();
       _helloHost(peer, ch);
+      _enforceConnectionCap(keep: key);
     } catch (e) {
-      if (!token.isCancelled) _scheduleRetry(peer);
+      if (!token.isCancelled) _scheduleRetry(conn);
     } finally {
       // Only clear the flight flag if THIS call is still the active
       // attempt — a newer _connect may have superseded us.
-      if (identical(_connectCancel, token)) _connectInFlight = false;
+      if (identical(conn.connectCancel, token)) conn.connectInFlight = false;
     }
   }
 
-  void _watchControl(IChannel ch) {
-    _controlSub?.cancel();
+  void _watchControl(_PeerConn conn, IChannel ch) {
+    conn.controlSub?.cancel();
     if (ch is! IControlLink) {
-      _controlSub = null;
+      conn.controlSub = null;
       return;
     }
-    _controlSub = (ch as IControlLink).controlFrames.listen(_onControl);
+    conn.controlSub = (ch as IControlLink).controlFrames.listen(_onControl);
   }
 
   void _onControl(ControlInbound c) {
@@ -865,15 +1047,19 @@ class ConnectionManager extends Service {
   /// it). Cached rooms not in the live set return `false`. Used by
   /// the chat AppBar to render the online dot.
   ///
-  /// Plan-18 follow-up: gated by `_status is StatusOnline`. When the
-  /// WS to the relay drops (retrying / offline), we have no fresh
-  /// signal that any room is reachable, so EVERY room is reported
-  /// offline regardless of the cached `_liveRoomIds`. Home tiles +
-  /// chat AppBar flip to grey immediately. On reconnect, the relay
-  /// re-pushes the rooms snapshot which repopulates the live set
-  /// and tiles go green again.
+  /// Plan-18 follow-up: gated on having SOME live relay link. When every WS
+  /// is down (retrying / offline), we have no fresh signal that any room is
+  /// reachable, so EVERY room is reported offline regardless of the cached
+  /// `_liveRoomIds`.
+  ///
+  /// The gate is deliberately "any live link", NOT "this peer is connected":
+  /// the relay fans out `room_announced` / `rooms` for every subscribed peer
+  /// over whichever channel we hold, so rooms of a server we never opened a
+  /// dedicated connection to are still genuinely observable. Narrowing the gate
+  /// to `statusFor(epk)` would report them offline while we are happily
+  /// receiving their frames.
   bool isRoomLive(String epk, String roomId) {
-    if (_status is! StatusOnline) return false;
+    if (!_hasLiveLink) return false;
     final live = _liveRoomIds[toStandardB64(epk)];
     return live != null && live.contains(roomId);
   }
@@ -886,11 +1072,9 @@ class ConnectionManager extends Service {
   /// fan-out as presence. Drives the blue Home dot on non-active
   /// sessions.
   ///
-  /// Gated on `StatusOnline` (same as [isRoomLive]): a dropped WS means
-  /// we have no fresh signal, so we report not-working and let the tile
-  /// fall back to the amber "reconnecting" / grey state.
+  /// Gated on a live relay link (same reasoning as [isRoomLive]).
   bool isRoomWorking(String epk, String roomId) {
-    if (_status is! StatusOnline) return false;
+    if (!_hasLiveLink) return false;
     final list = _roomsByPeer[toStandardB64(epk)];
     if (list == null) return false;
     for (final r in list) {
@@ -1029,17 +1213,16 @@ class ConnectionManager extends Service {
 
   /// Plan 17 fix — legacy migration hook for peers paired before
   /// `PeerRecord.roomId` existed. When the relay tells us about rooms
-  /// for the active peer, and that peer has no persisted roomId yet,
-  /// we adopt the announced room as canonical:
-  ///   1. Update `_activeRoomId` so outbound envelopes are routed.
+  /// for a peer, and that peer has no persisted roomId yet, we adopt the
+  /// announced room as canonical:
+  ///   1. Update that connection's room so outbound envelopes are routed.
   ///   2. Push the change down to the WS transport.
   ///   3. Persist the choice on the PeerRecord via storage so
   ///      subsequent app launches address (peer, room) from the start
   ///      and don't re-trigger discovery.
   void _maybeAdoptLegacyRoom(String peerKey, String discoveredRoom) {
-    final active = _activePeer;
-    if (active == null) return;
-    if (toStandardB64(active.remoteEpk) != peerKey) return;
+    final conn = _connections[peerKey];
+    if (conn == null) return;
     if (discoveredRoom == kHostRoomId) return;
     /*
      * `host` is the control plane, not a workspace, so a record bound to it is
@@ -1048,18 +1231,18 @@ class ConnectionManager extends Service {
      * discovery is what pinned every request to a room that cannot answer
      * `session_list`; the user saw each session time out after 12 s.
      */
-    if (active.roomId != null && active.roomId != kHostRoomId) {
+    if (conn.peer.roomId != null && conn.peer.roomId != kHostRoomId) {
       return; // explicit room selection — discovery must not override it
     }
-    _activeRoomId = discoveredRoom;
-    final cur = _status;
-    if (cur is StatusOnline) {
-      _propagateActiveRoom(discoveredRoom, cur.channel);
+    conn.activeRoomId = discoveredRoom;
+    final cur = conn.channel;
+    if (cur != null) {
+      _propagateActiveRoom(discoveredRoom, cur);
     }
     // Persist asynchronously — failure here is non-fatal (next discovery
     // round will re-adopt).
-    final updated = active.copyWith(roomId: discoveredRoom);
-    _activePeer = updated;
+    final updated = conn.peer.copyWith(roomId: discoveredRoom);
+    conn.peer = updated;
     // ignore: unawaited_futures
     _storage
         .savePeer(updated)
@@ -1139,24 +1322,20 @@ class ConnectionManager extends Service {
   /// pushed anything for it yet.
   WorkspaceState? workspaceStateFor(String cwd) => _workspaceStates[cwd];
 
-  void _watchChannel(PeerRecord peer, IChannel ch) {
-    _channelSub?.cancel();
-    _channelSub = ch.serverMessages.listen(
+  void _watchChannel(_PeerConn conn, IChannel ch) {
+    conn.channelSub?.cancel();
+    conn.channelSub = ch.serverMessages.listen(
       (msg) {
-        // Real inbound — the Pi is alive and reachable. Safe to reset
-        // both the ping miss counter and the retry backoff.
-        final wasMissed = _missedPings;
-        if (wasMissed > 0) {}
-        if (_retryAttempt != 0) {}
-        _missedPings = 0;
-        _retryAttempt = 0;
+        // Real inbound — this Pi is alive and reachable. Safe to reset THIS
+        // connection's counters only; another server's health is its own.
+        conn.missedPings = 0;
+        conn.retryAttempt = 0;
         // Plan/69 — host control plane rides the same channel: the
         // handshake reply and the lifecycle pushes. Neither is scoped to
         // a workspace room, so neither is dropped by the proxy demux.
         switch (msg) {
           case HostHelloOk():
-            final key = toStandardB64(peer.remoteEpk);
-            _hostHelloByPeer[key] = msg;
+            _hostHelloByPeer[conn.key] = msg;
             if (!_hostHelloController.isClosed) {
               _hostHelloController.add(msg);
             }
@@ -1169,14 +1348,13 @@ class ConnectionManager extends Service {
             break;
         }
       },
-      onError: (_) => _onChannelLost(peer, ch),
-      onDone: () => _onChannelLost(peer, ch),
+      onError: (_) => _onChannelLost(conn, ch),
+      onDone: () => _onChannelLost(conn, ch),
     );
   }
 
-  void _onChannelLost(PeerRecord peer, IChannel ch) {
-    if (_status is! StatusOnline) return;
-    final cur = (_status as StatusOnline).channel;
+  void _onChannelLost(_PeerConn conn, IChannel ch) {
+    final cur = conn.channel;
     if (!identical(cur, ch)) {
       // Stale: this onDone came from a channel we already replaced. The
       // relay typically kicks the previous WS when our retry authenticates
@@ -1184,26 +1362,28 @@ class ConnectionManager extends Service {
       // self-sustaining retry loop.
       return;
     }
-    _cancelPing();
-    _scheduleRetry(peer);
+    _cancelPing(conn);
+    _scheduleRetry(conn);
   }
 
-  void _scheduleRetry(PeerRecord peer) {
-    final delay = _backoffFor(_retryAttempt);
-    _emit(StatusRetrying(nextRetry: delay, attempt: _retryAttempt));
+  void _scheduleRetry(_PeerConn conn) {
+    final delay = _backoffFor(conn.retryAttempt);
+    _setStatus(conn, StatusRetrying(nextRetry: delay, attempt: conn.retryAttempt));
     // Cancel any previous timer before scheduling — prevents the
     // "two timers firing back-to-back" footgun.
-    _retryTimer?.cancel();
-    _retryTimer = Timer(delay, () {
-      _retryTimer = null;
-      _retryAttempt++;
-      _connect(peer);
+    conn.retryTimer?.cancel();
+    conn.retryTimer = Timer(delay, () {
+      conn.retryTimer = null;
+      conn.retryAttempt++;
+      _connect(conn.peer);
     });
   }
 
-  void _startPing(PeerRecord peer, IChannel ch) {
-    _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) async {
-      if (_status is! StatusOnline) return;
+  void _startPing(_PeerConn conn) {
+    conn.pingTimer?.cancel();
+    conn.pingTimer = Timer.periodic(const Duration(seconds: 25), (_) async {
+      final ch = conn.channel;
+      if (ch == null) return;
       // Plan-18 follow-up — DECOUPLED Pi-liveness from WS-liveness.
       //
       // Before: 3 missed Pongs from the Pi triggered `_onChannelLost`,
@@ -1223,11 +1403,11 @@ class ConnectionManager extends Service {
       // below (ping SEND fails) or via the channel listener's
       // onError / onDone, both of which still trigger
       // `_onChannelLost`.
-      _missedPings++;
-      if (_missedPings == 3) {
-        _markActiveRoomOffline();
+      conn.missedPings++;
+      if (conn.missedPings == 3) {
+        _markRoomOffline(conn);
         // No `return` — keep firing pings. When Pi comes back, the
-        // inbound Pong (or any other frame) resets _missedPings via
+        // inbound Pong (or any other frame) resets the counter via
         // _watchChannel, and `room_announced` repopulates
         // _liveRoomIds → tile + AppBar flip back to green
         // automatically.
@@ -1236,51 +1416,75 @@ class ConnectionManager extends Service {
         final id = _newId();
         await ch.send(Ping(id: id));
       } catch (e) {
-        _cancelPing();
-        _onChannelLost(peer, ch);
+        _cancelPing(conn);
+        _onChannelLost(conn, ch);
       }
     });
   }
 
-  /// Plan-18 follow-up — when the Pi stops responding to protocol
+  /// Plan-18 follow-up — when a Pi stops responding to protocol
   /// Pings, mark its current cwd-room as offline locally so the UI
   /// reflects the degraded state. The WS↔relay stays up.
-  void _markActiveRoomOffline() {
-    final activeEpk = _activePeer?.remoteEpk;
-    if (activeEpk == null) return;
-    final key = toStandardB64(activeEpk);
+  void _markRoomOffline(_PeerConn conn) {
+    final key = conn.key;
     final live = _liveRoomIds[key];
-    if (live == null || !live.contains(_activeRoomId)) return;
-    live.remove(_activeRoomId);
+    if (live == null || !live.contains(conn.activeRoomId)) return;
+    live.remove(conn.activeRoomId);
     if (live.isEmpty) _liveRoomIds.remove(key);
     if (!_roomsController.isClosed) {
       _roomsController.add(_roomsSnapshot());
     }
   }
 
-  void _cancelRetry() {
-    _retryTimer?.cancel();
-    _retryTimer = null;
+  void _cancelRetry(_PeerConn conn) {
+    conn.retryTimer?.cancel();
+    conn.retryTimer = null;
   }
 
-  void _cancelPing() {
-    _pingTimer?.cancel();
-    _pingTimer = null;
-    _missedPings = 0;
+  void _cancelPing(_PeerConn conn) {
+    conn.pingTimer?.cancel();
+    conn.pingTimer = null;
+    conn.missedPings = 0;
   }
 
-  void _emit(ConnectionStatus s) {
+  /// Publishes a status change for the FOCUSED server. Status changes for an
+  /// unfocused server update only the pool snapshot — they must not overwrite
+  /// what the user is currently looking at.
+  void _emitFocus(ConnectionStatus s) {
     // Plan-18 follow-up — when the connection-status flips ON or OFF
     // StatusOnline, every room's "live" answer changes too (see
     // `isRoomLive` gate). Re-emit the rooms snapshot so subscribers
     // (Home, Chat AppBar) re-evaluate dot color immediately, without
     // waiting for the relay's next push.
-    final wasOnline = _status is StatusOnline;
+    final wasOnline = status is StatusOnline;
     final nowOnline = s is StatusOnline;
-    _status = s;
     if (!_statusController.isClosed) _statusController.add(s);
+    _emitStatuses();
     if (wasOnline != nowOnline && !_roomsController.isClosed) {
       _roomsController.add(_roomsSnapshot());
+    }
+  }
+
+  /// Sets one connection's status. Emits the focused stream only when that
+  /// connection is the focused one.
+  void _setStatus(_PeerConn conn, ConnectionStatus s) {
+    final focused = _focusedKey == conn.key;
+    final wasOnline = conn.status is StatusOnline;
+    final nowOnline = s is StatusOnline;
+    conn.status = s;
+    if (focused) {
+      _emitFocus(s);
+    } else {
+      _emitStatuses();
+      if (wasOnline != nowOnline && !_roomsController.isClosed) {
+        _roomsController.add(_roomsSnapshot());
+      }
+    }
+  }
+
+  void _emitStatuses() {
+    if (!_statusesController.isClosed) {
+      _statusesController.add(statusesSnapshot);
     }
   }
 
