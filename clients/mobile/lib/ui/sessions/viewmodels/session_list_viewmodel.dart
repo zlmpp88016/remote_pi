@@ -71,9 +71,18 @@ class SessionListViewModel extends ViewModel<SessionListState> {
       );
       emit(SessionListReady(sessions: ok.sessions, currentId: ok.currentId));
     } on TimeoutException {
-      // Past the deadline. Say the workspace is not answering rather than
-      // dumping a raw `TimeoutException` on the user.
-      emit(const SessionListError('这个工作区没有响应。稍后重试，或先重启该工作区。'));
+      // Past the deadline. Prefer the host's own reason when it has one: a
+      // workspace whose Pi died on spawn reports `stopped` + `last_error`, and
+      // "no response" would throw that away for a generic sentence.
+      final failure = cwd == null ? null : _conn.workspaceStateFor(cwd!);
+      final reason = failure?.lastError;
+      emit(
+        SessionListError(
+          reason != null && reason.isNotEmpty
+              ? '这个工作区起不来：$reason'
+              : '这个工作区没有响应。稍后重试，或先重启该工作区。',
+        ),
+      );
     } catch (e) {
       emit(SessionListError(e.toString()));
     }
