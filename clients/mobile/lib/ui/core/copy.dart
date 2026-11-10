@@ -323,6 +323,13 @@ abstract final class ChatCopy {
   static const noActiveDevice = '没有活动设备';
   static const connecting = '连接中…';
   static const nothingHere = '这里还没有内容';
+
+  /// Shown while the transcript is on screen but the live Pi has not been moved
+  /// onto this session yet (measured cold attach: ~12 s over the public relay).
+  static const syncingSession = '同步中…';
+
+  /// Bottom-sheet title/copy for the same wait, when it outlives a glance.
+  static const syncingSessionHint = '已显示历史记录，正在把会话同步到设备…';
   static const cameraOff = '相机权限已关闭 —— 请到系统设置里开启后再附照片。';
   static const micOff = '麦克风权限已关闭 —— 请到系统设置里开启后再口述。';
   static const holdToTalk = '按住说话';

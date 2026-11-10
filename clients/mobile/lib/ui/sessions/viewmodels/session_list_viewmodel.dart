@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:mobile/data/preferences/preferences.dart';
 import 'package:mobile/data/sessions/session_catalog.dart';
+import 'package:mobile/data/sync/sync_service.dart';
 import 'package:mobile/data/transport/connection_manager.dart';
 import 'package:mobile/protocol/protocol.dart';
 import 'package:mobile/ui/core/viewmodel/viewmodel.dart';
@@ -16,6 +17,7 @@ class SessionListViewModel extends ViewModel<SessionListState> {
     required this.epk,
     required this.roomId,
     this.cwd,
+    this.sync,
   }) : super(const SessionListLoading()) {
     // ignore: discarded_futures
     reload();
@@ -24,6 +26,10 @@ class SessionListViewModel extends ViewModel<SessionListState> {
   final SessionCatalog _catalog;
   final ConnectionManager _conn;
   final Preferences _prefs;
+
+  /// Paint-first open. Present in the app (see `app_router`); absent in the unit
+  /// tests that only exercise this screen's own gating.
+  final SyncService? sync;
   final String epk;
   final String roomId;
   final String? cwd;
@@ -134,13 +140,24 @@ class SessionListViewModel extends ViewModel<SessionListState> {
     emit(s.copyWith(switching: true, openingId: sessionId));
     try {
       _conn.switchRoom(roomId);
-      // `session_switch` takes the same road as `session_list`: the daemon
-      // either switches in-process or stages the target and exits so the
-      // supervisor can reopen it with `--session`. That exit window is
-      // routinely longer than one request timeout over the public relay, and a
-      // timed-out switch used to end as `TimeoutException` on screen.
-      await _retryOnTimeout(() => _catalog.switchSession(sessionId));
+      // Paint first, attach behind it.
+      //
+      // Measured over the public relay: the switch ack arrives in ~50 ms, but
+      // the OLD Pi is still the one answering then (it exits ~150 ms later) and
+      // the room goes deaf for the 12 s respawn. A chat built on that window
+      // gets either the transcript of the session you just left, or nothing.
+      // So the transcript is read from the file by id (~200 ms, independent of
+      // which session the Pi is on) and the chat says "同步中…" until the
+      // attach is confirmed against `session_list.current_id`.
       await _prefs.setSelectedRoom(epk: epk, roomId: roomId);
+      final syncer = sync;
+      if (syncer != null) {
+        await syncer.openSession(sessionId, epk: epk, roomId: roomId);
+      } else {
+        // No writer bound (unit test): keep the legacy contract, so this
+        // screen's own gating stays testable without a Hive-backed SyncService.
+        await _retryOnTimeout(() => _catalog.switchSession(sessionId));
+      }
       // `switching` gates every row (`ListTile(enabled: !switching)`), so
       // leaving it true after a successful switch disables the whole list
       // with no way back short of leaving the screen.

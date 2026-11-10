@@ -139,6 +139,13 @@ class ChatPage extends StatelessWidget {
     // Plan-18 follow-up — when the agent is currently producing a
     // response, show "working…" instead of online/offline.
     final isWorking = vm.isWorking;
+    // The attach that moves the live Pi onto the session on screen has not
+    // landed yet. This is "syncing", not "offline": the transcript is already
+    // painted from a file read; what is missing is the live attach. Measured
+    // cold attach is ~12 s over the public relay, so it must be stated rather
+    // than hidden.
+    final isAttachSyncing =
+        resolved && state is ChatReady && state.isAttachSyncing;
 
     // Plan/24-fix-title: pass the navigation hint into the helpers so
     // either line of the AppBar (room or peer) shows it instead of
@@ -214,15 +221,22 @@ class ChatPage extends StatelessWidget {
                       builder: (_) {
                         // Plan-18 follow-up — 4-state pill:
                         // working / reconnecting / online / offline.
-                        // Priority: working > reconnecting > online > offline.
-                        final color = isWorking
+                        // Priority: attach-syncing > working > reconnecting >
+                        // online > offline. "Syncing" wins because a turn cannot
+                        // start before the attach lands, so it is the honest
+                        // answer while the daemon respawn is in flight.
+                        final color = isAttachSyncing
+                            ? colors.warning
+                            : isWorking
                             ? colors.working
                             : isReconnecting
                             ? colors.warning
                             : isOnline
                             ? colors.success
                             : colors.muted;
-                        final label = isWorking
+                        final label = isAttachSyncing
+                            ? ChatCopy.syncingSession
+                            : isWorking
                             ? '运行中…'
                             : isReconnecting
                             ? '重连中…'
@@ -495,6 +509,9 @@ class ChatPage extends StatelessWidget {
     // token-streaming window. Driven by the broad working signal so it matches
     // the AppBar/Home "working" indicator.
     final isWorking = isReady && vm.isWorking;
+    // The Pi has not been moved onto this session yet: a send now would land in
+    // the session it is still on. Lock the composer and say why.
+    final isAttachPending = isReady && state.isAttachSyncing;
     final cancelId = vm.cancelTargetId;
     // Quick actions need an open channel to dispatch — only offer the
     // entry point when the chat input itself is enabled. Hiding the
@@ -502,12 +519,14 @@ class ChatPage extends StatelessWidget {
     // the sheet.
     final actionsEnabled =
         isReady &&
+        !isAttachPending &&
         !isOffline &&
         !isRevoked &&
         !isPeerOffline &&
         !isPresenceOffline;
 
     return InputBar(
+      syncing: isAttachPending,
       disabled:
           !isReady ||
           isOffline ||
@@ -842,6 +861,12 @@ class _TranscriptSkeleton extends StatelessWidget {
           Text(
             '正在载入会话…',
             style: TextStyle(color: colors.muted, fontSize: 13),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            ChatCopy.syncingSessionHint,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: colors.muted.withValues(alpha: 0.8), fontSize: 11),
           ),
         ],
       ),

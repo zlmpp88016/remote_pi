@@ -56,6 +56,12 @@ class ChatViewModel extends ViewModel<ChatState> {
   /// Mirrors [SyncService.isLoadingTranscript]. Seeded in `_bootstrap` and kept
   /// live by the subscription; drives the in-chat skeleton.
   bool _isLoadingTranscript = false;
+  StreamSubscription<bool>? _attachSub;
+
+  /// Mirrors [SyncService.isAttachSyncing]: the transcript on screen came from
+  /// a file read and the Pi has not been moved onto that session yet. Drives
+  /// the "同步中…" pill, so the wait is honest instead of a lie.
+  bool _attachSyncing = false;
   List<QueuedMsg> _queuedMessages = const [];
   // Plan/57 — interactive extension_ui_request awaiting an answer (ask_user).
   ExtensionUiRequest? _pendingUiRequest;
@@ -86,6 +92,7 @@ class ChatViewModel extends ViewModel<ChatState> {
     _streamingSub = _sync.streamingStream.listen(_onStreaming);
     _workingSub = _sync.workingStream.listen(_onWorking);
     _transcriptLoadingSub = _sync.transcriptLoadingStream.listen(_onTranscriptLoading);
+    _attachSub = _sync.attachStateStream.listen(_onAttachState);
     _queuedSub = _sync.queuedStream.listen(_onQueued);
     _eventSub = _sync.events.listen(_onEvent);
     _uiReqSub = _sync.extensionUiRequestStream.listen(_onExtensionUiRequest);
@@ -277,6 +284,7 @@ class ChatViewModel extends ViewModel<ChatState> {
     _streaming = _sync.streaming;
     _working = _sync.isWorking;
     _isLoadingTranscript = _sync.isLoadingTranscript;
+    _attachSyncing = _sync.isAttachSyncing;
     _queuedMessages = _sync.queuedMessages;
     _msgsSub = _read.watchMessages(epk, roomId).listen(_onMessages);
     _runtimeSub = _read.watchRuntime(epk, roomId).listen(_onRuntime);
@@ -304,6 +312,12 @@ class ChatViewModel extends ViewModel<ChatState> {
   void _onTranscriptLoading(bool loading) {
     if (_isLoadingTranscript == loading) return;
     _isLoadingTranscript = loading;
+    _recompute();
+  }
+
+  void _onAttachState(bool syncing) {
+    if (_attachSyncing == syncing) return;
+    _attachSyncing = syncing;
     _recompute();
   }
 
@@ -461,6 +475,7 @@ class ChatViewModel extends ViewModel<ChatState> {
       treeError: _treeError,
       forkDraft: _forkDraft,
       isLoadingTranscript: _isLoadingTranscript,
+      isAttachSyncing: _attachSyncing,
     );
   }
 
@@ -527,6 +542,7 @@ class ChatViewModel extends ViewModel<ChatState> {
     _streamingSub?.cancel();
     _workingSub?.cancel();
     _transcriptLoadingSub?.cancel();
+    _attachSub?.cancel();
     _queuedSub?.cancel();
     _eventSub?.cancel();
     _uiReqSub?.cancel();
