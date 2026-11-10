@@ -438,6 +438,29 @@ describe("handleSessionList", () => {
       error: expect.stringContaining("cwd unavailable"),
     });
   });
+
+  /*
+   * A daemon respawned into a workspace with no sessions runs an in-memory
+   * session whose jsonl does not exist yet. Publishing that id made the client
+   * say "running" (true) beside an empty list, and a phantom "current" row.
+   */
+  test("a current id with no file behind it is not published", async () => {
+    const ctx: ActionCtx = { cwd: "/proj", getSessionId: () => "ghost" };
+    const sender = makeSender();
+    await handleSessionList(ctx, sender, { type: "session_list", id: "r7" }, async () => []);
+    const ok = sender.sent[0] as Extract<ServerMessage, { type: "session_list_ok" }>;
+    expect(ok.current_id).toBeNull();
+    expect(ok.sessions).toHaveLength(0);
+  });
+
+  test("no ctx session id → current_id is null", async () => {
+    const ctx: ActionCtx = { cwd: "/proj" };
+    const sender = makeSender();
+    await handleSessionList(ctx, sender, { type: "session_list", id: "r7" }, async () => sampleListed);
+    const ok = sender.sent[0] as Extract<ServerMessage, { type: "session_list_ok" }>;
+    expect(ok.current_id).toBeNull();
+    expect(ok.sessions.every((s) => !s.live)).toBe(true);
+  });
 });
 
 describe("handleSessionRead", () => {

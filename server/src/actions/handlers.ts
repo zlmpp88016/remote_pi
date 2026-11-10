@@ -431,7 +431,19 @@ export async function handleSessionList(
   }
   try {
     const listed = await listSessions(cwd);
-    const currentId = ctx?.getSessionId?.() ?? null;
+    /*
+     * `current_id` is published only when the listing actually contains it.
+     *
+     * The Pi's in-memory session id is not always backed by a file: a daemon
+     * respawned into a workspace with no sessions runs a fresh in-memory
+     * session whose jsonl is only written on the first turn. Publishing that
+     * id made the client show "this workspace is running" (honest) next to an
+     * empty list, and a row would appear marked "current" for a session that
+     * cannot be opened. A current id with no file behind it is not a session.
+     */
+    const reportedId = ctx?.getSessionId?.() ?? null;
+    const currentId =
+      reportedId != null && listed.some((s) => s.id === reportedId) ? reportedId : null;
     sender.send({
       type: "session_list_ok",
       in_reply_to: msg.id,
