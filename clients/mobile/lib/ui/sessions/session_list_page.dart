@@ -76,7 +76,12 @@ class SessionListPage extends StatelessWidget {
             ),
           ),
         ),
-        SessionListReady(:final sessions, :final currentId, :final switching) =>
+        SessionListReady(
+            :final sessions,
+            :final currentId,
+            :final switching,
+            :final openingId,
+          ) =>
           sessions.isEmpty
               ? Center(
                   child: Text(
@@ -107,12 +112,24 @@ class SessionListPage extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(color: colors.muted, fontSize: 12),
                       ),
-                      trailing: live
+                      trailing: s.id == openingId
+                          ? SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: colors.accent,
+                              ),
+                            )
+                          : live
                           ? Icon(LucideIcons.circleDot, color: colors.accent)
                           : null,
                       onTap: () async {
-                        final ok = await vm.pick(s.id);
-                        if (!ok || !ctx.mounted) return;
+                        // Navigate FIRST, then switch. `session_switch` restarts
+                        // the daemon (stage → ack → exit → respawn), so awaiting
+                        // it before navigating left the list sitting there for
+                        // over a second after the tap. The chat already handles
+                        // an empty session while its sync lands.
                         if (!isWideLayout(ctx)) {
                           ctx.push(
                             '/chat',
@@ -123,6 +140,7 @@ class SessionListPage extends StatelessWidget {
                             },
                           );
                         }
+                        await vm.pick(s.id);
                       },
                     );
                   },

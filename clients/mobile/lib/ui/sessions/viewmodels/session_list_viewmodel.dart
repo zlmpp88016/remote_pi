@@ -131,7 +131,7 @@ class SessionListViewModel extends ViewModel<SessionListState> {
   Future<bool> pick(String sessionId) async {
     final s = state;
     if (s is! SessionListReady || s.switching) return false;
-    emit(s.copyWith(switching: true));
+    emit(s.copyWith(switching: true, openingId: sessionId));
     try {
       _conn.switchRoom(roomId);
       // `session_switch` takes the same road as `session_list`: the daemon
@@ -145,7 +145,9 @@ class SessionListViewModel extends ViewModel<SessionListState> {
       // leaving it true after a successful switch disables the whole list
       // with no way back short of leaving the screen.
       final now = state;
-      if (now is SessionListReady) emit(now.copyWith(switching: false));
+      if (now is SessionListReady) {
+        emit(now.copyWith(switching: false, clearOpening: true));
+      }
       return true;
     } on SessionSwitchFailure catch (e) {
       emit(SessionListError(_human(e)));

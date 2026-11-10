@@ -185,6 +185,17 @@ class SyncService extends Service {
   bool get isWorking => _working;
   Stream<bool> get workingStream => _workingController.stream;
 
+  /// True while a `session_sync` is in flight — i.e. the transcript on screen
+  /// is not yet known to be the current one. The session list uses this to put
+  /// a spinner on the row the user just tapped instead of looking frozen, and
+  /// the chat uses it to show a skeleton instead of "这里还没有内容" (which is
+  /// otherwise indistinguishable from a genuinely empty session).
+  bool get isLoadingTranscript => _awaitingSyncSince != null;
+  Stream<bool> get transcriptLoadingStream =>
+      _transcriptLoadingController.stream;
+  final StreamController<bool> _transcriptLoadingController =
+      StreamController<bool>.broadcast();
+
   /// `cancel` target for the in-flight reply (null when idle).
   String? get workingReplyTo => _workingReplyTo;
 
@@ -479,8 +490,21 @@ class SyncService extends Service {
     final id = _newId();
     _awaitingSyncId = id;
     _awaitingSyncSince = DateTime.now();
+    _emitTranscriptLoading(true);
     ch.send(SessionSync(id: id));
     _armPendingSyncRetry();
+  }
+
+  void _emitTranscriptLoading(bool value) {
+    if (_transcriptLoadingController.isClosed) return;
+    _transcriptLoadingController.add(value);
+  }
+
+  void _settleTranscriptLoading() {
+    if (_awaitingSyncSince == null) return;
+    _awaitingSyncId = null;
+    _awaitingSyncSince = null;
+    _emitTranscriptLoading(false);
   }
 
   /// Retries a `session_sync` that never came back, and flushes a deferred one
@@ -501,8 +525,7 @@ class SyncService extends Service {
         // Give up quietly: the chat keeps whatever it has, and the next real
         // turn or reopen will try again. Endless retrying would outlive the
         // screen that asked.
-        _awaitingSyncId = null;
-        _awaitingSyncSince = null;
+        _settleTranscriptLoading();
         return;
       }
       if (waited >= _syncNoAnswerRetry) {
@@ -859,10 +882,9 @@ class SyncService extends Service {
       case SessionHistory():
         // Any answer settles the outstanding sync, whatever its id: the retry
         // only needs to know that the room is talking again.
-        _awaitingSyncId = null;
-        _awaitingSyncSince = null;
         _pendingSyncRetry?.cancel();
         _pendingSyncRetry = null;
+        _settleTranscriptLoading();
         // Plan 01 — a response to an `older` page request must MERGE in front
         // of the window; a response to a plain sync replaces it. Either way
         // the cursor advances, and a fresh sync supersedes any page request
@@ -1589,6 +1611,7 @@ class SyncService extends Service {
     _roomsSub?.cancel();
     _presenceSub?.cancel();
     _streamingController.close();
+    _transcriptLoadingController.close();
     _eventController.close();
     _extensionUiController.close();
     _workingController.close();

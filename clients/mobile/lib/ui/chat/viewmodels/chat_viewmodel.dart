@@ -32,6 +32,7 @@ class ChatViewModel extends ViewModel<ChatState> {
   StreamSubscription<RuntimeRecord>? _runtimeSub;
   StreamSubscription<StreamingMessage?>? _streamingSub;
   StreamSubscription<bool>? _workingSub;
+  StreamSubscription<bool>? _transcriptLoadingSub;
   StreamSubscription<List<QueuedMsg>>? _queuedSub;
   StreamSubscription<SessionEvent>? _eventSub;
   StreamSubscription<ExtensionUiRequest>? _uiReqSub;
@@ -51,6 +52,10 @@ class ChatViewModel extends ViewModel<ChatState> {
   List<ChatMessage> _messages = const [];
   StreamingMessage? _streaming;
   bool _working = false;
+
+  /// Mirrors [SyncService.isLoadingTranscript]. Seeded in `_bootstrap` and kept
+  /// live by the subscription; drives the in-chat skeleton.
+  bool _isLoadingTranscript = false;
   List<QueuedMsg> _queuedMessages = const [];
   // Plan/57 — interactive extension_ui_request awaiting an answer (ask_user).
   ExtensionUiRequest? _pendingUiRequest;
@@ -80,6 +85,7 @@ class ChatViewModel extends ViewModel<ChatState> {
     // seed AFTER activate() in _bootstrap, when the sync owns THIS session.
     _streamingSub = _sync.streamingStream.listen(_onStreaming);
     _workingSub = _sync.workingStream.listen(_onWorking);
+    _transcriptLoadingSub = _sync.transcriptLoadingStream.listen(_onTranscriptLoading);
     _queuedSub = _sync.queuedStream.listen(_onQueued);
     _eventSub = _sync.events.listen(_onEvent);
     _uiReqSub = _sync.extensionUiRequestStream.listen(_onExtensionUiRequest);
@@ -270,6 +276,7 @@ class ChatViewModel extends ViewModel<ChatState> {
     // the constructor avoids inheriting the previous chat's bubble/pill.
     _streaming = _sync.streaming;
     _working = _sync.isWorking;
+    _isLoadingTranscript = _sync.isLoadingTranscript;
     _queuedMessages = _sync.queuedMessages;
     _msgsSub = _read.watchMessages(epk, roomId).listen(_onMessages);
     _runtimeSub = _read.watchRuntime(epk, roomId).listen(_onRuntime);
@@ -291,6 +298,12 @@ class ChatViewModel extends ViewModel<ChatState> {
 
   void _onWorking(bool working) {
     _working = working;
+    _recompute();
+  }
+
+  void _onTranscriptLoading(bool loading) {
+    if (_isLoadingTranscript == loading) return;
+    _isLoadingTranscript = loading;
     _recompute();
   }
 
@@ -447,6 +460,7 @@ class ChatViewModel extends ViewModel<ChatState> {
       treeSnapshot: _treeSnapshot,
       treeError: _treeError,
       forkDraft: _forkDraft,
+      isLoadingTranscript: _isLoadingTranscript,
     );
   }
 
@@ -512,6 +526,7 @@ class ChatViewModel extends ViewModel<ChatState> {
     _runtimeSub?.cancel();
     _streamingSub?.cancel();
     _workingSub?.cancel();
+    _transcriptLoadingSub?.cancel();
     _queuedSub?.cancel();
     _eventSub?.cancel();
     _uiReqSub?.cancel();

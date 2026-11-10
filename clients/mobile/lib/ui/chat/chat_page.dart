@@ -445,29 +445,41 @@ class ChatPage extends StatelessWidget {
         actionLabel: 'Re-pair',
         onAction: () => context.go('/pair'),
       ),
-      ChatReady(:final messages, :final streaming, :final hasOlder) => () {
-        final visible = hideToolCalls
-            ? messages.where((m) => m is! ToolEvent).toList()
-            : messages;
-        // Empty body → the default placeholder (Pi brand icon + "Nothing
-        // here"), shown whenever there's nothing to render — including while
-        // reconnecting (the reconnect handshake never swaps the body).
-        if (visible.isEmpty && streaming == null) {
-          return const _EmptyState(
-            icon: LucideIcons.terminal,
-            message: ChatCopy.nothingHere,
-          );
-        }
-        return _MessageList(
-          messages: visible,
-          streaming: streaming,
-          onDecide: (id, decision) => vm.approveTool(id, decision),
-          // Paging only makes sense when tool-call rows are not being hidden;
-          // otherwise the "load earlier" spinner would appear to do nothing.
-          hasOlder: hasOlder && !hideToolCalls,
-          onLoadOlder: vm.loadOlder,
-        );
-      }(),
+      ChatReady(
+        :final messages,
+        :final streaming,
+        :final hasOlder,
+        :final isLoadingTranscript,
+      ) =>
+          () {
+            final visible = hideToolCalls
+                ? messages.where((m) => m is! ToolEvent).toList()
+                : messages;
+            // Empty body → the default placeholder (Pi brand icon + "Nothing
+            // here"), shown whenever there's nothing to render — including while
+            // reconnecting (the reconnect handshake never swaps the body).
+            if (visible.isEmpty && streaming == null) {
+              // A transcript still on its way is NOT an empty session. Without
+              // this distinction a resumed session rendered "这里还没有内容" and
+              // looked broken for the whole round-trip.
+              if (isLoadingTranscript) {
+                return const _TranscriptSkeleton();
+              }
+              return const _EmptyState(
+                icon: LucideIcons.terminal,
+                message: ChatCopy.nothingHere,
+              );
+            }
+            return _MessageList(
+              messages: visible,
+              streaming: streaming,
+              onDecide: (id, decision) => vm.approveTool(id, decision),
+              // Paging only makes sense when tool-call rows are not being hidden;
+              // otherwise the "load earlier" spinner would appear to do nothing.
+              hasOlder: hasOlder && !hideToolCalls,
+              onLoadOlder: vm.loadOlder,
+            );
+          }(),
     };
   }
 
@@ -800,6 +812,38 @@ class _LoadOlderButton extends StatelessWidget {
       child: const Text(
         ChatCopy.loadEarlier,
         style: TextStyle(fontFamily: kMonoFamily, fontSize: 11),
+      ),
+    );
+  }
+}
+
+class _TranscriptSkeleton extends StatelessWidget {
+  const _TranscriptSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    // Deliberately not a full-screen spinner: the chat body is already painted
+    // and only its content is pending, so a centered indicator reads as "the
+    // app froze". A short caption understated enough to disappear quickly.
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: colors.accent,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '正在载入会话…',
+            style: TextStyle(color: colors.muted, fontSize: 13),
+          ),
+        ],
       ),
     );
   }

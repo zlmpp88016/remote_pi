@@ -69,6 +69,11 @@ class ChatReady extends ChatState {
   /// compared; the ViewModel replaces the instance on each snapshot.
   final TreeSnapshot? treeSnapshot;
 
+  /// True while the transcript for this session is still being fetched.
+  /// Without it an empty body and a still-loading one both render
+  /// "这里还没有内容", so a resumed session looks like a broken empty one.
+  final bool isLoadingTranscript;
+
   /// Plan 01 — last tree/branching error code (null when none).
   final String? treeError;
 
@@ -94,6 +99,7 @@ class ChatReady extends ChatState {
     this.treeSnapshot,
     this.treeError,
     this.forkDraft,
+    this.isLoadingTranscript = false,
   });
 
   ChatReady copyWith({
@@ -120,6 +126,7 @@ class ChatReady extends ChatState {
     bool clearTreeError = false,
     String? forkDraft,
     bool clearForkDraft = false,
+    bool? isLoadingTranscript,
   }) =>
       ChatReady(
         messages: messages ?? this.messages,
@@ -147,6 +154,8 @@ class ChatReady extends ChatState {
             : (treeSnapshot ?? this.treeSnapshot),
         treeError: clearTreeError ? null : (treeError ?? this.treeError),
         forkDraft: clearForkDraft ? null : (forkDraft ?? this.forkDraft),
+        isLoadingTranscript:
+            isLoadingTranscript ?? this.isLoadingTranscript,
       );
 
   @override
