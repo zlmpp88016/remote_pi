@@ -144,8 +144,10 @@ class ChatPage extends StatelessWidget {
     // painted from a file read; what is missing is the live attach. Measured
     // cold attach is ~12 s over the public relay, so it must be stated rather
     // than hidden.
-    final isAttachSyncing =
-        resolved && state is ChatReady && state.isAttachSyncing;
+    // Deliberately NOT gated on `resolved`: this is the app's own attach state,
+    // not a relay report, so it must be right on the very first frame instead
+    // of only after the presence handshake lands.
+    final isAttachSyncing = state is ChatReady && state.isAttachSyncing;
 
     // Plan/24-fix-title: pass the navigation hint into the helpers so
     // either line of the AppBar (room or peer) shows it instead of
@@ -464,6 +466,7 @@ class ChatPage extends StatelessWidget {
         :final streaming,
         :final hasOlder,
         :final isLoadingTranscript,
+        :final isAttachSyncing,
       ) =>
           () {
             final visible = hideToolCalls
@@ -476,7 +479,7 @@ class ChatPage extends StatelessWidget {
               // A transcript still on its way is NOT an empty session. Without
               // this distinction a resumed session rendered "这里还没有内容" and
               // looked broken for the whole round-trip.
-              if (isLoadingTranscript) {
+              if (isLoadingTranscript || isAttachSyncing) {
                 return const _TranscriptSkeleton();
               }
               return const _EmptyState(

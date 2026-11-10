@@ -133,6 +133,13 @@ class SessionListViewModel extends ViewModel<SessionListState> {
     _ => e.message.isEmpty ? '无法启动该工作区。' : e.message,
   };
 
+  /// Declare the open before the route is pushed, so the chat that mounts a
+  /// moment later already knows a sync is not welcome yet. See
+  /// [SyncService.markOpening].
+  void markOpening(String sessionId) {
+    sync?.markOpening(sessionId);
+  }
+
   /// Returns true when the Pi switched (or was already on) that session.
   Future<bool> pick(String sessionId) async {
     final s = state;

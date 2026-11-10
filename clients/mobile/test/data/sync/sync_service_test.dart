@@ -938,7 +938,9 @@ void main() {
         reason: 'history from a Pi that is not on the target must be dropped',
       );
       expect(s.ch.sent.whereType<SessionSync>().length, syncsBefore);
-      expect(s.sync.isLoadingTranscript, isFalse);
+      // The body is still "loading" — but for the READ that is painting the
+      // target's transcript, not for a sync the old Pi answered.
+      expect(s.sync.isAttachSyncing, isTrue);
 
       s.conn.dispose();
       s.sync.dispose();

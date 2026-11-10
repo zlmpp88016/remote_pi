@@ -82,6 +82,10 @@ class SyncService extends Service {
   /// how the chat ended up permanently empty after resuming a session. So the
   /// send is not the end of the story: a silence longer than the observed
   /// cold-start latency is retried until the transcript arrives.
+  /// A  is in flight: its reply IS the transcript on screen, so
+  /// the body is "loading", not "empty".
+  bool _readPending = false;
+
   String? _awaitingSyncId;
   DateTime? _awaitingSyncSince;
   static const _syncNoAnswerRetry = Duration(seconds: 3);
@@ -232,7 +236,7 @@ class SyncService extends Service {
   /// a spinner on the row the user just tapped instead of looking frozen, and
   /// the chat uses it to show a skeleton instead of "这里还没有内容" (which is
   /// otherwise indistinguishable from a genuinely empty session).
-  bool get isLoadingTranscript => _awaitingSyncSince != null;
+  bool get isLoadingTranscript => _awaitingSyncSince != null || _readPending;
   Stream<bool> get transcriptLoadingStream =>
       _transcriptLoadingController.stream;
   final StreamController<bool> _transcriptLoadingController =
@@ -680,6 +684,24 @@ class SyncService extends Service {
   /// `session_sync` sent there is answered by the OLD Pi (wrong transcript) or
   /// dropped entirely. `session_read` is addressed by id and independent of
   /// which session the Pi is on, so it is what the user sees first.
+  /// Declare an open WITHOUT touching the wire.
+  ///
+  /// The session list navigates to /chat and only then starts the work, so the
+  /// chat's own bootstrap runs first. Without a synchronous marker it would
+  /// request a sync for the session the Pi is still on — exactly the wrong
+  /// transcript this change exists to prevent. Setting the flag before the
+  /// push makes the very first frame already say "同步中…".
+  void markOpening(String sessionId) {
+    _attachSessionId = sessionId;
+    _attachConfirmed = false;
+    _attachAttempt = 0;
+    _attachStartedAt = DateTime.now();
+    _switchSent = false;
+    _attachRetry?.cancel();
+    _attachRetry = null;
+    _emitAttachState();
+  }
+
   Future<void> openSession(String sessionId, {required String epk, required String roomId}) async {
     // Bind first: the tap happens right before the chat mounts, and the chat's
     // own `activate` must short-circuit rather than reset the state we are
@@ -693,15 +715,7 @@ class SyncService extends Service {
     _setWorking(false);
     _resetPaging();
 
-    _attachSessionId = sessionId;
-    _attachConfirmed = false;
-    _attachAttempt = 0;
-    _attachStartedAt = DateTime.now();
-    _switchSent = false;
-    _attachRetry?.cancel();
-    _attachRetry = null;
-    _emitAttachState();
-
+    markOpening(sessionId);
     await _wipeRows(epk, roomId);
 
     // Paint first. ~100–200 ms measured over the public relay.
@@ -716,6 +730,8 @@ class SyncService extends Service {
   void _requestRead(String sessionId, {String? before}) {
     final ch = _conn.channel;
     if (ch == null) return;
+    _readPending = true;
+    _emitTranscriptLoading(true);
     ch.send(
       SessionRead(id: _newId(), sessionId: sessionId, before: before),
     );
@@ -813,6 +829,8 @@ class SyncService extends Service {
   /// Plan/71 — one page of ANY session arrived. This is the transcript the
   /// user sees first, so it replaces the rows the same way a sync does.
   void _onSessionRead(SessionReadOk msg) {
+    _readPending = false;
+    if (_awaitingSyncSince == null) _emitTranscriptLoading(false);
     // A read for a session the user has already left must never overwrite the
     // rows of the one they are looking at now.
     if (_attachSessionId != null && msg.sessionId != _attachSessionId) return;
