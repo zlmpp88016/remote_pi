@@ -130,8 +130,22 @@ class SessionListViewModel extends ViewModel<SessionListState> {
   /// Returns true when the Pi switched (or was already on) that session.
   Future<bool> pick(String sessionId) async {
     final s = state;
-    if (s is! SessionListReady || s.switching) return false;
-    emit(s.copyWith(switching: true, openingId: sessionId));
+    // A failed open leaves the list itself intact (see [_failOpen]); tapping
+    // again from the inline error must work, so an error that still carries the
+    // rows is a valid starting point.
+    final base = s is SessionListReady
+        ? s
+        : (s is SessionListError ? s.recoverable : null);
+    if (base == null) return false;
+    // A second tap while the first open is still running is a no-op for the
+    // SAME row, but not a blanket refusal: the list must stay usable after a
+    // failure, and the previous guard (`s.switching`) never recovered from one.
+    if (base.switching && base.openingId == sessionId) return false;
+    emit(base.copyWith(
+      switching: true,
+      openingId: sessionId,
+      clearOpenError: true,
+    ));
     try {
       _conn.switchRoom(roomId);
       // `session_switch` takes the same road as `session_list`: the daemon
@@ -141,20 +155,51 @@ class SessionListViewModel extends ViewModel<SessionListState> {
       // timed-out switch used to end as `TimeoutException` on screen.
       await _retryOnTimeout(() => _catalog.switchSession(sessionId));
       await _prefs.setSelectedRoom(epk: epk, roomId: roomId);
-      // `switching` gates every row (`ListTile(enabled: !switching)`), so
-      // leaving it true after a successful switch disables the whole list
-      // with no way back short of leaving the screen.
-      final now = state;
-      if (now is SessionListReady) {
-        emit(now.copyWith(switching: false, clearOpening: true));
-      }
+      _settleSwitch();
       return true;
     } on SessionSwitchFailure catch (e) {
-      emit(SessionListError(_human(e)));
+      _failOpen(_human(e));
       return false;
     } catch (e) {
-      emit(SessionListError(e.toString()));
+      _failOpen(e.toString());
       return false;
+    }
+  }
+
+  /// A tap that failed must not erase the list.
+  ///
+  /// The screen used to swap `SessionListReady` for a full-screen
+  /// `SessionListError`, which removed every row: after one refused switch
+  /// there was nothing left to tap and the screen could only be abandoned. The
+  /// error now rides on top of the rows as a banner, and the gate is released so
+  /// the next tap goes through.
+  void _failOpen(String message) {
+    final now = state;
+    final base = now is SessionListReady ? now : null;
+    if (base == null) {
+      emit(SessionListError(message));
+      return;
+    }
+    emit(
+      base.copyWith(
+        switching: false,
+        clearOpening: true,
+        openError: message,
+      ),
+    );
+  }
+
+  /// Clear the per-row spinner and the list-wide gate on EVERY exit path.
+  ///
+  /// `switching` gates every row (`ListTile(enabled: !switching)`), so leaving
+  /// it true after a failure disabled the whole list with no way back short of
+  /// leaving the screen: the guard at the top of [pick] then dropped every
+  /// later tap silently. That is why a single failed switch made the session
+  /// list look dead.
+  void _settleSwitch() {
+    final now = state;
+    if (now is SessionListReady) {
+      emit(now.copyWith(switching: false, clearOpening: true));
     }
   }
 

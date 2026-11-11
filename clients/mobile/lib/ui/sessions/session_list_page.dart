@@ -81,6 +81,7 @@ class SessionListPage extends StatelessWidget {
             :final currentId,
             :final switching,
             :final openingId,
+            :final openError,
           ) =>
           sessions.isEmpty
               ? Center(
@@ -89,7 +90,13 @@ class SessionListPage extends StatelessWidget {
                     style: TextStyle(color: colors.muted),
                   ),
                 )
-              : ListView.separated(
+              : Column(
+                  children: [
+                    // A tap that failed keeps the rows: the message rides on top
+                    // instead of replacing them, so the user can just tap again.
+                    if (openError != null) _OpenErrorBanner(message: openError),
+                    Expanded(
+                      child: ListView.separated(
                   itemCount: sessions.length,
                   separatorBuilder: (_, _) =>
                       Divider(height: 1, color: colors.border),
@@ -145,7 +152,38 @@ class SessionListPage extends StatelessWidget {
                     );
                   },
                 ),
+                    ),
+                  ],
+                ),
       },
+    );
+  }
+}
+
+/// A tap that failed, shown ABOVE the rows instead of instead of them.
+class _OpenErrorBanner extends StatelessWidget {
+  const _OpenErrorBanner({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      color: colors.error.withValues(alpha: 0.08),
+      child: Row(
+        children: [
+          Icon(LucideIcons.circleAlert, color: colors.error, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: colors.error, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -98,9 +98,13 @@ class _FakeStorage extends PairingStorage {
 /// silent when [answerSessionList] is false — that is what the old code walked
 /// into and what the 12 s timeout was made of.
 class _Channel implements IChannel, IControlLink {
-  _Channel({this.startError, this.answerSessionList = true, this.silentAttempts = 0});
-
+  _Channel({this.startError, this.answerSessionList = true, this.silentAttempts = 0, this.switchError});
   final String? startError;
+
+  /// When set, every `session_switch` is answered with this failure instead of
+  /// an ack — the path that used to leave `switching` stuck on.
+  final String? switchError;
+
   bool answerSessionList;
 
   /// Number of `session_list` requests to swallow before answering. A cold
@@ -178,6 +182,16 @@ class _Channel implements IChannel, IControlLink {
           ),
         );
       case SessionSwitch(:final id):
+        if (switchError != null) {
+          _server.add(
+            SessionSwitchError(
+              inReplyTo: id,
+              code: SessionSwitchErrorCode.unknown,
+              message: switchError!,
+            ),
+          );
+          return;
+        }
         _server.add(
           SessionSwitchOk(
             inReplyTo: id,
@@ -209,11 +223,13 @@ Future<({ConnectionManager conn, _Channel ch})> _rig({
   bool answerSessionList = true,
   int silentAttempts = 0,
   bool roomLive = false,
+  String? switchError,
 }) async {
   final ch = _Channel(
     startError: startError,
     answerSessionList: answerSessionList,
     silentAttempts: silentAttempts,
+    switchError: switchError,
   );
   final conn = ConnectionManager(
     factory: (_, _) async => ch,
@@ -368,6 +384,52 @@ void main() {
       // The real test of the flag: a second pick must not be refused.
       final again = await vm.pick('s1');
       expect(again, isTrue, reason: 'the second pick must not be gated out');
+    });
+
+    test('a FAILED pick still leaves the list tappable', () async {
+      // Regression: `switching` used to be cleared only on the success path, so
+      // one failed switch left it `true` forever. The guard at the top of
+      // `pick()` then dropped every later tap with no feedback, and the whole
+      // session list looked dead until it was left and re-entered.
+      final r = await _rig(roomLive: true, switchError: 'no sdk');
+      addTearDown(r.conn.dispose);
+      addTearDown(r.ch.close);
+
+      final vm = SessionListViewModel(
+        SessionCatalog(r.conn),
+        r.conn,
+        Preferences(_FakeSecureStorage()),
+        epk: _epk,
+        roomId: _room,
+        cwd: '/proj',
+      );
+      addTearDown(vm.dispose);
+
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      expect(vm.state, isA<SessionListReady>());
+
+      final ok = await vm.pick('s1');
+      expect(ok, isFalse, reason: 'the switch was refused by the host');
+
+      // The screen may show an error, but the GATE must be released. Replaying
+      // the state is how the list would see it: not `switching` any more.
+      final after = vm.state;
+      if (after is SessionListReady) {
+        expect(
+          after.switching,
+          isFalse,
+          reason: 'a failed switch must not disable every row',
+        );
+      }
+
+      // And the decisive bit: the next tap is not swallowed by the guard.
+      final setBefore = r.ch.sent.where((t) => t == 'session_switch').length;
+      await vm.pick('s1');
+      expect(
+        r.ch.sent.where((t) => t == 'session_switch').length,
+        greaterThan(setBefore),
+        reason: 'the second tap must reach the wire, not be gated out',
+      );
     });
 
     test('a switch that outlives its view model does not throw', () async {
