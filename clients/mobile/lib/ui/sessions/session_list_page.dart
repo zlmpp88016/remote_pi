@@ -160,7 +160,7 @@ class SessionListPage extends StatelessWidget {
   }
 }
 
-/// A tap that failed, shown ABOVE the rows instead of instead of them.
+/// A tap that failed, shown ABOVE the rows instead of replacing them.
 class _OpenErrorBanner extends StatelessWidget {
   const _OpenErrorBanner({required this.message});
   final String message;

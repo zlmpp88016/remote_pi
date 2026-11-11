@@ -160,8 +160,14 @@ class SessionListViewModel extends ViewModel<SessionListState> {
     } on SessionSwitchFailure catch (e) {
       _failOpen(_human(e));
       return false;
+    } on TimeoutException {
+      // The daemon accepted nothing at all — usually dead, restarting, or too
+      // slow to answer. A raw `TimeoutException after 0:00:12` is not a sentence
+      // a user can act on.
+      _failOpen('这个会话没有响应。先确认机器上的 Pi 还在运行，或重启该工作区后重试。');
+      return false;
     } catch (e) {
-      _failOpen(e.toString());
+      _failOpen('无法打开该会话：$e');
       return false;
     }
   }
