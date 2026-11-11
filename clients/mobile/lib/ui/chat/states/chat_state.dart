@@ -74,12 +74,6 @@ class ChatReady extends ChatState {
   /// "这里还没有内容", so a resumed session looks like a broken empty one.
   final bool isLoadingTranscript;
 
-  /// True while the live Pi has not yet been moved onto this session: the
-  /// transcript is already on screen (from an id-addressed file read) but the
-  /// attach behind it is still respawning the daemon. Drives the "同步中…"
-  /// status pill, so the wait is stated instead of hidden.
-  final bool isAttachSyncing;
-
   /// Plan 01 — last tree/branching error code (null when none).
   final String? treeError;
 
@@ -106,7 +100,6 @@ class ChatReady extends ChatState {
     this.treeError,
     this.forkDraft,
     this.isLoadingTranscript = false,
-    this.isAttachSyncing = false,
   });
 
   ChatReady copyWith({
@@ -134,7 +127,6 @@ class ChatReady extends ChatState {
     String? forkDraft,
     bool clearForkDraft = false,
     bool? isLoadingTranscript,
-    bool? isAttachSyncing,
   }) =>
       ChatReady(
         messages: messages ?? this.messages,
@@ -164,7 +156,6 @@ class ChatReady extends ChatState {
         forkDraft: clearForkDraft ? null : (forkDraft ?? this.forkDraft),
         isLoadingTranscript:
             isLoadingTranscript ?? this.isLoadingTranscript,
-        isAttachSyncing: isAttachSyncing ?? this.isAttachSyncing,
       );
 
   @override
@@ -184,8 +175,7 @@ class ChatReady extends ChatState {
       other.hasOlder == hasOlder &&
       other.treeSnapshot == treeSnapshot &&
       other.treeError == treeError &&
-      other.forkDraft == forkDraft &&
-      other.isAttachSyncing == isAttachSyncing;
+      other.forkDraft == forkDraft;
 
   @override
   int get hashCode => Object.hash(
@@ -204,7 +194,6 @@ class ChatReady extends ChatState {
         treeSnapshot,
         treeError,
         forkDraft,
-        isAttachSyncing,
       );
 }
 

@@ -125,13 +125,11 @@ class SessionListPage extends StatelessWidget {
                           ? Icon(LucideIcons.circleDot, color: colors.accent)
                           : null,
                       onTap: () async {
-                        // Declare the target BEFORE navigating. The chat's own
-                        // bootstrap requests a sync the moment it mounts, and
-                        // that sync is answered by the Pi that is still on the
-                        // PREVIOUS session — the wrong transcript, silently. The
-                        // marker makes the chat's first frame already render as
-                        // 「同步中…」 and holds every sync until the attach lands.
-                        vm.markOpening(s.id);
+                        // Navigate FIRST, then switch. `session_switch` restarts
+                        // the daemon (stage → ack → exit → respawn), so awaiting
+                        // it before navigating left the list sitting there for
+                        // over a second after the tap. The chat already handles
+                        // an empty session while its sync lands.
                         if (!isWideLayout(ctx)) {
                           ctx.push(
                             '/chat',

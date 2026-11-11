@@ -1,7 +1,6 @@
 import 'package:mobile/config/dependencies.dart';
 import 'package:mobile/data/mesh/mesh_sync_service.dart';
 import 'package:mobile/data/preferences/preferences.dart';
-import 'package:mobile/data/sync/sync_service.dart';
 import 'package:mobile/data/transport/connection_manager.dart';
 import 'package:mobile/pairing/owner_identity_bridge.dart';
 import 'package:mobile/pairing/storage.dart';
@@ -377,7 +376,6 @@ GoRouter buildRouter(
               injector.get<ConnectionManager>(),
               injector.get<Preferences>(),
               epk: epk,
-              sync: injector.get<SyncService>(),
               roomId: roomId,
               cwd: cwd,
             ),

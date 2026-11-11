@@ -886,32 +886,6 @@ class SessionSync extends ClientMessage {
   };
 }
 
-/// Plan/71 — read ONE session's transcript by id, WITHOUT switching to it.
-///
-/// This is what lets a tap paint immediately: `session_sync` can only answer
-/// for the session the Pi is currently on, and getting the Pi there costs a
-/// full daemon restart (~12 s over the public relay). A read is ~100–200 ms
-/// and is addressed by id, so it does not depend on the switch at all.
-class SessionRead extends ClientMessage {
-  final String id;
-  final String sessionId;
-  final int? limit;
-
-  /// Opaque cursor from a previous `session_read_ok.older_cursor`.
-  final String? before;
-
-  SessionRead({required this.id, required this.sessionId, this.limit, this.before});
-
-  @override
-  Map<String, dynamic> toJson() => {
-    'type': 'session_read',
-    'id': id,
-    'session_id': sessionId,
-    if (limit != null) 'limit': limit,
-    if (before != null) 'before': before,
-  };
-}
-
 // ---------------------------------------------------------------------------
 // Plan/28 — Typed app actions
 // ---------------------------------------------------------------------------
@@ -1690,7 +1664,6 @@ sealed class ServerMessage {
       // Plan/32 — Pi-extension emits this when a context compaction finishes.
       'compaction' => Compaction.fromJson(json),
       'session_history' => SessionHistory.fromJson(json),
-      'session_read_ok' => SessionReadOk.fromJson(json),
       'bye' => Bye.fromJson(json),
       'action_ok' => ActionOk.fromJson(json),
       'action_error' => ActionError.fromJson(json),
@@ -2083,40 +2056,6 @@ class Compaction extends ServerMessage {
 /// sets `eos: true`. `truncated: true` indicates Pi had more events
 /// than the requested `limit` and dropped the oldest — surfaced to
 /// logs only (no UI affordance per plan/16 D1=B).
-/// Plan/71 — reply to [SessionRead]. Same event vocabulary as
-/// [SessionHistory], so the app renders it through the SAME code path.
-class SessionReadOk extends ServerMessage {
-  final String inReplyTo;
-  final String sessionId;
-  final List<SessionHistoryEvent> events;
-  final bool eos;
-  final bool truncated;
-  final String? olderCursor;
-  final bool hasOlder;
-
-  SessionReadOk({
-    required this.inReplyTo,
-    required this.sessionId,
-    required this.events,
-    required this.eos,
-    this.truncated = false,
-    this.olderCursor,
-    this.hasOlder = false,
-  });
-
-  factory SessionReadOk.fromJson(Map<String, dynamic> j) => SessionReadOk(
-    inReplyTo: j['in_reply_to'] as String,
-    sessionId: j['session_id'] as String,
-    events: (j['events'] as List<dynamic>? ?? const <dynamic>[])
-        .map((e) => SessionHistoryEvent.fromJson(e as Map<String, dynamic>))
-        .toList(),
-    eos: j['eos'] as bool? ?? true,
-    truncated: j['truncated'] as bool? ?? false,
-    olderCursor: j['older_cursor'] as String?,
-    hasOlder: j['has_older'] as bool? ?? false,
-  );
-}
-
 class SessionHistory extends ServerMessage {
   final String inReplyTo;
   final int sessionStartedAt;

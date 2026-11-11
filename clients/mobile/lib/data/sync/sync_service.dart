@@ -82,56 +82,10 @@ class SyncService extends Service {
   /// how the chat ended up permanently empty after resuming a session. So the
   /// send is not the end of the story: a silence longer than the observed
   /// cold-start latency is retried until the transcript arrives.
-  /// A  is in flight: its reply IS the transcript on screen, so
-  /// the body is "loading", not "empty".
-  bool _readPending = false;
-
   String? _awaitingSyncId;
   DateTime? _awaitingSyncSince;
   static const _syncNoAnswerRetry = Duration(seconds: 3);
   static const _syncDeadline = Duration(seconds: 40);
-
-  // -------------------------------------------------------------------------
-  // Session attach (the switch that makes the Pi actually BE on this session)
-  // -------------------------------------------------------------------------
-  //
-  // Measured over the public relay, one `session_switch` per target:
-  //   t+0–50 ms   the OLD Pi answers `session_history` — it is still alive and
-  //               still on the session you just left, so a sync sent here
-  //               returns the WRONG transcript, silently.
-  //   t+250 ms–8 s  frames are dropped: the room is deaf while the supervisor
-  //               respawns the Pi. No reply, no error.
-  //   t+12 s(+)   the NEW Pi answers correctly.
-  // That is the whole "history almost never loads" report, and the reason a
-  // switch ack is NOT a completion signal. The transcript is therefore painted
-  // from `session_read` (id-addressed, ~100–200 ms, switch-independent) and the
-  // attach runs behind it, gated on `session_list.current_id` actually
-  // matching the target. Until it does, the chat says so.
-
-  /// Target id of the attach in flight, or null when nothing is attached.
-  String? _attachSessionId;
-  /// Whether the Pi is known to be ON [_attachSessionId] yet.
-  bool _attachConfirmed = true;
-  int _attachAttempt = 0;
-  Timer? _attachRetry;
-  static const _attachPollFirst = Duration(milliseconds: 700);
-  static const _attachPollMax = Duration(seconds: 2);
-  /// Boot budget for the respawned Pi. Measured cold start is 12.1–13.3 s, so
-  /// this must clear that with room to spare — it is the floor at which the
-  /// user learns the attach failed, not a liveness test.
-  static const _attachDeadline = Duration(seconds: 45);
-  final StreamController<bool> _attachController =
-      StreamController<bool>.broadcast();
-
-  /// True while the live Pi is known to be on the session the user tapped.
-  /// False means the transcript on screen came from a file read and the
-  /// switch behind it has not landed yet — the chat must say "syncing"
-  /// instead of pretending everything is settled.
-  bool get isAttachSyncing => !_attachConfirmed;
-  Stream<bool> get attachStateStream => _attachController.stream;
-  DateTime? _attachStartedAt;
-  bool _switchSent = false;
-  String? _pendingAttachListId;
 
   // Whether the active session's agent is currently producing a reply. Spans
   // the WHOLE turn (send/echo → agent_done), not just the token-streaming
@@ -236,7 +190,7 @@ class SyncService extends Service {
   /// a spinner on the row the user just tapped instead of looking frozen, and
   /// the chat uses it to show a skeleton instead of "这里还没有内容" (which is
   /// otherwise indistinguishable from a genuinely empty session).
-  bool get isLoadingTranscript => _awaitingSyncSince != null || _readPending;
+  bool get isLoadingTranscript => _awaitingSyncSince != null;
   Stream<bool> get transcriptLoadingStream =>
       _transcriptLoadingController.stream;
   final StreamController<bool> _transcriptLoadingController =
@@ -520,15 +474,6 @@ class SyncService extends Service {
       _pendingSyncRequest = true;
       return;
     }
-    // An attach in flight means the Pi has not been moved onto the session on
-    // screen yet. A sync here is answered by the Pi that is STILL on the old
-    // session (~50 ms window) or dropped during the respawn (~12 s), so it
-    // must wait: `_confirmAttach` is what re-requests it.
-    if (!_attachConfirmed) {
-      _pendingSyncRequest = true;
-      _armPendingSyncRetry();
-      return;
-    }
     // A live channel is not a live ROOM. `session_switch` restarts the daemon
     // (stage → ack → exit → supervisor respawn), and in that window the room is
     // gone while the websocket stays up. Sending then loses the frame silently:
@@ -660,9 +605,26 @@ class SyncService extends Service {
     await ch.send(SessionClone(id: _newId(), fence: fence));
   }
 
-  /// Drop every row held for this `(epk, room)` — the transcript belongs to
-  /// the session we are leaving.
-  Future<void> _wipeRows(String epk, String room) async {
+  /// Plan/28 — `session_switch` acked: the room is unchanged but the Pi is now
+  /// on a DIFFERENT session, so every row we hold belongs to the one we just
+  /// left.
+  ///
+  /// Without this the chat kept rendering the previous session (or an empty
+  /// list, for a session whose rows were never synced) and nothing ever asked
+  /// for the new transcript: `activate()` short-circuits on an unchanged
+  /// `(epk, room)`, and no status edge fires because the connection never
+  /// dropped. The screen stayed wrong until the app was restarted.
+  Future<void> switchedSession() async {
+    final epk = _activeEpk;
+    if (epk == null) return;
+    final room = _activeRoomId;
+    // Streaming/working state belonged to the session we left; an in-flight
+    // send's timer would attribute its reply to the wrong session.
+    _cancelAllSendTimers();
+    _discardStreamingState();
+    _setQueuedMessages(const []);
+    _setWorking(false);
+    _resetPaging();
     await _enqueue(() async {
       if (_activeEpk != epk || _activeRoomId != room) return;
       final box = await _boxes.msgsBox(epk, room);
@@ -673,174 +635,9 @@ class SyncService extends Service {
       final idx = _boxes.sessionsIndexBox();
       await idx.delete(LocalBoxes.sessionKey(epk, room));
     });
-  }
-
-  /// Open [sessionId]: paint its transcript from the file at once, then attach
-  /// the live Pi to it in the background.
-  ///
-  /// The order is load-bearing. `session_switch` costs a full daemon respawn
-  /// (~12 s over the public relay) and its ack arrives ~50 ms BEFORE the old
-  /// Pi dies, so anything derived from the switch window is unreliable: a
-  /// `session_sync` sent there is answered by the OLD Pi (wrong transcript) or
-  /// dropped entirely. `session_read` is addressed by id and independent of
-  /// which session the Pi is on, so it is what the user sees first.
-  /// Declare an open WITHOUT touching the wire.
-  ///
-  /// The session list navigates to /chat and only then starts the work, so the
-  /// chat's own bootstrap runs first. Without a synchronous marker it would
-  /// request a sync for the session the Pi is still on — exactly the wrong
-  /// transcript this change exists to prevent. Setting the flag before the
-  /// push makes the very first frame already say "同步中…".
-  void markOpening(String sessionId) {
-    _attachSessionId = sessionId;
-    _attachConfirmed = false;
-    _attachAttempt = 0;
-    _attachStartedAt = DateTime.now();
-    _switchSent = false;
-    _attachRetry?.cancel();
-    _attachRetry = null;
-    _emitAttachState();
-  }
-
-  Future<void> openSession(String sessionId, {required String epk, required String roomId}) async {
-    // Bind first: the tap happens right before the chat mounts, and the chat's
-    // own `activate` must short-circuit rather than reset the state we are
-    // about to build.
-    await activate(epk, roomId);
-    // Turn state belonged to the session we are leaving; an in-flight send's
-    // timer would attribute its reply to the wrong session.
-    _cancelAllSendTimers();
-    _discardStreamingState();
-    _setQueuedMessages(const []);
-    _setWorking(false);
-    _resetPaging();
-
-    markOpening(sessionId);
-    await _wipeRows(epk, roomId);
-
-    // Paint first. ~100–200 ms measured over the public relay.
-    _requestRead(sessionId);
-    // Then attach. One `session_list` first: reopening the same chat (or the
-    // app restarting on it) must NOT respawn the daemon for a switch that is a
-    // no-op, and the answer is also the only honest completion signal.
-    _pollAttach();
-  }
-
-  /// Plan/71 — fetch one page of [sessionId] without switching to it.
-  void _requestRead(String sessionId, {String? before}) {
-    final ch = _conn.channel;
-    if (ch == null) return;
-    _readPending = true;
-    _emitTranscriptLoading(true);
-    ch.send(
-      SessionRead(id: _newId(), sessionId: sessionId, before: before),
-    );
-  }
-
-  void _sendSwitch(String sessionId) {
-    final ch = _conn.channel;
-    if (ch == null) return;
-    ch.send(SessionSwitch(id: _newId(), sessionId: sessionId));
-  }
-
-  /// One attach probe: ask the room which session it is on.
-  ///
-  /// The reply decides everything — the switch is only sent when the answer is
-  /// NOT the target, and the attach is confirmed only when it IS. A lost
-  /// `session_switch_ok` therefore costs nothing: the switch still happens
-  /// (measured — `current_id` flips even when the ack never arrives) and this
-  /// poll is what notices.
-  void _pollAttach() {
-    final target = _attachSessionId;
-    if (target == null || _attachConfirmed) return;
-    final waited = DateTime.now().difference(_attachStartedAt ?? DateTime.now());
-    if (waited > _attachDeadline) {
-      debugPrint('[attach] gave up on $target after $_attachAttempt polls');
-      _attachSessionId = null;
-      _attachConfirmed = true;
-      _attachRetry?.cancel();
-      _attachRetry = null;
-      _emitAttachState();
-      return;
-    }
-    final ch = _conn.channel;
-    if (ch == null) {
-      _schedulePoll();
-      return;
-    }
-    _attachAttempt++;
-    _pendingAttachListId = _newId();
-    ch.send(SessionList(id: _pendingAttachListId!));
-    // If this probe's reply never arrives, try again rather than stalling.
-    _schedulePoll();
-  }
-
-  void _schedulePoll() {
-    final target = _attachSessionId;
-    if (target == null || _attachConfirmed) return;
-    _attachRetry?.cancel();
-    final ms = math.min(
-      _attachPollMax.inMilliseconds,
-      _attachPollFirst.inMilliseconds * (1 << math.min(_attachAttempt, 4)),
-    );
-    _attachRetry = Timer(Duration(milliseconds: ms), () {
-      _attachRetry = null;
-      if (_attachSessionId != target || _attachConfirmed) return;
-      _pollAttach();
-    });
-  }
-
-  void _emitAttachState() {
-    if (_attachController.isClosed) return;
-    _attachController.add(!_attachConfirmed);
-  }
-
-  /// The Pi confirmed it is on [_attachSessionId]: pull the authoritative window
-  /// and stop saying "syncing".
-  void _confirmAttach() {
-    if (_attachConfirmed) return;
-    _attachConfirmed = true;
-    _attachRetry?.cancel();
-    _attachRetry = null;
-    _emitAttachState();
-    // Now, and only now, a `session_sync` is answered by the right Pi.
+    // Pull the NEW session's transcript. `_indexLoaded` is now true, so this
+    // is a real fetch rather than a short-circuited activation.
     requestSync();
-  }
-
-  /// A switch nobody asked us for: another device moved this room's session.
-  ///
-  /// There is no target id to verify against, so the honest recovery is the
-  /// pre-existing one — drop the rows (they belong to the session we left) and
-  /// re-sync. `openSession` cannot be used here because it needs the id the
-  /// user tapped; a foreign switch only tells us that something changed.
-  Future<void> switchedSession() async {
-    final epk = _activeEpk;
-    if (epk == null) return;
-    final room = _activeRoomId;
-    _cancelAllSendTimers();
-    _discardStreamingState();
-    _setQueuedMessages(const []);
-    _setWorking(false);
-    _resetPaging();
-    await _wipeRows(epk, room);
-    requestSync();
-  }
-
-  /// Plan/71 — one page of ANY session arrived. This is the transcript the
-  /// user sees first, so it replaces the rows the same way a sync does.
-  void _onSessionRead(SessionReadOk msg) {
-    _readPending = false;
-    if (_awaitingSyncSince == null) _emitTranscriptLoading(false);
-    // A read for a session the user has already left must never overwrite the
-    // rows of the one they are looking at now.
-    if (_attachSessionId != null && msg.sessionId != _attachSessionId) return;
-    _olderCursor = msg.olderCursor;
-    _hasOlder = msg.hasOlder;
-    if (!_olderStateController.isClosed) {
-      _olderStateController.add(OlderPageState(_hasOlder, _olderCursor));
-    }
-    // ignore: discarded_futures
-    _applyHistory(msg.events);
   }
 
   /// Plan/28 — `session_new` acked: wipe the active session's rows + index.
@@ -1083,16 +880,6 @@ class SyncService extends Service {
         }
 
       case SessionHistory():
-        // The OLD Pi is still alive for ~50 ms after it acks a switch, and it
-        // answers a sync sent in that window with ITS OWN session's transcript
-        // — a perfectly valid-looking reply about the wrong conversation. A
-        // pending attach therefore gates every history on identity.
-        if (!_attachConfirmed && _attachSessionId != null) {
-          _settleTranscriptLoading();
-          _pendingSyncRetry?.cancel();
-          _pendingSyncRetry = null;
-          return;
-        }
         // Any answer settles the outstanding sync, whatever its id: the retry
         // only needs to know that the room is talking again.
         _pendingSyncRetry?.cancel();
@@ -1118,7 +905,7 @@ class SyncService extends Service {
           _applyOlderHistory(msg);
         } else {
           // ignore: discarded_futures
-          _applyHistory(msg.events, sessionStartedAt: msg.sessionStartedAt);
+          _applyHistory(msg);
         }
 
       case ErrorMessage(:final code, :final message):
@@ -1162,24 +949,11 @@ class SyncService extends Service {
         }
 
       case SessionSwitchOk():
-        // The ack means "the switch was accepted", NOT "the Pi is on it".
-        // The daemon stages the target and exits ~150 ms later; until the
-        // supervisor's respawn answers `session_list` with this id as
-        // `current_id`, the room is deaf and the OLD Pi is still the one
-        // answering. So the ack only proves the switch started — the poll armed
-        // by `openSession` is what proves it landed.
-        if (_attachSessionId == null) {
-          // A switch we did not initiate locally (another device drove it).
-          // There is no target to verify against, so fall back to the old
-          // wipe-and-sync: the frame still means this room changed session.
-          // ignore: discarded_futures
-          switchedSession();
-        }
-        break;
-
-      case SessionReadOk():
-        _onSessionRead(msg);
-        break;
+        // The Pi moved to a different session in the SAME room. Drop the rows
+        // we still hold and fetch the new transcript; nothing else observes
+        // this frame, so without it the chat keeps showing the old session.
+        // ignore: discarded_futures
+        switchedSession();
 
       case TreeSnapshotOk(:final snapshot):
         if (!_treeSnapshotController.isClosed) {
@@ -1215,32 +989,12 @@ class SyncService extends Service {
         }
         break;
 
-      case SessionListOk():
-        // Only the attach poll cares; the session LIST screen consumes its own
-        // reply through SessionCatalog's request future, which listens on the
-        // same stream. A reply to a poll is proof the room is answering again,
-        // so `current_id` is trustworthy at this point.
-        final poll = _pendingAttachListId;
-        if (poll != null && msg.inReplyTo == poll) {
-          _pendingAttachListId = null;
-          final target = _attachSessionId;
-          if (target == null || _attachConfirmed) break;
-          if (msg.currentId == target) {
-            _confirmAttach();
-          } else if (!_switchSent) {
-            // The Pi is on some OTHER session, so this attach needs a real
-            // switch — and the switch is what costs the daemon respawn.
-            _switchSent = true;
-            _sendSwitch(target);
-          }
-        }
-        break;
-
       case Pong():
       case PairOk():
       case PairError():
       case ActionOk():
       case ModelsList():
+      case SessionListOk():
       case SessionSwitchError():
       case WorkspaceListOk():
       case WorkspaceStartOk():
@@ -1315,11 +1069,11 @@ class SyncService extends Service {
     );
   }
 
-  Future<void> _applyHistory(List<SessionHistoryEvent> events, {int? sessionStartedAt}) async {
+  Future<void> _applyHistory(SessionHistory h) async {
     final epk = _activeEpk;
     if (epk == null) return;
     final room = _activeRoomId;
-    final rows = _convertHistory(events);
+    final rows = _convertHistory(h.events);
     final historyIds = {for (final r in rows) _key(r.role, r.id)};
     await _enqueue(() async {
       final box = await _boxes.msgsBox(epk, room);
@@ -1341,8 +1095,8 @@ class SyncService extends Service {
       ];
       await _reconcileRows(box, epk, room, desired);
     });
-    if (_activeEpk == epk && _activeRoomId == room && sessionStartedAt != null) {
-      final started = sessionStartedAt;
+    if (_activeEpk == epk && _activeRoomId == room) {
+      final started = h.sessionStartedAt;
       _updateIndex(
         (cur) => cur.copyWith(
           sessionStartedAt: DateTime.fromMillisecondsSinceEpoch(started),
@@ -1847,9 +1601,6 @@ class SyncService extends Service {
 
   @override
   void dispose() {
-    _attachRetry?.cancel();
-    _attachRetry = null;
-    if (!_attachController.isClosed) _attachController.close();
     _flushTimer?.cancel();
     _syncDebounce?.cancel();
     _pendingSyncRetry?.cancel();

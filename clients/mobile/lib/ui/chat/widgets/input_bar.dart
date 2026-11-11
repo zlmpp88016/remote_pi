@@ -37,11 +37,6 @@ enum VoiceHint {
 
 class InputBar extends StatefulWidget {
   final bool disabled; // offline or no peer
-
-  /// The transcript is on screen but the live Pi has not been moved onto this
-  /// session yet. Input is locked (a message would go to the session the Pi is
-  /// still on) and the hint says why, instead of looking merely offline.
-  final bool syncing;
   final bool streaming; // show cancel instead of send
   final void Function(String text) onSend;
   final VoidCallback? onCancel;
@@ -90,7 +85,6 @@ class InputBar extends StatefulWidget {
     this.draft,
     this.onOpenAttach,
     this.disabled = false,
-    this.syncing = false,
     this.streaming = false,
   });
 
@@ -316,7 +310,7 @@ class _InputBarState extends State<InputBar> {
     final colors = context.colors;
     final voiceState = widget.voice?.state;
     final attachState = widget.attachment?.state;
-    final canInteract = !widget.disabled && !widget.syncing;
+    final canInteract = !widget.disabled;
     final hasQuickActions = widget.onOpenQuickActions != null;
     final recording = voiceState is VoiceRecording;
     final transcribing = voiceState is VoiceTranscribing;
@@ -417,9 +411,7 @@ class _InputBarState extends State<InputBar> {
                       ),
                       cursorColor: colors.accent,
                       decoration: InputDecoration(
-                        hintText: widget.syncing
-                            ? ChatCopy.syncingSessionHint
-                            : widget.disabled
+                        hintText: widget.disabled
                             ? PanelsCopy.offline
                             : widget.streaming
                             ? PanelsCopy.steerCurrent
