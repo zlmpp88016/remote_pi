@@ -31,7 +31,120 @@
  * the hand-rolled 800 ms blind retry in `resyncLive` exists precisely because a
  * raw WebSocket does not. A reconnect re-emits `open`, so the caller's
  * hydration path runs unchanged.
+ *
+ * ## A lossy hop, and the one retry that is safe
+ *
+ * The outbound POST crosses whatever sits between the browser and the server. On
+ * the public lane that includes an HTTP proxy whose idle-connection reclaim is
+ * ~4 s: the first POST after a quiet moment reuses a connection the proxy has
+ * already closed and comes back as a proxy-generated 502 (measured: no `Date`, no
+ * `content-type`, `Keep-Alive: timeout=4`, while the server itself reaps at 5 s).
+ * An immediate re-send of the same body succeeded 2/2.
+ *
+ * So a lost POST is re-sent for a small, explicit set of READ frames — and only
+ * for those. See `IDEMPOTENT_READ_FRAMES` for the invariant that separates a
+ * harmless re-send from a duplicated side effect.
  */
+
+import { decodeCt } from "./protocol.ts";
+
+/**
+ * One outbound frame awaiting its POST, plus the re-sends it has already spent.
+ *
+ * The budget lives ON the frame rather than in a parallel table: it has to
+ * survive the frame being put back at the head of the queue, and it must die
+ * with the frame, so a long-lived tab cannot accumulate counters.
+ */
+interface QueuedFrame {
+  readonly data: string;
+  attempts: number;
+}
+
+/**
+ * How long to wait before each re-send of a read frame (ms, in order).
+ *
+ * An IMMEDIATE re-send is what the lane measurement proved (2/2 succeeded after a
+ * 502), so the first delay only has to leave the reaped socket behind; the rest
+ * are short draws, not a backoff ladder, because each one is a fresh chance at
+ * the same 4 s reclaim race and none of them costs anything but a duplicate
+ * `session_read` on the host.
+ *
+ * FOUR throws, ~2 s of added latency at worst. That is deliberate: a read that
+ * loses every throw is dropped, and its only remaining backstop is the UI's 30 s
+ * `SESSION_READ_TIMEOUT_MS`, so the number of throws is what decides whether a
+ * lossy hop is survivable at all. Kept small enough that a genuinely silent host
+ * is still reported quickly rather than papered over.
+ */
+const READ_RETRY_DELAYS_MS: readonly number[] = [120, 500, 1_400];
+
+/**
+ * Frames a lost POST may be re-sent for. An ALLOW-LIST, deliberately so.
+ *
+ * THE INVARIANT: a re-send is only safe for a frame the host may apply twice and
+ * reach the same state. All three kinds below are session READS — they answer
+ * from disk and change nothing — and all three are fire-and-forget
+ * (`_forwardToRoom` in client.ts registers no pending entry), so even a DOUBLE
+ * delivery (the first POST landed and only its reply was lost) costs nothing more
+ * than a second reply that the caller ignores.
+ *
+ * A write must NEVER be added here. `user_message` is the clearest case: the first
+ * POST may already have run the turn, so a re-send runs it TWICE, and a
+ * duplicated chat message is worse than the timeout the UI can explain.
+ * `session_switch`, `session_new`, `model_set`, `thinking_set`, `models_mutate`,
+ * `settings_mutate`, `workspace_*`, `package_*`, `skill_*` and `schedule_*` are
+ * the same shape — each changes host state, so a duplicate is a real second side
+ * effect. Everything else keeps the drop-once behaviour, and the allow-list
+ * direction means a frame kind added later is NOT retried until someone states,
+ * here, why it is idempotent.
+ */
+const IDEMPOTENT_READ_FRAMES: ReadonlySet<string> = new Set([
+  "session_read",
+  "session_list",
+  "session_sync",
+]);
+
+/**
+ * Innermost `type` of an outbound frame, or null when it cannot be read.
+ *
+ * The transport is handed a ready-made envelope string, so a frame's own kind is
+ * only visible after peeling the base64 `ct` layers: an outbound client request
+ * travels as `{peer, room, ct}` → `host_forward{room, ct}` → the real message.
+ * Called only on a failure, so the happy path pays nothing for this.
+ *
+ * @param frame - the frame body that was POSTed.
+ * @returns the deepest `type` found, or null for an unreadable body.
+ */
+function innermostFrameType(frame: string): string | null {
+  let current: unknown;
+  try {
+    current = JSON.parse(frame);
+  } catch {
+    return null;
+  }
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (typeof current !== "object" || current === null) return null;
+    const inner = (current as { ct?: unknown }).ct;
+    const type = (current as { type?: unknown }).type;
+    if (typeof inner !== "string") return typeof type === "string" ? type : null;
+    try {
+      current = decodeCt<unknown>(inner);
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * Wait, with no new dependency and no timer bookkeeping to leak.
+ *
+ * @param ms - milliseconds to wait.
+ */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 /** Minimal surface `RemotePiWebClient` needs from a socket. */
 type SocketEventType = "open" | "message" | "close" | "error";
@@ -125,7 +238,7 @@ export function createSseWebSocketFactory(
     };
     let closed = false;
     /** Outbound frames awaiting the in-flight POST, in order. */
-    const outbox: string[] = [];
+    const outbox: QueuedFrame[] = [];
     let pumping = false;
 
     const emit = (type: SocketEventType, event: unknown): void => {
@@ -153,7 +266,7 @@ export function createSseWebSocketFactory(
     /** Connection id handed out by the stream in its FIRST event. */
     let connectionId: string | null = null;
     /** Frames produced before the id arrives must wait, not be dropped. */
-    const preIdOutbox: string[] = [];
+    const preIdOutbox: QueuedFrame[] = [];
 
     /* Named-event listener: `onmessage` never sees `event: endpoint`. */
     addNamedListener(source, "endpoint", (event: { data?: unknown }) => {
@@ -172,7 +285,7 @@ export function createSseWebSocketFactory(
       }
       /* Release anything queued while we waited for the id. */
       while (preIdOutbox.length > 0) {
-        outbox.push(preIdOutbox.shift() as string);
+        outbox.push(preIdOutbox.shift() as QueuedFrame);
       }
       void pump();
     });
@@ -198,6 +311,21 @@ export function createSseWebSocketFactory(
       emit("error", event);
     };
 
+    /**
+     * May this frame be POSTed again rather than dropped?
+     *
+     * `true` only when the frame's own kind is in `IDEMPOTENT_READ_FRAMES` AND its
+     * re-send budget is unspent. Everything else keeps the drop-once behaviour,
+     * which is what a write frame requires.
+     *
+     * @param queued - the frame whose POST just failed.
+     */
+    const mayResend = (queued: QueuedFrame): boolean => {
+      if (queued.attempts >= READ_RETRY_DELAYS_MS.length) return false;
+      const type = innermostFrameType(queued.data);
+      return type !== null && IDEMPOTENT_READ_FRAMES.has(type);
+    };
+
     /** Drain the outbox in order, one POST at a time. */
     const pump = async (): Promise<void> => {
       if (pumping) return;
@@ -206,8 +334,11 @@ export function createSseWebSocketFactory(
         while (outbox.length > 0 && !closed) {
           /* Cannot POST without an id: the server has no stream to write to. */
           if (connectionId === null) return;
-          const frame = outbox.shift() as string;
+          const queued = outbox.shift() as QueuedFrame;
+          const frame = queued.data;
           let status = 0;
+          /** The POST produced no status at all: the hop dropped the request. */
+          let lost = false;
           try {
             const res = await fetchImpl(
               `${baseUrl}${framePath}?id=${encodeURIComponent(connectionId)}`,
@@ -222,12 +353,14 @@ export function createSseWebSocketFactory(
             status = res.status;
           } catch {
             /*
-             * A network failure is DROPPED, not retried: every frame in this
-             * protocol either carries a request id the caller times out on, or is
-             * a push the host re-sends after a re-sync. Retrying blindly would
-             * duplicate a chat message, far worse than a timeout the UI explains.
+             * A network failure is NOT retried blindly. The frame's own KIND
+             * decides, via `IDEMPOTENT_READ_FRAMES`: a session READ is re-sent
+             * (a lost `session_read` used to strand the viewer on "Reading this
+             * session…" for the whole 600 s guard), while every WRITE is dropped
+             * exactly as before — it may already have been applied, and a
+             * duplicate turn is far worse than a timeout the UI explains.
              */
-            continue;
+            lost = true;
           }
 
           /*
@@ -256,7 +389,25 @@ export function createSseWebSocketFactory(
             emit("close", {});
             return;
           }
-          if (status >= 500) {
+          /*
+           * The two shapes a lost frame takes here: the request never produced a
+           * status (`lost` — the proxy reset a connection it had already reaped),
+           * or the hop in front of the server refused it (5xx — measured as a 502
+           * carrying the proxy's own `Keep-Alive: timeout=4` and no `Date`, which
+           * the Node server never sends).
+           */
+          if (lost || status >= 500) {
+            if (mayResend(queued)) {
+              /* Head of the queue, not the tail: order is this transport's contract. */
+              const wait = READ_RETRY_DELAYS_MS[queued.attempts];
+              queued.attempts += 1;
+              outbox.unshift(queued);
+              await delay(wait);
+              continue;
+            }
+            /* Out of budget, or not a kind that may be re-sent. A write that never
+               reached the host stays silent, exactly as it did before. */
+            if (lost) continue;
             /* Server-side fault: surface it, but keep the stream open. */
             emit("error", { type: "post_failed", status });
           }
@@ -272,10 +423,10 @@ export function createSseWebSocketFactory(
         if (closed) return;
         /* Unreachable once `open` waits for the id, but a frame must never be dropped if it ever races. */
         if (connectionId === null) {
-          preIdOutbox.push(data);
+          preIdOutbox.push({ data, attempts: 0 });
           return;
         }
-        outbox.push(data);
+        outbox.push({ data, attempts: 0 });
         void pump();
       },
       close(): void {

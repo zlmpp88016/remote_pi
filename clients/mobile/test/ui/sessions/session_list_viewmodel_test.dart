@@ -98,12 +98,27 @@ class _FakeStorage extends PairingStorage {
 /// silent when [answerSessionList] is false — that is what the old code walked
 /// into and what the 12 s timeout was made of.
 class _Channel implements IChannel, IControlLink {
-  _Channel({this.startError, this.answerSessionList = true, this.silentAttempts = 0, this.switchError});
+  _Channel({
+    this.startError,
+    this.answerSessionList = true,
+    this.silentAttempts = 0,
+    this.switchError,
+    this.answerSwitch = true,
+    this.ackDelay = Duration.zero,
+  });
   final String? startError;
 
   /// When set, every `session_switch` is answered with this failure instead of
   /// an ack — the path that used to leave `switching` stuck on.
   final String? switchError;
+
+  /// When false, `session_switch` is accepted and never answered, which is what
+  /// a switch that outlives its ack slice looks like from the screen.
+  final bool answerSwitch;
+
+  /// How long the ack takes. A real daemon answers while a writer is still
+  /// polling, so a slow ack is the window a `reload()` can fall into.
+  final Duration ackDelay;
 
   bool answerSessionList;
 
@@ -181,7 +196,8 @@ class _Channel implements IChannel, IControlLink {
             currentId: 's1',
           ),
         );
-      case SessionSwitch(:final id):
+      case SessionSwitch(:final id, :final sessionId):
+        if (!answerSwitch) return; // nothing comes back, ever
         if (switchError != null) {
           _server.add(
             SessionSwitchError(
@@ -192,13 +208,16 @@ class _Channel implements IChannel, IControlLink {
           );
           return;
         }
-        _server.add(
-          SessionSwitchOk(
-            inReplyTo: id,
-            sessionId: 's1',
-            sessionStartedAt: 0,
-          ),
-        );
+        Future<void>.delayed(ackDelay, () {
+          if (_server.isClosed) return;
+          _server.add(
+            SessionSwitchOk(
+              inReplyTo: id,
+              sessionId: sessionId,
+              sessionStartedAt: 0,
+            ),
+          );
+        });
       default:
         // Anything else is not this screen's business.
         break;
@@ -224,12 +243,16 @@ Future<({ConnectionManager conn, _Channel ch})> _rig({
   int silentAttempts = 0,
   bool roomLive = false,
   String? switchError,
+  bool answerSwitch = true,
+  Duration ackDelay = Duration.zero,
 }) async {
   final ch = _Channel(
     startError: startError,
     answerSessionList: answerSessionList,
     silentAttempts: silentAttempts,
     switchError: switchError,
+    answerSwitch: answerSwitch,
+    ackDelay: ackDelay,
   );
   final conn = ConnectionManager(
     factory: (_, _) async => ch,
@@ -455,5 +478,154 @@ void main() {
       vm.dispose(); // gone before the switch resolves
       await expectLater(pending, completes);
     });
+
+    test(
+      'a reload() during a switch does not put a SECOND session_switch on the '
+      'wire',
+      () async {
+        // `reload()` re-emits `SessionListReady(switching: false)`, and the gate
+        // used to read exactly that bit. A listing answered while the watch was
+        // still running therefore made the list tappable again, and the next tap
+        // was a second `session_switch` — one extra Pi spawn for a tap the user
+        // did not repeat. Only reachable from the full-screen error branch
+        // today, which is why it has to be pinned here.
+        final r = await _rig(
+          roomLive: true,
+          ackDelay: const Duration(milliseconds: 600),
+        );
+        addTearDown(r.conn.dispose);
+        addTearDown(r.ch.close);
+
+        final vm = SessionListViewModel(
+          SessionCatalog(r.conn),
+          r.conn,
+          Preferences(_FakeSecureStorage()),
+          epk: _epk,
+          roomId: _room,
+          cwd: '/proj',
+        );
+        addTearDown(vm.dispose);
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        expect(vm.state, isA<SessionListReady>());
+
+        final first = vm.pick('s1');
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        // The Retry button on the error branch is wired to this.
+        unawaited(vm.reload());
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+
+        final second = await vm.pick('s1');
+        expect(
+          second,
+          isFalse,
+          reason: 'the switch is still in flight; the tap must be refused',
+        );
+        await first;
+        expect(
+          r.ch.sent.where((t) => t == 'session_switch').length,
+          1,
+          reason: 'exactly one session_switch per pick',
+        );
+      },
+      timeout: const Timeout(Duration(seconds: 30)),
+    );
+
+    test(
+      'a MISSED ack still costs exactly one session_switch, and the read-only '
+      'watch is what settles it',
+      () async {
+        // The headline invariant: the ack slice expiring must NOT re-send the
+        // switch. A re-send is a second Pi spawn, which is the restart storm
+        // this whole change exists to stop. The rig never answers
+        // `session_switch`, but its `session_list` reports currentId 's1', so
+        // the watch can observe that the switch DID take effect — the same
+        // shape as a lost ack on a lossy lane.
+        final r = await _rig(roomLive: true, answerSwitch: false);
+        addTearDown(r.conn.dispose);
+        addTearDown(r.ch.close);
+
+        final vm = SessionListViewModel(
+          SessionCatalog(r.conn),
+          r.conn,
+          Preferences(_FakeSecureStorage()),
+          epk: _epk,
+          roomId: _room,
+          cwd: '/proj',
+        );
+        addTearDown(vm.dispose);
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        expect(vm.state, isA<SessionListReady>());
+
+        final settled = await vm.pick('s1');
+        expect(
+          settled,
+          isTrue,
+          reason: 'the watch observes current_id and settles without the ack',
+        );
+        expect(
+          r.ch.sent.where((t) => t == 'session_switch').length,
+          1,
+          reason: 'a missed ack must never cost a second spawn',
+        );
+        expect(
+          r.ch.sent.where((t) => t == 'session_list').length,
+          greaterThanOrEqualTo(1),
+          reason: 'it settled by polling, not by an ack that never came',
+        );
+        final s = vm.state;
+        expect(
+          s is SessionListReady && !s.switching,
+          isTrue,
+          reason: 'the gate is released so the list is usable again',
+        );
+      },
+      timeout: const Timeout(Duration(seconds: 60)),
+    );
+
+    test(
+      'an OFFLINE watch fails fast instead of holding every row for the whole '
+      'settle budget',
+      () async {
+        // The catalog throws `offline` the instant there is no channel, which is
+        // not the mid-recycle story the watch exists for. Watching it burned the
+        // full 90 s before the banner appeared; the old, correct failure took
+        // the 12 s ack slice.
+        final r = await _rig(roomLive: true, answerSwitch: false);
+        addTearDown(r.conn.dispose);
+        addTearDown(r.ch.close);
+
+        final vm = SessionListViewModel(
+          SessionCatalog(r.conn),
+          r.conn,
+          Preferences(_FakeSecureStorage()),
+          epk: _epk,
+          roomId: _room,
+          cwd: '/proj',
+        );
+        addTearDown(vm.dispose);
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        expect(vm.state, isA<SessionListReady>());
+
+        final started = DateTime.now();
+        final pending = vm.pick('s1');
+        // Let the 12 s ack slice run out, then drop the link.
+        await Future<void>.delayed(const Duration(seconds: 13));
+        await r.conn.disconnect();
+
+        expect(await pending, isFalse);
+        expect(
+          DateTime.now().difference(started).inSeconds,
+          lessThan(30),
+          reason: 'offline must not wait for the 90 s settle budget',
+        );
+        final s = vm.state;
+        final rows = s is SessionListReady
+            ? s
+            : (s is SessionListError ? s.recoverable : null);
+        expect(rows?.switching, isFalse, reason: 'the gate is released');
+        expect(rows?.openError, isNotNull, reason: 'and it says why');
+      },
+      timeout: const Timeout(Duration(seconds: 120)),
+    );
   });
 }

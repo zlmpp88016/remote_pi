@@ -10,20 +10,33 @@
  * "Settled" means the panel answered a refresh TWICE in a row, spaced out. One
  * answer is not enough: the host can be mid-respawn and still serve the request
  * already queued.
+ *
+ * THE CONTROL IT DRIVES IS THE PRODUCT'S OWN. This used to look for an
+ * `aria-label` matching `/refresh the session list/i`; the shipped label is
+ * `刷新会话列表` (`session-list.tsx:132`) and the English string exists nowhere in
+ * `src`. So `answeredOnce` returned false on its FIRST line every time, the
+ * caller fell through to the reload path, and the reload path looked for a
+ * `Sessions` button that also does not exist — eight attempts of pure waiting,
+ * then exit 1 that the runner swallows. The precondition never actually ran;
+ * it only cost about two minutes per isolated gate.
  */
-import { attach, evaluate, sleep } from "./_cdp.mjs";
+import { APP_ORIGIN, attach, evaluate, sleep } from "./_cdp.mjs";
+import { ensureUiReady } from "./_ui-state.mjs";
 
 const { send, ws } = await attach();
 
+/** The dock's refresh control (session-list.tsx:132). */
 const REFRESH = `(function(){
   var b=[...document.querySelectorAll('button')].find(function(x){
-    return /refresh the session list/i.test(x.getAttribute('aria-label') || '');
+    return (x.getAttribute('aria-label') || '').trim() === '刷新会话列表';
   });
   if(!b) return false;
   b.click(); return true;
 })()`;
 
 const ROWS = `document.querySelectorAll('[aria-label^="Read session"]').length`;
+/** The panel's own failure notice (session-list.tsx:153). */
+const LOAD_FAILED = `document.body.innerText.indexOf('无法加载该工作区的会话') >= 0`;
 
 async function answeredOnce(timeoutMs) {
   const t0 = Date.now();
@@ -33,10 +46,7 @@ async function answeredOnce(timeoutMs) {
     for (let i = 0; i < 20; i += 1) {
       await sleep(300);
       const rows = await evaluate(send, ROWS);
-      const failed = await evaluate(
-        send,
-        `document.body.innerText.indexOf('Could not load this workspace') >= 0`,
-      );
+      const failed = await evaluate(send, LOAD_FAILED);
       if (failed === true) break;
       /*
        * Rows must be NON-ZERO and STABLE, not merely answered.
@@ -86,19 +96,15 @@ for (let attempt = 0; attempt < 8 && !settled; attempt += 1) {
      * The failure this recovers from is NOT always the host: the page can be left
      * in a state that has no refresh control at all (a viewer left open, a
      * half-applied switch), and then no amount of waiting produces rows no matter
-     * how healthy the host is. A reload is what a user would do, and it is the
-     * only self-healing step available from here.
+     * how healthy the host is. The shared fixture does the rebuilding — it
+     * expands both rails, opens the 会话 tab and reports whether that worked, so
+     * a page that cannot be rebuilt is named as such instead of silently
+     * costing the whole attempt budget.
      */
-    await evaluate(send, `location.href='http://localhost:3010/'`);
-    await sleep(8_000);
-    await evaluate(send, `(function(){
-      var b=document.querySelector('[class*=wsButton]');
-      if(b){b.click(); return 1} return 0})()`);
-    await sleep(3_000);
-    await evaluate(send, `(function(){
-      var b=[...document.querySelectorAll('button')].find(function(x){return (x.textContent||'').trim()==='Sessions'});
-      if(b){b.click(); return 1} return 0})()`);
-    await sleep(2_000);
+    const state = await ensureUiReady(send);
+    if (!state.ok) {
+      console.log(`settle: page could not be rebuilt (${state.reason})`);
+    }
     continue;
   }
   // Space the second probe out: a host mid-respawn can still answer the request
@@ -109,5 +115,9 @@ for (let attempt = 0; attempt < 8 && !settled; attempt += 1) {
 }
 
 ws.close();
-console.log(settled ? "settle: host is answering consistently" : "settle: host did not settle");
+console.log(
+  settled
+    ? "settle: host is answering consistently"
+    : `settle: host did not settle (page ${APP_ORIGIN})`,
+);
 process.exitCode = settled ? 0 : 1;

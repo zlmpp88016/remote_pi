@@ -67,7 +67,9 @@ await openSession();
 
 const read = async () =>
   evaluate(send, `(function(){
-    var dock = document.querySelector('[aria-label="Conversation statistics"]');
+    /* The product hard-codes this label in Chinese (stats-pills.tsx:68); the
+       English literal never matched, so a rendered dock read as absent. */
+    var dock = document.querySelector('[aria-label="对话统计"]');
     var activity = document.querySelector('[data-stat="activity"]');
     var usage = document.querySelector('[data-stat="usage"]');
     var turns = [...document.querySelectorAll('[data-turn]')];

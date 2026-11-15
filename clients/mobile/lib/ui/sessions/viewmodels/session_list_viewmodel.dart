@@ -28,7 +28,55 @@ class SessionListViewModel extends ViewModel<SessionListState> {
   final String roomId;
   final String? cwd;
 
+  /// How long the reply frame for `session_switch` is waited for.
+  ///
+  /// This is an ACK budget, not a boot budget, and it is deliberately left at
+  /// the catalog's 12 s: a missed ack is not a failed switch (see
+  /// [_switchOnce]), so there is nothing to inflate here.
+  static const _switchAckTimeout = Duration(seconds: 12);
+
+  /// True from the moment a tap becomes a `session_switch` until that switch is
+  /// settled — cleared in a `finally`, so on EVERY exit path.
+  ///
+  /// The gate lives here, not in `SessionListReady.switching`, because the state
+  /// is replaceable: [reload] re-emits a fresh `SessionListReady` whose
+  /// `switching` defaults to false while a watch may still be running for up to
+  /// [_switchSettleBudget], and the next tap would then put a SECOND
+  /// `session_switch` on the wire — one extra Pi spawn, which is exactly the
+  /// invariant this whole path exists to keep.
+  bool _switchInFlight = false;
+
+  /// Boot-level budget for the switch to actually take effect.
+  ///
+  /// Counted from the moment the request is sent, because the staged host only
+  /// exits AFTER answering, so the respawn starts on top of the ack slice above.
+  /// Worst case it has to cover: 12 s of ack slice + a full ~13.7 s cold boot of
+  /// the recycled Pi (the same figure this file documents for `session_list` on
+  /// the public frp lane, measured from `workspace_start_ok`) + a ~1.1 s median /
+  /// 1.82 s p95 round trip per 2 s poll — about 26 s, so 90 s leaves >3x margin
+  /// without failing so late that a dead workspace looks like a hang. It stays
+  /// well inside the minute-scale patience a user has for one screen.
+  static const _switchSettleBudget = Duration(seconds: 90);
+
+  /// Spacing between read-only polls while watching for the switch.
+  ///
+  /// The public lane's round trip is ~1.1 s median / 1.82 s p95, so polling at
+  /// that rate would queue requests behind a Pi that is still booting and turn
+  /// the observation itself into congestion. Two seconds is the smallest gap
+  /// that leaves the wire idle between polls.
+  static const _switchPollInterval = Duration(seconds: 2);
+
+  /// Per-poll budget — the same short slice [reload] uses for `session_list`.
+  static const _switchPollTimeout = Duration(seconds: 3);
+
   Future<void> reload() async {
+    // A switch in flight owns this screen's state: [pick] will report the
+    // outcome and clear its own flag. Reloading here would swap the rows for a
+    // spinner and re-emit a `switching: false` list the moment the listing
+    // answers — i.e. hand the user a tappable list while a `session_switch` is
+    // still unsettled. Only reachable from the full-screen error branch today;
+    // refused anyway so it cannot become the hole the gate used to have.
+    if (_switchInFlight) return;
     emit(const SessionListLoading());
     try {
       // A workspace that is not live has no room listening on it, so asking it
@@ -90,13 +138,18 @@ class SessionListViewModel extends ViewModel<SessionListState> {
 
   /// Retries [call] on request timeout until a boot-sized deadline expires.
   ///
-  /// Both calls on this screen address a room that may be mid-boot: the relay
-  /// announces a room as soon as its Pi subscribes, but the command handlers
-  /// only exist once Pi has finished starting. Measured over the public frp
-  /// path: ~13.7 s from `workspace_start_ok` to the first `session_list`
-  /// answer, against ~100 ms for a warm room. One generous timeout cannot
-  /// cover that gap without also making a genuinely dead room hang for half a
-  /// minute, so retry on short slices and let the deadline decide.
+  /// This is for `session_list` on this screen: it addresses a room that may be
+  /// mid-boot, because the relay announces a room as soon as its Pi subscribes
+  /// while the command handlers only exist once Pi has finished starting.
+  /// Measured over the public frp path: ~13.7 s from `workspace_start_ok` to the
+  /// first `session_list` answer, against ~100 ms for a warm room. One generous
+  /// timeout cannot cover that gap without also making a genuinely dead room
+  /// hang for half a minute, so retry on short slices and let the deadline
+  /// decide.
+  ///
+  /// NOT for `session_switch`: re-sending that one makes the host exit and
+  /// respawn the Pi again, so it is sent exactly once and then watched
+  /// (see [_switchOnce]).
   Future<T> _retryOnTimeout<T>(
     Future<T> Function() call, {
     Duration deadline = const Duration(seconds: 30),
@@ -137,10 +190,17 @@ class SessionListViewModel extends ViewModel<SessionListState> {
         ? s
         : (s is SessionListError ? s.recoverable : null);
     if (base == null) return false;
-    // A second tap while the first open is still running is a no-op for the
-    // SAME row, but not a blanket refusal: the list must stay usable after a
-    // failure, and the previous guard (`s.switching`) never recovered from one.
-    if (base.switching && base.openingId == sessionId) return false;
+    // One switch at a time, whatever the row. `session_switch` is not re-sendable
+    // (see [_switchOnce]), so a second one while the first is in flight would be
+    // a second Pi spawn for a tap the user did not mean to repeat. The
+    // authoritative gate is [_switchInFlight], a field of this view model, and
+    // NOT the `switching` bit of the state: that bit is what the ROWS read (they
+    // are `enabled: !switching`), while the exactly-once promise has to survive
+    // any state replacement (a `reload()` racing the watch). It is cleared in
+    // the `finally` below — every exit path, including a throw or dispose — so it
+    // can never leave the list dead; it only spans a switch that is running.
+    if (_switchInFlight || base.switching) return false;
+    _switchInFlight = true;
     emit(base.copyWith(
       switching: true,
       openingId: sessionId,
@@ -150,26 +210,134 @@ class SessionListViewModel extends ViewModel<SessionListState> {
       _conn.switchRoom(roomId);
       // `session_switch` takes the same road as `session_list`: the daemon
       // either switches in-process or stages the target and exits so the
-      // supervisor can reopen it with `--session`. That exit window is
-      // routinely longer than one request timeout over the public relay, and a
-      // timed-out switch used to end as `TimeoutException` on screen.
-      await _retryOnTimeout(() => _catalog.switchSession(sessionId));
+      // supervisor can reopen it with `--session`. That exit window is routinely
+      // longer than one request timeout over the public relay — but unlike a
+      // listing, a switch must NEVER be repeated: every extra copy makes the
+      // supervisor exit and respawn the Pi again, so retrying a slow boot is
+      // exactly what turned one tap into a restart storm. Send once, then watch.
+      final switched = await _switchOnce(sessionId);
+      if (!switched) return false;
       await _prefs.setSelectedRoom(epk: epk, roomId: roomId);
-      _settleSwitch();
+      // The gate itself is released in the `finally` below, so this path and the
+      // failure paths share one release.
       return true;
     } on SessionSwitchFailure catch (e) {
       _failOpen(_human(e));
       return false;
+    } on WorkspaceControlFailure catch (e) {
+      // The link is gone (see [_awaitSettled]): no amount of watching fixes that,
+      // so say so now instead of at the deadline.
+      _failOpen(_startHuman(e));
+      return false;
     } on TimeoutException {
-      // The daemon accepted nothing at all — usually dead, restarting, or too
-      // slow to answer. A raw `TimeoutException after 0:00:12` is not a sentence
-      // a user can act on.
-      _failOpen('这个会话没有响应。先确认机器上的 Pi 还在运行，或重启该工作区后重试。');
+      // The one request went out and nothing confirmed it inside the boot-level
+      // budget: the Pi is dead, refused to come back, or the room is gone.
+      // Prefer the host's own reason when it has one — a workspace whose Pi
+      // crashed reports `last_error`, and a generic "no response" would throw
+      // that away, the same trade [reload] already refuses to make.
+      final failure = cwd == null ? null : _conn.workspaceStateFor(cwd!);
+      final reason = failure?.lastError;
+      _failOpen(
+        reason != null && reason.isNotEmpty
+            ? '这个工作区起不来：$reason'
+            : '这个会话没有响应。先确认机器上的 Pi 还在运行，或重启该工作区后重试。',
+      );
       return false;
     } catch (e) {
       _failOpen('无法打开该会话：$e');
       return false;
+    } finally {
+      // ONE place, every path — a tap that threw, was refused, timed out, or
+      // outlived the screen must not keep the next tap out.
+      _switchInFlight = false;
+      // …and neither may the `switching` bit, which is what the ROWS read. Also
+      // idempotent, so the paths that already released it (and the banner they
+      // set) are left untouched.
+      _settleSwitch();
     }
+  }
+
+  /// Sends `session_switch` EXACTLY ONCE and waits for it to take effect.
+  ///
+  /// One `session_switch` is one Pi spawn. On the daemon path the host stages
+  /// the target, answers `session_switch_ok`, and exits so the supervisor can
+  /// reopen the Pi with `--session`; the supervisor restarts a switch exit with
+  /// no backoff at all, so a re-sent request kills the Pi that is still booting
+  /// and spawns another one. Measured on the public lane, one tap abandoned
+  /// after its first 12 s slice and then retried churned the workspace through
+  /// pid 17184 → 3740 → 12360 → 18248 → … while the supervisor's `restarts`
+  /// counter stayed 0 the whole time (so that counter is not evidence of calm).
+  ///
+  /// Therefore the request is never repeated: a missed ack only moves this
+  /// method from "wait for the reply" to "watch for the effect". While it
+  /// watches, `switching` stays true, which is also what keeps a second tap
+  /// from putting a second `session_switch` on the wire.
+  ///
+  /// The whole method is bounded by [_switchSettleBudget] counted from the
+  /// send, so the gated list can never be held open longer than that.
+  ///
+  /// Returns false only when the screen was disposed while watching: there is
+  /// nobody left to report to, so the caller must not record a switch it could
+  /// not confirm.
+  Future<bool> _switchOnce(String sessionId) async {
+    final end = DateTime.now().add(_switchSettleBudget);
+    try {
+      await _catalog.switchSession(sessionId, timeout: _switchAckTimeout);
+      return true;
+    } on TimeoutException {
+      // The frame is on the wire — the ack just missed its slice. Whether the
+      // host is mid-recycle or the frame never landed is NOT observable from
+      // here, and the two answers differ by a whole extra Pi spawn, so the
+      // cheaper one wins: read the host's state instead of asking it to switch
+      // again. A frame that really was lost ends as the banner below, which the
+      // user can retry deliberately.
+      return _awaitSettled(sessionId, end);
+    }
+  }
+
+  /// Read-only watch for [sessionId] becoming the current session.
+  ///
+  /// Asks `session_list` — the same reply [reload] already parses — and compares
+  /// `current_id`, which the host publishes only when the id it is running is
+  /// actually in that listing. Nothing here mutates host state, so polling can
+  /// never cost a spawn.
+  ///
+  /// Throws [TimeoutException] when [end] passes, so the caller keeps the
+  /// existing `_failOpen` banner path and the list itself survives. Returns
+  /// false when the view model was disposed first — the watch is abandoned with
+  /// no claim either way.
+  ///
+  /// A late `session_switch_error` (typed refusals such as `locked`) that lands
+  /// after the ack budget cannot be observed through this channel; the banner
+  /// then carries the host's `last_error` when there is one, or the generic
+  /// sentence, and the rows stay tappable for another attempt.
+  Future<bool> _awaitSettled(String sessionId, DateTime end) async {
+    while (DateTime.now().isBefore(end)) {
+      // The screen that asked is gone: `emit` is already a no-op, so there is
+      // nobody to report to and no reason to keep spending the wire on it.
+      if (isDisposed) return false;
+      await Future<void>.delayed(_switchPollInterval);
+      try {
+        final ok = await _catalog.listSessions(timeout: _switchPollTimeout);
+        if (ok.currentId == sessionId) return true;
+      } on TimeoutException {
+        // A Pi that is still booting has no handler for `session_list` yet, so
+        // silence is the expected state during a recycle — poll again.
+        continue;
+      } on WorkspaceControlFailure {
+        // NOT the mid-recycle case, which is silence ([TimeoutException]): the
+        // catalog throws this BEFORE anything reaches the wire, when there is no
+        // channel at all (see `SessionCatalog._expect`). A link that is not
+        // there cannot turn into a switch, so watching it only keeps every row
+        // disabled for the whole budget before the banner appears — the old,
+        // correct failure took the ack slice. Fail fast instead.
+        rethrow;
+      }
+    }
+    if (isDisposed) return false;
+    throw TimeoutException(
+      'session_switch was sent once and never became current',
+    );
   }
 
   /// A tap that failed must not erase the list.
@@ -199,12 +367,12 @@ class SessionListViewModel extends ViewModel<SessionListState> {
   ///
   /// `switching` gates every row (`ListTile(enabled: !switching)`), so leaving
   /// it true after a failure disabled the whole list with no way back short of
-  /// leaving the screen: the guard at the top of [pick] then dropped every
-  /// later tap silently. That is why a single failed switch made the session
-  /// list look dead.
+  /// leaving the screen — the guard at the top of [pick] then dropped every
+  /// later tap. Idempotent, so it can be the single release in `pick`'s
+  /// `finally` without stamping over the banner [_failOpen] just set.
   void _settleSwitch() {
     final now = state;
-    if (now is SessionListReady) {
+    if (now is SessionListReady && (now.switching || now.openingId != null)) {
       emit(now.copyWith(switching: false, clearOpening: true));
     }
   }

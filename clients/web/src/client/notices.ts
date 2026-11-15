@@ -37,6 +37,36 @@ export const DEVICE_NAME =
  */
 export const CHAT_TIMEOUT_MS = 600_000;
 
+/**
+ * How long a `session_read` may stay unanswered before the viewer says so.
+ *
+ * A READ had no bound of its own: it shared `CHAT_TIMEOUT_MS` above, which is
+ * sized for a model turn and is ten minutes. That number was never right for a
+ * disk read — the failure it produced was a viewer stuck on "Reading this
+ * session…" for ten minutes with no way out but closing the tab.
+ *
+ * 30 s is a BOUND, not a tuning value, and both of its edges are measured on the
+ * public lane:
+ *
+ *   • an ACCEPTED read answers in 0.35-3.5 s (POST latency 350-750 ms, 60+ reads);
+ *   • the lane also STALLS the inbound stream (the shared HTTP proxy holds the
+ *     response body), during which every pending reply lands late and together:
+ *     measured click→transcript maxima of 11.4 s, 15.1 s, 16.7 s and 17.4 s.
+ *
+ * So the bound has to sit ABOVE the worst measured stall or it would report a
+ * failure over a read that was about to succeed — which is exactly why there is
+ * no client-side re-ask ladder here. A re-ask replaces the pending request id,
+ * so during a stall it discards the reply that was in flight and asks again into
+ * the same stall: measured on this lane, a 3.5 s ladder produced 5 requests for
+ * one click and threw away every reply. The transport's re-send is the opposite
+ * shape (same id, no state to lose) and that is where the retrying belongs.
+ *
+ * What this constant guarantees is only the thing the viewer may never do: spin
+ * forever. One lost reply now ends in the fixed sentence "Could not read that
+ * session." at 30 s, after which clicking the row again is the retry.
+ */
+export const SESSION_READ_TIMEOUT_MS = 30_000;
+
 /** A `session_switch` is a process restart, not a model turn: seconds, not
  *  minutes. Bounded so a lost reply surfaces instead of hanging forever. */
 export const SWITCH_TIMEOUT_MS = 45_000;

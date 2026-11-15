@@ -7,6 +7,7 @@
  * `.wsNameIdle` was dark and perfectly readable.
  */
 import { attach, evaluate } from "./_cdp.mjs";
+import { assertUiReady, ensureUiReady } from "./_ui-state.mjs";
 
 const EXPR = String.raw`(() => {
   const cv = document.createElement("canvas");
@@ -98,6 +99,15 @@ const SCROLLBAR = String.raw`(() => {
 })()`;
 
 const { send, ws } = await attach();
+// The workspace rows only render with the sidebar expanded; inside the full
+// suite an earlier runner has navigated the page, so establish that fixture and
+// ASSERT it — a collapsed rail reads as "no selected workspace row rendered",
+// which is a fixture failure wearing a product finding's clothes.
+const fixture = assertUiReady(
+  await ensureUiReady(send, { wantRows: false }),
+  "verify-web-contrast-selection",
+);
+console.log(`ui fixture: ok=${fixture.ok} origin=${fixture.origin} sidebarExpanded=${fixture.sidebarExpanded}`);
 const rows = await evaluate(send, EXPR);
 const sb = await evaluate(send, SCROLLBAR);
 ws.close();

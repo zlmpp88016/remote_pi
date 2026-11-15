@@ -54,7 +54,7 @@ import {
 } from "@/lib/remote-pi/usage-stats";
 
 import { joinRemotePath } from "@/lib/remote-pi/remote-path";
-import { ATTACH_MODEL_REQUIRED, ATTACH_VISION_REQUIRED, CHAT_TIMEOUT_MS, COMPOSER_WORKSPACE_NOT_RUNNING, STOP_FAILED, REMOVE_FAILED, DEVICE_NAME, EMPTY_SESSIONS, EMPTY_SKILLS, EMPTY_PACKAGES, EMPTY_PLUGIN_SKILLS, FS_FAILED, FS_NAV_UNAVAILABLE, PLAN_READ_FAILED, PLAN_REFUSED, PLAN_TRUNCATED, MODELS_FAILED, MODELS_FOR_LIVE_WORKSPACE, MODEL_NOT_CONNECTED, MODEL_SET_FAILED, RESTART_FAILED, REAUTH_REQUIRED, RELAY_REQUIRED, SEND_FAILED, SKILLS_FAILED, SKILL_FAILED, PACKAGE_FAILED, CHANGES_UNAVAILABLE, CHANGES_FAILED, SETTINGS_UNREADABLE, SETTINGS_SAVED, SETTINGS_ERROR, SETTINGS_UNAVAILABLE, SETTINGS_SURFACE_UNAVAILABLE, SCHEDULE_FAILED, SCHEDULE_NO_WORKSPACE, PACKAGE_OP_TIMEOUT_MS, PLUGINS_FOR_LIVE_WORKSPACE, SESSIONS_FAILED, SESSIONS_FOR_LIVE_WORKSPACE, SESSIONS_LIST_TIMEOUT_MS, HOST_STALE_MS, SESSIONS_RELIST_ATTEMPTS, SESSIONS_RELIST_MS, SESSIONS_RETRY_BUDGET, SESSIONS_NOT_READY_BUDGET, SESSION_NEW_TIMEOUT_MS, SWITCH_RESPAWN_GRACE_MS, SWITCH_TIMEOUT_MS, SESSION_NEW_FAILED, SESSION_READ_FAILED, START_FAILED, STORAGE_WARNING, SWITCH_FAILED, THINKING_SET_FAILED, WORKSPACES_FAILED, ADD_FAILED, chatItemStatus, chatNoticeForTurn, isSuperseded, pairFailureText, phaseBusyLabel, relayNotice } from "./notices";
+import { ATTACH_MODEL_REQUIRED, ATTACH_VISION_REQUIRED, CHAT_TIMEOUT_MS, COMPOSER_WORKSPACE_NOT_RUNNING, STOP_FAILED, REMOVE_FAILED, DEVICE_NAME, EMPTY_SESSIONS, EMPTY_SKILLS, EMPTY_PACKAGES, EMPTY_PLUGIN_SKILLS, FS_FAILED, FS_NAV_UNAVAILABLE, PLAN_READ_FAILED, PLAN_REFUSED, PLAN_TRUNCATED, MODELS_FAILED, MODELS_FOR_LIVE_WORKSPACE, MODEL_NOT_CONNECTED, MODEL_SET_FAILED, RESTART_FAILED, REAUTH_REQUIRED, RELAY_REQUIRED, SEND_FAILED, SKILLS_FAILED, SKILL_FAILED, PACKAGE_FAILED, CHANGES_UNAVAILABLE, CHANGES_FAILED, SETTINGS_UNREADABLE, SETTINGS_SAVED, SETTINGS_ERROR, SETTINGS_UNAVAILABLE, SETTINGS_SURFACE_UNAVAILABLE, SCHEDULE_FAILED, SCHEDULE_NO_WORKSPACE, PACKAGE_OP_TIMEOUT_MS, PLUGINS_FOR_LIVE_WORKSPACE, SESSIONS_FAILED, SESSIONS_FOR_LIVE_WORKSPACE, SESSIONS_LIST_TIMEOUT_MS, HOST_STALE_MS, SESSIONS_RELIST_ATTEMPTS, SESSIONS_RELIST_MS, SESSIONS_RETRY_BUDGET, SESSIONS_NOT_READY_BUDGET, SESSION_NEW_TIMEOUT_MS, SESSION_READ_TIMEOUT_MS, SWITCH_RESPAWN_GRACE_MS, SWITCH_TIMEOUT_MS, SESSION_NEW_FAILED, SESSION_READ_FAILED, START_FAILED, STORAGE_WARNING, SWITCH_FAILED, THINKING_SET_FAILED, WORKSPACES_FAILED, ADD_FAILED, chatItemStatus, chatNoticeForTurn, isSuperseded, pairFailureText, phaseBusyLabel, relayNotice } from "./notices";
 import { applyPreset, readStoredPreset, type ThemePreset } from "@/lib/theme-presets";
 import {
   applyMode,
@@ -585,6 +585,14 @@ export function ConnectClient() {
        * The guard mirrors the chat timer: only clear the ref if it still holds
        * THIS request, so a reply that did arrive (and already nulled it) is never
        * overwritten by a late timeout.
+       *
+       * The budget is `SESSION_READ_TIMEOUT_MS`, NOT `CHAT_TIMEOUT_MS`: a read is
+       * a disk read on the host, not a model turn, and the chat's ten minutes is
+       * why one lost frame could leave the viewer on "Reading this session…" with
+       * no way out but closing the tab. The lost-frame case itself is repaired
+       * one layer down (sse-transport.ts `IDEMPOTENT_READ_FRAMES` re-sends a READ
+       * whose POST failed); this timer is the bound for a loss that outlives
+       * those re-sends, e.g. the whole inbound stream stalling.
        */
       const readTimeout = setTimeout(() => {
         const pending = sessionReadReqRef.current;
@@ -592,7 +600,7 @@ export function ConnectClient() {
         sessionReadReqRef.current = null;
         setSessionReadLoading(false);
         setSessionsNotice(SESSION_READ_FAILED);
-      }, CHAT_TIMEOUT_MS);
+      }, SESSION_READ_TIMEOUT_MS);
       // The handle is intentionally not stored: unlike the chat timer there is no
       // "supersede the previous turn" case here. The ref comparison above is the
       // only guard needed, and it makes a stale timer a no-op on its own.

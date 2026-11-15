@@ -18,10 +18,18 @@
  */
 import assert from "node:assert/strict";
 import { attach, evaluate, sleep } from "./_cdp.mjs";
+import { assertUiReady, ensureUiReady } from "./_ui-state.mjs";
 
 const MOUNT_BUDGET_MS = 150;
 
 const { send, ws } = await attach();
+// The rows live in the dock's 会话 tab; an earlier runner in the suite has
+// navigated away, so establish the fixture before asserting on it — and ASSERT
+// the fixture itself, so "zero rows" can never be reported as a product defect.
+const fixture = assertUiReady(await ensureUiReady(send), "verify-web-session-click-feedback");
+console.log(
+  `ui fixture: ok=${fixture.ok} origin=${fixture.origin} dockOpen=${fixture.dockOpen} rows=${fixture.sessionRows}`,
+);
 
 const rows = await evaluate(
   send,
@@ -34,13 +42,20 @@ console.log(`session rows: ${rows}`);
 await evaluate(
   send,
   `(function(){
-     var c=document.querySelector('[aria-label="Close the read-only session view"]');
+     var c=document.querySelector('[aria-label="关闭只读会话视图"]');
      if(c) c.click();
      return !!c;
    })()`,
 );
 await sleep(600);
 
+/*
+ * The viewer's close button carries a CHINESE aria-label in the product
+ * (session-viewer.tsx:182). The English literal used here never matched, so a
+ * viewer that mounted in ~12ms was reported as never mounting. The row label
+ * ("Read session …") and the loading text ("Reading this session…") really are
+ * English in the product, so those are left alone.
+ */
 const t0 = Date.now();
 await evaluate(
   send,
@@ -58,7 +73,7 @@ for (let i = 0; i < 40; i += 1) {
   const st = await evaluate(
     send,
     `(function(){
-       var close=document.querySelector('[aria-label="Close the read-only session view"]');
+       var close=document.querySelector('[aria-label="关闭只读会话视图"]');
        if(!close) return {open:false};
        return {open:true, loading: document.body.innerText.indexOf('Reading this session')>=0};
      })()`,
@@ -100,7 +115,7 @@ for (let i = 0; i < 60; i += 1) {
   content = await evaluate(
     send,
     `(function(){
-       var close=document.querySelector('[aria-label="Close the read-only session view"]');
+       var close=document.querySelector('[aria-label="关闭只读会话视图"]');
        if(!close) return false;
        return document.body.innerText.indexOf('Reading this session')<0;
      })()`,

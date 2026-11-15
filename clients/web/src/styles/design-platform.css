@@ -138,14 +138,24 @@
     /* ── ink ramp ─────────────────────────────────────────────────────────── */
     --dsw-alias-label-primary: var(--dsw-static-neutral-bluish-1000);
     --dsw-alias-label-secondary: var(--dsw-static-neutral-bluish-700);
-    --dsw-alias-label-tertiary: var(--dsw-static-neutral-bluish-600);
+    /*
+     * One step darker than DSH's light value (`bluish-600`, 3.71:1 on white —
+     * below AA for the 13 modules that carry tertiary text: stats pills, message
+     * footers, turn dividers, …). `bluish-700` measures 5.80:1 on white and
+     * 5.55:1 on the `#f9fafb` card. It matches `label-secondary`, so the two
+     * ranks no longer differ by hue weight — legibility was chosen over that
+     * distinction, the same trade the caption token below already makes.
+     */
+    --dsw-alias-label-tertiary: var(--dsw-static-neutral-bluish-700);
     /*
      * DSH's light value for this token is `neutral-bluish-400` (#adb2b8), which is
      * 2.2:1 on white — nowhere near AA for the placeholder/hint text it carries.
-     * Kept one step darker (`neutral-bluish-600`, 4.6:1 on #f9fafb) so captions
-     * stay legible; this remains the single deliberate contrast deviation.
+     * `bluish-600` was tried next but measures only 3.55:1 on the `#f9fafb` card
+     * and 3.71:1 on white, still below AA (an earlier comment here claimed 4.6:1;
+     * that figure was wrong). `bluish-700` gives 5.55:1 / 5.80:1, so captions
+     * actually stay legible, matching the tertiary rank above.
      */
-    --dsw-alias-label-caption: var(--dsw-static-neutral-bluish-600);
+    --dsw-alias-label-caption: var(--dsw-static-neutral-bluish-700);
 
     /* ── interactive ──────────────────────────────────────────────────────── */
     --dsw-alias-interactive-bg-hover: rgba(38, 49, 72, 0.06);
@@ -407,9 +417,14 @@
      *
      * DSH's own light ramp has a darker second step for exactly this role:
      * `--dsw-alias-label-secondary` = neutral-bluish-700 = rgb(97,102,107) =
-     * 5.80:1 (design-platform.css:223 in the DSH source). Moving to it keeps the
-     * hierarchy (primary 18.90 -> secondary 5.80 -> tertiary 3.71 stays available
-     * for genuinely decorative marks) while clearing AA.
+     * 5.80:1 (design-platform.css:223 in the DSH source). Moving to it clears AA
+     * for every text use of --faint.
+     *
+     * There is no longer a dimmer step to hand to decorative marks:
+     * `label-tertiary` was raised to bluish-700 as well (see the ink ramp above),
+     * so the light hierarchy is primary 18.90 -> secondary 5.80 -> tertiary 5.80.
+     * The old 3.71:1 tertiary value is gone from this theme on purpose — it was
+     * under AA wherever it carried text.
      *
      * Dark theme is untouched: its --faint is neutral-bluish-500 on a dark
      * surface, which is already readable there.

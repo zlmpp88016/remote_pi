@@ -27,6 +27,7 @@
  */
 import assert from "node:assert/strict";
 import { attach, evaluate, sleep } from "./_cdp.mjs";
+import { assertUiReady, ensureUiReady } from "./_ui-state.mjs";
 
 /** The label must change within this budget; no network round-trip fits. */
 const REACT_BUDGET_MS = 400;
@@ -34,12 +35,19 @@ const REACT_BUDGET_MS = 400;
 const SETTLE_BUDGET_MS = 90_000;
 
 const { send, ws } = await attach();
+// Needs a populated session list to find a non-live row with a readable
+// transcript; establish that fixture instead of assuming a warm tab, and ASSERT
+// it — without the rows this gate cannot make a claim about anything.
+const fixture = assertUiReady(await ensureUiReady(send), "verify-web-resume-feedback");
+console.log(
+  `ui fixture: ok=${fixture.ok} origin=${fixture.origin} dockOpen=${fixture.dockOpen} rows=${fixture.sessionRows}`,
+);
 
 // Start clean: an already-open viewer belongs to the previous session.
 await evaluate(
   send,
   `(function(){
-     var c=document.querySelector('[aria-label="Close the read-only session view"]');
+     var c=document.querySelector('[aria-label="关闭只读会话视图"]');
      if(c) c.click();
      return !!c;
    })()`,
@@ -47,6 +55,9 @@ await evaluate(
 await sleep(2000);
 
 // Find a row that is NOT the live one: only those offer "Resume here".
+// The viewer's close button uses a CHINESE aria-label in the product
+// (session-viewer.tsx:182); the English literal never matched. "Resume here"
+// and the "Read session …" row label really are English, so they stay.
 //
 // It must also have real content. Sessions with content and sessions without
 // both look like ordinary rows, so picking the first non-live one picked an
@@ -87,7 +98,7 @@ for (let row = 0; row < Math.min(rowCount, 12) && picked < 0; row += 1) {
    */
   for (let i = 0; i < 25; i += 1) {
     historyBefore = await evaluate(send, `(function(){
-      var s=document.querySelector('[aria-label="Close the read-only session view"]');
+      var s=document.querySelector('[aria-label="关闭只读会话视图"]');
       if(!s) return 0;
       var sec=s.closest('section');
       return sec ? sec.innerText.length : 0;
@@ -137,7 +148,7 @@ assert.ok(
 // --- 3. history must survive ------------------------------------------------
 // Measured the same way as `historyBefore`: the viewer's own container.
 const historyDuring = await evaluate(send, `(function(){
-  var s=document.querySelector('[aria-label="Close the read-only session view"]');
+  var s=document.querySelector('[aria-label="关闭只读会话视图"]');
   if(!s) return 0;
   var sec=s.closest('section');
   return sec ? sec.innerText.length : 0;

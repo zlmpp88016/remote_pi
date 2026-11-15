@@ -94,7 +94,10 @@ void main() {
   Future<
     ({ConnectionManager conn, _FakeChannel ch, SyncService sync, String epk})
   >
-  setup({Duration pendingSendTimeout = const Duration(seconds: 20)}) async {
+  setup({
+    Duration pendingSendTimeout = const Duration(seconds: 20),
+    String? epk,
+  }) async {
     final ch = _FakeChannel();
     final conn = ConnectionManager(
       factory: (_, _) async => ch,
@@ -107,11 +110,11 @@ void main() {
       boxes,
       pendingSendTimeout: pendingSendTimeout,
     );
-    final epk = 'epk_sync_${++_counter}';
+    final peerEpk = epk ?? 'epk_sync_${++_counter}';
     conn.adopt(
       ch,
       PeerRecord(
-        remoteEpk: epk,
+        remoteEpk: peerEpk,
         sessionName: 'Pi',
         relayUrl: 'ws://localhost',
         pairedAt: '2026-01-01T00:00:00Z',
@@ -122,10 +125,10 @@ void main() {
     // client always has it. Without this the rig would look permanently
     // offline and `requestSync` would defer every frame it is asked to send.
     ch.pushControl(
-      RoomAnnounced(peer: epk, roomId: 'main', startedAt: 1, cwd: '/proj'),
+      RoomAnnounced(peer: peerEpk, roomId: 'main', startedAt: 1, cwd: '/proj'),
     );
     await _settle();
-    return (conn: conn, ch: ch, sync: sync, epk: epk);
+    return (conn: conn, ch: ch, sync: sync, epk: peerEpk);
   }
 
   List<MessageRecord> messages(String epk) {
@@ -144,6 +147,17 @@ void main() {
         ? SessionIndexRecord.fromJson(raw.cast<String, dynamic>())
         : null;
   }
+
+  /// The host's answer to `session_list`, which is the only PASSIVE frame that
+  /// names the live session.
+  SessionListOk listing(String inReplyTo, String? currentId) => SessionListOk(
+    inReplyTo: inReplyTo,
+    currentId: currentId,
+    sessions: [
+      if (currentId != null)
+        WireSessionInfo(id: currentId, name: currentId, mtime: 0, live: true),
+    ],
+  );
 
   test(
     'user_message echo writes one MessageRecord + updates the index',
@@ -848,6 +862,160 @@ void main() {
       await _settle();
 
       expect(messages(s.epk), isEmpty);
+
+      s.conn.dispose();
+      s.sync.dispose();
+    },
+  );
+
+  // F3 — the host answers a switch by broadcasting an EMPTY `session_history`
+  // BEFORE the ack, carrying the `session_switch` id. Settling the attempt on
+  // that frame released the skeleton between the reset and the ack, so the chat
+  // showed "这里还没有内容" on the session the user had just picked.
+  test(
+    'the pre-ack session_history fan-out does NOT settle the transcript window; '
+    'the answer to OUR session_sync does',
+    () async {
+      final s = await setup();
+      // The sync is armed by a 200 ms debounce; wait for it to actually leave.
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(s.sync.isLoadingTranscript, isTrue);
+      final sync = s.ch.sent.whereType<SessionSync>().last;
+
+      s.ch.push(
+        SessionHistory(
+          inReplyTo: 'the-switch-id', // not an id we ever sent
+          sessionStartedAt: 0,
+          events: const [],
+          eos: true,
+          truncated: false,
+        ),
+      );
+      await _settle();
+      expect(
+        s.sync.isLoadingTranscript,
+        isTrue,
+        reason: 'a reset fan-out must not release the skeleton',
+      );
+
+      s.ch.push(
+        SessionHistory(
+          inReplyTo: sync.id,
+          sessionStartedAt: 0,
+          events: const [],
+          eos: true,
+          truncated: false,
+        ),
+      );
+      await _settle();
+      expect(
+        s.sync.isLoadingTranscript,
+        isFalse,
+        reason: 'the answer to our own session_sync still settles it',
+      );
+
+      s.conn.dispose();
+      s.sync.dispose();
+    },
+  );
+
+  // F5 — `session_switch_ok` (authoritative) and `session_list_ok` (passive)
+  // have no ordering relation: a listing answered by the PRE-switch Pi names the
+  // session we just left and can land after the ack.
+  test(
+    'a stale current_id from the pre-switch Pi does not fight the ack; a move '
+    'made elsewhere is still adopted once the switch has settled',
+    () async {
+      final s = await setup();
+      s.ch.push(listing('l0', 'A'));
+      await _settle();
+      expect(s.sync.activeSessionId, 'A', reason: 'first sight');
+
+      s.ch.push(SessionSwitchOk(
+        inReplyTo: 'sw',
+        sessionId: 'B',
+        sessionStartedAt: 0,
+      ));
+      await _settle();
+      expect(s.sync.activeSessionId, 'B', reason: 'an ack is authoritative');
+
+      s.ch.push(listing('l1', 'A')); // answered before the switch
+      await _settle();
+      expect(
+        s.sync.activeSessionId,
+        'B',
+        reason: 'a passive report must not undo the ack while it settles',
+      );
+
+      // The attempt ends when the room answers our own sync…
+      final sync = s.ch.sent.whereType<SessionSync>().last;
+      s.ch.push(
+        SessionHistory(
+          inReplyTo: sync.id,
+          sessionStartedAt: 0,
+          events: const [],
+          eos: true,
+          truncated: false,
+        ),
+      );
+      await _settle();
+      // …and from then on a report naming another session is a real move.
+      s.ch.push(listing('l2', 'C'));
+      await _settle();
+      expect(
+        s.sync.activeSessionId,
+        'C',
+        reason: 'a switch made on another client must still be adopted',
+      );
+
+      s.conn.dispose();
+      s.sync.dispose();
+    },
+  );
+
+  test(
+    'a cold boot COMPARES the listing against the durable session id instead '
+    'of keeping another session\'s rows',
+    () async {
+      // What the previous run left behind: session A's rows, labeled A.
+      const epk = 'epk_restart_label';
+      await LocalBoxes().msgsBox(epk, 'main').then(
+        (box) => box.put(
+          0,
+          MessageRecord(
+            id: 'u1',
+            seq: 0,
+            role: MsgRole.user,
+            text: 'from session A',
+            ts: DateTime.fromMillisecondsSinceEpoch(1),
+          ).toJson(),
+        ),
+      );
+      await LocalBoxes().sessionsIndexBox().put(
+        '$epk:main',
+        SessionIndexRecord(
+          epk: epk,
+          roomId: 'main',
+          sessionId: 'A',
+        ).toJson(),
+      );
+
+      // A fresh writer over the same durable boxes = a restart.
+      final s = await setup(epk: epk);
+      expect(
+        s.sync.activeSessionId,
+        'A',
+        reason: 'the id that says whose rows these are survives the process',
+      );
+
+      // The Pi came back on a different session; those rows are not B's.
+      s.ch.push(listing('l0', 'B'));
+      await _settle();
+      expect(
+        messages(epk),
+        isEmpty,
+        reason: 'A\'s rows must not be projected as B (S1 across a restart)',
+      );
 
       s.conn.dispose();
       s.sync.dispose();

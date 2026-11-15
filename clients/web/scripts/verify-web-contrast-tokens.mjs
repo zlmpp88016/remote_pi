@@ -1,7 +1,17 @@
 /** Resolved-token proof: ok-text / warn-text / scrollbar tokens actually resolve
  *  (not silently guaranteed-invalid) and produce the claimed contrast. */
 import { attach, evaluate } from "./_cdp.mjs";
+import { assertUiReady, ensureUiReady } from "./_ui-state.mjs";
 const { send, ws } = await attach();
+// Custom properties resolve only on the loaded app document. Without this the
+// gate read every token as EMPTY whenever an earlier runner had navigated away.
+// The fixture is ASSERTED rather than logged: a fixture that never became ready
+// produced a wall of meaningless `EMPTY` findings instead of naming the step.
+const fixture = assertUiReady(
+  await ensureUiReady(send, { wantRows: false }),
+  "verify-web-contrast-tokens",
+);
+console.log(`ui fixture: ok=${fixture.ok} origin=${fixture.origin} sidebarExpanded=${fixture.sidebarExpanded}`);
 const r = await evaluate(send, `(function(){
   const cs=getComputedStyle(document.documentElement);
   const names=["--ok-text","--warn-text","--dsw-alias-scrollbar-bg-l2","--dsw-alias-scrollbar-hover-l2","--dsw-static-neutral-200","--dsw-static-neutral-300","--faint","--dsw-alias-label-secondary","--dsw-alias-label-tertiary","--muted"];

@@ -38,6 +38,29 @@ class SyncService extends Service {
   String? _activeEpk;
   String _activeRoomId = 'main';
 
+  // F2 — WHICH session the rows of each box belong to, keyed by
+  // [LocalBoxes.sessionKey] (the same key the durable index uses).
+  //
+  // The durable box is named `msgs_<epk>__<roomId>`, so every session of a
+  // workspace shares ONE box and its rows only mean anything for the session
+  // that wrote them. These ids are never derived here: they are copied from a
+  // server frame (`session_switch_ok.session_id` /
+  // `session_list_ok.current_id`). A CHANGE of the id for a box is what makes
+  // that box's rows foreign — the session dimension [activate] did not have.
+  // Keyed per box rather than held as one "current" value: the id describes the
+  // box it was reported for, and a revisit must still know which session that
+  // box holds instead of mistaking it for a first sight.
+  final Map<String, String> _sessionIdByBox = <String, String>{};
+
+  // F2 — deferred cleanup, one entry per box. A session change was recorded for
+  // a box while the writer was no longer bound to it, so its rows could not be
+  // dropped at the time (clearing a box this change never owned would delete
+  // another session's data). Left undone they would be read back as the NEXT
+  // session's transcript — the cross-talk this fixes — so [activate] finishes
+  // the wipe on rebinding. A set, not a slot: each box's clean-up is independent
+  // and dropping one would strand that room's stale rows.
+  final Set<String> _pendingSessionResets = <String>{};
+
   // In-memory dedupe + ordering for the active session's msgs box. Rebuilt on
   // [activate]. Key = `<role>:<id>` so a user msg and the assistant reply that
   // shares its id don't collide.
@@ -73,7 +96,8 @@ class SyncService extends Service {
   Timer? _syncDebounce;
   Timer? _pendingSyncRetry;
 
-  /// The `session_sync` we are waiting on, and the head start it got.
+  /// The last `session_sync` SEND of the current attempt (see
+  /// [_syncWindowSince]).
   ///
   /// `isRoomLive` cannot be trusted around a `session_switch`: the Pi stages
   /// the target, acks, exits and is respawned by the supervisor, and the relay
@@ -82,9 +106,85 @@ class SyncService extends Service {
   /// how the chat ended up permanently empty after resuming a session. So the
   /// send is not the end of the story: a silence longer than the observed
   /// cold-start latency is retried until the transcript arrives.
-  String? _awaitingSyncId;
   DateTime? _awaitingSyncSince;
+
+  /// When the CURRENT attempt started, whether or not a frame went out.
+  ///
+  /// [_awaitingSyncSince] is the last SEND, so every resend advances it; this is
+  /// the window the whole attempt lives in and a resend never moves it. The two
+  /// clocks must not be one: timing resends off the window start would send one
+  /// per tick, and letting a resend re-arm the window would push the give-up out
+  /// of reach on every retry — the same shape of bug the deferred
+  /// `_pendingSyncRequest` early-return produced (measured: 163 s of retries
+  /// whose `waited` never left the 3.008–3.044 s band). Opened by the first
+  /// request (sent OR deferred) and cleared only when an answer settles the
+  /// window or the deadline gives up on it, so one attempt is bounded however
+  /// the room behaves.
+  DateTime? _syncWindowSince;
+
+  /// Set when a window ended at the deadline while it was still WAITING for the
+  /// room (nothing was ever sent). That is the one give-up that deserves another
+  /// attempt without the user asking: the room coming back means the daemon the
+  /// chat was waiting for is listening again. It fires once — and only on a
+  /// room-live edge, not on every rooms broadcast — so a room that stays down
+  /// costs nothing after the notice.
+  bool _resyncOnRoomReturn = false;
+
+  /// The ids of the `session_sync` frames SENT in this attempt, newest last —
+  /// the only frames that may settle it.
+  ///
+  /// The host answers a switch by broadcasting an EMPTY `session_history`
+  /// BEFORE the ack, carrying `in_reply_to` = the id of the `session_switch`
+  /// (the reset has to land before the ack — see `_resetSessionForNew`).
+  /// Settling on ANY answer therefore released the loading state in the middle
+  /// of every daemon switch: the chat fell back to "这里还没有内容" on the very
+  /// session the user had just picked, and only the ack put the skeleton back.
+  /// An id from this list is the only proof that the room answered OUR question
+  /// about the transcript. Bounded by [_syncDeadline]: one id per
+  /// [_syncNoAnswerRetry] at most, cleared when the attempt opens or ends.
+  final List<String> _syncRequestIds = <String>[];
+
+  /// The id an AUTHORITATIVE `session_switch_ok` moved the active box to, plus
+  /// the box it was for — kept until that switch has actually settled.
+  ///
+  /// The ack and a `session_list_ok` have NO ordering relation on the wire: a
+  /// listing answered by the PRE-switch Pi (`current_id` = A) can be delivered
+  /// after the ack that moved us to B. Read as a genuine move, that frame wipes
+  /// and refetches the box for A, the next poll refetches it for B — repeated
+  /// wipe+refetch churn and a transiently empty transcript on every list reload
+  /// that lands inside the ack slice. So while a switch settles, a PASSIVE id
+  /// that disagrees with the ack is refused outright.
+  ///
+  /// This is an explicit in-flight flag, not a clock: a non-null key IS "a switch
+  /// is settling". It is set by an ack (which necessarily then asks for the
+  /// transcript) and cleared where an attempt ends — [_settleTranscriptLoading]
+  /// (a real answer, or the 40 s deadline giving up) and the no-channel branch of
+  /// [requestSync], where no attempt can even start. It therefore cannot outlive
+  /// the attempt, and a genuine move made on another client is still adopted once
+  /// nothing is in flight.
+  String? _settlingSwitchId;
+  String? _settlingSwitchKey;
+
+  /// Fixed row id for the "this session never answered" notice, so repeated
+  /// deadlines REPLACE that row instead of stacking one per attempt.
+  static const _syncDeadlineNoticeId = 'sync_deadline_notice';
+
+  /// Retry cadence INSIDE one window (see [_syncWindowSince]): a `session_sync`
+  /// silent for this long is re-sent.
   static const _syncNoAnswerRetry = Duration(seconds: 3);
+
+  /// How long ONE attempt may run before the chat stops waiting and says why.
+  ///
+  /// Left at 40 s, deliberately. The measured defect was not a tight deadline —
+  /// every retry in the 163 s burst reported `waited` ≈ 3.02 s, so the deadline
+  /// was UNREACHABLE; widening it would only delay the notice for the same dead
+  /// room. Budget check against those measurements: the round trip is ~1.1 s
+  /// median / 1.8 s p95, so 40 s is ~36 median round trips; and the slowest
+  /// healthy pre-transcript stage, a `session_switch` respawn, is ~26 s end to
+  /// end, leaving ~14 s of margin (a full 3 s resend cycle plus the reply, four
+  /// times over). A truly dead room therefore ALWAYS ends here: the timer that
+  /// checks this deadline is re-armed by every request and by every rebind, so
+  /// no path can leave the chat waiting past ~1 s after this mark.
   static const _syncDeadline = Duration(seconds: 40);
 
   // Whether the active session's agent is currently producing a reply. Spans
@@ -157,7 +257,18 @@ class SyncService extends Service {
       _syncTurnStateFromRoomMeta();
       // A deferred sync is waiting for exactly this: the room coming back
       // (usually the daemon that `session_switch` restarted).
-      if (_pendingSyncRequest) requestSync();
+      if (_pendingSyncRequest) {
+        requestSync();
+      } else if (_resyncOnRoomReturn) {
+        // A previous window already gave up and said so. Only a room that is
+        // actually LIVE again earns a new attempt, so the released state stays
+        // released while the room is down.
+        final epk = _activeEpk;
+        if (epk != null && _conn.isRoomLive(epk, _activeRoomId)) {
+          _resyncOnRoomReturn = false;
+          requestSync();
+        }
+      }
     });
     _presenceSub = _conn.presenceStream.listen((_) => _writeRuntime());
     _onStatus(_conn.status); // replay current
@@ -185,12 +296,16 @@ class SyncService extends Service {
   bool get isWorking => _working;
   Stream<bool> get workingStream => _workingController.stream;
 
-  /// True while a `session_sync` is in flight — i.e. the transcript on screen
-  /// is not yet known to be the current one. The session list uses this to put
-  /// a spinner on the row the user just tapped instead of looking frozen, and
-  /// the chat uses it to show a skeleton instead of "这里还没有内容" (which is
-  /// otherwise indistinguishable from a genuinely empty session).
-  bool get isLoadingTranscript => _awaitingSyncSince != null;
+  /// True while an attempt to learn this session's transcript is outstanding —
+  /// a `session_sync` in flight OR a request still waiting for the room to come
+  /// back. Either way the transcript on screen is not yet known to be the
+  /// current one, so the chat shows a skeleton instead of "这里还没有内容"
+  /// (otherwise indistinguishable from a genuinely empty session).
+  ///
+  /// Keyed on the ATTEMPT WINDOW, not on the last send: a deferred request never
+  /// sends one, and the window is also what carries the deadline, so this flag
+  /// is released when — and only when — the attempt is actually over.
+  bool get isLoadingTranscript => _syncWindowSince != null;
   Stream<bool> get transcriptLoadingStream =>
       _transcriptLoadingController.stream;
   final StreamController<bool> _transcriptLoadingController =
@@ -227,12 +342,38 @@ class SyncService extends Service {
   String? get activeEpk => _activeEpk;
   String get activeRoomId => _activeRoomId;
 
+  /// The server-reported id of the session the active box currently owns, or
+  /// null when no frame has named it yet (cold boot, or right after
+  /// `session_new`).
+  String? get activeSessionId {
+    final epk = _activeEpk;
+    if (epk == null) return null;
+    return _sessionIdByBox[LocalBoxes.sessionKey(epk, _activeRoomId)];
+  }
+
   /// Bind the writer to a (peer, room). Opens the box and rebuilds the
   /// dedupe/seq index from it. Called by the chat when it mounts / switches
   /// rooms; also adopted automatically on the first StatusOnline.
+  ///
+  /// F2 — `(epk, room)` is the ADDRESS, not the transcript. Because the box is
+  /// shared by every session of the workspace, a session change recorded while
+  /// this box was bound leaves rows that belong to the session we left. Such a
+  /// change arrives as a pending reset ([_adoptSessionId]), and it is applied
+  /// HERE — before the index is rebuilt, so neither this writer nor a reader can
+  /// project those rows as the new session's transcript — then refetched. That
+  /// is the session dimension this early-return was missing.
   Future<void> activate(String epk, String roomId) async {
     final room = roomId.isEmpty ? 'main' : roomId;
-    if (_activeEpk == epk && _activeRoomId == room && _indexLoaded) return;
+    final sameBinding = _activeEpk == epk && _activeRoomId == room;
+    final sessionChanged = _pendingSessionResets.contains(
+      LocalBoxes.sessionKey(epk, room),
+    );
+    if (sameBinding && _indexLoaded && !sessionChanged) return;
+    if (!sameBinding) {
+      // Ids in flight asked about the PREVIOUS binding's transcript, so their
+      // answers say nothing about this one (see [_syncRequestIds]).
+      _syncRequestIds.clear();
+    }
     // Genuine session switch: drop the in-memory turn state so the
     // PREVIOUS session's streaming buffer + whole-turn working flag can't
     // bleed into the next chat (the bug where chat 2 looked "working"
@@ -246,8 +387,32 @@ class SyncService extends Service {
     _resetPaging();
     _activeEpk = epk;
     _activeRoomId = room;
+    // F5 — whose rows this box holds, straight from the durable index and
+    // BEFORE anything can hand out an answer: a cold boot's first
+    // `session_list_ok` must be a COMPARISON against what the last run recorded,
+    // not another "first sight" that keeps another session's rows (S1 surviving
+    // one restart). Read synchronously — the index box is open at boot — so no
+    // frame can slip in between.
+    _restoreSessionLabel(epk, room);
+    // A clock opened for the PREVIOUS binding says nothing about this one: its
+    // age must not follow the screen across a rebind, or the new session could
+    // give up (and say so) seconds after being opened. The window is kept OPEN
+    // — there is no transcript for the new binding either, so releasing the
+    // skeleton here would flash "这里还没有内容" for an empty session — and
+    // restarted, which also re-arms the timer so the deadline stays bounded
+    // even if nothing asks again.
+    _restartSyncWindow();
+    if (sessionChanged) {
+      // Consumed here: after this the box holds no session's rows.
+      _pendingSessionResets.remove(LocalBoxes.sessionKey(epk, room));
+      await _dropActiveTranscript();
+    }
     await _loadIndex();
     _writeRuntime();
+    if (sessionChanged) {
+      // Emptied just now, so only a fresh sync can fill it.
+      requestSync();
+    }
   }
 
   /// Clears the in-memory streaming buffer + whole-turn working flag
@@ -471,8 +636,40 @@ class SyncService extends Service {
     final ch = _conn.channel;
     final epk = _activeEpk;
     if (ch == null || epk == null) {
+      // No channel to address at all (offline, or not bound yet). The status
+      // surface already says so and there is no frame to lose, so no window is
+      // opened — a `session_sync` cannot time out against a link we know is
+      // down. With no window either, nothing is left that could end a settling
+      // switch, so its guard ([_settlingSwitchId]) must not outlive it — left set
+      // it would ignore a move made on another client forever. An ALREADY open
+      // window still gets its tick, otherwise a channel that dies mid-attempt
+      // would strand that window (and its skeleton).
       _pendingSyncRequest = true;
+      if (_syncWindowSince == null) {
+        _settlingSwitchKey = null;
+        _settlingSwitchId = null;
+      } else {
+        _armPendingSyncRetry();
+      }
       return;
+    }
+    // One attempt window, opened by whichever comes first — a deferral or a
+    // send. THIS is what makes the deadline reachable when the room never comes
+    // back: previously only a successful send armed the clock, so the deferred
+    // loop ran with no time reference at all. A fresh attempt also supersedes a
+    // room-return resync queued by a window that already gave up.
+    final opened = _syncWindowSince == null;
+    _syncWindowSince ??= DateTime.now();
+    if (opened) {
+      // A fresh attempt opens the transcript again: the previous give-up notice
+      // was about an attempt nobody is repeating, and leaving it in the box
+      // would replace the loading skeleton with a message about the past.
+      _resyncOnRoomReturn = false;
+      // Ids from the previous attempt answer questions nobody is asking now
+      // (see [_syncRequestIds]).
+      _syncRequestIds.clear();
+      // ignore: discarded_futures
+      _removeById(_syncDeadlineNoticeId);
     }
     // A live channel is not a live ROOM. `session_switch` restarts the daemon
     // (stage → ack → exit → supervisor respawn), and in that window the room is
@@ -481,16 +678,20 @@ class SyncService extends Service {
     // a pending flag was never set either.
     if (!_conn.isRoomLive(epk, _activeRoomId)) {
       _pendingSyncRequest = true;
+      // Deferred is not "nothing to see": the transcript on screen is still not
+      // known to be this session's, so the same skeleton applies. Emitted once
+      // per window — this path re-enters every second.
+      if (opened) _emitTranscriptLoading(true);
       _armPendingSyncRetry();
       return;
     }
     _pendingSyncRequest = false;
     _pendingSyncRetry?.cancel();
     _pendingSyncRetry = null;
-    final id = _newId();
-    _awaitingSyncId = id;
     _awaitingSyncSince = DateTime.now();
-    _emitTranscriptLoading(true);
+    final id = _newId();
+    _syncRequestIds.add(id);
+    if (opened) _emitTranscriptLoading(true);
     ch.send(SessionSync(id: id));
     _armPendingSyncRetry();
   }
@@ -500,35 +701,137 @@ class SyncService extends Service {
     _transcriptLoadingController.add(value);
   }
 
+  /// Closes the attempt window and releases the loading state.
+  ///
+  /// Guarded on the WINDOW, not on `_awaitingSyncSince`: a deferred attempt
+  /// never sent a frame, so keying this on the send would leave that case
+  /// unsettled — the same blind spot that made the deadline unreachable.
+  /// `_pendingSyncRequest` is deliberately left alone here: it is the pre-existing
+  /// "still owed a sync" flag the rooms listener flushes, and an answer arriving
+  /// while a deferral is queued does not make that deferral unnecessary. Only the
+  /// give-up and the cancel paths clear it, because those end the attempt.
   void _settleTranscriptLoading() {
-    if (_awaitingSyncSince == null) return;
-    _awaitingSyncId = null;
+    // A queued room-return resync was for the attempt that is now over.
+    _resyncOnRoomReturn = false;
+    // The switch this box was waiting on has settled too: the room either
+    // answered or the deadline proved it never will, so a listing that names
+    // another session is a genuine move from here on (see
+    // [_settlingSwitchId]).
+    _settlingSwitchId = null;
+    _settlingSwitchKey = null;
+    // Nothing outstanding can answer this attempt any more — true whether or not
+    // a window was open (an id is only added by a send).
+    _syncRequestIds.clear();
+    if (_syncWindowSince == null) return;
+    _syncWindowSince = null;
     _awaitingSyncSince = null;
     _emitTranscriptLoading(false);
   }
 
-  /// Retries a `session_sync` that never came back, and flushes a deferred one
-  /// once the room returns. Both cases are the same symptom from the user's
-  /// side — an empty chat that never fills.
+  /// Restarts the clock of an OPEN attempt window, leaving it open.
+  ///
+  /// For a rebind (a session switch or a room change): the attempt now addresses
+  /// a different transcript, so it gets a full deadline, but the loading state
+  /// must not blink off in between — the new binding has no rows either. The
+  /// last-send time is deliberately KEPT: a frame already on the wire is still
+  /// outstanding, and its age is what paces the next resend. No-op when no
+  /// window is open, so it never manufactures a loading state.
+  void _restartSyncWindow() {
+    if (_syncWindowSince == null) return;
+    _syncWindowSince = DateTime.now();
+    _armPendingSyncRetry();
+  }
+
+  /// The attempt outlived [_syncDeadline]: release the loading state and say
+  /// why, instead of leaving the skeleton up or dropping to "这里还没有内容" as
+  /// if the session were empty.
+  void _giveUpOnSync(Duration waited) {
+    debugPrint(
+      '[sync] session_sync gave up after $waited without an answer '
+      '(deadline ${_syncDeadline.inSeconds}s) — releasing the loading state',
+    );
+    final wasWaitingForRoom = _pendingSyncRequest;
+    // Notice queued BEFORE the release so its box write is already on the chain
+    // when the skeleton comes down (an empty box would otherwise render
+    // "这里还没有内容" for the few frames the write takes). The release stays
+    // SYNCHRONOUS on purpose: the guarantee this fix exists for is that the
+    // loading state ends at the deadline, so nothing may be made conditional on
+    // a write completing.
+    _pendingSyncRequest = false;
+    // ignore: discarded_futures
+    _noticeTranscriptUnavailable();
+    _settleTranscriptLoading();
+    // The attempt is OVER: the deferred flag stays cleared so the release is
+    // final — left set, the rooms listener would re-request on the next
+    // broadcast (including unrelated ones such as a working flip) and put the
+    // skeleton back up on a chat that was just told it gave up. The one case
+    // with a real answer is a room that was DOWN the whole window coming back:
+    // that is the daemon finishing its restart, so it earns one more automatic
+    // attempt (see [_resyncOnRoomReturn]). Set AFTER the settle, which clears it
+    // as part of ending the window.
+    _resyncOnRoomReturn = wasWaitingForRoom;
+  }
+
+  /// Tells the user, in the transcript, that this session never answered.
+  ///
+  /// Reuses the notice mechanism this file already has for a frame-level
+  /// failure — the `ErrorMessage` case below writes an `⚠` assistant row —
+  /// because the sync layer has no banner of its own (the banners live in
+  /// ChatPage, and the event stream carries no notice type). Writing the row
+  /// also gives the ViewModel the message change that carries the released
+  /// `isLoadingTranscript` to the screen. It clears itself: the next real
+  /// `session_history` replaces the window in [_applyHistory].
+  Future<void> _noticeTranscriptUnavailable() {
+    if (_activeEpk == null) return Future<void>.value();
+    return _upsert(
+      MsgRole.assistant,
+      _syncDeadlineNoticeId,
+      (seq, _) => MessageRecord(
+        id: _syncDeadlineNoticeId,
+        seq: seq,
+        role: MsgRole.assistant,
+        text:
+            '⚠ 这段会话没有回应：等待 ${_syncDeadline.inSeconds} 秒仍没有收到历史记录。'
+            '请确认电脑上的 Pi 仍在运行（或该会话刚重启完成），'
+            '必要时返回列表重新打开这一段。',
+        ts: DateTime.now(),
+      ),
+    );
+  }
+
+  /// Drives ONE attempt window: re-asks for the room every second, re-sends a
+  /// `session_sync` that has been silent for [_syncNoAnswerRetry], and gives up
+  /// at [_syncDeadline]. Both cases are the same symptom from the user's side —
+  /// an empty chat that never fills.
+  ///
+  /// The deadline is evaluated FIRST. It used to sit behind
+  /// `if (_pendingSyncRequest) { requestSync(); return; }`, and a deferred
+  /// request re-sets that flag on every pass — so the 1 s loop could never reach
+  /// the check, the clock never advanced, and a room that stayed down left the
+  /// chat loading for as long as the screen existed.
   void _armPendingSyncRetry() {
     if (_pendingSyncRetry != null) return;
     _pendingSyncRetry = Timer(const Duration(seconds: 1), () {
       _pendingSyncRetry = null;
+      final windowSince = _syncWindowSince;
+      // Settled while this tick was queued — nothing left to drive.
+      if (windowSince == null) return;
+      final waited = DateTime.now().difference(windowSince);
+      if (waited >= _syncDeadline) {
+        _giveUpOnSync(waited);
+        return;
+      }
       if (_pendingSyncRequest) {
+        // Still waiting for the room: ask again. requestSync() re-defers (and
+        // re-arms this timer) while it stays down, inside the SAME window.
         requestSync();
         return;
       }
-      final since = _awaitingSyncSince;
-      if (_awaitingSyncId == null || since == null) return;
-      final waited = DateTime.now().difference(since);
-      if (waited > _syncDeadline) {
-        // Give up quietly: the chat keeps whatever it has, and the next real
-        // turn or reopen will try again. Endless retrying would outlive the
-        // screen that asked.
-        _settleTranscriptLoading();
-        return;
-      }
-      if (waited >= _syncNoAnswerRetry) {
+      final lastSend = _awaitingSyncSince;
+      if (lastSend != null &&
+          DateTime.now().difference(lastSend) >= _syncNoAnswerRetry) {
+        // `waited` is the AGE OF THE WINDOW, so it keeps growing past 3 s —
+        // the acceptance signal that the retry chain is no longer pinned.
         debugPrint('[sync] session_sync unanswered for $waited — retrying');
         _pendingSyncRequest = true;
         requestSync();
@@ -614,10 +917,119 @@ class SyncService extends Service {
   /// for the new transcript: `activate()` short-circuits on an unchanged
   /// `(epk, room)`, and no status edge fires because the connection never
   /// dropped. The screen stayed wrong until the app was restarted.
-  Future<void> switchedSession() async {
+  ///
+  /// [sessionId] is the ack's own `session_id`, and with it this is just one way
+  /// to LEARN which session the box must own ([_adoptSessionId]): an ack naming
+  /// the session already on screen keeps its rows, which is what the host's
+  /// `session_started_at: 0` ("unchanged clock") already asks of callers.
+  /// Without an id — an older Pi — the unconditional wipe stands.
+  Future<void> switchedSession([String? sessionId]) async {
+    if (sessionId != null && sessionId.isNotEmpty) {
+      await _adoptSessionId(
+        sessionId,
+        source: 'session_switch_ok',
+        assumeMoved: true,
+      );
+      return;
+    }
     final epk = _activeEpk;
     if (epk == null) return;
-    final room = _activeRoomId;
+    final key = LocalBoxes.sessionKey(epk, _activeRoomId);
+    // No id came with this call, so which session the (now empty) box holds is
+    // unknown again; the next id a frame reports is a first sight.
+    _sessionIdByBox.remove(key);
+    // …and until the attempt this wipes for has settled, no passive report may
+    // say otherwise either: a listing answered by the PRE-switch Pi names the
+    // session we just left. An unknown target ([_settlingSwitchId] null) is the
+    // strictest form of the same guard — every passive id is refused.
+    _settlingSwitchKey = key;
+    _settlingSwitchId = null;
+    _leaveSessionState();
+    await _dropActiveTranscript();
+    // Pull the NEW session's transcript. `_indexLoaded` is now true, so this
+    // is a real fetch rather than a short-circuited activation.
+    requestSync();
+  }
+
+  /// F2 — adopt the session id a SERVER frame reports for the active binding.
+  ///
+  /// The id is copied, never derived. Two frames qualify today —
+  /// `session_switch_ok.session_id` and `session_list_ok.current_id` — so a
+  /// switch ack and a plain listing (which the picker polls when an ack goes
+  /// missing) reach the same decision. A CHANGE drops the rows: the box is
+  /// `msgs_<epk>__<roomId>` and shared by every session of the workspace, so
+  /// rows written under the previous id are another session's transcript.
+  ///
+  /// [assumeMoved] is true for an ack: it answers a switch WE asked for, so its
+  /// id is where the host moved even if we never learnt where it was — kept
+  /// equal to the pre-F2 behaviour so a cold-boot switch still clears. A passive
+  /// listing with no previous id is a first sight instead: the box may already
+  /// hold THIS session's rows from the last run, and dropping them would be
+  /// data loss on a guess.
+  Future<void> _adoptSessionId(
+    String? id, {
+    required String source,
+    required bool assumeMoved,
+  }) async {
+    final epk = _activeEpk;
+    if (epk == null || id == null || id.isEmpty) return;
+    final key = LocalBoxes.sessionKey(epk, _activeRoomId);
+    final previous = _sessionIdByBox[key];
+    if (previous == id) {
+      // An ack that names the session already on screen still ANSWERS the
+      // switch, so it settles ownership: nothing is left to guard.
+      if (assumeMoved) {
+        _settlingSwitchId = null;
+        _settlingSwitchKey = null;
+      }
+      return;
+    }
+    // F5 — a PASSIVE report says nothing while our own switch is still in
+    // flight. The ack and a `session_list_ok` have no ordering relation on the
+    // wire, so a listing answered by the PRE-switch Pi names the session we just
+    // left and can arrive after the ack. Adopted as a genuine move it wipes and
+    // refetches the box for the old session, and the next poll wipes it again for
+    // the real one — churn plus a transiently empty transcript on every list
+    // reload that lands inside the ack slice. The guard ends with the attempt
+    // (a real answer or the deadline — see [_settleTranscriptLoading]), so a move
+    // made on ANOTHER client is still adopted once nothing is in flight.
+    if (!assumeMoved && _settlingSwitchKey == key && id != _settlingSwitchId) {
+      debugPrint(
+        '[session] $source → $id refused: still settling on the acked id '
+        '${_settlingSwitchId ?? '(unreported)'}',
+      );
+      return;
+    }
+    _sessionIdByBox[key] = id;
+    if (assumeMoved) {
+      // From here this ack's id is the authority for this box until the attempt
+      // it opens ends.
+      _settlingSwitchKey = key;
+      _settlingSwitchId = id;
+    }
+    if (previous == null && !assumeMoved) {
+      debugPrint('[session] $source → $id (first sight, rows kept)');
+      // The rows this box already holds are now taken to be [id]'s, so record
+      // that durably: after a restart the same listing is a COMPARISON instead
+      // of another guess (see [SessionIndexRecord.sessionId]).
+      await _labelBoxSessionQueued(epk, _activeRoomId, id);
+      return;
+    }
+    debugPrint(
+      '[session] $source → $id (was ${previous ?? 'unreported'}) — dropping '
+      'the previous rows',
+    );
+    _leaveSessionState();
+    // `previous` is what the rows being dropped belong to; the wipe keeps that
+    // label if it has to be deferred (see [_dropActiveTranscript]).
+    await _dropActiveTranscript(rowsOwner: previous);
+    // The session we moved to has its rows nowhere in the (now empty) box.
+    requestSync();
+  }
+
+  /// Everything IN MEMORY that belonged to the session being left. The durable
+  /// rows are handled by [_dropActiveTranscript].
+  void _leaveSessionState() {
     // Streaming/working state belonged to the session we left; an in-flight
     // send's timer would attribute its reply to the wrong session.
     _cancelAllSendTimers();
@@ -625,19 +1037,107 @@ class SyncService extends Service {
     _setQueuedMessages(const []);
     _setWorking(false);
     _resetPaging();
-    await _enqueue(() async {
-      if (_activeEpk != epk || _activeRoomId != room) return;
+    // The ids in flight asked about the session being LEFT, so an answer to one
+    // of them is no longer this attempt's answer (see [_syncRequestIds]) — only a
+    // frame answering the request issued for the new session may settle it.
+    _syncRequestIds.clear();
+    // The attempt addressed the session being left, so its age must not decide
+    // when the NEXT session gives up — the caller issues a fresh request for it.
+    _restartSyncWindow();
+  }
+
+  /// F2 — clear the active binding's rows and its durable index entry.
+  ///
+  /// Queued through the same chain as every other box mutation, so a history
+  /// apply already in flight cannot land after the wipe. The `active changed ⇒
+  /// skip` guard stays — clearing a box this change never owned would delete
+  /// another session's rows — but a skip is no longer silent: the cleanup is
+  /// remembered in [_pendingSessionResets] and finished by the next
+  /// [activate] of that binding. A skipped cleanup can therefore only DELAY
+  /// correctness, never leave the wrong transcript in place.
+  ///
+  /// [rowsOwner] is the session the rows being dropped belong to. A DEFERRED
+  /// wipe also re-states it in the durable index ([SessionIndexRecord.sessionId])
+  /// — that deferral is in-memory only, so without the durable copy a process
+  /// kill inside the window would make the next run's first listing a "first
+  /// sight" that keeps the other session's rows, and S1 would survive one
+  /// restart.
+  Future<void> _dropActiveTranscript({String? rowsOwner}) {
+    final epk = _activeEpk;
+    if (epk == null) return Future<void>.value();
+    final room = _activeRoomId;
+    final key = LocalBoxes.sessionKey(epk, room);
+    return _enqueue(() async {
+      if (_activeEpk != epk || _activeRoomId != room) {
+        _pendingSessionResets.add(key);
+        if (rowsOwner != null) await _labelBoxSession(epk, room, rowsOwner);
+        return;
+      }
       final box = await _boxes.msgsBox(epk, room);
       await box.clear();
+      // Any deferral for THIS box is now satisfied — the rows it asked about are
+      // gone — so a later [activate] must not clear it a second time.
+      _pendingSessionResets.remove(key);
       _idToSeq.clear();
       _nextSeq = 0;
       _indexLoaded = true;
       final idx = _boxes.sessionsIndexBox();
-      await idx.delete(LocalBoxes.sessionKey(epk, room));
+      await idx.delete(key);
     });
-    // Pull the NEW session's transcript. `_indexLoaded` is now true, so this
-    // is a real fetch rather than a short-circuited activation.
-    requestSync();
+  }
+
+  /// F5 — record WHICH session a box's rows belong to, durably.
+  ///
+  /// Written only about rows that are really there, never about a session we
+  /// merely intend to load: a record vouching for rows somebody else wrote is
+  /// worse than no record at all, and an empty box needs no protection. Writes
+  /// nothing — not even an index row — when the box is empty. Deliberately does
+  /// NOT clear a label: dropping one is the job of the wipe, which deletes the
+  /// record together with the rows it described.
+  ///
+  /// Does no queueing of its own, so it is safe from inside an [_enqueue]
+  /// operation (which is how [_dropActiveTranscript] uses it); every other
+  /// caller goes through [_labelBoxSessionQueued].
+  Future<void> _labelBoxSession(
+    String epk,
+    String room,
+    String sessionId,
+  ) async {
+    final box = await _boxes.msgsBox(epk, room);
+    if (box.isEmpty) return;
+    final idx = _boxes.sessionsIndexBox();
+    final key = LocalBoxes.sessionKey(epk, room);
+    final raw = idx.get(key);
+    final cur = raw is Map
+        ? SessionIndexRecord.fromJson(_coerce(raw))
+        : SessionIndexRecord(epk: epk, roomId: room);
+    // A no-op write would still be a box event, and this runs on every history
+    // apply — i.e. on every reconnect replay.
+    if (cur.sessionId == sessionId) return;
+    await idx.put(key, cur.copyWith(sessionId: sessionId).toJson());
+  }
+
+  /// [\_labelBoxSession] behind the shared write chain, so it cannot lose an
+  /// update to a concurrent `_updateIndex` on the same record.
+  Future<void> _labelBoxSessionQueued(
+    String epk,
+    String room,
+    String sessionId,
+  ) => _enqueue(() => _labelBoxSession(epk, room, sessionId));
+
+  /// F5 — seed the in-memory binding from the durable index, if it is not known
+  /// yet. A live frame always wins: memory is only empty here on a cold boot or
+  /// a box nobody has named.
+  void _restoreSessionLabel(String epk, String room) {
+    final key = LocalBoxes.sessionKey(epk, room);
+    if (_sessionIdByBox.containsKey(key)) return;
+    final raw = _boxes.sessionsIndexBox().get(key);
+    final stored = raw is Map
+        ? SessionIndexRecord.fromJson(_coerce(raw)).sessionId
+        : null;
+    if (stored == null || stored.isEmpty) return;
+    _sessionIdByBox[key] = stored;
+    debugPrint('[session] $key restored as → $stored');
   }
 
   /// Plan/28 — `session_new` acked: wipe the active session's rows + index.
@@ -645,6 +1145,10 @@ class SyncService extends Service {
     final epk = _activeEpk;
     if (epk == null) return;
     final room = _activeRoomId;
+    // F2 — the replacement session is brand new and this path reports no id for
+    // it, so the wiped session's id must stop describing this box: the next id
+    // a frame names has to count as a first sight, not as "still the same".
+    _sessionIdByBox.remove(LocalBoxes.sessionKey(epk, room));
     // Session wiped → any optimistic sends/streaming/working state are moot.
     _cancelAllSendTimers();
     _discardStreamingState();
@@ -653,10 +1157,21 @@ class SyncService extends Service {
     // Plan 01 — a new session has no older transcript, so drop any cursor
     // pointing at the previous one.
     _resetPaging();
+    // The wiped session's outstanding attempt (if any) has nothing left to fetch
+    // here, so it is dropped whole: its age must not age into a "no response"
+    // notice on the fresh, deliberately empty session, and no timer or deferred
+    // flag may restart it for a transcript nobody is waiting for.
+    _pendingSyncRetry?.cancel();
+    _pendingSyncRetry = null;
+    _pendingSyncRequest = false;
+    _resyncOnRoomReturn = false;
+    _settleTranscriptLoading();
     await _enqueue(() async {
       if (_activeEpk != epk || _activeRoomId != room) return;
       final box = await _boxes.msgsBox(epk, room);
       await box.clear();
+      // The box is empty, so a cleanup deferred for it (F2) is satisfied too.
+      _pendingSessionResets.remove(LocalBoxes.sessionKey(epk, room));
       _idToSeq.clear();
       _nextSeq = 0;
       _indexLoaded = true;
@@ -880,20 +1395,30 @@ class SyncService extends Service {
         }
 
       case SessionHistory():
-        // Any answer settles the outstanding sync, whatever its id: the retry
-        // only needs to know that the room is talking again.
-        _pendingSyncRetry?.cancel();
-        _pendingSyncRetry = null;
-        _settleTranscriptLoading();
         // Plan 01 — a response to an `older` page request must MERGE in front
-        // of the window; a response to a plain sync replaces it. Either way
-        // the cursor advances, and a fresh sync supersedes any page request
-        // still in flight (otherwise a lost reply would block paging forever).
-        final isOlderPage = _pendingOlderRequestId != null &&
+        // of the window; a response to a plain sync replaces it.
+        final isOlderPage =
+            _pendingOlderRequestId != null &&
             msg.inReplyTo == _pendingOlderRequestId;
-        // Cleared either way: this reply settles the request, and a plain sync
-        // supersedes any page request still in flight (a lost reply must not
-        // block paging forever).
+        // Only a frame that answers a `session_sync` WE SENT may settle the
+        // attempt. The host resets a session BEFORE it acks the switch and
+        // broadcasts that reset as an empty `session_history` carrying the
+        // `session_switch` id (see `_resetSessionForNew`), so settling on ANY
+        // answer released the loading state between the reset and the ack: the
+        // transcript fell back to "这里还没有内容" on the session the user had
+        // just picked, and only the ack put the skeleton back. The reset itself
+        // is still APPLIED — it is the second, id-independent signal that the
+        // session changed — it just does not end an attempt whose own answer is
+        // still owed. Nothing waits indefinitely: the window (and its 40 s
+        // deadline) was opened by the request this frame does not answer.
+        if (_syncRequestIds.contains(msg.inReplyTo)) {
+          _pendingSyncRetry?.cancel();
+          _pendingSyncRetry = null;
+          _settleTranscriptLoading();
+        }
+        // Either way the cursor advances, and a fresh sync supersedes any page
+        // request still in flight (otherwise a lost reply would block paging
+        // forever).
         _pendingOlderRequestId = null;
         _olderCursor = msg.olderCursor;
         _hasOlder = msg.hasOlder;
@@ -948,12 +1473,36 @@ class SyncService extends Service {
           _runtimeStatusController.add(status);
         }
 
-      case SessionSwitchOk():
+      case SessionSwitchOk(:final sessionId):
         // The Pi moved to a different session in the SAME room. Drop the rows
         // we still hold and fetch the new transcript; nothing else observes
         // this frame, so without it the chat keeps showing the old session.
+        // F2 — the id the ack carries is authoritative: it says which session
+        // the box must own, instead of wiping blindly on any ack.
         // ignore: discarded_futures
-        switchedSession();
+        switchedSession(sessionId);
+
+      case SessionListOk(:final currentId):
+        // F2 — the host's answer to `session_list`, and the only other frame
+        // that names the live session. Adopting it is what keeps transcript
+        // ownership correct when `session_switch_ok` is LOST: the picker polls
+        // this same reply after a missed ack, and the row it marks 当前 and the
+        // rows in this box are then decided by one server value.
+        //
+        // The frame names no room and the picker lists workspaces this writer is
+        // not bound to, so a reply while the connection addresses ANOTHER room is
+        // ignored — adopting it would repaint this box from someone else's
+        // switch. (A frame from another PEER's channel never reaches here: the
+        // `originEpk` gate at the top of this handler already drops it.) An
+        // unchanged id returns at once, so polling costs no rows.
+        if (_activeEpk != null && _conn.activeRoomId == _activeRoomId) {
+          // ignore: discarded_futures
+          _adoptSessionId(
+            currentId,
+            source: 'session_list_ok.current_id',
+            assumeMoved: false,
+          );
+        }
 
       case TreeSnapshotOk(:final snapshot):
         if (!_treeSnapshotController.isClosed) {
@@ -994,7 +1543,6 @@ class SyncService extends Service {
       case PairError():
       case ActionOk():
       case ModelsList():
-      case SessionListOk():
       case SessionSwitchError():
       case WorkspaceListOk():
       case WorkspaceStartOk():
@@ -1073,6 +1621,11 @@ class SyncService extends Service {
     final epk = _activeEpk;
     if (epk == null) return;
     final room = _activeRoomId;
+    // F5 — whose rows this frame is, captured with the address it arrived for
+    // rather than read back after the write: the rows belong to the session this
+    // attempt was issued for, and a switch that lands while the write is queued
+    // moves the label forward together with its own queued wipe of these rows.
+    final sessionId = _sessionIdByBox[LocalBoxes.sessionKey(epk, room)];
     final rows = _convertHistory(h.events);
     final historyIds = {for (final r in rows) _key(r.role, r.id)};
     await _enqueue(() async {
@@ -1094,6 +1647,7 @@ class SyncService extends Service {
           preserved[j].copyWith(seq: rows.length + j),
       ];
       await _reconcileRows(box, epk, room, desired);
+      if (sessionId != null) await _labelBoxSession(epk, room, sessionId);
     });
     if (_activeEpk == epk && _activeRoomId == room) {
       final started = h.sessionStartedAt;

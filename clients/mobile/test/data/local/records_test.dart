@@ -69,10 +69,31 @@ void main() {
         lastMessageAt: DateTime.fromMillisecondsSinceEpoch(99),
         lastMessagePreview: 'hi',
         sessionStartedAt: DateTime.fromMillisecondsSinceEpoch(10),
+        sessionId: 'sess-a',
       );
       final back = SessionIndexRecord.fromJson(r.toJson());
       expect(back, r);
       expect(back.status, SessionActivity.working);
+      expect(back.sessionId, 'sess-a');
+    });
+
+    test('SessionIndexRecord written BEFORE sessionId still loads', () {
+      // The field was added to the durable index to survive a process kill
+      // (S1 across a restart), so every record already on a device predates it.
+      final back = SessionIndexRecord.fromJson({
+        'epk': 'epk1',
+        'room_id': 'main',
+        'display_name': 'proj',
+        'status': 'working',
+        'last_message_at': 99,
+        'last_message_preview': 'hi',
+        'session_started_at': 10,
+      });
+      expect(back.sessionId, isNull, reason: 'unknown, so a first sight');
+      expect(back.displayName, 'proj');
+      expect(back.sessionStartedAt, DateTime.fromMillisecondsSinceEpoch(10));
+      // A label that is only attached later must not drop the rest.
+      expect(back.copyWith(sessionId: 'x').displayName, 'proj');
     });
 
     test('RuntimeRecord survives roundtrip', () {

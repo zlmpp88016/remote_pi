@@ -67,7 +67,15 @@ class SessionCatalog {
     );
   }
 
-  Future<SessionSwitchOk> switchSession(String sessionId) {
+  /// Plan/67 — ask the Pi to move to [sessionId], waiting [timeout] for the ack
+  /// (default [_timeout]).
+  ///
+  /// The default is deliberately NOT raised to cover a cold boot: on the daemon
+  /// path the switch itself can be answered by a staged exit + respawn, and a
+  /// caller that reacts to a missed ack by sending a SECOND `session_switch`
+  /// only forces another respawn. A long boot is the caller's problem to
+  /// observe, not a reason to widen this budget.
+  Future<SessionSwitchOk> switchSession(String sessionId, {Duration? timeout}) {
     return _expect<SessionSwitchOk>(
       SessionSwitch(id: uuid7(), sessionId: sessionId),
       (id, msg) {
@@ -76,6 +84,7 @@ class SessionCatalog {
         }
         return msg is SessionSwitchOk && msg.inReplyTo == id;
       },
+      timeout: timeout,
     );
   }
 

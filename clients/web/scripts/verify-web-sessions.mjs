@@ -361,13 +361,19 @@ function helpers() {
   );
 
   const now = 1_760_000_000_000;
-  check("just now", relativeTime(now, now) === "just now");
-  check("minutos", relativeTime(now - 5 * 60_000, now) === "5m ago");
-  check("horas", relativeTime(now - 3 * 3_600_000, now) === "3h ago");
-  check("dias", relativeTime(now - 2 * 86_400_000, now) === "2d ago");
-  check("meses", relativeTime(now - 90 * 86_400_000, now) === "3mo ago");
-  check("anos", relativeTime(now - 400 * 86_400_000, now) === "1y ago");
-  check("mtime futuro não gera idade negativa", relativeTime(now + 60_000, now) === "just now");
+  /*
+   * Expected strings are the ones `relativeTime` actually returns. The product
+   * hard-codes Chinese here (sessions.ts, no i18n layer); these expectations
+   * were left behind in English, so every age check failed against a correct
+   * implementation. Same offsets and same boundaries — only the literals moved.
+   */
+  check("just now", relativeTime(now, now) === "刚刚");
+  check("minutos", relativeTime(now - 5 * 60_000, now) === "5 分钟前");
+  check("horas", relativeTime(now - 3 * 3_600_000, now) === "3 小时前");
+  check("dias", relativeTime(now - 2 * 86_400_000, now) === "2 天前");
+  check("meses", relativeTime(now - 90 * 86_400_000, now) === "3 个月前");
+  check("anos", relativeTime(now - 400 * 86_400_000, now) === "1 年前");
+  check("mtime futuro não gera idade negativa", relativeTime(now + 60_000, now) === "刚刚");
 
   const list = [row({ id: "old", mtime: 1 }), row({ id: "new", mtime: 3 }), row({ id: "mid", mtime: 2 })];
   check("sortSessions ordena do mais novo ao mais antigo", sortSessions(list).map((s) => s.id).join(",") === "new,mid,old");

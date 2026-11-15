@@ -240,11 +240,14 @@ const {
   _handleControl,
   _routeClientMessageFrom,
   _setLastCtxForTest,
+  _setHostProxyChannelForTest,
   _deliverMeshMessageToAgentForTest,
   CTRL_PREFIX,
 } = indexModule;
 const { _resetSurfaceDepsForTests } = await import("./pi_surface/deps.js");
 const { acquireCwdLock } = await import("./session/cwd_lock.js");
+const { EXIT_DAEMON_SWITCH_SESSION, PENDING_SWITCH_FILE } = await import("./daemon/rpc_child.js");
+const { resetIndexForTest, setAgentRootForTest } = await import("./actions/session_index.js");
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -4684,6 +4687,222 @@ describe("plan/68 — Pi surface dispatch (index wiring)", () => {
 
     _setLastCtxForTest(null);
     await _stopForTest(makeMockCtx(home));
+  });
+});
+
+// ── F4: daemon session_switch — reset/fan-out BEFORE ack, flush-gated exit ───
+describe("daemon session_switch — empty history fan-out before ack, exit gated on relay flush (F4)", () => {
+  /**
+   * Pins the DAEMON branch of `case "session_switch"` (the one real users
+   * hit): with no switch-capable ctx and REMOTE_PI_DAEMON=1, the reset +
+   * EMPTY `session_history` fan-out must land STRICTLY BEFORE the
+   * `session_switch_ok` ack, and `process.exit(EXIT_DAEMON_SWITCH_SESSION)`
+   * must wait for `_awaitRelayFlush` — which fails open, never hangs.
+   *
+   * Both outbound paths feed ONE ordered log: the per-request `sender.send`
+   * (the ack) and `_hostProxyChannel` (the daemon's fan-out route to the
+   * paired apps, installed through the existing `_setHostProxyChannelForTest`
+   * seam). Ordering is asserted on recorded indices, never on timing.
+   */
+  let home: string;
+  let prevAgentDir: string | undefined;
+  let prevDaemon: string | undefined;
+  let prevRemoteHome: string | undefined;
+  let exitSpy: ReturnType<typeof vi.spyOn> | undefined;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    _knownPeers.length = 0;
+    _consumeCalls.length = 0;
+    _setRelayCalls.length = 0;
+    _savedRelayUrl = null;
+    _tokenStatus = "ok";
+    _meshOwnerDiscoveryEnabled = false;
+    relayRef.current = null;
+    relayInstances.length = 0;
+    _defaultConnectImpl = async () => undefined;
+    _setDisposedForTest(false);
+    _setLastCtxForTest(null);
+    _setHostProxyChannelForTest(null);
+    _setMessageBufferForTest([]);
+    await _stopForTest(makeMockCtx());
+
+    home = mkdtempSync(join(tmpdir(), "remote-pi-f4-switch-"));
+    prevAgentDir = process.env["PI_CODING_AGENT_DIR"];
+    process.env["PI_CODING_AGENT_DIR"] = home;
+    // Daemon trigger + hermetic staging: `stagePendingSwitchTarget` writes
+    // PENDING_SWITCH_FILE under REMOTE_PI_HOME — never the real home (a stray
+    // staged file there would steer a live supervisor's next restart).
+    prevDaemon = process.env["REMOTE_PI_DAEMON"];
+    process.env["REMOTE_PI_DAEMON"] = "1";
+    prevRemoteHome = process.env["REMOTE_PI_HOME"];
+    process.env["REMOTE_PI_HOME"] = home;
+    // The index memoizes the SDK agent root once per process (`primeAgentDir`);
+    // point it at THIS test's transcript tree so the listing sees the seeded
+    // session regardless of which test primed it first (existing test hook).
+    setAgentRootForTest(home);
+  });
+
+  afterEach(async () => {
+    exitSpy?.mockRestore();
+    exitSpy = undefined;
+    _setLastCtxForTest(null);
+    _setHostProxyChannelForTest(null);
+    _setMessageBufferForTest([]);
+    await _stopForTest(makeMockCtx(home));
+    if (prevAgentDir === undefined) delete process.env["PI_CODING_AGENT_DIR"];
+    else process.env["PI_CODING_AGENT_DIR"] = prevAgentDir;
+    if (prevDaemon === undefined) delete process.env["REMOTE_PI_DAEMON"];
+    else process.env["REMOTE_PI_DAEMON"] = prevDaemon;
+    if (prevRemoteHome === undefined) delete process.env["REMOTE_PI_HOME"];
+    else process.env["REMOTE_PI_HOME"] = prevRemoteHome;
+    // Drop the SQLite index handle so the temp home is deletable on Windows,
+    // and release the transcript-root override for the next describe.
+    setAgentRootForTest(null);
+    resetIndexForTest();
+    try { rmSync(home, { recursive: true, force: true }); } catch { /* best-effort */ }
+  });
+
+  /** Seed a session the workspace listing can resolve. The SessionManager
+   *  only materializes the file after an assistant turn — hence the pair. */
+  function seedTargetSession(name: string): string {
+    const seeded = SessionManager.create(home, undefined, { name });
+    seeded.appendMessage({ role: "user", content: "pergunta antiga" });
+    seeded.appendMessage({ role: "assistant", content: [{ type: "text", text: "resposta" }] });
+    return seeded.getSessionId();
+  }
+
+  /** The F4 ordering invariant, on recorded indices: exactly one EMPTY
+   *  session_history fan-out, strictly before the single per-request ack,
+   *  both answering the switch id, both carrying the same restamped clock. */
+  function expectEmptyHistoryBeforeAck(wire: ServerMessage[], replyId: string, sessionId: string): void {
+    const historyIdx = wire.findIndex((m) => m.type === "session_history");
+    const okIdx = wire.findIndex((m) => m.type === "session_switch_ok");
+    expect(historyIdx).toBeGreaterThanOrEqual(0);
+    expect(okIdx).toBeGreaterThanOrEqual(0);
+    expect(historyIdx).toBeLessThan(okIdx);
+
+    const history = wire[historyIdx] as Extract<ServerMessage, { type: "session_history" }>;
+    expect(history.events).toEqual([]);
+    expect(history.in_reply_to).toBe(replyId);
+    expect(history.eos).toBe(true);
+    expect(history.truncated).toBe(false);
+
+    const ok = wire[okIdx] as Extract<ServerMessage, { type: "session_switch_ok" }>;
+    expect(ok.in_reply_to).toBe(replyId);
+    expect(ok.session_id).toBe(sessionId);
+    // The ack reports exactly the timestamp the fan-out carried.
+    expect(ok.session_started_at).toBe(history.session_started_at);
+
+    expect(wire.filter((m) => m.type === "session_history")).toHaveLength(1);
+    expect(wire.filter((m) => m.type === "session_switch_ok")).toHaveLength(1);
+    expect(wire.some((m) => m.type === "session_switch_error")).toBe(false);
+  }
+
+  test("no relay: EMPTY session_history fan-out precedes session_switch_ok; exit 43 fails open fast", async () => {
+    captureHandler("remote-pi"); // binds _pi so typed actions are served
+    const targetId = seedTargetSession("f4-alvo");
+
+    // Daemon trigger: REMOTE_PI_DAEMON=1 (beforeEach) AND no switchSession on
+    // the ctx the action reads. An RPC daemon never captures a command ctx;
+    // the existing seam installs an event-ctx-shaped one (cwd, no
+    // switchSession) so the branch resolves a cwd without switch capability.
+    _setLastCtxForTest({ cwd: home });
+
+    // Make the reset observable: the stale buffer must be cleared by it.
+    _setMessageBufferForTest([{ role: "user", content: "stale turn", timestamp: 1 }]);
+
+    const wire: ServerMessage[] = [];
+    _setHostProxyChannelForTest({
+      send: (m: ServerMessage) => { wire.push(m); },
+      detach: () => undefined,
+    });
+
+    const exitCalls: Array<number | string | null | undefined> = [];
+    exitSpy = vi.spyOn(process, "exit").mockImplementation((code?: number | string | null | undefined) => {
+      exitCalls.push(code);
+      return undefined as never;
+    });
+
+    const startedAt = Date.now();
+    _routeClientMessageFrom(
+      { send: (m: ServerMessage) => { wire.push(m); } },
+      { type: "session_switch", id: "f4-switch", session_id: targetId },
+      makeMockCtx(home),
+    );
+
+    // No relay is configured: `_awaitRelayFlush` must fail open immediately.
+    // waitFor's own 1 s deadline fails the test if the exit ever parks on the
+    // 2 s bound; the elapsed check pins it strictly below that bound.
+    await vi.waitFor(() => expect(exitCalls).toContain(EXIT_DAEMON_SWITCH_SESSION));
+    expect(Date.now() - startedAt).toBeLessThan(1500);
+
+    expectEmptyHistoryBeforeAck(wire, "f4-switch", targetId);
+
+    // The reset really ran, and the exit is the deliberate single recycle code.
+    expect(_getMessageBufferForTest()).toHaveLength(0);
+    expect(exitCalls).toEqual([EXIT_DAEMON_SWITCH_SESSION]);
+
+    // The resolved path was staged for the supervisor BEFORE the exit.
+    const staged = JSON.parse(readFileSync(join(home, PENDING_SWITCH_FILE), "utf8")) as { sessionPath?: string };
+    expect(staged.sessionPath).toContain(targetId);
+  });
+
+  test("with relay: exit 43 waits for the MATCHING presence reply; other traffic does not release it", async () => {
+    captureHandler("remote-pi");
+    const targetId = seedTargetSession("f4-alvo-relay");
+    _setLastCtxForTest({ cwd: home });
+
+    // The module-level MockRelay is the clean fake-relay seam: bring it up,
+    // then hold the flush open by answering nothing until the test says so.
+    await _startRelayForTest(makeMockCtx(home));
+    const relay = relayRef.current;
+    expect(relay).not.toBeNull();
+
+    const wire: ServerMessage[] = [];
+    // Daemon start auto-creates the real host-proxy channel; replace it with
+    // the capture stub so the fan-out lands on the same ordered log.
+    _setHostProxyChannelForTest({
+      send: (m: ServerMessage) => { wire.push(m); },
+      detach: () => undefined,
+    });
+
+    const controlFrames: Array<{ type?: string; peers?: unknown }> = [];
+    relay!.sendControl.mockImplementation((frame: { type?: string; peers?: unknown }) => {
+      controlFrames.push(frame);
+    });
+
+    const exitCalls: Array<number | string | null | undefined> = [];
+    exitSpy = vi.spyOn(process, "exit").mockImplementation((code?: number | string | null | undefined) => {
+      exitCalls.push(code);
+      return undefined as never;
+    });
+
+    _routeClientMessageFrom(
+      { send: (m: ServerMessage) => { wire.push(m); } },
+      { type: "session_switch", id: "f4-switch-relay", session_id: targetId },
+      makeMockCtx(home),
+    );
+
+    // Ack out + flush probe sent, but the exit is parked waiting for the reply.
+    await vi.waitFor(() => expect(controlFrames.some((f) => f.type === "presence_check")).toBe(true));
+    expectEmptyHistoryBeforeAck(wire, "f4-switch-relay", targetId);
+    const probe = controlFrames.filter((f) => f.type === "presence_check");
+    expect(probe).toHaveLength(1);
+    expect(probe[0]!.peers).toEqual([]);
+    expect(exitCalls).toHaveLength(0);
+
+    // Non-matching replies must NOT release the exit: a presence snapshot
+    // WITH states, and a peer_online naming a different peer.
+    relay!.emit("message", JSON.stringify({ type: "presence", states: [{ peer: "someone-else" }] }));
+    relay!.emit("message", JSON.stringify({ type: "peer_online", peer: "not-this-pi" }));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(exitCalls).toHaveLength(0);
+
+    // The matching empty presence snapshot proves the flush → the exit lands.
+    relay!.emit("message", JSON.stringify({ type: "presence", states: [] }));
+    await vi.waitFor(() => expect(exitCalls).toContain(EXIT_DAEMON_SWITCH_SESSION));
+    expect(exitCalls).toEqual([EXIT_DAEMON_SWITCH_SESSION]);
   });
 });
 

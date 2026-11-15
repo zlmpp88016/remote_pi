@@ -177,7 +177,7 @@ import {
   isWebSocketScheme,
   toWebSocketUrl,
 } from "./config.js";
-import { configureRelayLog, parseRelayLogFlags } from "./log.js";
+import { configureRelayLog, logRelayEvent, parseRelayLogFlags } from "./log.js";
 import { Box, Container, Image, Text } from "@earendil-works/pi-tui";
 
 // ── State machine ─────────────────────────────────────────────────────────────
@@ -4961,14 +4961,53 @@ export function _routeClientMessageFrom(
             return;
           }
           stagePendingSwitchTarget(target.path);
+          /*
+           * Reset + fan-out BEFORE the ack — the point of this ordering.
+           *
+           * `session_switch_ok` is a per-request reply: if that ONE frame is
+           * lost, the app keeps rendering the previous session's transcript
+           * (measured on the real public frpc lane: another session's messages
+           * for >=120 s after the switch). The non-daemon branch below already
+           * answers that by resetting the mirror and broadcasting an EMPTY
+           * `session_history` before the ack; clients apply that frame
+           * wholesale with no dependency on the reply id (`_applyHistory` on
+           * mobile, the `session_history` fan-out carve-out on web), so it is a
+           * second, independent signal that the session changed.
+           *
+           * Reusing `_resetSessionForNew` keeps ONE definition of "reset" —
+           * buffer, steers, queued items, runtime-status cache, the clock, and
+           * the empty-history broadcast — instead of a daemon-only variant that
+           * would drift. It also restamps `_sessionStartedAt`, so the ack below
+           * reports exactly the timestamp the fan-out carried (same as the
+           * non-daemon branch).
+           */
+          _resetSessionForNew(msg.id);
           sender.send({
             type: "session_switch_ok",
             in_reply_to: msg.id,
             session_id: msg.session_id,
-            session_started_at: Date.now(),
+            session_started_at: _sessionStartedAt ?? Date.now(),
           });
-          // Let the ack flush before the process dies.
-          setTimeout(() => process.exit(EXIT_DAEMON_SWITCH_SESSION), 150);
+          /*
+           * Both frames are only QUEUED at this point: `ws.send` copies into
+           * libuv, and `process.exit` abandons anything libuv has not yet handed
+           * to the kernel — so the exit waits until the relay PROVES it consumed
+           * them (see `_awaitRelayFlush`). No sleep: the wait ends on the first
+           * relay reply, which is ordering evidence, not elapsed time. The bound
+           * is a fail-open net, never the mechanism.
+           *
+           * `EXIT_DAEMON_SWITCH_SESSION` is unchanged, so the supervisor takes
+           * the same deliberate-recycle path it always did
+           * (supervisor.ts:881-892: no crash budget, `--session <path>`
+           * respawn). Only WHEN the exit happens changed, not what it means.
+           */
+          const flushed = await _awaitRelayFlush(DAEMON_SWITCH_FLUSH_TIMEOUT_MS);
+          logRelayEvent(
+            `switch: session_history fan-out + session_switch_ok ${
+              flushed ? "confirmed by the relay" : "unconfirmed (exiting anyway)"
+            } → exit ${EXIT_DAEMON_SWITCH_SESSION}`,
+          );
+          process.exit(EXIT_DAEMON_SWITCH_SESSION);
           return;
         }
 
@@ -5437,6 +5476,130 @@ function _resetSessionForNew(inReplyTo: string): void {
     events: [],
     eos: true,
     truncated: false,
+  });
+}
+
+/**
+ * Upper bound on how long the daemon `session_switch` branch waits for the relay
+ * to confirm it consumed the frames written just before the exit.
+ *
+ * The wait ENDS at the first matching relay reply, so this number is NOT the
+ * delay the switch pays: on the healthy path the exit happens one round-trip
+ * after the ack. Locally (embedded relay, or a host-local relay) that is sub-ms
+ * — i.e. earlier than the fixed 150 ms sleep this replaced. When the daemon
+ * dials a relay over a WAN (a self-hosted relay behind frp, say) the round-trip
+ * is hundreds of ms, still inside the exit window the clients already budget
+ * (`SWITCH_TIMEOUT_MS = 45s`, `SWITCH_RESPAWN_GRACE_MS = 600`).
+ *
+ * The bound exists only so a relay that stopped answering degrades to
+ * "exit anyway, let the supervisor respawn" instead of parking the workspace.
+ * Two seconds is chosen for that failure path, not for the healthy one: if the
+ * relay is unreachable the frames were lost regardless, and a longer wait would
+ * only delay the respawn the client is already waiting on (its switch budget is
+ * 12 s on mobile, 45 s on web).
+ */
+const DAEMON_SWITCH_FLUSH_TIMEOUT_MS = 2_000;
+
+/**
+ * Resolve once the relay has demonstrably consumed every frame this process has
+ * already written on its connection, or after `timeoutMs`.
+ *
+ * Why a RELAY ROUND-TRIP is the confirmation. `RelayClient` exposes no
+ * send/drain callback and no socket handle (`src/transport/relay_client.ts`
+ * only has `send`/`sendControl`/`isOpen`/`isAlive`/`close`), and `process.exit`
+ * throws away whatever libuv has not yet handed to the kernel — a timer
+ * therefore only makes the loss unlikely, it never proves the frames left.
+ * Control frames are the one mechanism in the codebase that gives a real
+ * confirmation: both relays consume frames from a single connection strictly in
+ * order — the Rust relay's routing loop (`relay/src/handlers/peer.rs`,
+ * `stream.next()` → sequential match) and the embedded one
+ * (`transport/embedded_relay.ts`, same shape) — and both ANSWER
+ * `presence_check`. Because TCP preserves write order, a reply to a control
+ * frame sent AFTER the data proves the relay has already read the data off the
+ * wire and dispatched it: the Rust relay hands it to the destination
+ * connection's queue (`registry.forward`), the embedded relay writes the
+ * destination socket synchronously. That is the flush confirmation this exit
+ * needs. (It cannot prove the APP has rendered the frames — that is the relay's
+ * and the client's job, and the relay is a separate long-lived process.)
+ *
+ * `presence_check` specifically: the Rust relay answers `presence`, the
+ * embedded relay answers `peer_online`, and neither routes the frame to any
+ * client — it is a relay-local control frame, so this cannot alter any
+ * app-visible frame shape or ordering. The Rust relay dedupes REPEATED
+ * identical `presence` snapshots per connection, but it does so on a per-conn
+ * cache that starts empty and this daemon never sends `presence_check`, so the
+ * first (and here only) reply is always emitted. The embedded relay answers
+ * unconditionally.
+ *
+ * Both reply shapes are ignored by every inbound listener on this side
+ * (`_installAutoListener` and `PlainPeerChannel._onLine` drop any frame without
+ * `peer` + `ct`), so the confirmation frame cannot leak into app traffic.
+ *
+ * @param timeoutMs - fail-open bound; the promise resolves `true` earlier
+ *                    whenever the confirmation lands.
+ * @returns `true` when the relay confirmed, `false` when there is no live relay
+ *          to confirm with (nothing can be flushed) or the bound elapsed.
+ */
+function _awaitRelayFlush(timeoutMs: number): Promise<boolean> {
+  const relay = _relay;
+  // No connection at all: the fan-out and the ack reached no one, so there is
+  // nothing to confirm and holding the exit back would only delay the respawn.
+  if (relay === null) return Promise.resolve(false);
+  // A closed socket makes `sendControl` a silent no-op, so waiting could only
+  // burn the whole bound.
+  if (!relay.isOpen()) return Promise.resolve(false);
+  const ownPubkey = _ownPubkeyB64();
+
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    // Declared before `finish` so the "already settled" path can never touch a
+    // binding in its temporal dead zone.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const finish = (confirmed: boolean): void => {
+      if (settled) return;
+      settled = true;
+      if (timer !== null) clearTimeout(timer);
+      relay.off("message", onMessage);
+      relay.off("close", onClose);
+      resolve(confirmed);
+    };
+    /*
+     * Match the answer to OUR `peers: []` exactly, never "any frame of that
+     * type". A loose matcher could be satisfied by unrelated traffic on this
+     * connection and report a flush that never happened, which would silently
+     * restore the very drop this guards against.
+     */
+    const onMessage = (line: string): void => {
+      let frame: { type?: unknown; states?: unknown; peer?: unknown };
+      try {
+        frame = JSON.parse(line) as { type?: unknown; states?: unknown; peer?: unknown };
+      } catch {
+        return; // not JSON — cannot be the control reply
+      }
+      // Rust relay: `presence` echoes a snapshot; an empty request yields [].
+      if (frame.type === "presence" && Array.isArray(frame.states) && frame.states.length === 0) {
+        finish(true);
+        return;
+      }
+      // Embedded relay: `peer_online` names the asking peer, i.e. this process.
+      if (frame.type === "peer_online" && ownPubkey !== null && frame.peer === ownPubkey) {
+        finish(true);
+      }
+    };
+    // The socket dying proves the frames can no longer be flushed by it, so
+    // there is nothing left to wait for.
+    const onClose = (): void => finish(false);
+    timer = setTimeout(() => finish(false), timeoutMs);
+    relay.on("message", onMessage);
+    relay.on("close", onClose);
+    try {
+      // `peers: []` — we only need a round-trip; the answer's content is
+      // irrelevant beyond proving it is OUR answer, which is what the matcher
+      // above checks.
+      relay.sendControl({ type: "presence_check", peers: [] });
+    } catch {
+      finish(false);
+    }
   });
 }
 

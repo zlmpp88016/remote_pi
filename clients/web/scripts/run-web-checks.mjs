@@ -23,6 +23,7 @@ const siteRoot = join(here, "..");
 const SUITE = [
   "verify-web-foundations",
   "verify-web-transport",
+  "verify-web-sse-read-retry",
   "verify-web-recovery",
   "verify-web-workspaces",
   "verify-web-client",
@@ -46,6 +47,13 @@ const SUITE = [
   "verify-session-labels",
   "verify-web-session-click-feedback",
   "verify-web-resume-feedback",
+  /*
+   * Kept last: it navigates the tab (including a failed attempt to reach the
+   * live DSH reference) and reloads the app, so nothing after it should depend
+   * on the page state an earlier gate left behind. It respawns nothing, so it
+   * does not belong in SUITE_LIVE.
+   */
+  "verify-visual-parity",
 ];
 
 /**
@@ -115,8 +123,22 @@ const SUITE_RESPAWN = [
 const SUITE_DIRECT = ["verify-web-local-auth", "verify-web-sse-transport"];
 
 const SUITE_EXTRA = ["verify-session-labels"];
+/*
+ * Gates that need a real browser and a CONNECTED host, but respawn nothing and
+ * therefore belong in the fast suite — and that are not named `verify-web-*`.
+ * `verify-visual-parity` was in NO runner and no CI workflow; only README.md:71
+ * mentioned it, so its expectations could (and did) drift away from the product
+ * without anything going red. Listing it in RUNNERS_EXTRA makes the drift guard
+ * below see it as both present AND accounted for.
+ */
+const RUNNERS_EXTRA = ["verify-visual-parity"];
 const present = readdirSync(here)
-  .filter((f) => /^verify-web-.*\.mjs$/.test(f) || SUITE_EXTRA.some((n) => f === `${n}.mjs`))
+  .filter(
+    (f) =>
+      /^verify-web-.*\.mjs$/.test(f) ||
+      SUITE_EXTRA.some((n) => f === `${n}.mjs`) ||
+      RUNNERS_EXTRA.some((n) => f === `${n}.mjs`),
+  )
   .map((f) => f.replace(/\.mjs$/, ""));
 const known = [...SUITE, ...SUITE_LIVE, ...SUITE_DIRECT];const unlisted = present.filter((name) => !known.includes(name));
 const missing = known.filter((name) => !present.includes(name));
@@ -155,6 +177,14 @@ const SUITE_ISOLATED = new Set([
   "verify-web-resume-feedback",
   "verify-web-contrast-states",
   "verify-web-session-click-feedback",
+  /*
+   * `verify-web-resume-feedback` runs immediately before this one and makes the
+   * host RESPAWN. Parity reads workspace rows, the dock and a history transcript
+   * off a connected page, so it has to start from a settled host and a clean
+   * page — without this it reported "no-workspace-button" as three product
+   * failures about a viewer it never opened.
+   */
+  "verify-visual-parity",
 ]);
 const suite = SUITE;
 
@@ -214,11 +244,20 @@ for (const name of suite) {
     failed.push(name);
     console.log("FAIL");
     const text = `${err.stdout ?? ""}${err.stderr ?? ""}`;
+    /*
+     * Print the gate's OWN reason lines as well as its `[FAIL]` markers.
+     *
+     * `console.error("FAIL: …")` / `RESULT: FAIL` is how the browser gates
+     * report, and neither matched the old filter — so a failing gate printed its
+     * name and then nothing at all, which is how a data precondition came to look
+     * like an unexplained red line. The `note` lines carry the observed readings
+     * for the same reason.
+     */
     console.log(
       text
         .split("\n")
-        .filter((l) => /\[FAIL\]|FAILED|Error/.test(l))
-        .slice(0, 12)
+        .filter((l) => /\[FAIL\]|FAILED|Error|^\s*FAIL:|^RESULT:\s*FAIL|^\s*note\b/.test(l))
+        .slice(0, 20)
         .join("\n"),
     );
   }

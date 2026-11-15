@@ -6,11 +6,23 @@
  * white Retry button, because that state had never been triggered. This script
  * walks the states explicitly so a clean result means something.
  *
+ * A STATE THAT COULD NOT BE REACHED IS A FAILURE, NOT A SKIP.
+ *
+ * Every state used to return a bare string and the settle loop treated
+ * `no-tab` as terminal-and-fine, so the "right dock / session list" audit ran
+ * against whatever document happened to be loaded and the state could not fail
+ * on the surface it claimed to cover. Each state now returns
+ * `{ ok, detail, wait }`, an unreachable state fails the run, and the selectors
+ * are the product's own strings — the English ones (`/right dock/i` on button
+ * text, an exact `"Sessions"` tab label) exist nowhere in `src`, which is
+ * exactly why that state silently degraded.
+ *
  * The audit expression is duplicated from audit-contrast.mjs on purpose: it must
  * run in the SAME CDP session that drives the state changes, otherwise the
  * second connection sees a different (or already-navigated) page.
  */
 import { attach, evaluate, sleep } from "./_cdp.mjs";
+import { DOCK_EXPAND_TITLE, DOCK_OPEN, assertUiReady, ensureUiReady } from "./_ui-state.mjs";
 
 const MIN = 4.5;
 
@@ -94,15 +106,75 @@ const AUDIT = String.raw`(() => {
   return bad;
 })()`.replace("__MIN__", String(MIN));
 
+/*
+ * Every state is a `{ ok, detail, wait }` result.
+ *
+ * `wait` names the settle condition the loop below should poll for; `detail` is
+ * what the log prints. A state that could not be established returns
+ * `ok: false` and the run fails — it must never be audited anyway, because an
+ * audit of the wrong document is worse than no audit: it reports OK.
+ */
 const STATES = [
   {
-    name: "empty (no workspace selected)",
-    setup: async () => "initial",
+    /*
+     * "Empty" here means THE WORKSPACE LIST IS EMPTY, which is reachable in the
+     * running product without mutating anything: the sidebar filter narrows
+     * `visible` to zero rows and the product renders its own empty state
+     * (`workspace-sidebar.tsx:412-427`).
+     *
+     * It used to be called "empty (no workspace selected)" and simply measured
+     * the initial paint — but `ensureUiReady` now selects a workspace and
+     * expands both rails before this loop runs, so it measured a fully loaded
+     * screen while claiming to be the empty one. Driving the real empty state is
+     * strictly more coverage: the compact empty state's own text is now graded
+     * (it uses `--muted`, which is `label-secondary`).
+     */
+    name: "empty workspace list (filter matches nothing)",
+    setup: async (send) => {
+      const outcome = await evaluate(
+        send,
+        `(function(){
+           var el = document.querySelector('input[aria-label="筛选工作区"]');
+           if (!el) return "no-filter";
+           var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+           setter.call(el, "zzz-no-match-zzz");
+           el.dispatchEvent(new Event("input", { bubbles: true }));
+           return "filtered";
+         })()`,
+      );
+      await sleep(600);
+      const rows = await evaluate(
+        send,
+        `document.querySelectorAll('[class*=wsNameActive], [class*=wsNameIdle]').length`,
+      );
+      const emptyShown = await evaluate(
+        send,
+        `!!document.querySelector('aside[aria-label="工作区"] [class*=emptyCompact]')`,
+      );
+      return {
+        ok: outcome === "filtered" && rows === 0 && emptyShown === true,
+        detail: `${outcome} rows=${rows} emptyState=${emptyShown}`,
+        wait: "none",
+      };
+    },
   },
   {
     name: "workspace selected",
-    setup: async (send) =>
-      evaluate(
+    setup: async (send) => {
+      /* Restore the full list first: the state above filters it to zero. */
+      await evaluate(
+        send,
+        `(function(){
+           var el = document.querySelector('input[aria-label="筛选工作区"]');
+           if (!el) return "no-filter";
+           var setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+           setter.call(el, "");
+           el.dispatchEvent(new Event("input", { bubbles: true }));
+           return "cleared";
+         })()`,
+      );
+      await sleep(600);
+      const outcome = await evaluate(
         send,
         `(function(){
            var el = [...document.querySelectorAll("[class*=wsName]")][0];
@@ -111,28 +183,63 @@ const STATES = [
            (row.querySelector("button") || row).click();
            return "ok";
          })()`,
-      ),
+      );
+      return { ok: outcome === "ok", detail: outcome, wait: "none" };
+    },
   },
   {
+    /*
+     * The right dock / session list.
+     *
+     * The product's strings are 右侧停靠栏 and 会话 — `workspace-sidebar.tsx:610-624`
+     * and `right-rail.tsx:59`. The English `/right dock/i` and `"Sessions"` this
+     * state used to search for do not exist anywhere in `src`, so the toggle was
+     * never clicked, the tab never opened, and the state resolved to `no-tab`
+     * every single run. The AA fix for the dock's modules was therefore never
+     * exercised by this file while the gate reported OK. `_ui-state.mjs` already
+     * locates both by the real strings; this uses the same selectors.
+     */
     name: "right dock / session list",
     setup: async (send) => {
-      await evaluate(
+      const dock = await evaluate(
         send,
         `(function(){
-           var b = [...document.querySelectorAll("button")].find(function(x){ return /right dock/i.test(x.textContent||""); });
-           if (b && !/^hide/i.test((b.textContent||"").trim())) b.click();
-           return 1;
+           if (${DOCK_OPEN}) return "already-open";
+           var b = [...document.querySelectorAll("button")].find(function(x){
+             return (x.getAttribute("title") || "").startsWith(${JSON.stringify(DOCK_EXPAND_TITLE)});
+           });
+           if (!b) return "no-dock-toggle";
+           b.click();
+           return "opened";
          })()`,
       );
       await sleep(2500);
-      return evaluate(
+      const tab = await evaluate(
         send,
         `(function(){
-           var b = [...document.querySelectorAll("button, [role=tab]")].find(function(x){ return (x.textContent||"").trim()==="Sessions"; });
+           var d = ${DOCK_OPEN};
+           if (!d) return "no-dock";
+           var b = [...d.querySelectorAll("button, [role=tab]")].find(function(x){
+             return (x.textContent || "").trim() === "会话";
+           });
            if (!b) return "no-tab";
-           b.click(); return "ok";
+           b.click();
+           return "ok";
          })()`,
       );
+      /* The rows are the proof the tab actually rendered, and they are what the
+       * dock's `--ink-*` and age/preview colours sit on. */
+      let rows = 0;
+      for (let i = 0; i < 20; i += 1) {
+        rows = await evaluate(send, `document.querySelectorAll('[aria-label^="Read session"]').length`);
+        if (rows > 0) break;
+        await sleep(500);
+      }
+      return {
+        ok: tab === "ok" && rows > 0,
+        detail: `dock=${dock} tab=${tab} rows=${rows}`,
+        wait: "none",
+      };
     },
   },
   {
@@ -147,7 +254,7 @@ const STATES = [
         const n = await evaluate(send, `document.querySelectorAll('[aria-label^="Read session"]').length`);
         if (n > 0) break;
       }
-      return evaluate(
+      const outcome = await evaluate(
         send,
         `(function(){
            var b = document.querySelectorAll('[aria-label^="Read session"]')[0];
@@ -155,11 +262,21 @@ const STATES = [
            b.click(); return "opened";
          })()`,
       );
+      return { ok: outcome === "opened", detail: outcome, wait: "viewer" };
     },
   },
 ];
 
 const { send, ws } = await attach();
+// This gate clicks a session row and then measures the viewer, so the session
+// list must already be populated when it starts. The fixture is ASSERTED: a
+// fixture that never became ready used to degrade into a bogus product finding
+// on a document nobody had set up (after 9s + up to 60s + 6×10s of retries).
+const fixture = assertUiReady(await ensureUiReady(send), "verify-web-contrast-states");
+console.log(
+  `ui fixture: ok=${fixture.ok} sidebarExpanded=${fixture.sidebarExpanded} ` +
+    `dockOpen=${fixture.dockOpen} rows=${fixture.sessionRows}`,
+);
 let failedStates = 0;
 
 for (const state of STATES) {
@@ -167,30 +284,44 @@ for (const state of STATES) {
   /*
    * Wait for the state to actually SETTLE rather than for a fixed 6s.
    *
-   * The two states that open a session depend on `session_read` returning its
+   * The state that opens a session depends on `session_read` returning its
    * transcript, which can take longer than a fixed budget right after the host
    * respawns. Sampling too early audited a half-loaded pane and made this gate
    * fail intermittently — the failure moved between states on each run, which is
    * the signature of a timing assumption rather than a contrast defect.
    */
-  for (let i = 0; i < 20; i += 1) {
-    await sleep(1000);
-    if (outcome === "initial" || outcome === "ok" || outcome === "no-tab") break;
-    const settled = await evaluate(
-      send,
-      `(function(){
-         var v=document.querySelector('[aria-label="Close the read-only session view"]');
-         if(!v) return false;
-         var sec=v.closest('section');
-         return !!sec && sec.innerText.length > 400;
-       })()`,
-    );
-    if (settled) { await sleep(1500); break; }
+  if (outcome.wait === "viewer") {
+    for (let i = 0; i < 20; i += 1) {
+      await sleep(1000);
+      const settled = await evaluate(
+        send,
+        `(function(){
+           var v=document.querySelector('[aria-label="关闭只读会话视图"]');
+           if(!v) return false;
+           var sec=v.closest('section');
+           return !!sec && sec.innerText.length > 400;
+         })()`,
+      );
+      if (settled) { await sleep(1500); break; }
+    }
   }
   const bad = await evaluate(send, AUDIT);
-  const status = bad.length === 0 ? "OK" : "FAIL";
-  if (bad.length > 0) failedStates += 1;
-  console.log(`${status.padEnd(4)} ${state.name.padEnd(32)} setup=${outcome} failing=${bad.length}`);
+  /*
+   * An UNREACHABLE state is a failure of this gate, not a pass with a note.
+   * `no-tab` used to short-circuit the settle loop while the run still counted
+   * the state as audited; that is how the dock state reported OK for a document
+   * that never had the dock open.
+   */
+  const reachable = outcome.ok === true;
+  const status = !reachable ? "FAIL" : bad.length === 0 ? "OK" : "FAIL";
+  if (!reachable || bad.length > 0) failedStates += 1;
+  console.log(
+    `${status.padEnd(4)} ${state.name.padEnd(42)} setup=${outcome.detail} failing=${bad.length}`,
+  );
+  if (!reachable) {
+    console.log(`       state could not be established — not audited (setup=${outcome.detail})`);
+    continue;
+  }
   for (const it of bad) {
     console.log(`       ${it.ratio}:1 (need ${it.need})  ${it.cls}  ${it.fg} on ${it.bg}  "${it.text}"`);
   }

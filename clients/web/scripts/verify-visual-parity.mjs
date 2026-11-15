@@ -19,7 +19,21 @@
  * falls back to the recorded baseline in `_e2e-evidence/comparison/` — it never
  * passes by silently skipping a comparison.
  *
+ * IT IS PART OF `npm run verify:web` (last entry in `SUITE`, run by
+ * `run-web-checks.mjs`). It used to be in no runner and no CI workflow — only a
+ * line in README.md — which is how three of its expectations (`label-tertiary`,
+ * `label-caption`, the composer placeholder) stayed pinned to the OLD
+ * pre-AA `rgb(129, 133, 140)` for a whole branch while the token moved to
+ * `bluish-700`. A gate nothing runs cannot notice drift; wiring it in is the fix.
+ *
+ * Everything it drives is found by the product's own strings (已连接主机,
+ * 显示右侧停靠栏, 会话, 运行中/未运行, 解除该主机配对…). The English selectors it
+ * used to carry (`host connected`, `Show the right dock`, `Sessions`,
+ * `Workspaces`, `/running/i`, `Unpair this host…`) existed nowhere in `src`, so
+ * the component half silently measured an absent element every run.
+ *
  * Usage: node scripts/verify-visual-parity.mjs
+ *        (or: npm run verify:web, which runs it with the rest of the suite)
  */
 
 import { dirname, join } from "node:path";
@@ -101,7 +115,14 @@ const TOKENS = [
   ["--dsw-alias-bg-mask-1", "rgba(0, 0, 0, 0.5)"],
   ["--dsw-alias-label-primary", "rgb(15, 17, 21)"],
   ["--dsw-alias-label-secondary", "rgb(97, 102, 107)"],
-  ["--dsw-alias-label-tertiary", "rgb(129, 133, 140)"],
+  /*
+   * Raised from DSH's light `bluish-600` (129,133,140 = 3.71:1 on white) to
+   * `bluish-700` for WCAG AA — see the ink ramp in design-platform.css. The
+   * expected value here must follow the token, not the other way round: it was
+   * left at the old `bluish-600` value while the token moved, which is exactly
+   * the drift that kept this gate from being wired into a runner.
+   */
+  ["--dsw-alias-label-tertiary", "rgb(97, 102, 107)"],
   ["--dsw-static-deepseek-400", "rgb(122, 170, 255)"],
   ["--dsw-static-deepseek-450", "rgb(86, 134, 254)"],
   ["--dsw-alias-interactive-bg-hover", "rgba(38, 49, 72, 0.06)"],
@@ -134,7 +155,11 @@ console.log("\n== layout ==");
 {
   await evaluate(send, `location.href = "${APP_ORIGIN}/remote-pi/connect"`);
   for (let i = 0; i < 60; i++) {
-    const up = await evaluate(send, '(document.body.innerText||"").includes("host connected")').catch(() => false);
+    /* The product's connection pill reads 已连接主机 (remote-pi-shell.tsx:283).
+       The English string this gate used to wait for (`host connected`) does not
+       exist anywhere in src, so the wait always ran its full 60 s budget and
+       then measured a page that had never reached the connected view. */
+    const up = await evaluate(send, '(document.body.innerText||"").includes("已连接主机")').catch(() => false);
     if (up) break;
     await sleep(1000);
   }
@@ -185,34 +210,87 @@ console.log("\n== layout ==");
   /* Open a history session: the read-only viewer REPLACES the composer row, so
      this is the state where the chain used to break again. */
   /*
+   * Wait for an actual workspace ROW, not just for the connection pill.
+   *
+   * 已连接主机 only means the relay room is open. Right after a gate that made
+   * the host respawn (`verify-web-resume-feedback` runs immediately before this
+   * one in the suite), the pill is already green while `workspace_list` has not
+   * answered yet — the sidebar renders no rows and this section then reported
+   * "no-workspace-button" as three product failures about a viewer it never
+   * opened. The row is the precondition these assertions need.
+   */
+  let wsButtonFound = false;
+  for (let i = 0; i < 60; i++) {
+    wsButtonFound = await evaluate(
+      send,
+      `[...document.querySelectorAll('button')].some((x) => /运行中|未运行/.test(x.getAttribute("title") || ""))`,
+    ).catch(() => false);
+    if (wsButtonFound) break;
+    await sleep(1000);
+  }
+  check("a workspace row is listed", wsButtonFound, true);
+
+  /*
    * Select a workspace FIRST, explicitly.
    *
-   * The Sessions panel lists nothing until a workspace is active — the panel
-   * says "List this workspace's sessions; it must be running." and renders zero
-   * rows. This section used to pass only because the tab happened to already
-   * have a workspace selected from an earlier run, so on a clean profile the
-   * three viewer assertions below failed with `hasLi:0`. Selecting it here makes
-   * the gate independent of leftover state.
+   * The Sessions panel lists nothing until a workspace is active — its list has
+   * no rows and renders `先连接主机并选择运行中的工作区。` instead. This section
+   * used to pass only because the tab happened to already have a workspace
+   * selected from an earlier run, so on a clean profile the three viewer
+   * assertions below failed with `hasLi:0`. Selecting it here makes the gate
+   * independent of leftover state.
+   *
+   * The match is `运行中` (`workspaceStatus`, view-model.ts:266) and not the
+   * English `running` — no button in this product ever carried that text, so the
+   * fallback never matched anything.
    */
   const wsPicked = await evaluate(send, `(() => {
-    const b = [...document.querySelectorAll("button")].find(x => /^4\.1f —/.test(x.getAttribute("title") || ""))
-      || [...document.querySelectorAll("button")].find(x => /running/i.test(x.innerText || ""));
+    const b = [...document.querySelectorAll('button')].find(x => /运行中/.test(x.getAttribute("title") || ""))
+      || [...document.querySelectorAll('button')].find(x => /运行中/.test(x.innerText || ""));
     if (!b) return "no-workspace-button";
     b.click(); return "picked:" + (b.getAttribute("title") || "").slice(0, 24);
   })()`);
   note(`workspace selection: ${wsPicked}`);
   await sleep(1200);
-  await evaluate(send, `(() => { const d=[...document.querySelectorAll("button")].find(x=>(x.getAttribute("title")||"").startsWith("Show the right dock")); if(d)d.click(); return !!d; })()`);
+  /* The dock's open control carries `显示右侧停靠栏` (workspace-sidebar.tsx:611);
+     it is `收起右侧停靠栏` once open, so only click when it is the open form. */
+  const dockOpened = await evaluate(send, `(() => {
+    if (document.querySelector('aside[aria-label="停靠栏"]')) return "already open";
+    const d = [...document.querySelectorAll("button")].find(x => (x.getAttribute("title") || "").startsWith("显示右侧停靠栏"));
+    if (d) { d.click(); return "clicked"; }
+    return "no dock toggle";
+  })()`);
+  note(`dock: ${dockOpened}`);
   await sleep(1500);
-  await evaluate(send, `(() => { const t=[...document.querySelectorAll("button")].find(x=>/^会话$/i.test((x.innerText||"").trim())); if(t)t.click(); return !!t; })()`);
+  await evaluate(send, `(() => {
+    const dock = document.querySelector('aside[aria-label="停靠栏"]');
+    const t = dock ? [...dock.querySelectorAll("button")].find(x => (x.textContent || "").trim() === "会话") : null;
+    if (t) t.click();
+    return !!t;
+  })()`);
   /* Wait for rows instead of guessing: a list request through the relay is not
-     instant, and a fixed sleep is exactly how this section went flaky. */
-  for (let i = 0; i < 100; i++) {
-    const n = await evaluate(send, `document.querySelectorAll('section[aria-label="Sessions"] button[aria-label^="Read session"]').length`).catch(() => 0);
+     instant, and a fixed sleep is exactly how this section went flaky.
+
+     The budget is 60 s and it asks the panel to refresh, because selecting a
+     workspace switches rooms and the host answers `session_list` only once its
+     session directory is ready — right after a gate that made the host respawn
+     that can take tens of seconds. A 20 s poll is what produced the
+     occasional `hasLi:0` red here; widening the budget makes the gate wait for
+     the real condition instead of reporting a slow host as a broken viewer. */
+  for (let i = 0; i < 300; i++) {
+    const n = await evaluate(send, `document.querySelectorAll('section[aria-label="会话"] button[aria-label^="Read session"]').length`).catch(() => 0);
     if (Number(n) > 0) break;
+    /* Every 5 s, ask the panel to list again (session-list.tsx:132). */
+    if (i > 0 && i % 25 === 0) {
+      await evaluate(send, `(() => {
+        const b = document.querySelector('button[aria-label="刷新会话列表"]');
+        if (b && !b.disabled) b.click();
+        return !!b;
+      })()`).catch(() => false);
+    }
     await sleep(200);
   }
-  const clickRes = JSON.parse(await evaluate(send, `(() => { const s=document.querySelector('section[aria-label="Sessions"]'); const lis=[...(s?.querySelectorAll("li")||[])]; const t=lis.find(li=>{const b=li.querySelector('button[aria-label^="Read session"]'); const l=(b&&b.getAttribute("aria-label"))||""; return /^Read session [0-9a-f]{8}$/.test(l);})||lis.find(li=>!(li.innerText||"").includes("LIVE")); const b=t?.querySelector('button[aria-label^="Read session"]'); if(b){b.click();return JSON.stringify({clicked:true,label:b.getAttribute("aria-label")});} return JSON.stringify({clicked:false,hasLi:lis.length,hasS:!!s}); })()`));
+  const clickRes = JSON.parse(await evaluate(send, `(() => { const s=document.querySelector('section[aria-label="会话"]'); const lis=[...(s?.querySelectorAll("li")||[])]; const t=lis.find(li=>{const b=li.querySelector('button[aria-label^="Read session"]'); const l=(b&&b.getAttribute("aria-label"))||""; return /^Read session [0-9a-f]{8}$/.test(l);})||lis.find(li=>!(li.innerText||"").includes("LIVE")); const b=t?.querySelector('button[aria-label^="Read session"]'); if(b){b.click();return JSON.stringify({clicked:true,label:b.getAttribute("aria-label")});} return JSON.stringify({clicked:false,hasLi:lis.length,hasS:!!s}); })()`));
   note(`session click result: ${JSON.stringify(clickRes)}`);
   /*
    * Poll for the viewer instead of sleeping a fixed 4.5s. `session_read` is a
@@ -286,10 +364,11 @@ for (const [name, want] of TOKENS) check(name, ours.tokens[name], want);
 /*
  * The one deliberate deviation from DSH: their light caption is
  * `rgb(173, 178, 184)` = 2.2:1 on white, far below the 4.5:1 AA floor for the
- * placeholder text this token carries. Ours steps one ramp darker (4.6:1 on
- * #f9fafb). Asserting our value pins the deviation so it cannot drift silently.
+ * placeholder text this token carries. Ours steps two ramp steps darker
+ * (`bluish-700` = 5.80:1 on white / 5.55:1 on the `#f9fafb` card). Asserting our
+ * value pins the deviation so it cannot drift silently.
  */
-check("--dsw-alias-label-caption (AA-raised, deviates from DSH)", ours.caption, "rgb(129, 133, 140)");
+check("--dsw-alias-label-caption (AA-raised, deviates from DSH)", ours.caption, "rgb(97, 102, 107)");
 
 console.log("== element defaults ==");
 check("body background", ours.bodyBg, "rgb(255, 255, 255)");
@@ -407,7 +486,8 @@ await evaluate(send, `location.href = "${APP_ORIGIN}/remote-pi/connect"`);
 await sleep(4000);
 let connected = false;
 for (let i = 0; i < 60; i++) {
-  connected = await evaluate(send, `(document.body.innerText || "").includes("host connected")`);
+  /* 已连接主机 again: the English `host connected` never existed in src. */
+  connected = await evaluate(send, `(document.body.innerText || "").includes("已连接主机")`);
   if (connected) break;
   await sleep(1000);
 }
@@ -420,17 +500,26 @@ if (!connected) {
    * The sidebar auto-collapses to the 56px rail at this viewport width, and the
    * rail has no workspace rows by design. Expand it first so the row geometry
    * is measured on a row that actually exists.
+   *
+   * The toggle's titles are `展开侧栏（Ctrl/Cmd+B）` when collapsed and
+   * `收起侧栏（Ctrl/Cmd+B）` when expanded (workspace-sidebar.tsx:194-196). The
+   * old English prefixes matched nothing, so the expand never happened and the
+   * row geometry was read off the 56px rail.
    */
-  await evaluate(send, `(() => {
-    const b = [...document.querySelectorAll("button")].find((x) => (x.getAttribute("title") || "").startsWith("Toggle the sidebar") || (x.getAttribute("title") || "").startsWith("Expand the sidebar"));
-    if (b) b.click();
-    return true;
+  const expanded = await evaluate(send, `(() => {
+    const sb = document.querySelector('aside[aria-label="工作区"]');
+    const t = sb ? [...sb.querySelectorAll('button[aria-pressed]')].find(b => /侧栏/.test(b.getAttribute('title') || '')) : null;
+    if (!t) return 'no sidebar toggle';
+    const collapsed = t.getAttribute('aria-pressed') === 'true';
+    if (collapsed) t.click();
+    return collapsed ? 'expanded' : 'already expanded';
   })()`);
+  note(`sidebar: ${expanded}`);
   await sleep(900);
 
   /* Sidebar rail. */
   const side = JSON.parse(await evaluate(send, `(() => {
-    const a = document.querySelector('aside[aria-label="Workspaces"]');
+    const a = document.querySelector('aside[aria-label="工作区"]');
     if (!a) return JSON.stringify({ present: false });
     const cs = getComputedStyle(a);
     const row = [...a.querySelectorAll("div")].find((d) => {
@@ -443,11 +532,12 @@ if (!connected) {
       border: cs.borderRightWidth + " " + cs.borderRightColor,
       rowRadius: row ? getComputedStyle(row).borderTopLeftRadius : null,
       rowHeight: row ? Math.round(row.getBoundingClientRect().height) : null,
-      runningButtons: a.querySelectorAll('button[title*="running"], button[title*="stopped"]').length,
+      /* The status labels are 运行中 / 未运行 (view-model.ts:266,276). */
+      runningButtons: a.querySelectorAll('button[title*="运行中"], button[title*="未运行"]').length,
     });
   })()`));
   console.log("\n== sidebar ==");
-  check("aside aria-label=Workspaces present", side.present, true);
+  check("aside aria-label=工作区 present", side.present, true);
   if (side.present) {
     check("bg #f9fafb (DSH sidebar fill)", side.bg, "rgb(249, 250, 251)");
     check("right hairline l3 12% (DSH sidebar col)", side.border, "1px rgba(0, 0, 0, 0.12)");
@@ -493,12 +583,14 @@ if (!connected) {
     check("Add 28x28 circle", `${comp.add.join("x")} r=${comp.addRadius}`, "28x28 r=999px");
     check("Send 34x34 circle", `${comp.send.join("x")} r=${comp.sendRadius}`, "34x34 r=999px");
     check("Send bg deepseek-500", comp.sendBg, "rgb(65, 118, 230)");
-    check("placeholder caption #81858c (AA-raised)", comp.placeholder, "rgb(129, 133, 140)");
+    check("placeholder caption bluish-700 (AA-raised)", comp.placeholder, "rgb(97, 102, 107)");
   }
 
   /* Unpair dialog: opens on a real click, so this also proves the trigger. */
   const opened = await evaluate(send, `(() => {
-    const b = [...document.querySelectorAll("button")].find((x) => (x.getAttribute("title") || "") === "Unpair this host and clear the stored pairing");
+    /* The trigger's title is 解除该主机配对并清除已保存的配对信息
+       (remote-pi-shell.tsx:297). */
+    const b = [...document.querySelectorAll("button")].find((x) => (x.getAttribute("title") || "").includes("解除该主机配对"));
     if (!b) return false;
     b.focus();
     b.click();

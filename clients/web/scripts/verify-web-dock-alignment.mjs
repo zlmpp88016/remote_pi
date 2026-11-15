@@ -7,7 +7,7 @@
  * box at several viewport widths. A visual "it looks fine" check at one width is
  * exactly what missed it the first time.
  */
-import { attach, evaluate, sleep } from "./_cdp.mjs";
+import { APP_ORIGIN, attach, evaluate, sleep } from "./_cdp.mjs";
 
 function fail(msg) {
   console.error("FAIL:", msg);
@@ -23,7 +23,8 @@ const { send, ws } = await attach();
 const measure = () =>
   evaluate(send, `(function(){
     var form = document.querySelector('form');
-    var dock = document.querySelector('[aria-label="Conversation statistics"]');
+    /* Chinese label is what the product emits (stats-pills.tsx:68). */
+    var dock = document.querySelector('[aria-label="对话统计"]');
     if (!form) return { form: null, dock: null };
     var f = form.getBoundingClientRect();
     var d = dock ? dock.getBoundingClientRect() : null;
@@ -34,13 +35,19 @@ const measure = () =>
     };
   })()`);
 
-await evaluate(send, `location.href='http://localhost:3010/'`);
+/*
+ * Navigate to the origin `attach()` selected. The hard-coded localhost:3010
+ * literal made this gate ignore APP_ORIGIN and drive a page that never had the
+ * session, so it reported "no composer" at every width. Same fix as
+ * verify-web-usage-stats.mjs.
+ */
+await evaluate(send, `location.href=${JSON.stringify(APP_ORIGIN + "/")}`);
 await sleep(14_000);
 
 // The dock only exists once the live transcript has hydrated.
 for (let i = 0; i < 90; i += 1) {
   await sleep(1_000);
-  const ready = await evaluate(send, `document.querySelector('[aria-label="Conversation statistics"]') !== null`);
+  const ready = await evaluate(send, `document.querySelector('[aria-label="对话统计"]') !== null`);
   if (ready) break;
 }
 await sleep(1_500);
