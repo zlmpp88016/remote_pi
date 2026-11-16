@@ -4,6 +4,7 @@ import type { Duplex } from "node:stream";
 import { WebSocketServer, WebSocket } from "ws";
 import type { WebSocket as WsSocket } from "ws";
 import { ed25519Verify } from "../pairing/crypto.js";
+import { HOST_ROOM_ID } from "../protocol/types.js";
 import { logRelayEvent } from "../log.js";
 
 /**
@@ -62,6 +63,15 @@ interface Connection {
   peer: string;
   /** The sender's room, also vouched for. Used to rewrite outbound envelopes. */
   room: string;
+  /**
+   * The `room_meta` this connection announced in its hello, kept verbatim so a
+   * `room_announced` push carries the same `cwd`/`name`/`model` the Rust relay
+   * would (clients gate their workspace dock on `cwd`). Absent for a hello that
+   * carried no meta.
+   */
+  meta: Record<string, unknown>;
+  /** When this connection authenticated — the room's `started_at` for pushes. */
+  startedAt: number;
 }
 
 export interface EmbeddedRelay {
@@ -145,6 +155,14 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
   /** (peer, room) → live connections. Multiple devices per peer are allowed,
    *  matching the Rust relay (`duplicate_room_accepted_and_broadcast`). */
   const routes = new Map<string, Set<Connection>>();
+  /**
+   * peer → the connections that asked to watch its rooms (`subscribe_rooms`).
+   * Mirrors `relay/src/rooms.rs` (`subscribers_of`): lifecycle pushes go to
+   * WATCHERS, not to every socket on the relay. Broadcasting them to everyone
+   * would hand the supervisor's host bridge frames it has no use for, and would
+   * push a peer's room news to devices that never asked about that peer.
+   */
+  const roomWatchers = new Map<string, Set<Connection>>();
   let nextConnId = 1;
 
   const routeKey = (peer: string, room: string): string => `${peer}\u0000${room}`;
@@ -154,6 +172,36 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
     const bucket = routes.get(key);
     if (bucket) bucket.add(conn);
     else routes.set(key, new Set([conn]));
+    /*
+     * Lifecycle push, mirroring `relay/src/peers/registry.rs:106-119`: the FIRST
+     * connection at a (peer, room) announces the room to everyone watching that
+     * peer. Without it the embedded relay's catalog was PULL-only, so a client
+     * had no way to learn that a room's daemon had come back: a `session_switch`
+     * exits the child and the supervisor respawns it ~30 s later, and every
+     * `session_sync` sent in that gap was dropped by `onRoutedFrame` with no
+     * route behind it. The app then gave up at its deadline and stayed empty
+     * forever, because nothing ever told it the room was listening again.
+     *
+     * `host` is deliberately NOT announced: it is the control plane, never a
+     * workspace, and the catalog does not list it either — announcing it would
+     * add a phantom workspace tile to every client.
+     */
+    if (bucket === undefined && conn.room !== HOST_ROOM_ID) {
+      const announce = {
+        // Meta first, authoritative fields LAST: a hello's `room_meta` is
+        // client-supplied, so it must never be able to override the identity
+        // the relay vouches for (or the `started_at` the client parses).
+        ...conn.meta,
+        type: "room_announced",
+        peer: conn.peer,
+        room_id: conn.room,
+        started_at: conn.startedAt,
+      };
+      for (const sub of roomSubscribers(conn.peer)) safeSend(sub, announce);
+      logRelayEvent(
+        `embedded relay: room_announced peer=${conn.peer.slice(-8)} room=${conn.room}`,
+      );
+    }
   };
 
   const removeRoute = (conn: Connection): void => {
@@ -161,7 +209,22 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
     const bucket = routes.get(key);
     if (!bucket) return;
     bucket.delete(conn);
-    if (bucket.size === 0) routes.delete(key);
+    if (bucket.size > 0) return;
+    routes.delete(key);
+    // Last connection gone → the room is over (registry.rs:159-181). This is
+    // the edge that lets a client stop sending into a route with nobody behind
+    // it and wait for the `room_announced` above instead.
+    if (conn.room === HOST_ROOM_ID) return;
+    const ended = {
+      type: "room_ended",
+      peer: conn.peer,
+      room_id: conn.room,
+      since_ts: Date.now(),
+    };
+    for (const sub of roomSubscribers(conn.peer)) safeSend(sub, ended);
+    logRelayEvent(
+      `embedded relay: room_ended peer=${conn.peer.slice(-8)} room=${conn.room}`,
+    );
   };
 
   const authConnection = (socket: WsSocket): void => {
@@ -181,12 +244,13 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
     let nonce: Buffer | null = null;
     let claimedPeer: string | null = null;
     let claimedRoom = "main";
+    let claimedMeta: Record<string, unknown> = {};
 
     const onMessage = (raw: unknown): void => {
       const text = Buffer.isBuffer(raw) ? raw.toString() : String(raw);
 
       if (step === "hello") {
-        let hello: { type?: string; pubkey?: string; room_id?: string };
+        let hello: { type?: string; pubkey?: string; room_id?: string; room_meta?: unknown };
         try {
           hello = JSON.parse(text) as typeof hello;
         } catch {
@@ -202,6 +266,9 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
         claimedPeer = hello.pubkey;
         if (typeof hello.room_id === "string" && hello.room_id.length > 0) {
           claimedRoom = hello.room_id;
+        }
+        if (typeof hello.room_meta === "object" && hello.room_meta !== null) {
+          claimedMeta = hello.room_meta as Record<string, unknown>;
         }
         nonce = randomBytes(32);
         step = "auth";
@@ -245,7 +312,7 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
       clearTimeout(helloTimer);
       socket.off("message", onMessage);
 
-      conn = { id: nextConnId++, socket, peer, room: claimedRoom };
+      conn = { id: nextConnId++, socket, peer, room: claimedRoom, meta: claimedMeta, startedAt: Date.now() };
       addRoute(conn);
       logRelayEvent(
         `embedded relay: authenticated peer=${peer.slice(-8)} room=${claimedRoom} (${routes.size} route(s))`,
@@ -263,6 +330,7 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
         clearInterval(ping);
         if (conn) {
           removeRoute(conn);
+          unwatchRooms(conn);
           logRelayEvent(`embedded relay: peer=${peer.slice(-8)} room=${claimedRoom} disconnected`);
         }
       });
@@ -299,6 +367,9 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
     switch (type) {
       case "subscribe_rooms":
       case "rooms_check": {
+        // `subscribe_rooms` is the lasting interest; `rooms_check` is a pure
+        // pull (same split as `relay/src/handlers/peer.rs:274-280`).
+        if (type === "subscribe_rooms") watchRooms(conn, frame["peers"]);
         Promise.resolve(roomCatalog(conn.peer)).then(
           ({ peer: owner, rooms }: { peer: string; rooms: RelayRoomInfo[] }) => {
             if (conn.socket.readyState !== WebSocket.OPEN) return;
@@ -308,10 +379,24 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
              * list on either, so answering a catalog of N rooms with N+1
              * frames made every subscribe storm the UI thread. The snapshot
              * carries the same `cwd` the announce would.
+             *
+             * LIVENESS is the routing table, not the fleet registry. The
+             * supervisor's catalog lists every registered workspace whether or
+             * not its daemon is running, so reporting it verbatim made
+             * `isRoomLive` stale-true through the whole `session_switch`
+             * respawn gap: the app kept sending `session_sync` into a route
+             * with no connection behind it (the relay drops those silently)
+             * until its deadline gave up. A room is live exactly when somebody
+             * is authenticated at (owner, room_id) — the same fact the
+             * `room_announced` / `room_ended` pushes above report as edges.
              */
-            safeSend(conn, { type: "rooms", peer: owner, rooms });
+            const live = rooms.filter((r) => {
+              const bucket = routes.get(routeKey(owner, r.room_id));
+              return bucket !== undefined && bucket.size > 0;
+            });
+            safeSend(conn, { type: "rooms", peer: owner, rooms: live });
             logRelayEvent(
-              `embedded relay: ${type} peer=${conn.peer.slice(-8)} → ${rooms.length} room(s) for ${owner.slice(-8)}`,
+              `embedded relay: ${type} peer=${conn.peer.slice(-8)} → ${live.length}/${rooms.length} live room(s) for ${owner.slice(-8)}`,
             );
           },
           (e: unknown) => {
@@ -354,15 +439,40 @@ export function startEmbeddedRelay(options: EmbeddedRelayOptions = {}): Promise<
     }
   };
 
-  /** Every connection in `routes` whose room catalog includes [peer]. */
+  /** Every connection WATCHING [peer]'s rooms, excluding the owner's own
+   *  sockets (a device does not need an echo of its own room news). */
   const roomSubscribers = (peer: string): Connection[] => {
     const out: Connection[] = [];
-    for (const bucket of routes.values()) {
-      for (const c of bucket) {
-        if (c.peer !== peer) out.push(c);
-      }
+    const watchers = roomWatchers.get(peer);
+    if (!watchers) return out;
+    for (const c of watchers) {
+      if (c.peer !== peer) out.push(c);
     }
     return out;
+  };
+
+  /** Replace [conn]'s watch list with [peers] (the app always sends the full
+   *  list, matching the Rust relay's `subscribe_replaces_list`). */
+  const watchRooms = (conn: Connection, peers: unknown): void => {
+    unwatchRooms(conn);
+    if (!Array.isArray(peers)) return;
+    for (const p of peers) {
+      if (typeof p !== "string" || p === "") continue;
+      let set = roomWatchers.get(p);
+      if (!set) {
+        set = new Set();
+        roomWatchers.set(p, set);
+      }
+      set.add(conn);
+    }
+  };
+
+  /** Drop [conn] from every watch list — called when its socket closes. */
+  const unwatchRooms = (conn: Connection): void => {
+    for (const [peer, set] of roomWatchers) {
+      set.delete(conn);
+      if (set.size === 0) roomWatchers.delete(peer);
+    }
   };
 
   /** Send unless the socket already went away mid-iteration. */

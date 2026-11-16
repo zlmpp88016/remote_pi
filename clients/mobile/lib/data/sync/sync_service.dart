@@ -122,13 +122,21 @@ class SyncService extends Service {
   /// the room behaves.
   DateTime? _syncWindowSince;
 
-  /// Set when a window ended at the deadline while it was still WAITING for the
-  /// room (nothing was ever sent). That is the one give-up that deserves another
-  /// attempt without the user asking: the room coming back means the daemon the
-  /// chat was waiting for is listening again. It fires once — and only on a
-  /// room-live edge, not on every rooms broadcast — so a room that stays down
-  /// costs nothing after the notice.
+  /// Set when a window ended at the deadline without an answer — whether it was
+  /// still WAITING for the room or had sent a `session_sync` nobody answered.
+  /// Both deserve another attempt without the user asking, because both mean
+  /// "the host could not serve this transcript yet": a `session_switch` exits
+  /// the daemon and the supervisor's respawn needs ~30 s (measured 31.2 s on the
+  /// Android lane) before its relay connection authenticates, which can outlast
+  /// [_syncDeadline]. It fires once, on a room down→live EDGE (see the rooms
+  /// listener), so a room that stays down — or stays up and silent — costs
+  /// nothing after the notice.
   bool _resyncOnRoomReturn = false;
+
+  /// Liveness of the active binding as of the previous rooms broadcast. Seeds
+  /// the down→live edge [_resyncOnRoomReturn] fires on; [activate] re-seeds it
+  /// so a rebind never mistakes its first broadcast for a room coming back.
+  bool _roomLiveAtLastRooms = false;
 
   /// The ids of the `session_sync` frames SENT in this attempt, newest last —
   /// the only frames that may settle it.
@@ -185,7 +193,12 @@ class SyncService extends Service {
   /// times over). A truly dead room therefore ALWAYS ends here: the timer that
   /// checks this deadline is re-armed by every request and by every rebind, so
   /// no path can leave the chat waiting past ~1 s after this mark.
-  static const _syncDeadline = Duration(seconds: 40);
+  static const _kSyncDeadline = Duration(seconds: 40);
+
+  /// The deadline THIS instance runs on. Defaults to [_kSyncDeadline]; tests
+  /// inject a short one so the give-up and its recovery can be exercised
+  /// without waiting out the production budget.
+  final Duration _syncDeadline;
 
   // Whether the active session's agent is currently producing a reply. Spans
   // the WHOLE turn (send/echo → agent_done), not just the token-streaming
@@ -250,24 +263,32 @@ class SyncService extends Service {
     this._conn,
     this._boxes, {
     this.pendingSendTimeout = const Duration(seconds: 20),
-  }) {
+    Duration syncDeadline = _kSyncDeadline,
+  }) : _syncDeadline = syncDeadline {
     _connSub = _conn.statusStream.listen(_onStatus);
     _roomsSub = _conn.roomsStream.listen((_) {
       _writeRuntime();
       _syncTurnStateFromRoomMeta();
+      // Liveness of the active binding, and whether it just ROSE from down.
+      // The room-return resync below is an EDGE, not a level: the relay now
+      // pushes `room_ended` when the daemon's connection dies and
+      // `room_announced` when the respawned one authenticates, so a give-up
+      // while waiting for an ANSWER is recoverable too — but only on a real
+      // down→live transition. Firing on the level would re-request on every
+      // unrelated broadcast (a working flip) and undo the give-up instantly.
+      final epk = _activeEpk;
+      final liveNow = epk != null && _conn.isRoomLive(epk, _activeRoomId);
+      final roseFromDown = liveNow && !_roomLiveAtLastRooms;
+      _roomLiveAtLastRooms = liveNow;
       // A deferred sync is waiting for exactly this: the room coming back
       // (usually the daemon that `session_switch` restarted).
       if (_pendingSyncRequest) {
         requestSync();
-      } else if (_resyncOnRoomReturn) {
-        // A previous window already gave up and said so. Only a room that is
-        // actually LIVE again earns a new attempt, so the released state stays
-        // released while the room is down.
-        final epk = _activeEpk;
-        if (epk != null && _conn.isRoomLive(epk, _activeRoomId)) {
-          _resyncOnRoomReturn = false;
-          requestSync();
-        }
+      } else if (_resyncOnRoomReturn && roseFromDown) {
+        // A previous window already gave up and said so. The room was down and
+        // is listening again, so the daemon it was waiting for can now answer.
+        _resyncOnRoomReturn = false;
+        requestSync();
       }
     });
     _presenceSub = _conn.presenceStream.listen((_) => _writeRuntime());
@@ -387,6 +408,10 @@ class SyncService extends Service {
     _resetPaging();
     _activeEpk = epk;
     _activeRoomId = room;
+    // Seed the room-return edge from THIS binding's current liveness, so the
+    // first rooms broadcast after a rebind is a level, not a false "it came
+    // back" edge that would re-request a transcript nobody gave up on.
+    _roomLiveAtLastRooms = _conn.isRoomLive(epk, room);
     // F5 — whose rows this box holds, straight from the durable index and
     // BEFORE anything can hand out an answer: a cold boot's first
     // `session_list_ok` must be a COMPARISON against what the last run recorded,
@@ -750,7 +775,6 @@ class SyncService extends Service {
       '[sync] session_sync gave up after $waited without an answer '
       '(deadline ${_syncDeadline.inSeconds}s) — releasing the loading state',
     );
-    final wasWaitingForRoom = _pendingSyncRequest;
     // Notice queued BEFORE the release so its box write is already on the chain
     // when the skeleton comes down (an empty box would otherwise render
     // "这里还没有内容" for the few frames the write takes). The release stays
@@ -764,12 +788,16 @@ class SyncService extends Service {
     // The attempt is OVER: the deferred flag stays cleared so the release is
     // final — left set, the rooms listener would re-request on the next
     // broadcast (including unrelated ones such as a working flip) and put the
-    // skeleton back up on a chat that was just told it gave up. The one case
-    // with a real answer is a room that was DOWN the whole window coming back:
-    // that is the daemon finishing its restart, so it earns one more automatic
-    // attempt (see [_resyncOnRoomReturn]). Set AFTER the settle, which clears it
-    // as part of ending the window.
-    _resyncOnRoomReturn = wasWaitingForRoom;
+    // skeleton back up on a chat that was just told it gave up. What DOES earn
+    // one more automatic attempt is the host becoming able to serve again, and
+    // that is true of BOTH give-ups: a room that was down the whole window, and
+    // a room that was up but whose daemon exited mid-window (the `session_switch`
+    // respawn) and never answered. The rooms listener fires this on a down→live
+    // edge only, so arming it unconditionally cannot loop. Restricting it to
+    // `wasWaitingForRoom` is what left the transcript empty FOREVER after a
+    // switch whose respawn outlasted the deadline: the app had been sending, so
+    // the flag stayed false and no later recovery was ever queued.
+    _resyncOnRoomReturn = true;
   }
 
   /// Tells the user, in the transcript, that this session never answered.
@@ -1471,6 +1499,17 @@ class SyncService extends Service {
         _runtimeStatus = status;
         if (!_runtimeStatusController.isClosed) {
           _runtimeStatusController.add(status);
+        }
+        // A runtime_status can ONLY come from a live, session-bound daemon on
+        // this room — the supervisor never emits one, and a daemon publishes it
+        // the moment its relay connection is up (see `_cmdStart`). That makes it
+        // the readiness edge a gave-up attempt is waiting for: a `session_switch`
+        // respawns the daemon, the relay drops every sync sent while it boots,
+        // and the window can expire before the new process can answer. Without
+        // this the transcript stayed empty until the app was restarted.
+        if (_resyncOnRoomReturn) {
+          _resyncOnRoomReturn = false;
+          requestSync();
         }
 
       case SessionSwitchOk(:final sessionId):

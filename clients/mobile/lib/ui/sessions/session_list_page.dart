@@ -1,5 +1,6 @@
 import 'package:mobile/routing/adaptive.dart';
 import 'package:mobile/ui/core/themes/themes.dart';
+import 'package:mobile/ui/sessions/session_label.dart';
 import 'package:mobile/ui/sessions/states/session_list_state.dart';
 import 'package:mobile/ui/sessions/viewmodels/session_list_viewmodel.dart';
 import 'package:flutter/material.dart';
@@ -103,17 +104,22 @@ class SessionListPage extends StatelessWidget {
                   itemBuilder: (ctx, i) {
                     final s = sessions[i];
                     final live = s.id == currentId || s.live;
+                    // The host's `name` is the WORKSPACE FOLDER NAME, so every
+                    // row of one folder used to read identically. Same rule as
+                    // web: skip a folder-like name, fall back to the first
+                    // message, then to the short id.
+                    final label = sessionLabel(s);
+                    final subtitle = sessionSubtitle(s, label);
                     return ListTile(
                       enabled: !switching,
                       title: Text(
-                        (s.name?.isNotEmpty ?? false) ? s.name! : s.id,
+                        label,
                         style: TextStyle(color: colors.text),
                       ),
                       subtitle: Text(
                         [
                           if (live) '当前',
-                          if (s.preview != null && s.preview!.isNotEmpty)
-                            s.preview!,
+                          if (subtitle.isNotEmpty) subtitle,
                         ].join(' · '),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

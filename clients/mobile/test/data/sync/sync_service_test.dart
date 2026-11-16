@@ -97,6 +97,7 @@ void main() {
   setup({
     Duration pendingSendTimeout = const Duration(seconds: 20),
     String? epk,
+    Duration syncDeadline = const Duration(seconds: 40),
   }) async {
     final ch = _FakeChannel();
     final conn = ConnectionManager(
@@ -109,6 +110,7 @@ void main() {
       conn,
       boxes,
       pendingSendTimeout: pendingSendTimeout,
+      syncDeadline: syncDeadline,
     );
     final peerEpk = epk ?? 'epk_sync_${++_counter}';
     conn.adopt(
@@ -1067,6 +1069,71 @@ void main() {
         settled,
         reason: 'a transcript arrived; do not keep polling',
       );
+      s.conn.dispose();
+      s.sync.dispose();
+    },
+  );
+
+  test(
+    'a give-up while waiting for an ANSWER recovers when the daemon announces it is ready',
+    () async {
+      // THE user-facing defect: a `session_switch` exits the daemon and the
+      // supervisor's respawn needs ~30 s before its relay connection is up.
+      // Every sync sent into that gap is dropped, the window expires, and the
+      // give-up used to be FINAL — the transcript stayed empty until the app
+      // was restarted. The daemon publishes a runtime_status the moment it can
+      // serve; that frame is the edge that must re-open the attempt.
+      final s = await setup(syncDeadline: const Duration(seconds: 2));
+      final epk = s.epk;
+      // Let the first sync leave and the short deadline pass unanswered.
+      await _waitFor(
+        () => s.ch.sent.whereType<SessionSync>().isNotEmpty,
+        reason: 'the first sync must actually be sent',
+      );
+      await _waitFor(
+        () => !s.sync.isLoadingTranscript,
+        reason: 'the deadline must release the loading state',
+        timeoutMs: 8_000,
+      );
+      expect(
+        messages(epk).any((m) => m.id == 'sync_deadline_notice'),
+        isTrue,
+        reason: 'the give-up says why instead of showing an empty chat',
+      );
+      final afterGiveUp = s.ch.sent.whereType<SessionSync>().length;
+      // The give-up is final on its own: no readiness, no re-request. Arming
+      // the recovery must not turn into a poll that undoes the notice.
+      await Future<void>.delayed(const Duration(seconds: 4));
+      expect(
+        s.ch.sent.whereType<SessionSync>().length,
+        afterGiveUp,
+        reason: 'a host that still cannot serve must not be re-asked forever',
+      );
+
+      // The respawned daemon authenticates and announces itself.
+      s.ch.push(const RuntimeStatusMessage(RuntimeStatus()));
+      await _waitFor(
+        () => s.ch.sent.whereType<SessionSync>().length > afterGiveUp,
+        reason: 'readiness must re-open exactly one sync attempt',
+      );
+      expect(s.sync.isLoadingTranscript, isTrue);
+
+      // It answers this time: the transcript renders without an app restart.
+      final sync = s.ch.sent.whereType<SessionSync>().last;
+      s.ch.push(
+        SessionHistory(
+          inReplyTo: sync.id,
+          sessionStartedAt: 1,
+          events: [UserInputEvt(ts: 1, id: 'u1', text: 'resumed')],
+          eos: true,
+          truncated: false,
+        ),
+      );
+      await _waitFor(
+        () => messages(epk).any((m) => m.text == 'resumed'),
+        reason: 'the recovered sync must render the transcript',
+      );
+      await _waitFor(() => !s.sync.isLoadingTranscript);
       s.conn.dispose();
       s.sync.dispose();
     },

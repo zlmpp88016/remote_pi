@@ -46,6 +46,22 @@ class SessionListViewModel extends ViewModel<SessionListState> {
   /// invariant this whole path exists to keep.
   bool _switchInFlight = false;
 
+  /// The session whose read-only watch is running, if any.
+  ///
+  /// This — not the list-wide `switching` bit — is what keeps a missed ack from
+  /// costing a second `session_switch`: a tap on the SAME target is refused while
+  /// its watch runs, while a tap on a DIFFERENT one is a new intent and is
+  /// allowed to supersede it. Holding `switching` for the whole watch instead
+  /// disabled every row for up to [_switchSettleBudget].
+  String? _watchingId;
+
+  /// Bumped by every accepted tap, so a superseded watch stops quietly.
+  ///
+  /// Without it an abandoned watch would keep polling for a session nobody is
+  /// opening any more, and its `finally` would clear the spinner and banner that
+  /// belong to the NEWER tap.
+  int _switchGeneration = 0;
+
   /// Boot-level budget for the switch to actually take effect.
   ///
   /// Counted from the moment the request is sent, because the staged host only
@@ -199,7 +215,15 @@ class SessionListViewModel extends ViewModel<SessionListState> {
     // any state replacement (a `reload()` racing the watch). It is cleared in
     // the `finally` below — every exit path, including a throw or dispose — so it
     // can never leave the list dead; it only spans a switch that is running.
-    if (_switchInFlight || base.switching) return false;
+    // One switch per TARGET, not one switch per screen. [_switchInFlight] spans
+    // only the ack slice; the read-only watch that follows must NOT keep the list
+    // dead (see [_switchOnce]). Tapping the session already being watched is
+    // refused so its request is never re-sent — that is the exactly-once promise,
+    // and it survives a `reload()` replacing the state because it lives here.
+    // Tapping a DIFFERENT session is a new intent and supersedes the old watch.
+    if (_switchInFlight) return false;
+    if (_watchingId == sessionId) return false;
+    final gen = ++_switchGeneration;
     _switchInFlight = true;
     emit(base.copyWith(
       switching: true,
@@ -215,7 +239,7 @@ class SessionListViewModel extends ViewModel<SessionListState> {
       // listing, a switch must NEVER be repeated: every extra copy makes the
       // supervisor exit and respawn the Pi again, so retrying a slow boot is
       // exactly what turned one tap into a restart storm. Send once, then watch.
-      final switched = await _switchOnce(sessionId);
+      final switched = await _switchOnce(sessionId, gen);
       if (!switched) return false;
       await _prefs.setSelectedRoom(epk: epk, roomId: roomId);
       // The gate itself is released in the `finally` below, so this path and the
@@ -250,10 +274,14 @@ class SessionListViewModel extends ViewModel<SessionListState> {
       // ONE place, every path — a tap that threw, was refused, timed out, or
       // outlived the screen must not keep the next tap out.
       _switchInFlight = false;
-      // …and neither may the `switching` bit, which is what the ROWS read. Also
-      // idempotent, so the paths that already released it (and the banner they
-      // set) are left untouched.
-      _settleSwitch();
+      // A superseded attempt owns no UI: clearing here would wipe the spinner
+      // and banner of the newer tap that replaced it.
+      if (gen == _switchGeneration) {
+        _watchingId = null;
+        // Idempotent, so the paths that already released it (and the banner they
+        // set) are left untouched.
+        _settleSwitch();
+      }
     }
   }
 
@@ -269,9 +297,10 @@ class SessionListViewModel extends ViewModel<SessionListState> {
   /// counter stayed 0 the whole time (so that counter is not evidence of calm).
   ///
   /// Therefore the request is never repeated: a missed ack only moves this
-  /// method from "wait for the reply" to "watch for the effect". While it
-  /// watches, `switching` stays true, which is also what keeps a second tap
-  /// from putting a second `session_switch` on the wire.
+  /// method from "wait for the reply" to "watch for the effect". The watch does
+  /// NOT hold the list hostage — [_watchingId] refuses a re-send for this target
+  /// while the rows stay tappable, because `switching` gates EVERY row and
+  /// holding it for the whole budget locked the screen for up to 90 s.
   ///
   /// The whole method is bounded by [_switchSettleBudget] counted from the
   /// send, so the gated list can never be held open longer than that.
@@ -279,7 +308,7 @@ class SessionListViewModel extends ViewModel<SessionListState> {
   /// Returns false only when the screen was disposed while watching: there is
   /// nobody left to report to, so the caller must not record a switch it could
   /// not confirm.
-  Future<bool> _switchOnce(String sessionId) async {
+  Future<bool> _switchOnce(String sessionId, int gen) async {
     final end = DateTime.now().add(_switchSettleBudget);
     try {
       await _catalog.switchSession(sessionId, timeout: _switchAckTimeout);
@@ -291,7 +320,17 @@ class SessionListViewModel extends ViewModel<SessionListState> {
       // cheaper one wins: read the host's state instead of asking it to switch
       // again. A frame that really was lost ends as the banner below, which the
       // user can retry deliberately.
-      return _awaitSettled(sessionId, end);
+      //
+      // The ack slice is over, so hand the screen back NOW. `switching` gates
+      // every row (`ListTile(enabled: !switching)`); keeping it true through the
+      // watch disabled the whole list for up to 90 s — 30.8 s measured on the
+      // Android lane, which is unusable even when the switch eventually lands.
+      // The row keeps its spinner ([openingId]) so the tap still reads as busy.
+      _switchInFlight = false;
+      _watchingId = sessionId;
+      final now = state;
+      if (now is SessionListReady) emit(now.copyWith(switching: false));
+      return _awaitSettled(sessionId, end, gen);
     }
   }
 
@@ -311,11 +350,11 @@ class SessionListViewModel extends ViewModel<SessionListState> {
   /// after the ack budget cannot be observed through this channel; the banner
   /// then carries the host's `last_error` when there is one, or the generic
   /// sentence, and the rows stay tappable for another attempt.
-  Future<bool> _awaitSettled(String sessionId, DateTime end) async {
+  Future<bool> _awaitSettled(String sessionId, DateTime end, int gen) async {
     while (DateTime.now().isBefore(end)) {
-      // The screen that asked is gone: `emit` is already a no-op, so there is
-      // nobody to report to and no reason to keep spending the wire on it.
-      if (isDisposed) return false;
+      // The screen that asked is gone, or a newer tap superseded this watch:
+      // `emit` is a no-op or belongs to someone else, so stop spending the wire.
+      if (isDisposed || gen != _switchGeneration) return false;
       await Future<void>.delayed(_switchPollInterval);
       try {
         final ok = await _catalog.listSessions(timeout: _switchPollTimeout);
@@ -334,7 +373,7 @@ class SessionListViewModel extends ViewModel<SessionListState> {
         rethrow;
       }
     }
-    if (isDisposed) return false;
+    if (isDisposed || gen != _switchGeneration) return false;
     throw TimeoutException(
       'session_switch was sent once and never became current',
     );

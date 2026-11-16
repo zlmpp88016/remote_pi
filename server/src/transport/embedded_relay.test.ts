@@ -221,15 +221,31 @@ describe("startEmbeddedRelay", () => {
    * room carries `cwd`, and the app's workspace dock returns early without it.
    * The failure mode was silent — the client simply never learned any room.
    */
-  test("subscribe_rooms is answered with the catalog, including cwd", async () => {
+  test("subscribe_rooms is answered with the LIVE catalog, including cwd", async () => {
     const kp = generateEd25519Keypair();
     const peer = Buffer.from(kp.publicKey).toString("base64");
-    const rooms = [
-      { room_id: "roomabcdef12", started_at: 1_700_000_000_000, name: "proj", cwd: "/work/proj" },
-    ];
+    const liveRoom = {
+      room_id: "roomabcdef12",
+      started_at: 1_700_000_000_000,
+      name: "proj",
+      cwd: "/work/proj",
+    };
+    // Registered but NOT running: the supervisor's fleet catalog lists every
+    // workspace, so reporting it as live is what made the app send
+    // `session_sync` into a route with no daemon behind it during a respawn.
+    const deadRoom = {
+      room_id: "roomdeadbeef",
+      started_at: 1_700_000_000_000,
+      name: "other",
+      cwd: "/work/other",
+    };
     relay = await startEmbeddedRelay({
-      roomCatalog: () => ({ peer, rooms }),
+      roomCatalog: () => ({ peer, rooms: [liveRoom, deadRoom] }),
     });
+
+    // The daemon the catalog describes: authenticated at (peer, liveRoom).
+    const daemon = new RelayClient(relay.url, kp);
+    await daemon.connect({ roomId: liveRoom.room_id });
 
     const client = new RelayClient(relay.url, kp);
     const seen: Array<Record<string, unknown>> = [];
@@ -241,12 +257,71 @@ describe("startEmbeddedRelay", () => {
 
     const snapshot = seen.find((m) => m["type"] === "rooms");
     expect(snapshot?.["peer"]).toBe(peer);
-    expect(snapshot?.["rooms"]).toEqual(rooms);
+    // The live room is reported with its cwd; the one nobody is listening on
+    // is omitted, so `isRoomLive` on the client tracks the routing table.
+    expect(snapshot?.["rooms"]).toEqual([liveRoom]);
 
     // Exactly ONE reply: a snapshot plus per-room announces made the client
     // rebuild its tile list N+1 times per subscribe, which stormed the UI.
     expect(seen.filter((m) => m["type"] === "rooms")).toHaveLength(1);
     expect(seen.filter((m) => m["type"] === "room_announced")).toHaveLength(0);
+
+    daemon.close();
+    client.close();
+  });
+
+  test("a room's respawn is pushed to watchers as room_ended then room_announced", async () => {
+    // THE regression this relay existed without: `rooms` was pull-only, so a
+    // client could never learn that a daemon had come back. A `session_switch`
+    // exits the child and the supervisor respawns it ~30 s later; every sync
+    // sent in that gap was dropped, and the app sat empty forever.
+    const hostKp = generateEd25519Keypair();
+    const appKp = generateEd25519Keypair();
+    const hostPeer = Buffer.from(hostKp.publicKey).toString("base64");
+    const room = "roomabcdef12";
+    relay = await startEmbeddedRelay({
+      roomCatalog: () => ({
+        peer: hostPeer,
+        rooms: [{ room_id: room, started_at: 1, name: "proj", cwd: "/work/proj" }],
+      }),
+    });
+
+    const app = new RelayClient(relay.url, appKp);
+    const seen: Array<Record<string, unknown>> = [];
+    app.on("message", (line) => seen.push(JSON.parse(line) as Record<string, unknown>));
+    await app.connect();
+    app.sendControl({ type: "subscribe_rooms", peers: [hostPeer] });
+    await waitFor(() => seen.some((m) => m["type"] === "rooms"));
+
+    const daemon = new RelayClient(relay.url, hostKp);
+    await daemon.connect({ roomId: room, roomMeta: { name: "proj", cwd: "/work/proj" } });
+    await waitFor(() => seen.some((m) => m["type"] === "room_announced"));
+    const announced = seen.find((m) => m["type"] === "room_announced");
+    expect(announced?.["peer"]).toBe(hostPeer);
+    expect(announced?.["room_id"]).toBe(room);
+    expect(announced?.["cwd"]).toBe("/work/proj");
+    expect(typeof announced?.["started_at"]).toBe("number");
+
+    // The switch: the child exits, so its socket closes.
+    daemon.close();
+    await waitFor(() => seen.some((m) => m["type"] === "room_ended"));
+    const ended = seen.find((m) => m["type"] === "room_ended");
+    expect(ended?.["peer"]).toBe(hostPeer);
+    expect(ended?.["room_id"]).toBe(room);
+
+    // The supervisor's respawn authenticates a NEW connection on the same room.
+    const respawned = new RelayClient(relay.url, hostKp);
+    await respawned.connect({ roomId: room, roomMeta: { name: "proj", cwd: "/work/proj" } });
+    await waitFor(() => seen.filter((m) => m["type"] === "room_announced").length === 2);
+
+    // And a pull now agrees with the pushes: the room is live again.
+    app.sendControl({ type: "rooms_check", peers: [hostPeer] });
+    await waitFor(() => seen.filter((m) => m["type"] === "rooms").length === 2);
+    const snapshots = seen.filter((m) => m["type"] === "rooms");
+    expect((snapshots[1]?.["rooms"] as unknown[]).length).toBe(1);
+
+    respawned.close();
+    app.close();
   });
 
   test("rooms_check answers too (the app sends both frames)", async () => {

@@ -3283,6 +3283,25 @@ async function _cmdStart(ctx: Pick<ExtensionContext, "ui" | "cwd">): Promise<voi
   // this connection (no-op in TUI/interactive mode).
   _ensureHostProxyChannel();
   _state = "started";
+  /*
+   * Readiness announcement for the host-first app.
+   *
+   * A `session_switch` exits this process and the supervisor respawns it on the
+   * staged session; the new Pi needs ~30 s (measured 31.2 s on the Android lane)
+   * before it reaches this point, and until it does the relay has NO route for
+   * (machine, room) — every `session_sync` the app sends in that gap is dropped
+   * in silence. The app's attempt can therefore outlast its deadline, and a
+   * give-up used to be FINAL: the transcript stayed empty until the app was
+   * restarted.
+   *
+   * This frame is the proof that the gap is over. Only a live, session-bound
+   * daemon can emit it, it rides the same proxy path as every other broadcast,
+   * and the app treats it as the edge that re-opens a sync it had given up on.
+   * It also refreshes the chat header, which otherwise keeps the figures of the
+   * process that just exited. `force` because a fresh process has no comparable
+   * snapshot yet, and an idle daemon has no turn to publish one on.
+   */
+  _publishRuntimeStatusIfChanged(true);
   // Set _sessionStartedAt ONLY on first /remote-pi start since process boot.
   // Subsequent start cycles (after stop) preserve the original epoch so the
   // app keeps treating it as the same session (and merges new events from

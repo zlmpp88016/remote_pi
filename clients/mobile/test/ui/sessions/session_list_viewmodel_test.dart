@@ -105,6 +105,7 @@ class _Channel implements IChannel, IControlLink {
     this.switchError,
     this.answerSwitch = true,
     this.ackDelay = Duration.zero,
+    this.listCurrentId = 's1',
   });
   final String? startError;
 
@@ -119,6 +120,11 @@ class _Channel implements IChannel, IControlLink {
   /// How long the ack takes. A real daemon answers while a writer is still
   /// polling, so a slow ack is the window a `reload()` can fall into.
   final Duration ackDelay;
+
+  /// What `session_list` reports as the host's current session. Pointing it at
+  /// something OTHER than the tapped target keeps the read-only watch running,
+  /// which is the window the list-wide gate used to lock the whole screen for.
+  final String listCurrentId;
 
   bool answerSessionList;
 
@@ -193,7 +199,7 @@ class _Channel implements IChannel, IControlLink {
                 live: true,
               ),
             ],
-            currentId: 's1',
+            currentId: listCurrentId,
           ),
         );
       case SessionSwitch(:final id, :final sessionId):
@@ -245,6 +251,7 @@ Future<({ConnectionManager conn, _Channel ch})> _rig({
   String? switchError,
   bool answerSwitch = true,
   Duration ackDelay = Duration.zero,
+  String listCurrentId = 's1',
 }) async {
   final ch = _Channel(
     startError: startError,
@@ -253,6 +260,7 @@ Future<({ConnectionManager conn, _Channel ch})> _rig({
     switchError: switchError,
     answerSwitch: answerSwitch,
     ackDelay: ackDelay,
+    listCurrentId: listCurrentId,
   );
   final conn = ConnectionManager(
     factory: (_, _) async => ch,
@@ -528,6 +536,75 @@ void main() {
         );
       },
       timeout: const Timeout(Duration(seconds: 30)),
+    );
+
+    test(
+      'the list is tappable again WHILE the watch runs, and only the same '
+      'target is refused',
+      () async {
+        // `switching` gates EVERY row (`ListTile(enabled: !switching)`). Holding
+        // it for the whole settle budget locked the entire screen for up to 90 s
+        // — 30.8 s measured on the Android lane, unusable even when the switch
+        // eventually landed. The exactly-once promise only needs to refuse a
+        // re-send for the target being watched, not to freeze the screen.
+        final r = await _rig(
+          roomLive: true,
+          answerSwitch: false,
+          listCurrentId: 's2', // 's1' never becomes current, so the watch runs on
+        );
+        addTearDown(r.conn.dispose);
+        addTearDown(r.ch.close);
+
+        final vm = SessionListViewModel(
+          SessionCatalog(r.conn),
+          r.conn,
+          Preferences(_FakeSecureStorage()),
+          epk: _epk,
+          roomId: _room,
+          cwd: '/proj',
+        );
+        addTearDown(vm.dispose);
+        await Future<void>.delayed(const Duration(milliseconds: 120));
+        expect(vm.state, isA<SessionListReady>());
+
+        final first = vm.pick('s1');
+        // Past the 12 s ack slice, into the read-only watch.
+        await Future<void>.delayed(const Duration(seconds: 14));
+
+        final during = vm.state as SessionListReady;
+        expect(
+          during.switching,
+          isFalse,
+          reason: 'the rows must be tappable while the watch runs',
+        );
+        expect(
+          during.openingId,
+          's1',
+          reason: 'the tapped row still shows that it is busy',
+        );
+
+        // Same target: refused, and it must not cost a second spawn.
+        expect(await vm.pick('s1'), isFalse);
+        expect(
+          r.ch.sent.where((t) => t == 'session_switch').length,
+          1,
+          reason: 'a re-tap on the watched session never re-sends',
+        );
+
+        // A DIFFERENT session is a new intent and must go through.
+        expect(
+          await vm.pick('s2'),
+          isTrue,
+          reason: 'the watch sees s2 become current',
+        );
+        expect(
+          r.ch.sent.where((t) => t == 'session_switch').length,
+          2,
+          reason: 'one send per TARGET, not one send per screen',
+        );
+        expect(await first, isFalse, reason: 'the superseded watch stops quietly');
+      },
+      timeout: const Timeout(Duration(seconds: 90)),
     );
 
     test(
