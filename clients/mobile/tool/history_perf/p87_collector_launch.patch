@@ -1,0 +1,14 @@
+--- a/p87-collect-mobile.mjs
++++ b/p87-collect-mobile.mjs
+@@ -97,3 +97,8 @@
+-  device(['shell','am','start','-n',`${pkg}/com.example.remotepi.MainActivity`,
+-    '--ez','enable-dart-profiling','true','--es','dart-flags',
+-    '"--timeline_recorder=ring --profile_buffer_size=262144"']);
++  // Flutter splits dart-flags on commas and applies an allowlist. Direct
++  // timeline_recorder/profile_buffer_size flags are forbidden even in profile.
++  // Use the embedding's recorder switch and the allowed duration-based CPU
++  // buffer (covers the longest 120s browse window at the requested 1000us rate).
++  device(['shell','am','start','-n',`${pkg}/com.example.remotepi.MainActivity`,
++    '--ez','enable-dart-profiling','true',
++    '--ez','endless-trace-buffer','true','--es','dart-flags',
++    '--sample-buffer-duration=180,--profile_period=1000']);
