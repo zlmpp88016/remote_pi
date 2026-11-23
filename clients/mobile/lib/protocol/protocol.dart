@@ -1,5 +1,7 @@
 // ignore_for_file: lines_longer_than_80_chars
 
+import 'package:mobile/protocol/history.dart';
+
 // ---------------------------------------------------------------------------
 // Control frames (plano 12 — presence)
 //
@@ -1112,6 +1114,117 @@ class SessionSwitch extends ClientMessage {
   };
 }
 
+/// Plan/71 — READ one session's transcript without touching the live one.
+///
+/// Only used by the Plan 86 legacy fallback: a host that does not advertise
+/// `workspace_history_v1` can still serve a READ-ONLY view through a live Pi.
+/// It is never a browse-to-switch upgrade and never accepts a path.
+class SessionRead extends ClientMessage {
+  final String id;
+  final String sessionId;
+  final int? limit;
+  final String? before;
+  SessionRead({required this.id, required this.sessionId, this.limit, this.before});
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'session_read',
+    'id': id,
+    'session_id': sessionId,
+    if (limit != null) 'limit': limit,
+    if (before != null) 'before': before,
+  };
+}
+
+// --- Plan 86 P1 — host-native workspace history client frames ---------------
+//
+// Sent on room `host` (host-direct: see `data/transport/host_proxy.dart`). The
+// host derives the session bucket from `daemon_id`; no frame carries a path.
+
+class HistoryListRequest extends ClientMessage {
+  final String id;
+  final String daemonId;
+  final int limit;
+  final String? before;
+  final String? ifRevision;
+  HistoryListRequest({
+    required this.id,
+    required this.daemonId,
+    this.limit = kHistoryListDefaultLimit,
+    this.before,
+    this.ifRevision,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'history_list',
+    'id': id,
+    'daemon_id': daemonId,
+    'limit': limit,
+    if (before != null) 'before': before,
+    if (ifRevision != null) 'if_revision': ifRevision,
+  };
+}
+
+class HistoryReadRequest extends ClientMessage {
+  final String id;
+  final String daemonId;
+  final String sessionId;
+  final int limit;
+  final String? before;
+  final String? snapshot;
+  final String? ifRevision;
+  HistoryReadRequest({
+    required this.id,
+    required this.daemonId,
+    required this.sessionId,
+    this.limit = kHistoryReadDefaultLimit,
+    this.before,
+    this.snapshot,
+    this.ifRevision,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'history_read',
+    'id': id,
+    'daemon_id': daemonId,
+    'session_id': sessionId,
+    'limit': limit,
+    if (before != null) 'before': before,
+    if (snapshot != null) 'snapshot': snapshot,
+    if (ifRevision != null) 'if_revision': ifRevision,
+  };
+}
+
+class HistoryBodyRequest extends ClientMessage {
+  final String id;
+  final String daemonId;
+  final String sessionId;
+  final String snapshot;
+  final String bodyRef;
+  final int offsetBytes;
+  HistoryBodyRequest({
+    required this.id,
+    required this.daemonId,
+    required this.sessionId,
+    required this.snapshot,
+    required this.bodyRef,
+    this.offsetBytes = 0,
+  });
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'type': 'history_body',
+    'id': id,
+    'daemon_id': daemonId,
+    'session_id': sessionId,
+    'snapshot': snapshot,
+    'body_ref': bodyRef,
+    'offset_bytes': offsetBytes,
+  };
+}
+
 /// Plan/67 — reserved room_id for the supervisor host control plane.
 const kHostRoomId = 'host';
 
@@ -1664,6 +1777,13 @@ sealed class ServerMessage {
       // Plan/32 — Pi-extension emits this when a context compaction finishes.
       'compaction' => Compaction.fromJson(json),
       'session_history' => SessionHistory.fromJson(json),
+      // Plan/71 — read-only arbitrary-session transcript (Plan 86 legacy fallback).
+      'session_read_ok' => SessionReadOk.fromJson(json),
+      // Plan 86 P1 — host-native workspace history (zero Pi).
+      'history_list_ok' => HistoryListOk.fromJson(json),
+      'history_read_ok' => HistoryReadOk.fromJson(json),
+      'history_body_ok' => HistoryBodyOk.fromJson(json),
+      'history_error' => HistoryError.fromJson(json),
       'bye' => Bye.fromJson(json),
       'action_ok' => ActionOk.fromJson(json),
       'action_error' => ActionError.fromJson(json),
@@ -2093,6 +2213,82 @@ class SessionHistory extends ServerMessage {
     olderCursor: j['older_cursor'] as String?,
     hasOlder: (j['has_older'] as bool?) ?? false,
   );
+}
+
+/// Plan/71 — reply to [SessionRead].
+///
+/// Same event vocabulary as [SessionHistory]; what changes is that it answers
+/// for an arbitrary (non-active) session. Only the Plan 86 legacy fallback
+/// reads it, and only while a Pi is live.
+class SessionReadOk extends ServerMessage {
+  final String inReplyTo;
+  final String sessionId;
+  final List<SessionHistoryEvent> events;
+  final bool eos;
+  final bool truncated;
+  final String? olderCursor;
+  final bool hasOlder;
+
+  SessionReadOk({
+    required this.inReplyTo,
+    required this.sessionId,
+    required this.events,
+    required this.eos,
+    this.truncated = false,
+    this.olderCursor,
+    this.hasOlder = false,
+  });
+
+  factory SessionReadOk.fromJson(Map<String, dynamic> j) => SessionReadOk(
+    inReplyTo: j['in_reply_to'] as String,
+    sessionId: (j['session_id'] as String?) ?? '',
+    events: (j['events'] as List<dynamic>)
+        .map((e) => SessionHistoryEvent.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    eos: j['eos'] as bool? ?? true,
+    truncated: (j['truncated'] as bool?) ?? false,
+    olderCursor: j['older_cursor'] as String?,
+    hasOlder: (j['has_older'] as bool?) ?? false,
+  );
+}
+
+// --- Plan 86 P1 — host-native workspace history replies ----------------------//
+//
+// The DTOs live in `protocol/history.dart` (pure wire, guarded parsers). These
+// thin wrappers are what makes the channel's `ServerMessage` switch able to
+// recognize the family at all; an unknown type would degrade to
+// `ErrorMessage(unsupported_type)` and lose the frame.
+
+class HistoryListOk extends ServerMessage {
+  final HistoryListWire payload;
+  const HistoryListOk(this.payload);
+
+  factory HistoryListOk.fromJson(Map<String, dynamic> j) =>
+      HistoryListOk(HistoryListWire.fromJson(j));
+}
+
+class HistoryReadOk extends ServerMessage {
+  final HistoryReadWire payload;
+  const HistoryReadOk(this.payload);
+
+  factory HistoryReadOk.fromJson(Map<String, dynamic> j) =>
+      HistoryReadOk(HistoryReadWire.fromJson(j));
+}
+
+class HistoryBodyOk extends ServerMessage {
+  final HistoryBodyWire payload;
+  const HistoryBodyOk(this.payload);
+
+  factory HistoryBodyOk.fromJson(Map<String, dynamic> j) =>
+      HistoryBodyOk(HistoryBodyWire.fromJson(j));
+}
+
+class HistoryError extends ServerMessage {
+  final HistoryErrorWire payload;
+  const HistoryError(this.payload);
+
+  factory HistoryError.fromJson(Map<String, dynamic> j) =>
+      HistoryError(HistoryErrorWire.fromJson(j));
 }
 
 sealed class SessionHistoryEvent {

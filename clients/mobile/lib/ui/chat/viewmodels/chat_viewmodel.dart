@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../render_metrics.dart';
+
 import 'package:mobile/data/local/records/message_record.dart';
 import 'package:mobile/data/local/records/runtime_record.dart';
 import 'package:mobile/data/preferences/preferences.dart';
@@ -50,6 +52,7 @@ class ChatViewModel extends ViewModel<ChatState> {
   bool _disposed = false;
 
   List<ChatMessage> _messages = const [];
+  final _projection = ChatMessageProjection();
   StreamingMessage? _streaming;
   bool _working = false;
 
@@ -85,7 +88,9 @@ class ChatViewModel extends ViewModel<ChatState> {
     // seed AFTER activate() in _bootstrap, when the sync owns THIS session.
     _streamingSub = _sync.streamingStream.listen(_onStreaming);
     _workingSub = _sync.workingStream.listen(_onWorking);
-    _transcriptLoadingSub = _sync.transcriptLoadingStream.listen(_onTranscriptLoading);
+    _transcriptLoadingSub = _sync.transcriptLoadingStream.listen(
+      _onTranscriptLoading,
+    );
     _queuedSub = _sync.queuedStream.listen(_onQueued);
     _eventSub = _sync.events.listen(_onEvent);
     _uiReqSub = _sync.extensionUiRequestStream.listen(_onExtensionUiRequest);
@@ -287,7 +292,7 @@ class ChatViewModel extends ViewModel<ChatState> {
   }
 
   void _onMessages(List<MessageRecord> rows) {
-    _messages = [for (final r in rows) r.toChatMessage()];
+    _messages = _projection.project(rows);
     _recompute();
   }
 
@@ -538,5 +543,56 @@ class ChatViewModel extends ViewModel<ChatState> {
     _roomsSub?.cancel();
     _statusSub?.cancel();
     super.dispose();
+  }
+}
+
+/// Session-local exact value comparison, including nested tool values.
+class ChatMessageProjection {
+  final _values = <(MsgRole, String), Object?>{};
+  final _messages = <(MsgRole, String), ChatMessage>{};
+  List<ChatMessage> _last = const [];
+
+  List<ChatMessage> project(List<MessageRecord> rows) {
+    if (ChatRenderMetrics.enabled) ChatRenderMetrics.messageSnapshots++;
+    final keys = <(MsgRole, String)>{};
+    final next = <ChatMessage>[];
+    for (final row in rows) {
+      final key = (row.role, row.id);
+      keys.add(key);
+      final value = _freeze(row.toJson());
+      if (!_equal(_values[key], value)) {
+        _values[key] = value;
+        _messages[key] = row.toChatMessage();
+        if (ChatRenderMetrics.enabled) ChatRenderMetrics.projections++;
+      }
+      next.add(_messages[key]!);
+    }
+    _values.removeWhere((key, _) => !keys.contains(key));
+    _messages.removeWhere((key, _) => !keys.contains(key));
+    if (_last.length != next.length ||
+        Iterable<int>.generate(
+          next.length,
+        ).any((i) => !identical(_last[i], next[i]))) {
+      _last = List.unmodifiable(next);
+    }
+    return _last;
+  }
+
+  static Object? _freeze(Object? value) => switch (value) {
+    Map() => Map.unmodifiable(value.map((k, v) => MapEntry(k, _freeze(v)))),
+    List() => List.unmodifiable(value.map(_freeze)),
+    _ => value,
+  };
+
+  static bool _equal(Object? a, Object? b) {
+    if (a is Map && b is Map) {
+      return a.length == b.length &&
+          a.keys.every((key) => b.containsKey(key) && _equal(a[key], b[key]));
+    }
+    if (a is List && b is List) {
+      return a.length == b.length &&
+          Iterable<int>.generate(a.length).every((i) => _equal(a[i], b[i]));
+    }
+    return a == b;
   }
 }

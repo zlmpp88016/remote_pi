@@ -24,7 +24,11 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 const _epk = 'Bz02uLi';
-const _sessionsMarker = 'ROUTE:SESSIONS';
+const _historyMarker = 'ROUTE:HISTORY';
+
+/// Captured `extra` of the last `/history` navigation (P4 asserts the picker
+/// forwards the host's daemon id / cwd / room id, not just a title).
+Map<String, dynamic>? lastHistoryExtra;
 
 PeerRecord _peer() => const PeerRecord(
   remoteEpk: _epk,
@@ -34,10 +38,10 @@ PeerRecord _peer() => const PeerRecord(
 );
 
 class _Channel implements IChannel, IControlLink {
-  _Channel({this.workspaces = const [], this.startError});
+  _Channel({this.workspaces = const []});
 
   final List<WireWorkspaceInfo> workspaces;
-  final String? startError;
+  final sentTypes = <String>[];
 
   final _server = StreamController<ServerMessage>.broadcast();
   final _control = StreamController<ControlInbound>.broadcast();
@@ -50,6 +54,7 @@ class _Channel implements IChannel, IControlLink {
   void sendControl(Map<String, dynamic> json) {}
   @override
   Future<void> send(ClientMessage msg) async {
+    sentTypes.add((msg.toJson()['type'] as String?) ?? '');
     if (_server.isClosed) return;
     switch (msg) {
       case WorkspaceList(:final id):
@@ -57,25 +62,14 @@ class _Channel implements IChannel, IControlLink {
           WorkspaceListOk(inReplyTo: id, workspaces: workspaces),
         );
       case WorkspaceStart(:final id):
-        if (startError != null) {
-          _server.add(
-            ActionError(
-              inReplyTo: id,
-              action: ActionName.sessionCompact,
-              rawAction: 'workspace_start',
-              error: startError!,
-            ),
-          );
-        } else {
-          _server.add(
-            WorkspaceStartOk(
-              inReplyTo: id,
-              cwd: '/proj/b',
-              roomId: 'r-b',
-              daemonId: 'd2',
-            ),
-          );
-        }
+        _server.add(
+          WorkspaceStartOk(
+            inReplyTo: id,
+            cwd: '/proj/b',
+            roomId: 'r-b',
+            daemonId: 'd2',
+          ),
+        );
       case WorkspaceRemove(:final id):
         _server.add(
           ActionOk(
@@ -120,11 +114,12 @@ Future<void> _settle(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 400));
 }
 
-Future<WorkspaceListViewModel> _pump(
+Future<({WorkspaceListViewModel vm, _Channel ch})> _pump(
   WidgetTester tester,
   _Channel ch, {
   Size size = const Size(393, 852),
 }) async {
+  lastHistoryExtra = null;
   tester.view.devicePixelRatio = 1.0;
   tester.view.physicalSize = size;
   addTearDown(tester.view.resetPhysicalSize);
@@ -165,9 +160,15 @@ Future<WorkspaceListViewModel> _pump(
         ),
       ),
       GoRoute(
-        path: '/sessions',
-        builder: (_, _) =>
-            const Scaffold(body: Center(child: Text(_sessionsMarker))),
+        path: '/history',
+        builder: (_, state) {
+          lastHistoryExtra = state.extra is Map
+              ? (state.extra as Map).cast<String, dynamic>()
+              : null;
+          return const Scaffold(
+            body: Center(child: Text(_historyMarker)),
+          );
+        },
       ),
     ],
   );
@@ -175,7 +176,7 @@ Future<WorkspaceListViewModel> _pump(
     MaterialApp.router(theme: buildDarkTheme(), routerConfig: router),
   );
   await _settle(tester);
-  return vm;
+  return (vm: vm, ch: ch);
 }
 
 void main() {
@@ -202,7 +203,8 @@ void main() {
         ),
       ],
     );
-    final vm = await _pump(tester, ch);
+    final rig = await _pump(tester, ch);
+    final vm = rig.vm;
 
     expect(vm.state, isA<WorkspaceListReady>());
     expect(find.text('proj-a'), findsOneWidget);
@@ -231,7 +233,9 @@ void main() {
     );
   });
 
-  testWidgets('tocar num workspace navega para /sessions', (tester) async {
+  testWidgets('tocar num workspace abre /history sem iniciar o Pi', (
+    tester,
+  ) async {
     final ch = _Channel(
       workspaces: const [
         WireWorkspaceInfo(
@@ -252,12 +256,23 @@ void main() {
     );
     await _settle(tester);
 
-    expect(find.text(_sessionsMarker), findsOneWidget);
+    expect(find.text(_historyMarker), findsOneWidget);
+    // Plan 86 P4 — browsing must not start/spawn anything. The host's own
+    // daemon id, cwd and room id are forwarded to the history route.
+    expect(ch.sentTypes, isNot(contains('workspace_start')));
+    expect(ch.sentTypes, isNot(contains('workspace_restart')));
+    expect(ch.sentTypes, isNot(contains('session_switch')));
+    expect(lastHistoryExtra, isNotNull);
+    expect(lastHistoryExtra!['daemonId'], 'd2');
+    expect(lastHistoryExtra!['cwd'], '/proj/b');
+    expect(lastHistoryExtra!['roomId'], 'r-b');
+    expect(lastHistoryExtra!['epk'], _epk);
   });
 
-  testWidgets('start falhando mostra o erro com retry', (tester) async {
+  testWidgets('um workspace parado não mostra erro de start ao abrir', (
+    tester,
+  ) async {
     final ch = _Channel(
-      startError: 'not_registered',
       workspaces: const [
         WireWorkspaceInfo(
           cwd: '/proj/b',
@@ -269,7 +284,7 @@ void main() {
         ),
       ],
     );
-    final vm = await _pump(tester, ch);
+    final rig = await _pump(tester, ch);
 
     await tester.tap(find.text('proj-b'));
     await tester.runAsync(
@@ -277,10 +292,11 @@ void main() {
     );
     await _settle(tester);
 
-    expect(vm.state, isA<WorkspaceListError>());
-    expect(find.textContaining('remote-pi create'), findsOneWidget);
-    expect(find.text(Common.retry), findsOneWidget);
-    expect(find.text(_sessionsMarker), findsNothing);
+    // The picker keeps its catalog; no start error can be produced because no
+    // start was attempted.
+    expect(rig.vm.state, isA<WorkspaceListReady>());
+    expect(find.text(Common.retry), findsNothing);
+    expect(find.text(_historyMarker), findsOneWidget);
   });
 
   testWidgets('workspace adicionado tem badge \'added\' e botão de remover', (
@@ -299,7 +315,8 @@ void main() {
         ),
       ],
     );
-    final vm = await _pump(tester, ch);
+    final rig = await _pump(tester, ch);
+    final vm = rig.vm;
 
     expect(find.text('已添加'), findsOneWidget);
     expect(find.byTooltip(WorkspacesCopy.removeFromList), findsOneWidget);

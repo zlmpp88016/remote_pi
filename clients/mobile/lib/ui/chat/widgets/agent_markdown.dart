@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../render_metrics.dart';
+
 import 'package:mobile/ui/core/themes/themes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,7 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 /// app's dark/mono look. Links open in the system browser (url_launcher);
 /// code blocks get a copy button. Tolerant of partial markdown so it can also
 /// drive the live streaming bubble.
-class AgentMarkdown extends StatelessWidget {
+class AgentMarkdown extends StatefulWidget {
   const AgentMarkdown(this.data, {super.key, this.selectable = false});
 
   final String data;
@@ -21,29 +23,59 @@ class AgentMarkdown extends StatelessWidget {
   final bool selectable;
 
   @override
+  State<AgentMarkdown> createState() => _AgentMarkdownState();
+}
+
+class _AgentMarkdownState extends State<AgentMarkdown> {
+  Object? _identity;
+  Widget? _cached;
+
+  @override
   Widget build(BuildContext context) {
+    if (ChatRenderMetrics.enabled) ChatRenderMetrics.markdownBuilds++;
+    final theme = Theme.of(context);
+    final scaler = MediaQuery.textScalerOf(context);
+    final direction = Directionality.of(context);
     final colors = context.colors;
     final typo = context.typo;
-    final markdown = GptMarkdown(
-      data,
-      style: typo.mono,
-      onLinkTap: (url, _) => _openLink(context, url),
-      // Inline `code` — the chip (fill, outline, radius, padding) is painted by
-      // the package, so only the colours need overriding. `highlightBuilder`
-      // was deprecated in gpt_markdown 1.3.0: it returned a Widget, which had
-      // to sit in a WidgetSpan — off the baseline, unable to wrap across
-      // lines, and skipped by text selection.
-      inlineCodeStyle: InlineCodeStyle(
-        fontFamily: kMonoFamily,
-        color: colors.highlight,
-        backgroundColor: colors.codeBg,
-        borderColor: Colors.transparent,
-      ),
-      // Fenced ``` blocks — dark card + copy button.
-      codeBuilder: (context, name, code, closed) =>
-          _CodeBlock(language: name, code: code),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final identity = (
+          widget.data,
+          widget.selectable,
+          theme,
+          typo.mono,
+          scaler,
+          direction,
+          constraints.maxWidth,
+        );
+        if (_identity == identity) return _cached!;
+        _identity = identity;
+        if (ChatRenderMetrics.enabled) ChatRenderMetrics.markdownCreations++;
+        final markdown = GptMarkdown(
+          widget.data,
+          style: typo.mono,
+          onLinkTap: (url, _) => _openLink(context, url),
+          // Inline `code` — the chip (fill, outline, radius, padding) is painted by
+          // the package, so only the colours need overriding. `highlightBuilder`
+          // was deprecated in gpt_markdown 1.3.0: it returned a Widget, which had
+          // to sit in a WidgetSpan — off the baseline, unable to wrap across
+          // lines, and skipped by text selection.
+          inlineCodeStyle: InlineCodeStyle(
+            fontFamily: kMonoFamily,
+            color: colors.highlight,
+            backgroundColor: colors.codeBg,
+            borderColor: Colors.transparent,
+          ),
+          // Fenced ``` blocks — dark card + copy button.
+          codeBuilder: (context, name, code, closed) =>
+              _CodeBlock(language: name, code: code),
+        );
+        return _cached = widget.selectable
+            ? SelectionArea(child: markdown)
+            : markdown;
+      },
     );
-    return selectable ? SelectionArea(child: markdown) : markdown;
   }
 
   static Future<void> _openLink(BuildContext context, String url) async {

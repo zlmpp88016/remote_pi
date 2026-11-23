@@ -1,7 +1,10 @@
 import 'dart:async';
+
+import 'package:flutter/foundation.dart' show kProfileMode;
 import 'dart:io' show Platform;
 
 import 'package:mobile/config/utils/injector.dart';
+import 'package:mobile/config/history_fixture_bootstrap.dart';
 import 'package:mobile/data/actions/actions_repository.dart';
 import 'package:mobile/data/mesh/mesh_client.dart';
 import 'package:mobile/data/mesh/mesh_sync_service.dart';
@@ -9,6 +12,9 @@ import 'package:mobile/data/local/boxes.dart';
 import 'package:mobile/data/preferences/preferences.dart';
 import 'package:mobile/data/repositories/home_read_repository.dart';
 import 'package:mobile/data/repositories/session_read_repository.dart';
+import 'package:mobile/data/history/history_cache.dart';
+import 'package:mobile/data/history/history_repository_impl.dart';
+import 'package:mobile/domain/contracts/history_repository.dart';
 import 'package:mobile/data/sessions/session_catalog.dart';
 import 'package:mobile/data/sync/sync_service.dart';
 import 'package:mobile/data/transport/channel.dart'; // IChannel
@@ -63,8 +69,17 @@ Future<void> setupDependencies() async {
   final capabilities = detectDeviceCapabilities();
   _injector.addInstance<DeviceCapabilities>(capabilities);
 
+  final fixtureOrigin = const String.fromEnvironment('REMOTE_PI_HISTORY_FIXTURE');
+  const isolatedFixtureBoot = bool.fromEnvironment('REMOTE_PI_HISTORY_ISOLATED_BOOT');
+  final useIsolatedFixtureBoot = useIsolatedHistoryFixtureBootstrap(
+    profile: kProfileMode,
+    performanceOptIn: const bool.fromEnvironment('REMOTE_PI_HISTORY_PERF'),
+    fixtureBootOptIn: isolatedFixtureBoot,
+    origin: fixtureOrigin,
+  );
   final prefs = Preferences();
   await prefs.load();
+  if (useIsolatedFixtureBoot) await prefs.setRelayUrl(fixtureOrigin);
   _injector.addInstance<Preferences>(prefs);
 
   // Plan 31 — local SSOT box facade (boxes already opened + runtime wiped in
@@ -74,7 +89,9 @@ Future<void> setupDependencies() async {
   // Plan 23 — Owner-key sync. The store talks to the native plugin
   // (iCloud Keychain on iOS, Block Store on Android); the bridge sits
   // between it and the rest of the app, owning boot + watch-for-reset.
-  final OwnerIdentityStore ownerStore = MethodChannelOwnerIdentityStore();
+  final OwnerIdentityStore ownerStore = useIsolatedFixtureBoot
+      ? InMemoryOwnerIdentityStore()
+      : MethodChannelOwnerIdentityStore();
   _injector.addInstance<OwnerIdentityStore>(ownerStore);
   final ownerBridge = OwnerIdentityBridge(
     ownerStore,
@@ -135,6 +152,17 @@ Future<void> setupDependencies() async {
   );
   _injector.addRepository<HomeReadRepository>(
     () => HomeReadRepository(_injector.get<LocalBoxes>()),
+  );
+
+  // Plan 86 P4 — read-only workspace history (host-native, zero Pi, with the
+  // legacy READ-ONLY fallback). The bounded page cache lives in the singleton
+  // repository so a reopened workspace paints from cache, and only scoped
+  // invalidation/revalidation can replace what it holds.
+  _injector.addRepository<HistoryRepository>(
+    () => HistoryRepositoryImpl(
+      conn: _injector.get<ConnectionManager>(),
+      cache: HistoryPageCache(),
+    ),
   );
 
   // Repositories

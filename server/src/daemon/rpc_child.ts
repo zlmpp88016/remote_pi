@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { DaemonState } from "./control_protocol.js";
 import { defaultAgentName, loadLocalConfig, type LocalConfig } from "../session/local_config.js";
+import { parseHistoryNotice, type HistoryNotice } from "../session/history_notice.js";
 
 /**
  * Wrapper around a `pi --mode rpc -e <extension>` child process for the
@@ -333,6 +334,8 @@ export class RpcChild extends EventEmitter {
   private forceFreshSessionOnNextSpawn = false;
   /** Accumulates partial stdout lines while waiting for `\n`. */
   private stdoutBuf = "";
+  /** Accumulates partial STDERR lines so a split notice line is reassembled. */
+  private stderrBuf = "";
   /** Passive busy flag derived from the RPC stream (message_start/end). Hint
    *  only; `refreshBusy` syncs it authoritatively via get_state.isStreaming. */
   private _busy = false;
@@ -418,11 +421,7 @@ export class RpcChild extends EventEmitter {
     this._state = "running";
 
     child.stdout?.on("data", (chunk: Buffer) => this._onStdout(chunk));
-    child.stderr?.on("data", (chunk: Buffer) => {
-      // Forward stderr to our own stderr so `journalctl --user -u remote-pi-supervisord`
-      // sees daemon logs (with cwd prefix for disambiguation).
-      process.stderr.write(`[${this.opts.cwd}] ${chunk.toString()}`);
-    });
+    child.stderr?.on("data", (chunk: Buffer) => this._onStderr(chunk));
     child.on("exit", (code, signal) => this._onExit(code, signal));
     child.on("error", (err) => {
       // spawn() itself failed (e.g. `pi` binary not found).
@@ -484,6 +483,46 @@ export class RpcChild extends EventEmitter {
       if (!line.trim()) continue;
       this._handleStdoutLine(line);
     }
+  }
+
+  /**
+   * Plan 86 P2 correction (R1/R2) — child stderr carries TWO things:
+   *
+   *   1. ordinary Pi/extension logging, which is forwarded to our own stderr so
+   *      `journalctl --user -u remote-pi-supervisord` keeps showing it (with the
+   *      cwd prefix for disambiguation), unchanged from before;
+   *   2. `[remote-pi-history-notice] {...}` lines, which are the child's OWN
+   *      writer receipts. Those are parsed, re-emitted as a typed `notice`
+   *      event, and NOT forwarded — they are machine data, not log noise.
+   *
+   * Lines are accumulated across chunks: a notice is ~200 B and can be split by
+   * the pipe, and a half line must never be parsed (or forwarded twice).
+   */
+  private _onStderr(chunk: Buffer): void {
+    this.stderrBuf += chunk.toString();
+    let nl: number;
+    while ((nl = this.stderrBuf.indexOf("\n")) >= 0) {
+      const line = this.stderrBuf.slice(0, nl);
+      this.stderrBuf = this.stderrBuf.slice(nl + 1);
+      const notice = parseHistoryNotice(line);
+      if (notice !== null) {
+        this.emit("notice", notice);
+        continue;
+      }
+      if (line === "") continue;
+      process.stderr.write(`[${this.opts.cwd}] ${line}\n`);
+    }
+    // A partially received line stays buffered. Bound it: nothing legitimate is
+    // larger than a few KiB, and an unbounded buffer would be a leak.
+    if (this.stderrBuf.length > 64 * 1024) {
+      process.stderr.write(`[${this.opts.cwd}] ${this.stderrBuf}`);
+      this.stderrBuf = "";
+    }
+  }
+
+  /** Test-only: feed a raw stderr chunk through the same handler. */
+  _ingestStderrForTest(chunk: string): void {
+    this._onStderr(Buffer.from(chunk, "utf8"));
   }
 
   private _handleStdoutLine(line: string): void {
@@ -609,6 +648,10 @@ export class RpcChild extends EventEmitter {
   }
 
   private _onExit(code: number | null, signal: NodeJS.Signals | null): void {
+    // A partial stderr line cannot survive a respawn: drop it so a truncated
+    // notice is never parsed against the NEXT incarnation's pipe.
+    this.stderrBuf = "";
+    this.stdoutBuf = "";
     // Daemon app-action `/new`: child exits with a private code, supervisor
     // restarts it, and the next spawn omits --continue once to create a fresh
     // session. Later restarts go back to --continue.

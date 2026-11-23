@@ -19,12 +19,14 @@
  * the transcript is a terminal, so prose stays readable but code is obviously
  * code.
  */
-import { memo, type ReactNode } from "react";
+import { memo, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 import { Icon } from "../core/icons";
 import { isSafeHref } from "@/lib/remote-pi/markdown-links";
+import { historyProbeCount, historyProbeEnabled, registerHistoryProbeSource } from "@/lib/remote-pi/history-probe";
+import { markdownRenderCache, type MarkdownCacheKey } from "./markdown-render-cache.ts";
 
 import { compose } from "../primitives/recipes";
 import css from "./markdown.module.css";
@@ -224,22 +226,37 @@ const COMPONENTS: Components = {
   },
 };
 
-/**
- * Renders one agent reply. `memo` matters here: a streaming turn re-renders on
- * every delta, and the parsed tree only changes when `text` does.
- */
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
+/** Count actual parser runs in opted-in isolated artifacts. */
+function countParse() { return () => { historyProbeCount("markdownParse"); }; }
+const REMARK_PLUGINS = historyProbeEnabled() ? [remarkGfm, countParse] : [remarkGfm];
+registerHistoryProbeSource("markdown", () => ({ entries: markdownRenderCache.entriesCount, contentBytes: markdownRenderCache.bytes }));
+
+/** Viewport measurement and theme can change the outer history cache key
+ * without changing the parser's input. Keep a mounted parser keyed by the
+ * text alone so those updates don't rerun the synchronous GFM pipeline. */
+const MarkdownContent = memo(function MarkdownContent({ text }: { text: string }) {
   return (
-    <div className={css.root}>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={COMPONENTS}
-        /* Raw HTML is NOT enabled: `skipHtml` would drop it silently, so we
-           leave it to react-markdown's default of rendering it as text — the
-           user can SEE the markup the model emitted instead of it vanishing. */
-      >
-        {text}
-      </ReactMarkdown>
-    </div>
+    <ReactMarkdown remarkPlugins={REMARK_PLUGINS} components={COMPONENTS}>
+      {text}
+    </ReactMarkdown>
   );
+});
+
+/** Only memoize/cache element descriptions here, not a deep parsed tree.
+ * ReactMarkdown still parses on an actual remount (or when text changes). */
+export const Markdown = memo(function Markdown({
+  text,
+  cacheIdentity,
+}: {
+  text: string;
+  cacheIdentity?: { theme: string; width: number };
+}) {
+  historyProbeCount("markdownMount");
+  const element = <div className={css.root}><MarkdownContent text={text} /></div>;
+  if (cacheIdentity === undefined) return element;
+  const key: MarkdownCacheKey = { text, theme: cacheIdentity.theme, width: cacheIdentity.width };
+  const cached = markdownRenderCache.get(key) as ReactElement | null;
+  if (cached !== null) return cached;
+  markdownRenderCache.set(key, element);
+  return element;
 });

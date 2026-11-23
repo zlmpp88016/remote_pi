@@ -1,6 +1,12 @@
 import 'package:mobile/config/dependencies.dart';
 import 'package:mobile/data/mesh/mesh_sync_service.dart';
+import 'package:mobile/data/history/history_body_loader.dart';
 import 'package:mobile/data/preferences/preferences.dart';
+import 'package:mobile/domain/contracts/history_repository.dart';
+import 'package:mobile/ui/history/history_list_page.dart';
+import 'package:mobile/ui/history/history_viewer_page.dart';
+import 'package:mobile/ui/history/viewmodels/history_list_viewmodel.dart';
+import 'package:mobile/ui/history/viewmodels/history_viewer_viewmodel.dart';
 import 'package:mobile/data/transport/connection_manager.dart';
 import 'package:mobile/pairing/owner_identity_bridge.dart';
 import 'package:mobile/pairing/storage.dart';
@@ -416,6 +422,118 @@ GoRouter buildRouter(
             child: WorkspaceListPage(
               epk: epk,
               title: 'Workspaces',
+              device: device,
+              online: online,
+            ),
+          );
+        },
+      ),
+
+      // Plan 86 P4 — registered-workspace HISTORY, opened synchronously.
+      // Nothing here awaits `workspace_start` or spawns a Pi: the screen paints
+      // a skeleton and asks the host for `history_list`. Tapping a session
+      // opens the read-only viewer; only its explicit "继续对话" can switch.
+      GoRoute(
+        path: '/history',
+        builder: (ctx, st) {
+          final extra = st.extra;
+          var epk = '';
+          var daemonId = '';
+          String? cwd;
+          String? roomId;
+          String? device;
+          var title = 'Workspaces';
+          var online = false;
+          if (extra is Map) {
+            final e = extra['epk'];
+            if (e is String) epk = e;
+            final d = extra['daemonId'];
+            if (d is String) daemonId = d;
+            final c = extra['cwd'];
+            if (c is String && c.isNotEmpty) cwd = c;
+            final r = extra['roomId'];
+            if (r is String && r.isNotEmpty) roomId = r;
+            final t = extra['title'];
+            if (t is String && t.isNotEmpty) title = t;
+            final dv = extra['device'];
+            if (dv is String && dv.isNotEmpty) device = dv;
+            online = extra['online'] == true;
+          }
+          return ChangeNotifierProvider(
+            create: (_) => HistoryListViewModel(
+              injector.get<HistoryRepository>(),
+              epk: epk,
+              daemonId: daemonId,
+              cwd: cwd,
+              roomId: roomId,
+              title: title,
+            ),
+            child: HistoryListPage(
+              epk: epk,
+              daemonId: daemonId,
+              cwd: cwd,
+              roomId: roomId,
+              title: title,
+              device: device,
+              online: online,
+            ),
+          );
+        },
+      ),
+
+      // Plan 86 P4 — the read-only viewer. It has no composer; the only
+      // state-changing affordance is the explicit continue, which is confirmed
+      // in the page and then performs at most one `session_switch`.
+      GoRoute(
+        path: '/history/session',
+        builder: (ctx, st) {
+          final extra = st.extra;
+          var epk = '';
+          var daemonId = '';
+          var sessionId = '';
+          String? cwd;
+          String? roomId;
+          String? device;
+          var title = 'History';
+          var online = false;
+          if (extra is Map) {
+            final e = extra['epk'];
+            if (e is String) epk = e;
+            final d = extra['daemonId'];
+            if (d is String) daemonId = d;
+            final s = extra['sessionId'];
+            if (s is String) sessionId = s;
+            final c = extra['cwd'];
+            if (c is String && c.isNotEmpty) cwd = c;
+            final r = extra['roomId'];
+            if (r is String && r.isNotEmpty) roomId = r;
+            final t = extra['title'];
+            if (t is String && t.isNotEmpty) title = t;
+            final dv = extra['device'];
+            if (dv is String && dv.isNotEmpty) device = dv;
+            online = extra['online'] == true;
+          }
+          final repo = injector.get<HistoryRepository>();
+          return ChangeNotifierProvider(
+            create: (_) => HistoryViewerViewModel(
+              repo,
+              HistoryBodyLoader(repo),
+              injector.get<ConnectionManager>(),
+              injector.get<Preferences>(),
+              epk: epk,
+              daemonId: daemonId,
+              sessionId: sessionId,
+              cwd: cwd,
+              roomId: roomId,
+              title: title,
+            ),
+            child: HistoryViewerPage(
+              epk: epk,
+              daemonId: daemonId,
+              sessionId: sessionId,
+              cwd: cwd,
+              roomId: roomId,
+              title: title,
               device: device,
               online: online,
             ),

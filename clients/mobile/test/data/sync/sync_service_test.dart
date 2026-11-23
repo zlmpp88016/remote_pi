@@ -14,6 +14,7 @@ import 'package:mobile/data/transport/connection_manager.dart';
 import 'package:mobile/domain/session_state.dart';
 import 'package:mobile/pairing/storage.dart';
 import 'package:mobile/protocol/protocol.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 
@@ -48,14 +49,7 @@ int _counter = 0;
 
 late Directory _dir;
 
-/// Waits until [condition] holds, or fails the test after [timeoutMs].
-///
-/// The fixed-sleep `_settle()` this replaces was the suite's only source of
-/// flakiness: 30 ms is plenty when the machine is idle and too short when the
-/// full suite runs in parallel, so `sync_service_test` failed only in the
-/// combined run and always passed in isolation. Polling makes the wait track
-/// the actual work instead of the wall clock — and it still returns in a few
-/// milliseconds on an idle machine.
+/// Waits for observable state; the timeout only bounds a failed test.
 Future<void> _waitFor(
   bool Function() condition, {
   String? reason,
@@ -70,8 +64,18 @@ Future<void> _waitFor(
   }
 }
 
-/// Gives already-scheduled microtasks and timers a chance to run, without
-/// assuming a specific duration.
+/// Controls timers while allowing real Hive I/O and microtasks to complete.
+/// Only the supplied action and its callbacks use the controlled timers.
+Future<T> _withFakeTimers<T>(FakeAsync timers, Future<T> Function() action) =>
+    runZoned(
+      action,
+      zoneSpecification: ZoneSpecification(
+        createTimer: (self, parent, zone, duration, callback) =>
+            timers.run((_) => Timer(duration, zone.bindCallback(callback))),
+      ),
+    );
+
+/// Allows background work to progress; use [_waitFor] for state assertions.
 Future<void> _settle() =>
     Future<void>.delayed(const Duration(milliseconds: 30));
 
@@ -666,6 +670,117 @@ void main() {
     },
   );
 
+  test(
+    'P5 history batches, prepend, duplicate, mutation, reorder and reload',
+    () async {
+      final s = await setup();
+      final boxes = LocalBoxes();
+      final box = boxes.openMsgsBox(s.epk, 'main');
+      final snapshots = <List<MessageRecord>>[];
+      final sub = SessionReadRepository(
+        boxes,
+      ).watchMessages(s.epk, 'main').listen(snapshots.add);
+      var writes = 0;
+      final watch = box.watch().listen((_) => writes++);
+      await _settle();
+      SessionHistory history(String id, List<SessionHistoryEvent> events) =>
+          SessionHistory(
+            inReplyTo: id,
+            sessionStartedAt: 0,
+            events: events,
+            eos: true,
+            hasOlder: true,
+            olderCursor: 'cursor',
+          );
+      final head = [
+        for (var i = 0; i < 100; i++)
+          UserInputEvt(ts: i + 100, id: 'u$i', text: 'text$i'),
+      ];
+      // Complete online activation's debounced initial sync before the older
+      // request, and correlate the response to that actual outbound request.
+      await _waitFor(
+        () => s.ch.sent.whereType<SessionSync>().isNotEmpty,
+        reason: 'initial sync request not sent',
+      );
+      final headRequest = s.ch.sent.whereType<SessionSync>().last;
+      s.ch.push(history(headRequest.id, head));
+      await _waitFor(
+        () => snapshots.last.length == 100,
+        reason: 'head snapshot missing',
+      );
+      expect(snapshots.length, 2);
+      expect(writes, 100);
+      final originals = {for (final k in box.keys) k: box.get(k)};
+      final requestsBeforeOlder = s.ch.sent.whereType<SessionSync>().length;
+      s.sync.requestOlderPage();
+      await _waitFor(
+        () => s.ch.sent.whereType<SessionSync>().length > requestsBeforeOlder,
+        reason: 'older request not sent',
+      );
+      final request = s.ch.sent.whereType<SessionSync>().last;
+      expect(request.before, 'cursor');
+      s.ch.push(
+        history(request.id, const [
+          UserInputEvt(ts: 1, id: 'older', text: 'old'),
+          UserInputEvt(ts: 100, id: 'u0', text: 'text0'),
+        ]),
+      );
+      await _waitFor(
+        () => snapshots.last.length == 101,
+        reason: 'older snapshot missing',
+      );
+      expect(writes, 101);
+      expect(snapshots.length, 3);
+      expect(snapshots.last.first.id, 'older');
+      expect(snapshots.last.first.seq, -1);
+      for (final entry in originals.entries) {
+        expect(box.get(entry.key), entry.value);
+      }
+      final all = <SessionHistoryEvent>[
+        const UserInputEvt(ts: 1, id: 'older', text: 'old'),
+        ...head,
+      ];
+      s.ch.push(history('repeat', all));
+      await _settle();
+      expect(writes, 101);
+      expect(snapshots.length, 3);
+      // Rebuild index through an actual writer rebind, then update a row whose
+      // signed order differs from its physical key.
+      await s.sync.activate('other_p5', 'main');
+      await s.sync.activate(s.epk, 'main');
+      final beforeEcho = writes;
+      s.ch.push(UserInput(id: 'older', text: 'live update'));
+      await _waitFor(
+        () => writes >= beforeEcho + 1,
+        reason: 'echo write missing',
+      );
+      expect(snapshots.last.first.text, 'old');
+      expect(snapshots.last.first.seq, -1);
+      expect(box.length, 101);
+      final beforeMutation = writes;
+      final changed = <SessionHistoryEvent>[
+        const UserInputEvt(ts: 1, id: 'older', text: 'same-length mutation'),
+        ...head,
+      ];
+      s.ch.push(history('change', changed));
+      await _waitFor(() => snapshots.last.first.text == 'same-length mutation');
+      expect(writes, beforeMutation + 1);
+      final beforeRemove = snapshots.length;
+      s.ch.push(history('remove-reorder', [head[1], head[0]]));
+      await _waitFor(() => snapshots.last.length == 2);
+      expect(snapshots.length, beforeRemove + 1);
+      expect(snapshots.last.map((r) => r.id), ['u1', 'u0']);
+      final beforeRepeat = writes;
+      s.ch.push(history('repeat-reorder', [head[1], head[0]]));
+      await _settle();
+      expect(writes, beforeRepeat);
+      await watch.cancel();
+      await sub.cancel();
+      s.conn.dispose();
+      s.sync.dispose();
+    },
+  );
+
   test('re-applying an IDENTICAL SessionHistory is idempotent — no box churn, '
       'so the relay re-sending history on every reconnect no longer tears the '
       'list down and rebuilds it (plan/32 flicker fix)', () async {
@@ -856,11 +971,13 @@ void main() {
       await _settle();
       expect(messages(s.epk), hasLength(1));
 
-      s.ch.push(SessionSwitchOk(
-        inReplyTo: 'x',
-        sessionId: 'newsession',
-        sessionStartedAt: 0,
-      ));
+      s.ch.push(
+        SessionSwitchOk(
+          inReplyTo: 'x',
+          sessionId: 'newsession',
+          sessionStartedAt: 0,
+        ),
+      );
       await _settle();
 
       expect(messages(s.epk), isEmpty);
@@ -933,11 +1050,9 @@ void main() {
       await _settle();
       expect(s.sync.activeSessionId, 'A', reason: 'first sight');
 
-      s.ch.push(SessionSwitchOk(
-        inReplyTo: 'sw',
-        sessionId: 'B',
-        sessionStartedAt: 0,
-      ));
+      s.ch.push(
+        SessionSwitchOk(inReplyTo: 'sw', sessionId: 'B', sessionStartedAt: 0),
+      );
       await _settle();
       expect(s.sync.activeSessionId, 'B', reason: 'an ack is authoritative');
 
@@ -981,25 +1096,23 @@ void main() {
     () async {
       // What the previous run left behind: session A's rows, labeled A.
       const epk = 'epk_restart_label';
-      await LocalBoxes().msgsBox(epk, 'main').then(
-        (box) => box.put(
-          0,
-          MessageRecord(
-            id: 'u1',
-            seq: 0,
-            role: MsgRole.user,
-            text: 'from session A',
-            ts: DateTime.fromMillisecondsSinceEpoch(1),
-          ).toJson(),
-        ),
-      );
+      await LocalBoxes()
+          .msgsBox(epk, 'main')
+          .then(
+            (box) => box.put(
+              0,
+              MessageRecord(
+                id: 'u1',
+                seq: 0,
+                role: MsgRole.user,
+                text: 'from session A',
+                ts: DateTime.fromMillisecondsSinceEpoch(1),
+              ).toJson(),
+            ),
+          );
       await LocalBoxes().sessionsIndexBox().put(
         '$epk:main',
-        SessionIndexRecord(
-          epk: epk,
-          roomId: 'main',
-          sessionId: 'A',
-        ).toJson(),
+        SessionIndexRecord(epk: epk, roomId: 'main', sessionId: 'A').toJson(),
       );
 
       // A fresh writer over the same durable boxes = a restart.
@@ -1044,35 +1157,32 @@ void main() {
     },
   );
 
-  test(
-    'an answered session_sync stops the retries',
-    () async {
-      final s = await setup();
-      // The sync is armed by a 200 ms debounce; wait for it to actually leave.
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-      // Answer whatever id is outstanding, the way the Pi does.
-      final sync = s.ch.sent.whereType<SessionSync>().last;
-      s.ch.push(
-        SessionHistory(
-          inReplyTo: sync.id,
-          sessionStartedAt: 0,
-          events: const [],
-          eos: true,
-          truncated: false,
-        ),
-      );
-      await _settle();
-      final settled = s.ch.sent.whereType<SessionSync>().length;
-      await Future<void>.delayed(const Duration(seconds: 5));
-      expect(
-        s.ch.sent.whereType<SessionSync>().length,
-        settled,
-        reason: 'a transcript arrived; do not keep polling',
-      );
-      s.conn.dispose();
-      s.sync.dispose();
-    },
-  );
+  test('an answered session_sync stops the retries', () async {
+    final s = await setup();
+    // The sync is armed by a 200 ms debounce; wait for it to actually leave.
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    // Answer whatever id is outstanding, the way the Pi does.
+    final sync = s.ch.sent.whereType<SessionSync>().last;
+    s.ch.push(
+      SessionHistory(
+        inReplyTo: sync.id,
+        sessionStartedAt: 0,
+        events: const [],
+        eos: true,
+        truncated: false,
+      ),
+    );
+    await _settle();
+    final settled = s.ch.sent.whereType<SessionSync>().length;
+    await Future<void>.delayed(const Duration(seconds: 5));
+    expect(
+      s.ch.sent.whereType<SessionSync>().length,
+      settled,
+      reason: 'a transcript arrived; do not keep polling',
+    );
+    s.conn.dispose();
+    s.sync.dispose();
+  });
 
   test(
     'a give-up while waiting for an ANSWER recovers when the daemon announces it is ready',
@@ -1094,6 +1204,12 @@ void main() {
         () => !s.sync.isLoadingTranscript,
         reason: 'the deadline must release the loading state',
         timeoutMs: 8_000,
+      );
+      // Loading is released synchronously; the notice uses the serialized
+      // writer. Wait for that separate persistence step before asserting it.
+      await _waitFor(
+        () => messages(epk).any((m) => m.id == 'sync_deadline_notice'),
+        reason: 'the give-up notice must persist through the writer queue',
       );
       expect(
         messages(epk).any((m) => m.id == 'sync_deadline_notice'),
@@ -1144,13 +1260,15 @@ void main() {
     () async {
       final s = await setup();
       s.ch.push(UserInput(id: 'u1', text: 'hi'));
-      await _settle();
+      await _waitFor(
+        () => messages(s.epk).any((m) => m.id == 'u1'),
+        reason: 'the echoed row must be persisted before clearing it',
+      );
       expect(messages(s.epk), hasLength(1));
       expect(s.sync.isWorking, isTrue);
       expect(s.sync.streaming, isNotNull);
 
       await s.sync.clearActiveSession();
-      await _settle();
       expect(messages(s.epk), isEmpty);
       expect(index(s.epk), isNull);
       expect(s.sync.isWorking, isFalse);
@@ -1210,16 +1328,23 @@ void main() {
       '(a) pending bubble is removed silently when no echo arrives',
       () async {
         final s = await setup(pendingSendTimeout: short);
-        await s.sync.sendMessage('hello');
-        await _settle();
+        addTearDown(s.conn.dispose);
+        addTearDown(s.sync.dispose);
+        final timers = FakeAsync();
+        await _withFakeTimers(timers, () => s.sync.sendMessage('hello'));
         expect(messages(s.epk), hasLength(1), reason: 'optimistic pending row');
         expect(messages(s.epk).first.pending, isTrue);
         expect(s.sync.isWorking, isTrue);
         expect(s.sync.streaming, isNotNull, reason: 'thinking cursor seeded');
 
-        // No echo — wait past the timeout window.
-        await Future<void>.delayed(const Duration(milliseconds: 140));
-        await _settle();
+        // No echo: fire the backstop without a wall-clock scheduling race.
+        timers.elapse(short);
+        await _waitFor(
+          () =>
+              messages(s.epk).isEmpty &&
+              index(s.epk)?.status == SessionActivity.idle,
+          reason: 'the timed-out row and activity must finish persisting',
+        );
 
         expect(
           messages(s.epk),
@@ -1234,8 +1359,6 @@ void main() {
         expect(s.sync.streaming, isNull, reason: 'thinking cursor cleared');
         expect(index(s.epk)?.status, SessionActivity.idle);
         expect(s.sync.debugPendingSendTimerCount, 0);
-        s.conn.dispose();
-        s.sync.dispose();
       },
     );
 

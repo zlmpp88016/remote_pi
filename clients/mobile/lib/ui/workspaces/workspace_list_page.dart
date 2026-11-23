@@ -1,3 +1,5 @@
+import 'package:mobile/domain/history/history_stage_metrics.dart';
+import 'package:mobile/ui/history/history_viewport_metrics.dart';
 import 'package:mobile/protocol/protocol.dart';
 import 'package:mobile/routing/adaptive.dart';
 import 'package:mobile/ui/core/copy.dart';
@@ -40,6 +42,12 @@ class WorkspaceListPage extends StatelessWidget {
     final colors = context.colors;
     final vm = context.watch<WorkspaceListViewModel>();
     final state = vm.state;
+    if (state is WorkspaceListReady && HistoryStageMetrics.enabled) {
+      final stage = vm.viewportStage;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (identical(vm.state, state)) HistoryViewportMetrics.report(stage);
+      });
+    }
     return Scaffold(
       backgroundColor: colors.bg,
       appBar: AppBar(
@@ -47,7 +55,10 @@ class WorkspaceListPage extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(WorkspacesCopy.listTitle, style: TextStyle(color: colors.text, fontSize: 16)),
+            Text(
+              WorkspacesCopy.listTitle,
+              style: TextStyle(color: colors.text, fontSize: 16),
+            ),
             if (device != null)
               Text(
                 device!,
@@ -87,7 +98,10 @@ class WorkspaceListPage extends StatelessWidget {
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: vm.reload,
-                  child: Text(Common.retry, style: TextStyle(color: colors.accent)),
+                  child: Text(
+                    Common.retry,
+                    style: TextStyle(color: colors.accent),
+                  ),
                 ),
               ],
             ),
@@ -106,23 +120,35 @@ class WorkspaceListPage extends StatelessWidget {
                 child: workspaces.isEmpty
                     ? Center(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: kMaxContentWidth),
+                          constraints: const BoxConstraints(
+                            maxWidth: kMaxContentWidth,
+                          ),
                           child: Padding(
                             padding: const EdgeInsets.all(32),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(LucideIcons.folderOpen, color: colors.muted, size: 48),
+                                Icon(
+                                  LucideIcons.folderOpen,
+                                  color: colors.muted,
+                                  size: 48,
+                                ),
                                 const SizedBox(height: 16),
                                 Text(
                                   WorkspacesCopy.none,
-                                  style: TextStyle(color: colors.muted2, fontSize: 14),
+                                  style: TextStyle(
+                                    color: colors.muted2,
+                                    fontSize: 14,
+                                  ),
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
                                   WorkspacesCopy.noneHint,
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(color: colors.muted, fontSize: 12),
+                                  style: TextStyle(
+                                    color: colors.muted,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),
@@ -132,8 +158,7 @@ class WorkspaceListPage extends StatelessWidget {
                     : ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                         itemCount: workspaces.length,
-                        separatorBuilder: (_, _) =>
-                            const SizedBox(height: 10),
+                        separatorBuilder: (_, _) => const SizedBox(height: 10),
                         itemBuilder: (ctx, i) {
                           final w = workspaces[i];
                           return _WorkspaceCard(
@@ -141,11 +166,10 @@ class WorkspaceListPage extends StatelessWidget {
                             lifecycle: statesByCwd[w.cwd],
                             busy: starting,
                             restarting: restartingCwd == w.cwd,
-                            restartError:
-                                restartError?.cwd == w.cwd
-                                    ? restartError!.message
-                                    : null,
-                            onOpen: () => _open(ctx, vm, w),
+                            restartError: restartError?.cwd == w.cwd
+                                ? restartError!.message
+                                : null,
+                            onOpen: () => _open(ctx, w),
                             onRemove: w.source == 'added'
                                 ? () => vm.remove(w.cwd)
                                 : null,
@@ -162,7 +186,11 @@ class WorkspaceListPage extends StatelessWidget {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () => _browse(context, epk, device, online),
-                      icon: Icon(LucideIcons.folderSearch, size: 18, color: colors.accent),
+                      icon: Icon(
+                        LucideIcons.folderSearch,
+                        size: 18,
+                        color: colors.accent,
+                      ),
                       label: Text(
                         WorkspacesCopy.browseFolders,
                         style: TextStyle(color: colors.accent, fontSize: 13),
@@ -198,23 +226,21 @@ class WorkspaceListPage extends StatelessWidget {
     );
   }
 
-  Future<void> _open(
-    BuildContext ctx,
-    WorkspaceListViewModel vm,
-    WireWorkspaceInfo w,
-  ) async {
-    final ok = await vm.start(daemonId: w.daemonId, cwd: w.cwd);
-    if (ok == null || !ctx.mounted) return;
-    // Hand off to the existing sessions screen, which lists the
-    // AgentSessions of the now-live room and is where the user actually
-    // opens a chat.
+  /// Plan 86 P4 — open the HISTORY browser immediately.
+  ///
+  /// No `workspace_start` is awaited and no Pi is spawned: the history list
+  /// asks the host (`history_list`) which answers while the workspace is
+  /// stopped/starting/running. Starting a Pi belongs to the viewer's explicit
+  /// "继续对话" confirmation, never to browsing.
+  void _open(BuildContext ctx, WireWorkspaceInfo w) {
     ctx.push(
-      '/sessions',
+      '/history',
       extra: {
         'epk': epk,
-        'roomId': ok.roomId,
-        'cwd': ok.cwd,
-        'title': w.name.isNotEmpty ? w.name : ok.cwd,
+        'daemonId': w.daemonId,
+        'cwd': w.cwd,
+        'roomId': w.roomId,
+        'title': w.name.isNotEmpty ? w.name : w.cwd,
         'device': device,
         'online': online,
       },
@@ -275,9 +301,7 @@ class _WorkspaceCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.surface,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: crashed ? colors.error : colors.border,
-        ),
+        border: Border.all(color: crashed ? colors.error : colors.border),
       ),
       padding: const EdgeInsets.all(14),
       child: Column(
@@ -331,7 +355,11 @@ class _WorkspaceCard extends StatelessWidget {
                   IconButton(
                     tooltip: WorkspacesCopy.removeFromList,
                     onPressed: onRemove,
-                    icon: Icon(LucideIcons.trash2, color: colors.muted, size: 18),
+                    icon: Icon(
+                      LucideIcons.trash2,
+                      color: colors.muted,
+                      size: 18,
+                    ),
                   )
                 else
                   Icon(LucideIcons.chevronRight, color: colors.muted, size: 18),
@@ -407,9 +435,15 @@ class _WorkspaceCard extends StatelessWidget {
                           color: colors.onAccent,
                         ),
                       )
-                    : Icon(LucideIcons.rotateCw, size: 14, color: colors.onAccent),
+                    : Icon(
+                        LucideIcons.rotateCw,
+                        size: 14,
+                        color: colors.onAccent,
+                      ),
                 label: Text(
-                  restarting ? WorkspacesCopy.restarting : WorkspacesCopy.restart,
+                  restarting
+                      ? WorkspacesCopy.restarting
+                      : WorkspacesCopy.restart,
                   style: TextStyle(
                     color: colors.onAccent,
                     fontSize: 12,
@@ -419,7 +453,10 @@ class _WorkspaceCard extends StatelessWidget {
                 style: FilledButton.styleFrom(
                   backgroundColor: colors.accent,
                   disabledBackgroundColor: colors.border,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
                   shape: const RoundedRectangleBorder(
                     borderRadius: BorderRadius.all(Radius.circular(6)),
                   ),

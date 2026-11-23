@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:mobile/domain/history/history_stage_metrics.dart';
 import 'package:mobile/data/transport/connection_manager.dart';
 import 'package:mobile/protocol/changes.dart';
 import 'package:mobile/protocol/plan.dart';
@@ -133,7 +134,9 @@ class SessionCatalog {
     return _expect<FsListOk>(
       FsList(id: uuid7(), path: path, showHidden: showHidden),
       (id, msg) {
-        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'fs_list') {
+        if (msg is ActionError &&
+            msg.inReplyTo == id &&
+            msg.rawAction == 'fs_list') {
           throw WorkspaceControlFailure(msg.error);
         }
         return msg is FsListOk && msg.inReplyTo == id;
@@ -151,7 +154,9 @@ class SessionCatalog {
     return _expect<FsReadOk>(
       FsReadRequest(id: uuid7(), path: path, root: root),
       (id, msg) {
-        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'fs_read') {
+        if (msg is ActionError &&
+            msg.inReplyTo == id &&
+            msg.rawAction == 'fs_read') {
           final refusal = FsRefusal.fromWire(msg.error);
           if (refusal != null) throw FsReadFailure(refusal);
           throw WorkspaceControlFailure(msg.error);
@@ -163,15 +168,17 @@ class SessionCatalog {
 
   /// Plan/84 — list every scheduled task on the host.
   Future<ScheduleCatalog> listSchedules() async {
-    final ok = await _expect<ScheduleListOk>(
-      ScheduleListRequest(id: uuid7()),
-      (id, msg) {
-        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'schedule_list') {
-          throw WorkspaceControlFailure(msg.error);
-        }
-        return msg is ScheduleListOk && msg.inReplyTo == id;
-      },
-    );
+    final ok = await _expect<ScheduleListOk>(ScheduleListRequest(id: uuid7()), (
+      id,
+      msg,
+    ) {
+      if (msg is ActionError &&
+          msg.inReplyTo == id &&
+          msg.rawAction == 'schedule_list') {
+        throw WorkspaceControlFailure(msg.error);
+      }
+      return msg is ScheduleListOk && msg.inReplyTo == id;
+    });
     return ScheduleCatalog.fromJson({
       'tasks': ok.tasks,
       'workspace_names': ok.workspaceNames,
@@ -207,7 +214,9 @@ class SessionCatalog {
         freshSession: freshSession,
       ),
       (id, msg) {
-        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'schedule_add') {
+        if (msg is ActionError &&
+            msg.inReplyTo == id &&
+            msg.rawAction == 'schedule_add') {
           throw WorkspaceControlFailure(msg.error);
         }
         return msg is ScheduleAddOk && msg.inReplyTo == id;
@@ -218,15 +227,17 @@ class SessionCatalog {
 
   /// Plan/84 — delete one scheduled task.
   Future<void> removeSchedule(String jobId) {
-    return _expect<ScheduleAck>(
-      ScheduleRemove(id: uuid7(), jobId: jobId),
-      (id, msg) {
-        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'schedule_remove') {
-          throw WorkspaceControlFailure(msg.error);
-        }
-        return msg is ScheduleAck && msg.inReplyTo == id;
-      },
-    );
+    return _expect<ScheduleAck>(ScheduleRemove(id: uuid7(), jobId: jobId), (
+      id,
+      msg,
+    ) {
+      if (msg is ActionError &&
+          msg.inReplyTo == id &&
+          msg.rawAction == 'schedule_remove') {
+        throw WorkspaceControlFailure(msg.error);
+      }
+      return msg is ScheduleAck && msg.inReplyTo == id;
+    });
   }
 
   /// Plan/84 — enable or disable one scheduled task.
@@ -246,17 +257,17 @@ class SessionCatalog {
 
   /// Plan/84 — fire one scheduled task immediately.
   Future<void> runScheduleNow(String jobId) {
-    return _expect<ScheduleAck>(
-      ScheduleRunNow(id: uuid7(), jobId: jobId),
-      (id, msg) {
-        if (msg is ActionError &&
-            msg.inReplyTo == id &&
-            msg.rawAction == 'schedule_run_now') {
-          throw WorkspaceControlFailure(msg.error);
-        }
-        return msg is ScheduleAck && msg.inReplyTo == id;
-      },
-    );
+    return _expect<ScheduleAck>(ScheduleRunNow(id: uuid7(), jobId: jobId), (
+      id,
+      msg,
+    ) {
+      if (msg is ActionError &&
+          msg.inReplyTo == id &&
+          msg.rawAction == 'schedule_run_now') {
+        throw WorkspaceControlFailure(msg.error);
+      }
+      return msg is ScheduleAck && msg.inReplyTo == id;
+    });
   }
 
   /// Plan/84 — read the host's models.json. Keys never ride this reply.
@@ -264,7 +275,9 @@ class SessionCatalog {
     final ok = await _expect<ModelsDescribeOk>(
       ModelsDescribeRequest(id: uuid7()),
       (id, msg) {
-        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'models_describe') {
+        if (msg is ActionError &&
+            msg.inReplyTo == id &&
+            msg.rawAction == 'models_describe') {
           final reason = ModelsErrorReason.fromWire(msg.error);
           throw ModelsFailure(reason ?? ModelsErrorReason.invalid);
         }
@@ -289,7 +302,9 @@ class SessionCatalog {
         revision: revision,
       ),
       (id, msg) {
-        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'models_mutate') {
+        if (msg is ActionError &&
+            msg.inReplyTo == id &&
+            msg.rawAction == 'models_mutate') {
           final reason = ModelsErrorReason.fromWire(msg.error);
           throw ModelsFailure(reason ?? ModelsErrorReason.invalid);
         }
@@ -304,7 +319,9 @@ class SessionCatalog {
     final ok = await _expect<SettingsDescribeOk>(
       SettingsDescribeRequest(id: uuid7()),
       (id, msg) {
-        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'settings_describe') {
+        if (msg is ActionError &&
+            msg.inReplyTo == id &&
+            msg.rawAction == 'settings_describe') {
           final reason = SettingsErrorReason.fromWire(msg.error);
           throw SettingsFailure(reason ?? SettingsErrorReason.invalid);
         }
@@ -331,7 +348,9 @@ class SessionCatalog {
         revision: revision,
       ),
       (id, msg) {
-        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'settings_mutate') {
+        if (msg is ActionError &&
+            msg.inReplyTo == id &&
+            msg.rawAction == 'settings_mutate') {
           final reason = SettingsErrorReason.fromWire(msg.error);
           throw SettingsFailure(reason ?? SettingsErrorReason.invalid);
         }
@@ -389,7 +408,9 @@ class SessionCatalog {
   /// would only disturb the chat's child room for no benefit.
   Future<void> _expectAction(ClientMessage request, String action) {
     return _expect<ActionOk>(request, (id, msg) {
-      if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == action) {
+      if (msg is ActionError &&
+          msg.inReplyTo == id &&
+          msg.rawAction == action) {
         throw WorkspaceControlFailure(msg.error);
       }
       return msg is ActionOk && msg.inReplyTo == id && msg.rawAction == action;
@@ -404,15 +425,12 @@ class SessionCatalog {
 
   /// Ask the machine for its runtime + installed skills and packages.
   Future<PiSurfaceOk> piSurface() {
-    return _expect<PiSurfaceOk>(
-      PiSurface(id: uuid7()),
-      (id, msg) {
-        if (msg is ActionError && msg.inReplyTo == id) {
-          throw WorkspaceControlFailure(msg.error);
-        }
-        return msg is PiSurfaceOk && msg.inReplyTo == id;
-      },
-    );
+    return _expect<PiSurfaceOk>(PiSurface(id: uuid7()), (id, msg) {
+      if (msg is ActionError && msg.inReplyTo == id) {
+        throw WorkspaceControlFailure(msg.error);
+      }
+      return msg is PiSurfaceOk && msg.inReplyTo == id;
+    });
   }
 
   /// Force a skill; the output flows through the normal chat channels.
@@ -420,7 +438,9 @@ class SessionCatalog {
     return _expect<SkillInvokeOk>(
       SkillInvoke(id: uuid7(), name: name, args: args),
       (id, msg) {
-        if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == 'skill_invoke') {
+        if (msg is ActionError &&
+            msg.inReplyTo == id &&
+            msg.rawAction == 'skill_invoke') {
           throw WorkspaceControlFailure(msg.error);
         }
         return msg is SkillInvokeOk && msg.inReplyTo == id;
@@ -477,7 +497,9 @@ class SessionCatalog {
 
   Future<PackageOpOk> _packageOp(ClientMessage request, String action) {
     return _expect<PackageOpOk>(request, (id, msg) {
-      if (msg is ActionError && msg.inReplyTo == id && msg.rawAction == action) {
+      if (msg is ActionError &&
+          msg.inReplyTo == id &&
+          msg.rawAction == action) {
         throw WorkspaceControlFailure(msg.error);
       }
       return msg is PackageOpOk && msg.inReplyTo == id;
@@ -489,6 +511,8 @@ class SessionCatalog {
     bool Function(String id, ServerMessage msg) match, {
     Duration? timeout,
   }) async {
+    final stage = request is WorkspaceList ? HistoryStageMetrics.current : null;
+    stage?.mark('transport_request_us');
     final ch = _conn.channel;
     if (ch == null) {
       throw const WorkspaceControlFailure('offline');
@@ -499,14 +523,19 @@ class SessionCatalog {
     sub = ch.serverMessages.listen((msg) {
       try {
         if (!match(id, msg)) return;
+        stage?.mark('typed_reply_us');
         if (!done.isCompleted) done.complete(msg as T);
       } catch (e, st) {
         if (!done.isCompleted) done.completeError(e, st);
       }
     });
     try {
+      stage?.mark('send_begin_us');
       await ch.send(request);
-      return await done.future.timeout(timeout ?? _timeout);
+      stage?.mark('send_complete_us');
+      final reply = await done.future.timeout(timeout ?? _timeout);
+      stage?.mark('map_begin_us');
+      return reply;
     } finally {
       await sub.cancel();
     }

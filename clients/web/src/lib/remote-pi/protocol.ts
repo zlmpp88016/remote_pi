@@ -1178,7 +1178,7 @@ export function isSessionListOk(value: unknown): value is SessionListOk {
 /** A transcript event is only the fields the renderer reads, so an unknown
  *  extra key is tolerated but a wrong/missing type is not. `compaction` is
  *  accepted because the host emits it in a replay. */
-function isWireSessionEvent(value: unknown): value is WireSessionEvent {
+export function isWireSessionEvent(value: unknown): value is WireSessionEvent {
   if (!isJsonObject(value)) return false;
   if (typeof value.ts !== "number" || !Number.isFinite(value.ts)) return false;
   switch (value.type) {

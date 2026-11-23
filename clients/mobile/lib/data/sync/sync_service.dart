@@ -64,8 +64,10 @@ class SyncService extends Service {
   // In-memory dedupe + ordering for the active session's msgs box. Rebuilt on
   // [activate]. Key = `<role>:<id>` so a user msg and the assistant reply that
   // shares its id don't collide.
-  final Map<String, int> _idToSeq = {};
+  final Map<String, int> _idToPhysicalKey = {};
   int _nextSeq = 0;
+  int _nextPhysicalKey = 0;
+  int _dataGeneration = 0;
   bool _indexLoaded = false;
 
   // Serialise box mutations so concurrent async writes stay ordered.
@@ -351,8 +353,7 @@ class SyncService extends Service {
   Stream<OlderPageState> get olderPageStream => _olderStateController.stream;
 
   /// Plan 01 — session tree snapshots for the picker sheet.
-  Stream<TreeSnapshot> get treeSnapshotStream =>
-      _treeSnapshotController.stream;
+  Stream<TreeSnapshot> get treeSnapshotStream => _treeSnapshotController.stream;
 
   /// Plan 01 — tree/branching errors, as the raw wire error code.
   Stream<String> get treeErrorStream => _treeErrorController.stream;
@@ -406,6 +407,7 @@ class SyncService extends Service {
     // Plan 01 — a new session has its own transcript, so a cursor issued for
     // the previous one must never be replayed against it.
     _resetPaging();
+    _dataGeneration++;
     _activeEpk = epk;
     _activeRoomId = room;
     // Seed the room-return edge from THIS binding's current liveness, so the
@@ -1058,6 +1060,7 @@ class SyncService extends Service {
   /// Everything IN MEMORY that belonged to the session being left. The durable
   /// rows are handled by [_dropActiveTranscript].
   void _leaveSessionState() {
+    _dataGeneration++;
     // Streaming/working state belonged to the session we left; an in-flight
     // send's timer would attribute its reply to the wrong session.
     _cancelAllSendTimers();
@@ -1102,12 +1105,15 @@ class SyncService extends Service {
         return;
       }
       final box = await _boxes.msgsBox(epk, room);
-      await box.clear();
+      await _boxes.messageBatchWrite(epk, room, () async {
+        await box.clear();
+      }, isCurrent: () => _activeEpk == epk && _activeRoomId == room);
       // Any deferral for THIS box is now satisfied — the rows it asked about are
       // gone — so a later [activate] must not clear it a second time.
       _pendingSessionResets.remove(key);
-      _idToSeq.clear();
+      _idToPhysicalKey.clear();
       _nextSeq = 0;
+      _nextPhysicalKey = 0;
       _indexLoaded = true;
       final idx = _boxes.sessionsIndexBox();
       await idx.delete(key);
@@ -1170,6 +1176,7 @@ class SyncService extends Service {
 
   /// Plan/28 — `session_new` acked: wipe the active session's rows + index.
   Future<void> clearActiveSession() async {
+    _dataGeneration++;
     final epk = _activeEpk;
     if (epk == null) return;
     final room = _activeRoomId;
@@ -1197,11 +1204,14 @@ class SyncService extends Service {
     await _enqueue(() async {
       if (_activeEpk != epk || _activeRoomId != room) return;
       final box = await _boxes.msgsBox(epk, room);
-      await box.clear();
+      await _boxes.messageBatchWrite(epk, room, () async {
+        await box.clear();
+      }, isCurrent: () => _activeEpk == epk && _activeRoomId == room);
       // The box is empty, so a cleanup deferred for it (F2) is satisfied too.
       _pendingSessionResets.remove(LocalBoxes.sessionKey(epk, room));
-      _idToSeq.clear();
+      _idToPhysicalKey.clear();
       _nextSeq = 0;
+      _nextPhysicalKey = 0;
       _indexLoaded = true;
       final idx = _boxes.sessionsIndexBox();
       await idx.delete(LocalBoxes.sessionKey(epk, room));
@@ -1627,6 +1637,16 @@ class SyncService extends Service {
       // above. Neither frame is chat history, so neither is persisted here.
       case ChangesSnapshotOk():
       case ChangesSnapshotUnavailable():
+      // Plan 86 P4 — the read-only history family and its legacy fallback are
+      // consumed by the history repository's own request future. They MUST NOT
+      // reach the live transcript writer: browsing history never hydrates the
+      // `msgs_<epk>__<roomId>` box, never changes the frozen box name/pair URI
+      // and never marks a session as live.
+      case SessionReadOk():
+      case HistoryListOk():
+      case HistoryReadOk():
+      case HistoryBodyOk():
+      case HistoryError():
         break;
     }
   }
@@ -1665,10 +1685,12 @@ class SyncService extends Service {
     // attempt was issued for, and a switch that lands while the write is queued
     // moves the label forward together with its own queued wipe of these rows.
     final sessionId = _sessionIdByBox[LocalBoxes.sessionKey(epk, room)];
+    final generation = _dataGeneration;
     final rows = _convertHistory(h.events);
     final historyIds = {for (final r in rows) _key(r.role, r.id)};
     await _enqueue(() async {
       final box = await _boxes.msgsBox(epk, room);
+      if (_dataGeneration != generation) return;
       // Preserve local pending user rows the Pi hasn't echoed yet.
       final preserved = <MessageRecord>[];
       for (final v in box.values) {
@@ -1679,12 +1701,8 @@ class SyncService extends Service {
           preserved.add(r);
         }
       }
-      // Desired ordered state: history (seq = index) then preserved pending.
-      final desired = <MessageRecord>[
-        for (var i = 0; i < rows.length; i++) rows[i].copyWith(seq: i),
-        for (var j = 0; j < preserved.length; j++)
-          preserved[j].copyWith(seq: rows.length + j),
-      ];
+      // Desired identity order: history followed by preserved pending rows.
+      final desired = <MessageRecord>[...rows, ...preserved];
       await _reconcileRows(box, epk, room, desired);
       if (sessionId != null) await _labelBoxSession(epk, room, sessionId);
     });
@@ -1709,9 +1727,11 @@ class SyncService extends Service {
     final epk = _activeEpk;
     if (epk == null) return;
     final room = _activeRoomId;
+    final generation = _dataGeneration;
     final older = _convertHistory(h.events);
     await _enqueue(() async {
       final box = await _boxes.msgsBox(epk, room);
+      if (_dataGeneration != generation) return;
       final current = [
         for (final v in box.values) MessageRecord.fromJson(_coerce(v)),
       ]..sort((a, b) => a.seq.compareTo(b.seq));
@@ -1722,10 +1742,7 @@ class SyncService extends Service {
       for (final r in [...older, ...current]) {
         if (seen.add(_key(r.role, r.id))) merged.add(r);
       }
-      final desired = [
-        for (var i = 0; i < merged.length; i++) merged[i].copyWith(seq: i),
-      ];
-      await _reconcileRows(box, epk, room, desired);
+      await _reconcileRows(box, epk, room, merged);
     });
   }
 
@@ -1745,31 +1762,93 @@ class SyncService extends Service {
     String room,
     List<MessageRecord> desired,
   ) async {
-    for (final k in box.keys.toList()) {
-      if ((k as num).toInt() >= desired.length) {
-        await box.delete(k);
+    final generation = _dataGeneration;
+    bool current() =>
+        _dataGeneration == generation &&
+        _activeEpk == epk &&
+        _activeRoomId == room;
+    await _boxes.ensureMessageSchema(epk, room);
+    if (!current()) return;
+    final existing = <String, ({int key, MessageRecord row})>{};
+    var nextKey = 0;
+    for (final k in box.keys.cast<int>()) {
+      final row = MessageRecord.fromJson(_coerce(box.get(k)));
+      existing[_key(row.role, row.id)] = (key: k, row: row);
+      nextKey = math.max(nextKey, k + 1);
+    }
+    final seen = <String>{};
+    desired = [
+      for (final row in desired)
+        if (seen.add(_key(row.role, row.id))) row,
+    ];
+    var compatible = true;
+    int? previous;
+    for (final row in desired) {
+      final old = existing[_key(row.role, row.id)];
+      if (old == null) continue;
+      if (previous != null && old.row.seq <= previous) compatible = false;
+      previous = old.row.seq;
+    }
+    final orders = List<int>.filled(desired.length, 0);
+    if (compatible) {
+      // Retain anchors; prepend/append never rewrites existing order.
+      // Exhausted interior gaps explicitly fall back to authoritative order.
+      var start = 0;
+      int? left;
+      for (var i = 0; i <= desired.length; i++) {
+        final anchor = i == desired.length
+            ? null
+            : existing[_key(desired[i].role, desired[i].id)]?.row.seq;
+        if (i < desired.length && anchor == null) continue;
+        final count = i - start;
+        if (left != null && anchor != null && anchor - left <= count) {
+          compatible = false;
+          break;
+        }
+        final base = left != null ? left + 1 : (anchor ?? count) - count;
+        for (var j = start; j < i; j++) {
+          orders[j] = base + j - start;
+        }
+        if (i < desired.length) orders[i] = anchor!;
+        left = anchor;
+        start = i + 1;
       }
+    }
+    if (!compatible) {
+      for (var i = 0; i < orders.length; i++) {
+        orders[i] = i;
+      }
+    }
+    final physical = <String, int>{};
+    final deletes = <int>[];
+    final puts = <int, Map<String, dynamic>>{};
+    for (final k in box.keys.cast<int>()) {
+      final row = MessageRecord.fromJson(_coerce(box.get(k)));
+      if (!seen.contains(_key(row.role, row.id))) deletes.add(k);
     }
     for (var i = 0; i < desired.length; i++) {
-      final newJson = desired[i].toJson();
-      final curRaw = box.get(i);
-      // Normalise the stored value through fromJson→toJson so the compare is
-      // independent of however Hive ordered the persisted map.
-      final curNorm = curRaw == null
-          ? null
-          : jsonEncode(MessageRecord.fromJson(_coerce(curRaw)).toJson());
-      if (curNorm != jsonEncode(newJson)) {
-        await box.put(i, newJson);
+      final row = desired[i].copyWith(seq: orders[i]);
+      final id = _key(row.role, row.id);
+      final old = existing[id];
+      final key = old?.key ?? nextKey++;
+      physical[id] = key;
+      if (old == null ||
+          jsonEncode(old.row.toJson()) != jsonEncode(row.toJson())) {
+        puts[key] = row.toJson();
       }
     }
-    if (_activeEpk == epk && _activeRoomId == room) {
-      _idToSeq
+    await _boxes.messageBatchWrite(epk, room, () async {
+      // Keep delete-before-put ordering and the existing exception/generation
+      // publication fence. Hive still emits one BoxEvent per changed key.
+      if (deletes.isNotEmpty) await box.deleteAll(deletes);
+      if (puts.isNotEmpty) await box.putAll(puts);
+    }, isCurrent: current);
+    if (current()) {
+      _idToPhysicalKey
         ..clear()
-        ..addEntries([
-          for (var i = 0; i < desired.length; i++)
-            MapEntry(_key(desired[i].role, desired[i].id), i),
-        ]);
-      _nextSeq = desired.length;
+        ..addAll(physical);
+      _nextPhysicalKey = nextKey;
+      _nextSeq = orders.isEmpty ? 0 : orders.reduce(math.max) + 1;
       _indexLoaded = true;
     }
   }
@@ -1877,13 +1956,16 @@ class SyncService extends Service {
     return _enqueue(() async {
       if (_activeEpk != epk || _activeRoomId != room) return;
       final box = await _boxes.msgsBox(epk, room);
-      _idToSeq.clear();
+      await _boxes.ensureMessageSchema(epk, room);
+      _idToPhysicalKey.clear();
       _nextSeq = 0;
+      _nextPhysicalKey = 0;
       for (final k in box.keys) {
         final seq = (k as num).toInt();
         final r = MessageRecord.fromJson(_coerce(box.get(k)));
-        _idToSeq[_key(r.role, r.id)] = seq;
-        _nextSeq = math.max(_nextSeq, seq + 1);
+        _idToPhysicalKey[_key(r.role, r.id)] = seq;
+        _nextPhysicalKey = math.max(_nextPhysicalKey, seq + 1);
+        _nextSeq = math.max(_nextSeq, r.seq + 1);
         // Re-arm the no-echo backstop for any pending row this session owns, so
         // a bubble persisted across an app restart / quick session-switch is
         // reaped by its `ts` instead of spinning forever (already-stale → fires
@@ -1907,14 +1989,15 @@ class SyncService extends Service {
       if (!active) return;
       final box = await _boxes.msgsBox(epk, room);
       final mapKey = _key(role, id);
-      final existingSeq = _idToSeq[mapKey];
-      if (existingSeq != null) {
-        final existing = MessageRecord.fromJson(_coerce(box.get(existingSeq)));
-        await box.put(existingSeq, build(existingSeq, existing).toJson());
+      final physicalKey = _idToPhysicalKey[mapKey];
+      if (physicalKey != null) {
+        final existing = MessageRecord.fromJson(_coerce(box.get(physicalKey)));
+        await box.put(physicalKey, build(existing.seq, existing).toJson());
       } else {
         final seq = _nextSeq++;
-        await box.put(seq, build(seq, null).toJson());
-        _idToSeq[mapKey] = seq;
+        final physicalKey = _nextPhysicalKey++;
+        await box.put(physicalKey, build(seq, null).toJson());
+        _idToPhysicalKey[mapKey] = physicalKey;
       }
     });
   }
@@ -1927,7 +2010,7 @@ class SyncService extends Service {
       if (_activeEpk != epk || _activeRoomId != room) return;
       final box = await _boxes.msgsBox(epk, room);
       for (final role in MsgRole.values) {
-        final seq = _idToSeq.remove(_key(role, id));
+        final seq = _idToPhysicalKey.remove(_key(role, id));
         if (seq != null) await box.delete(seq);
       }
     });
@@ -1941,7 +2024,7 @@ class SyncService extends Service {
     _enqueue(() async {
       if (_activeEpk != epk || _activeRoomId != room) return;
       final box = await _boxes.msgsBox(epk, room);
-      final seq = _idToSeq[_key(MsgRole.user, id)];
+      final seq = _idToPhysicalKey[_key(MsgRole.user, id)];
       if (seq == null) return;
       final raw = box.get(seq);
       if (raw == null) return;
@@ -1981,16 +2064,16 @@ class SyncService extends Service {
       final box = await _boxes.msgsBox(epk, room);
       for (final role in MsgRole.values) {
         final key = _key(role, id);
-        final seq = _idToSeq[key];
+        final seq = _idToPhysicalKey[key];
         if (seq == null) continue;
         final raw = box.get(seq);
         if (raw == null) {
-          _idToSeq.remove(key);
+          _idToPhysicalKey.remove(key);
           continue;
         }
         final existing = MessageRecord.fromJson(_coerce(raw));
         if (!existing.pending) continue;
-        _idToSeq.remove(key);
+        _idToPhysicalKey.remove(key);
         await box.delete(seq);
       }
     });
@@ -2194,6 +2277,7 @@ class SyncService extends Service {
 
   @override
   void dispose() {
+    _dataGeneration++;
     _flushTimer?.cancel();
     _syncDebounce?.cancel();
     _pendingSyncRetry?.cancel();

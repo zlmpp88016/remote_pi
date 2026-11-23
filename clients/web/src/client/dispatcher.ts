@@ -46,6 +46,7 @@ import {
 import { sessionActionErrorText, sortSessions, switchErrorText } from "@/lib/remote-pi/sessions";
 import { hydrateTurns, type ChatEvent } from "@/lib/remote-pi/chat";
 import { PACKAGE_FAILED, MODEL_SET_FAILED, SESSION_NEW_FAILED, SKILL_FAILED, THINKING_SET_FAILED } from "./notices";
+import { ownsLegacySessionRead } from "./legacy-session-read";
 
 /** Structural twin of `ConfirmedModel` (kept local so this module has no cycle). */
 export interface ConfirmedModelLike {
@@ -87,6 +88,7 @@ export interface DispatcherPorts {
   readonly setSessionsBusy: (busy: boolean) => void;
   readonly setSessionsNotice: (notice: string | null) => void;
   readonly setSessionReadLoading: (loading: boolean) => void;
+  readonly retireSessionRead: () => void;
   readonly setSwitchLoading: (loading: boolean) => void;
   readonly setConfirmedByRoom: (
     update: (prev: Record<string, ConfirmedModelLike>) => Record<string, ConfirmedModelLike>,
@@ -137,7 +139,7 @@ export function dispatchServerMessage(
     sessionSwitchReqRef, pendingModelChoiceRef, prefetchReqRef,
     setModelBusy, setModelNotice, setModelSwitchTo,
     setSkillsBusy, setSkillsNotice,
-    setSessionsBusy, setSessionsNotice, setSessionReadLoading, setSwitchLoading,
+    setSessionsBusy, setSessionsNotice, setSessionReadLoading, retireSessionRead, setSwitchLoading,
     setConfirmedByRoom, setSessionsByRoom, setSessionCaps,
     applyCatalogue, applySkills, markRowCurrent, confirmCachedModel,
     openViewer, clearViewer, relistAfterSwitch, resyncLive, resetChatState,
@@ -264,7 +266,7 @@ export function dispatchServerMessage(
     const pending = sessionReadReqRef.current;
     if (pending === null || pending.room !== room || pending.id !== msg.in_reply_to) return;
     if (!isSessionReadOk(msg)) return;
-    sessionReadReqRef.current = null;
+    retireSessionRead();
     // READ-ONLY: this populates the viewer and never touches `chatState`, so
     // the live session and the live transcript are both left alone.
     openViewer(msg.session_id, msg.events);
@@ -329,7 +331,13 @@ export function dispatchServerMessage(
     return;
   }
 
-  if (msg.type === "action_ok" || msg.type === "action_error") {
+  const isSessionRefusal = msg.type === "action_error" && (
+    ownsLegacySessionRead(sessionReadReqRef.current, room, msg.in_reply_to) ||
+    (sessionSwitchReqRef.current?.room === room && sessionSwitchReqRef.current.id === msg.in_reply_to) ||
+    (sessionsReqRef.current?.room === room && sessionsReqRef.current.id === msg.in_reply_to) ||
+    (isActionError(msg) && sessionActionErrorText(msg.action) !== null)
+  );
+  if ((msg.type === "action_ok" || msg.type === "action_error") && !isSessionRefusal) {
     const setPending = modelSetRef.current;
     const thinkPending = thinkingReqRef.current;
     const isModelSet =
@@ -544,9 +552,7 @@ export function dispatchServerMessage(
     // by a superseded attempt. Either one keeps the frame out of the chat
     // path — it never belonged to a turn.
     const pendingSessionAction =
-      sessionReadReqRef.current !== null &&
-      sessionReadReqRef.current.room === room &&
-      sessionReadReqRef.current.id === msg.in_reply_to
+      ownsLegacySessionRead(sessionReadReqRef.current, room, msg.in_reply_to)
         ? "session_read"
         : sessionSwitchReqRef.current !== null &&
               sessionSwitchReqRef.current.room === room &&
@@ -557,13 +563,19 @@ export function dispatchServerMessage(
                 sessionsReqRef.current.id === msg.in_reply_to
             ? "session_list"
             : null;
-    const sessionAction = pendingSessionAction ?? (isActionError(msg) ? msg.action : null);
+    const explicitAction = isActionError(msg) ? msg.action : null;
+    // An explicit action identifies a stale request's class, but it cannot
+    // settle a newer request in the same class. Only the matching pending id
+    // owns viewer/loading state.
+    if (explicitAction === "session_read" && pendingSessionAction !== "session_read") return;
+    const sessionAction = pendingSessionAction ?? explicitAction;
     const sessionText =
       sessionAction === null ? null : sessionActionErrorText(sessionAction);
     if (sessionText !== null) {
       if (sessionAction === "session_read") {
-        sessionReadReqRef.current = null;
-        setSessionReadLoading(false);
+        if (pendingSessionAction === "session_read") {
+          retireSessionRead();
+        }
       } else if (sessionAction === "session_switch") {
         sessionSwitchReqRef.current = null;
       } else {

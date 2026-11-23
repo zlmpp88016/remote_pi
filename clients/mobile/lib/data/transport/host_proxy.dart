@@ -52,6 +52,13 @@ const kHostDirectTypes = <String>{
   'settings_describe',
   'settings_mutate',
   'changes_snapshot',
+  // Plan 86 P1 — host-native workspace history. These are answered by
+  // `pi-supervisord` on room `host` directly (zero Pi), exactly like
+  // `workspace_list`; wrapping them in `host_forward` would address a child
+  // room that has no handler and the reply would never come back.
+  'history_list',
+  'history_read',
+  'history_body',
 };
 
 /// Whether an inner message type is host control-plane (answered by the

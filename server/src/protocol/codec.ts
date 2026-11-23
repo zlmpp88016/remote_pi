@@ -36,6 +36,11 @@ const SERVER_TYPES = new Set<ServerMessage["type"]>([
   "package_op_ok",
   "action_ok",
   "action_error",
+  // Plan 86 P1 — host-native workspace history (zero Pi).
+  "history_list_ok",
+  "history_read_ok",
+  "history_body_ok",
+  "history_error",
 ]);
 
 export class DecodeError extends Error {

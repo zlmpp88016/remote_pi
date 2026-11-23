@@ -391,6 +391,56 @@ export const SESSIONS_FAILED = sessionActionErrorText("session_list")!;
 export const SESSION_READ_FAILED = sessionActionErrorText("session_read")!;
 /** Fixed sentence for a `session_switch` that never left the client. */
 export const SWITCH_FAILED = sessionActionErrorText("session_switch")!;
+/*
+ * Plan 86 P3 — the host-native history surface.
+ *
+ * Each wire code maps to ONE fixed sentence: the host's own text is never
+ * rendered, and a code this client does not know is reported as a generic
+ * failure rather than echoed.
+ */
+export const HISTORY_FAILED = "无法读取该工作区的历史。";
+export const HISTORY_BUILDING = "主机正在建立历史索引，正在重试…";
+export const HISTORY_SESSION_STALE = "该会话已被重写，正在重新打开。";
+export const HISTORY_SESSION_NOT_FOUND = "主机已不再列出该会话。";
+export const HISTORY_BODY_TOO_LARGE = "该字段过大，无法完整加载。";
+export const HISTORY_UNSUPPORTED = "此主机无法按该方式提供历史。";
+
+/** Fixed sentence for a typed history failure. */
+export function historyNotice(failure: {
+  code:
+    | "building"
+    | "stale"
+    | "not_modified"
+    | "unsupported"
+    | "not_found"
+    | "invalid_cursor"
+    | "body_too_large"
+    | "invalid_request"
+    | "internal"
+    | "malformed"
+    | "legacy"
+    | "timeout"
+    | "transport";
+}): string {
+  switch (failure.code) {
+    case "building":
+      return HISTORY_BUILDING;
+    case "stale":
+      return HISTORY_SESSION_STALE;
+    case "not_found":
+      return HISTORY_SESSION_NOT_FOUND;
+    case "body_too_large":
+      return HISTORY_BODY_TOO_LARGE;
+    case "unsupported":
+      return HISTORY_UNSUPPORTED;
+    case "not_modified":
+      // `not_modified` is a SUCCESS for a conditional read; it never reaches the
+      // UI as a notice. If it ever does, something mis-routed it.
+      return HISTORY_FAILED;
+    default:
+      return HISTORY_FAILED;
+  }
+}
 /** Attachment control reasons (fixed, client-authored). */
 export const ATTACH_MODEL_REQUIRED =
   "先选择模型 — 是否支持图片取决于当前模型。";

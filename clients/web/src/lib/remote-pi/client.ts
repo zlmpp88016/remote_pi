@@ -42,11 +42,17 @@
  *    a matching `in_reply_to`: a child room cannot answer a host RPC.
  */
 
+import { historyProbeMark } from "./history-probe.ts";
 import {
   createEd25519Signer,
   type Ed25519Backend,
   type Ed25519Signer,
 } from "./ed25519.ts";
+import {
+  type HistoryBodyRequestShape,
+  type HistoryListRequestShape,
+  type HistoryReadRequestShape,
+} from "./history.ts";
 import {
   ActionRejectedError,
   decodeCtChecked,
@@ -227,12 +233,43 @@ interface HandshakeFailureGate {
   release: () => void;
 }
 
+/** Plan 86 P3 — write-barrier signal emitted by a lane-aware transport. */
+export interface HistoryBarrierSignal {
+  /** Monotonic epoch; every queued write bumps it. */
+  epoch: number;
+  /** True when the write reached a definite terminal and reads may resume. */
+  cleared: boolean;
+  /** Set on `cleared` when no business answer arrived in time. */
+  uncertain?: boolean;
+}
+
+/** Priority of one host-native history read (foreground wins). */
+export type HistoryRequestPriority = "foreground" | "prefetch";
+
+/** One host-native history request body (built by `history.ts`). */
+export type HistoryWireRequest =
+  | HistoryListRequestShape
+  | HistoryReadRequestShape
+  | HistoryBodyRequestShape;
+
 export type WebSocketLike = {
   send(data: string): void;
   close(): void;
   addEventListener(type: SocketEventType, listener: (event: unknown) => void): void;
   removeEventListener(type: SocketEventType, listener: (event: unknown) => void): void;
   readonly protocol?: string;
+  /**
+   * OPTIONAL lane-aware send (SSE only).
+   *
+   * A WebSocket delivers frames in one ordered stream, so the plain `send` is
+   * correct there and this is absent. The SSE transport can POST independent
+   * host-native history reads concurrently, which is why it exposes this.
+   */
+  sendPrioritized?(data: string, priority: HistoryRequestPriority): void;
+  /** OPTIONAL write-barrier subscription (SSE only). */
+  onHistoryBarrier?(listener: (event: HistoryBarrierSignal) => void): () => void;
+  /** OPTIONAL promotion of a QUEUED history read (SSE only). */
+  reprioritize?(requestId: string, priority: HistoryRequestPriority): boolean;
 };
 
 /** Browser default. Injected in tests so the Origin header can be set. */
@@ -342,6 +379,10 @@ export class RemotePiWebClient {
   /** Dedicated `workspace_state` sink — lifecycle pushes never enter the
    *  generic message stream (and therefore never reach chat forwarding). */
   private workspaceStateListeners = new Set<(push: WorkspaceStatePush) => void>();
+  /** Plan 86 P3 — write-barrier subscribers (SSE lane scheduler only). */
+  private barrierListeners = new Set<(event: HistoryBarrierSignal) => void>();
+  /** Release handle for the socket's optional barrier subscription. */
+  private releaseSocketExtras: (() => void) | null = null;
   private closeListeners = new Set<(code: TransportCloseCode) => void>();
   private diagnosticListeners = new Set<(code: TransportDiagnosticCode) => void>();
   /** Every timer the transport owns; `close()` clears all of them. */
@@ -471,6 +512,9 @@ export class RemotePiWebClient {
       // passa SEM o pedido. Conexão direta ao relay segue podendo negociar.
       const socket = this.factory(this.relayUrl, []);
       this.socket = socket;
+      /* Bind the optional lane-aware extras for THIS socket generation. A
+       * transport without them (a real WebSocket) simply has none. */
+      this.bindSocketExtras(socket);
 
       // A handshake step that let an unexpected close/error slip through
       // would let `connect()` resolve on a DEAD socket: a real WebSocket
@@ -634,16 +678,19 @@ export class RemotePiWebClient {
    *  Its `room_id`s are the only child rooms this client will accept a proxied
    *  payload from (plus rooms it started or chatted on itself). */
   async listWorkspaces(hostEpk: string, roomId: string = HOST_ROOM): Promise<WorkspaceListOk> {
+    const directoryRequestId = newId();
+    historyProbeMark("directory", "request", directoryRequestId);
     const reply = await this.request({
       peer: hostEpk,
       room: roomId,
-      inner: { type: "workspace_list", id: newId() },
+      inner: { type: "workspace_list", id: directoryRequestId },
       accepts: ["workspace_list_ok"],
       acceptsError: "action_error",
       expectedAction: "workspace_list",
     });
     if (!isWorkspaceListOk(reply)) throw new ProtocolFrameError("unexpected_reply");
     for (const entry of reply.workspaces) this.rememberRoom(entry.room_id);
+    historyProbeMark("directory", "decoded", reply.in_reply_to, reply.workspaces.length);
     return reply;
   }
 
@@ -1292,6 +1339,28 @@ export class RemotePiWebClient {
     }));
   }
 
+  /**
+   * Plan 86 P3 — send ONE host-native history request.
+   *
+   * These frames address the HOST room directly (never `host_forward`): the
+   * service answers from disk with zero Pi processes, so there is no workspace
+   * room to proxy through. Replies arrive on the host room and are correlated by
+   * `in_reply_to` in the application layer — this method is fire-and-forget for
+   * the same reason `sendSessionRead` is (a reply that lands after the viewer
+   * closed must not resurrect anything).
+   *
+   * `priority` is honoured only by a transport that can POST independently
+   * (SSE); a WebSocket falls back to its single ordered send.
+   */
+  sendHistory(
+    hostEpk: string,
+    request: HistoryWireRequest,
+    priority: HistoryRequestPriority = "foreground",
+  ): string {
+    this.rawSend(hostEpk, HOST_ROOM, request as unknown as ClientMessage, priority);
+    return request.id;
+  }
+
   /** ONE host_forward sender shared by the typed actions above: mint the inner
    *  id, wrap the inner message, send on the host room and remember the room
    *  (addressing a room is the client's own statement that it exists). */
@@ -1414,6 +1483,54 @@ export class RemotePiWebClient {
       }
     }
     this.socketListeners = [];
+    this.releaseSocketExtras?.();
+    this.releaseSocketExtras = null;
+  }
+
+  /**
+   * Subscribe to the socket's OPTIONAL lane enhancements.
+   *
+   * Only the SSE transport has them; a WebSocket (and every test double shaped
+   * like one) has neither, and that path stays byte-identical to pre-P3. The
+   * handle is released by `detachAll`, so a dead socket can never deliver a
+   * barrier into the live controller.
+   */
+  private bindSocketExtras(socket: WebSocketLike): void {
+    if (typeof socket.onHistoryBarrier !== "function") return;
+    const subscribe = socket.onHistoryBarrier;
+    const release = subscribe.call(socket, (event) => {
+      if (this.closed) return;
+      for (const listener of [...this.barrierListeners]) listener(event);
+    });
+    this.releaseSocketExtras = release;
+  }
+
+  /**
+   * Plan 86 P3 — write-barrier epochs from the transport.
+   *
+   * `{cleared: false}` means a write was just queued: every history read that
+   * started earlier is pre-write and must not be applied. `{cleared: true}`
+   * means the write reached a business answer or a definite terminal, and the
+   * reads may be re-issued.
+   */
+  onHistoryBarrier(listener: (event: HistoryBarrierSignal) => void): () => void {
+    this.barrierListeners.add(listener);
+    return () => this.barrierListeners.delete(listener);
+  }
+
+  /**
+   * Plan 86 P3 — promote a QUEUED history read after a click.
+   *
+   * A WebSocket (or any transport without the lane) needs nothing: its frames are
+   * already ordered. This returns false when there is nothing to promote, which is
+   * the honest answer when the read is already in flight.
+   */
+  reprioritizeHistory(requestId: string, priority: HistoryRequestPriority): boolean {
+    const socket = this.socket;
+    if (socket === null) return false;
+    const reprioritize = socket.reprioritize;
+    if (typeof reprioritize !== "function") return false;
+    return reprioritize.call(socket, requestId, priority);
   }
 
   private setTimer(fire: () => void, ms: number): ReturnType<typeof setTimeout> | null {
@@ -1543,11 +1660,27 @@ export class RemotePiWebClient {
 
   // ── internals: outbound ───────────────────────────────────────────────────
 
-  private rawSend(peer: string, room: string, inner: ClientMessage): void {
+  private rawSend(
+    peer: string,
+    room: string,
+    inner: ClientMessage,
+    priority?: HistoryRequestPriority,
+  ): void {
     if (this.closed) throw new TransportError("closed");
     if (!this.socket || !this.handshakeDone) throw new TransportError("not_connected");
     this.bindHost(peer);
-    this.socket.send(encodeOuter(peer, room, inner));
+    const frame = encodeOuter(peer, room, inner);
+    /*
+     * A transport that can POST frames independently gets an explicit lane.
+     * Everything else (a real WebSocket, a test double) keeps the single ordered
+     * `send`, which is exactly the pre-P3 behaviour.
+     */
+    const sendPrioritized = this.socket.sendPrioritized;
+    if (priority !== undefined && typeof sendPrioritized === "function") {
+      sendPrioritized.call(this.socket, frame, priority);
+      return;
+    }
+    this.socket.send(frame);
   }
 
   /** The client is bound to ONE host peer from its first operation on; a
@@ -1671,6 +1804,9 @@ export class RemotePiWebClient {
   /** Host-room message: `in_reply_to` settles the request that declared this
    *  id, nothing else. A reply that matches no live request is NOT a push. */
   private onHostFrame(msg: ServerMessage): void {
+    if (msg.type === "workspace_list_ok" && typeof msg.in_reply_to === "string") {
+      historyProbeMark("directory", "received", msg.in_reply_to);
+    }
     /*
      * `session_history` is a FAN-OUT, not an RPC reply, even though it carries
      * the `in_reply_to` of the `session_sync` that asked for it.
@@ -1717,6 +1853,21 @@ export class RemotePiWebClient {
         return;
       }
       // Fall through to the ordinary reply path below.
+    }
+    /*
+     * Plan 86 P3 — history replies are HOST-room RPC answers with NO pending
+     * entry.
+     *
+     * `sendHistory` is fire-and-forget on purpose (the controller correlates by
+     * request id and may have released interest long before the answer lands), so
+     * a `history_*` frame would otherwise fall through to `unknown_reply` and be
+     * DROPPED — the exact shape that made `session_history` invisible after a
+     * resume. It is re-emitted on the host room and the application layer decides
+     * whether to apply it.
+     */
+    if (msg.type.startsWith("history_")) {
+      this.emitMessage(msg, HOST_ROOM);
+      return;
     }
     const id = typeof msg.in_reply_to === "string" ? msg.in_reply_to : null;
     if (id === null) {

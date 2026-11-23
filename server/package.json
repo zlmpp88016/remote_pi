@@ -13,7 +13,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "dev": "tsx src/index.ts",
-    "test": "vitest run",
+    "test": "vitest run --no-file-parallelism --maxWorkers=1 --exclude scripts/host-history-probes.test.mjs && node --test scripts/host-history-probes.test.mjs",
     "prepublishOnly": "npm run typecheck && npm run test && npm run build",
     "verify:supervision": "tsx scripts/verify-host-supervision.mts"
   },

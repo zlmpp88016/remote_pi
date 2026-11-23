@@ -106,6 +106,10 @@ import { registerAgentTools } from "./session/tools.js";
 import { formatPeerInventory } from "./session/peer_inventory.js";
 import { MeshNode } from "./session/mesh_node.js";
 import {
+  createHistoryNoticeEmitter,
+  type HistoryNoticeEmitter,
+} from "./session/history_notice_emitter.js";
+import {
   handleSessionCompact,
   handleModelSet,
   handleThinkingSet,
@@ -1236,6 +1240,19 @@ let _pi: ExtensionAPI | null = null;
 // extension factory wires it (and null if the SDK exposes no events bus).
 let _extensionUiBridge: ExtensionUiBridge | null = null;
 
+/*
+ * Plan 86 P2 correction (R1/R2) — the history writer notice.
+ *
+ * The host's history index needs to know WHICH file this Pi process appends to,
+ * from the process that actually owns the SessionManager. Without it the
+ * supervisor honestly reported `session_id: null` and every append was a
+ * conservative full rebuild. This emitter publishes that authority on the
+ * child's stderr (see `session/history_notice.ts`); no wire/client change.
+ *
+ * Null until the factory wires it: the hooks are inert outside a session.
+ */
+let _historyNotice: HistoryNoticeEmitter | null = null;
+
 let _stopAutoListener: (() => void) | null = null;
 
 // Cached keypair (loaded once, reused across start/pair cycles)
@@ -2276,6 +2293,12 @@ let _lastCtx: Pick<ExtensionContext, "ui" | "abort" | "cwd"> | null = null;
 // base-ctx methods (no newSession — that's command-ctx only), so command ops
 // keep using `_lastCtx`.
 let _lastEventCtx: Pick<ExtensionContext, "compact" | "abort" | "ui"> | null = null;
+// Plan 86 P2 correction (R1) — the read-only SessionManager of the CURRENT
+// session, captured on `session_start`. `message_end` uses it to publish the
+// writer notice (the SDK persists through THIS object). Kept separate from
+// `_lastEventCtx` on purpose: that one deliberately carries only base-ctx
+// methods, and widening it would invite callers to persist through a stale ctx.
+let _sessionManagerRef: ExtensionContext["sessionManager"] | null = null;
 const _noopCtx = { ui: { notify: () => undefined }, abort: () => undefined };
 
 // A single Pi process can load this extension TWICE in the SAME session:
@@ -2318,6 +2341,19 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
   // factory re-run (new pi session) can't leak subscriptions or double-send.
   _extensionUiBridge?.dispose();
   _extensionUiBridge = createExtensionUiBridge(pi, _broadcastToActive);
+
+  /*
+   * Plan 86 P2 correction (R1/R2) — one history writer notice per session.
+   *
+   * Created with the factory so it cannot be forgotten on a module-reuse host,
+   * and published from `session_start` (the ONLY point where the ctx's
+   * SessionManager is the one that will persist). `message_end` re-indexes
+   * eagerly and `session_shutdown` revokes. Deliberately best-effort: a stderr
+   * failure must never break a session.
+   */
+  if (_historyNotice === null) {
+    _historyNotice = createHistoryNoticeEmitter();
+  }
 
   // Plano 19: ensure ~/.pi/remote/{sessions,skills}/ exist and deploy the
   // agent-network skill on first load. resources_discover lets Pi find it.
@@ -2461,6 +2497,28 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
   pi.on("message_end", (event) => {
     const m = event?.message as { role?: string; content?: unknown; stopReason?: string; errorMessage?: string } | undefined;
     if (!m) return;
+    /*
+     * Plan 86 P2 correction (R1) — tell the host a line was just persisted.
+     *
+     * The SDK appends the entry to the session file AFTER the extension hooks
+     * (agent-session.js:298-309), so the host's index can re-read the appended
+     * bytes immediately instead of waiting for the next watcher/poll tick. The
+     * notice carries no payload: it only says "this incarnation appended", and
+     * the writer still proves the prefix/growth itself.
+     */
+    if (m.role === "user" || m.role === "assistant" || m.role === "toolResult") {
+      if (_historyNotice !== null && _sessionManagerRef !== null) {
+        /*
+         * Record the custody BOUNDARY, do not publish yet.
+         *
+         * The SDK appends this entry AFTER this hook returns
+         * (agent-session.js:287), so the end of the range is only observable at
+         * the NEXT hook. Consecutive boundaries therefore bound exactly what this
+         * writer persisted, and `flush` closes the last one at turn end.
+         */
+        _historyNotice.boundary({ sessionManager: _sessionManagerRef });
+      }
+    }
     if (m.role === "user" && _anyPeerActive()) {
       _broadcastConsumedSteerForUserContent(m.content);
     }
@@ -2559,6 +2617,15 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
     }
   });
   pi.on("turn_end", () => {
+    /*
+     * Plan 86 P2 correction (R1) — close the custody range for the LAST message
+     * of this turn. The entries are already on disk by now, so the endpoint is
+     * the real one; without this the last message of every turn would only be
+     * provable at the next turn's first boundary.
+     */
+    if (_historyNotice !== null && _sessionManagerRef !== null) {
+      _historyNotice.flush({ sessionManager: _sessionManagerRef });
+    }
     // Plan/32 Part B: publish working=false as room_meta (raw, no debounce).
     if (_myRoomMeta) _myRoomMeta = { ..._myRoomMeta, working: false };
     if (_relay && _myRoomId) {
@@ -2604,6 +2671,18 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
   // bound to the current session.
   pi.on("session_start", (_event, ctx) => {
     _lastEventCtx = ctx;
+    /*
+     * Plan 86 P2 correction (R1/R2) — publish THIS session's writer identity.
+     *
+     * `ctx.sessionManager` is the read-only SessionManager the SDK persists
+     * through, so `getSessionFile()`/`getSessionId()` are exactly the file the
+     * host must treat as trusted-append target for this incarnation. Emitted on
+     * EVERY session_start (including a module-reuse respawn) because that is
+     * also the fork/new/reload boundary.
+     */
+    if (_historyNotice === null) _historyNotice = createHistoryNoticeEmitter();
+    _sessionManagerRef = ctx.sessionManager;
+    _historyNotice.session({ sessionManager: ctx.sessionManager });
     // session_shutdown disposes per-session pi-ask subscriptions. A host that
     // reuses this module instance does NOT re-run the factory, so rebind the
     // bridge here; fresh-module hosts already created theirs in the factory.
@@ -2718,6 +2797,18 @@ const extension: ExtensionFactory = (pi: ExtensionAPI): void => {
     // (issue #55). session_start re-binds `_lastEventCtx` for the new session.
     _lastCtx = null;
     _lastEventCtx = null;
+    /*
+     * Plan 86 P2 correction (R1/R2) — revoke the writer authority BEFORE any
+     * teardown await, and drop the captured SessionManager synchronously.
+     *
+     * This handler is AWAITED by the SDK before the replacement runtime exists,
+     * so the notice ordering is: revoke(old session) → session_start(new). The
+     * host therefore never holds two live writers, and it never keeps trusting
+     * a file whose writer is gone. If this process dies without reaching here
+     * (SIGKILL), the supervisor revokes on child exit instead.
+     */
+    _historyNotice?.revoke(null);
+    _sessionManagerRef = null;
     // No bye reason: the process keeps running and the fresh instance re-joins
     // the SAME relay room, so an explicit offline→online flap would be wrong.
     // Revoke producer/Relay/bridge authority while the global node is still

@@ -341,6 +341,7 @@ export function WorkspaceSidebar({
             <button
               type="button"
               disabled={!refreshEnabled}
+              data-history-directory-refresh=""
               onClick={onRefresh}
               title={
                 refreshEnabled
@@ -364,6 +365,7 @@ export function WorkspaceSidebar({
             <button
               type="button"
               disabled={!refreshEnabled}
+              data-history-directory-refresh=""
               onClick={onRefresh}
               title={
                 refreshEnabled
@@ -443,6 +445,7 @@ export function WorkspaceSidebar({
                   <li key={`${ws.daemon_id}:${ws.room_id}`}>
                     <button
                       type="button"
+                      data-history-workspace=""
                       onClick={() => onOpenWorkspace(ws.room_id)}
                       aria-current={current ? "true" : undefined}
                       title={`${ws.name} — ${ws.cwd} · ${status.label}${note ? ` · ${note}` : ""}`}
@@ -468,6 +471,7 @@ export function WorkspaceSidebar({
                     ) : null}
                     <button
                       type="button"
+                      data-history-workspace=""
                       onClick={() => onOpenWorkspace(ws.room_id)}
                       aria-current={current ? "true" : undefined}
                       title={`${ws.name} — ${ws.cwd} · ${status.label}`}

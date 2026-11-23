@@ -1,3 +1,4 @@
+import '../render_metrics.dart';
 import 'package:mobile/domain/session_state.dart';
 import 'package:mobile/ui/chat/widgets/agent_markdown.dart';
 import 'package:mobile/ui/chat/widgets/image_bubble.dart';
@@ -15,6 +16,7 @@ class UserBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (ChatRenderMetrics.enabled) ChatRenderMetrics.userBuilds++;
     // Plan/24-fix-app-source-of-truth: render the lifecycle stage of
     // the bubble. `pending` (sent over WS, Pi hasn't echoed yet) gets
     // reduced opacity + a small spinner; `failed` (no echo in 15s) gets
@@ -195,6 +197,7 @@ class AssistantBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (ChatRenderMetrics.enabled) ChatRenderMetrics.assistantBuilds++;
     // Plan/32b — agent output is rendered as Markdown (GFM + code blocks),
     // spanning the FULL content width (the message list already pads 16px on
     // each side) — unlike the user's right-aligned chat bubble, which stays

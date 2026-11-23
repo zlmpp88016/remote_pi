@@ -12,7 +12,13 @@ import type { CronJob, NewJobInput } from "./cron_registry.js";
 import { roomIdFor } from "../rooms.js";
 import { daemonIdForCwd } from "./id.js";
 import { addPeer } from "../pairing/storage.js";
-import { HOST_ROOM_ID, type ServerMessage, type ActionName, type PairErrorCode } from "../protocol/types.js";
+import {
+  HOST_ROOM_ID,
+  type ServerMessage,
+  type ActionName,
+  type PairErrorCode,
+  type WorkspaceState,
+} from "../protocol/types.js";
 import type { HostTokenStatus } from "../pairing/host_pairing.js";
 
 export interface FleetEntry {
@@ -23,8 +29,56 @@ export interface FleetEntry {
   source: "daemon" | "added";
 }
 
+/**
+ * Plan 86 P1 — the supervisor's independent runtime authority for a workspace.
+ *
+ * The history API reports `current_id`/`ready` from THIS snapshot only. It is
+ * never derived from the newest transcript on disk, and `null`/`null` means
+ * genuinely unknown. `state` is the ChildSlot lifecycle state.
+ *
+ * Plan 86 P2 correction (R1/R2) — `session_id` becomes known only when the
+ * live Pi CHILD publishes its own writer notice for the incarnation it is
+ * currently running. `session_file`/`append_authority` come from the same
+ * notice and are what the history index requires before it may treat a growth
+ * as an incremental append. A session id by itself never enables that.
+ */
+export interface FleetRuntimeSnapshot {
+  state: WorkspaceState;
+  session_id: string | null;
+  ready: boolean | null;
+  /** Absolute session file the child published, or null when unknown. */
+  session_file?: string | null;
+  /** True only for the CURRENT incarnation of the CURRENT child. */
+  append_authority?: boolean;
+  /**
+   * The custody range the live child proved (R2), or null.
+   *
+   * `null` is never trustworthy: the history writer requires `span.before` to
+   * equal the identity it last indexed before it may treat a growth as an append.
+   */
+  session_span?: {
+    before: { ino: number; birthtime_ms: number; size: number; mtime_ms: number; ctime_ms: number };
+    after: { ino: number; birthtime_ms: number; size: number; mtime_ms: number; ctime_ms: number };
+  } | null;
+}
+
 export interface FleetOps {
   list(): FleetEntry[];
+  /**
+   * Plan 86 P1 — runtime snapshot for the history API, when the host owns a
+   * supervisor slot for [id]. Absent for workspaces without a slot.
+   *
+   * OPTIONAL, like `schedule`: test doubles and bare hosts need no stub.
+   */
+  runtime?(id: string): FleetRuntimeSnapshot | null;
+  /**
+   * Plan 86 P2 correction (R2) — true only when [file] is the append target of
+   * a live supported Pi writer for [id], as published by that child for the
+   * incarnation it is currently running.
+   *
+   * OPTIONAL like `runtime`: a host without a writer authority has none.
+   */
+  writerOwns?(id: string, file: string): boolean;
   /** Ensures a cwd has a fleet slot (registering it when new). Returns the
    *  resolved identity, or an error string (e.g. a bad path). */
   ensure(cwd: string): { ok: true; id: string; cwd: string; name: string } | { ok: false; error: string };

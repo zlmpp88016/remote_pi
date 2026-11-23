@@ -1,14 +1,152 @@
 --- a/p87-collect-mobile.mjs
 +++ b/p87-collect-mobile.mjs
-@@ -97,3 +97,8 @@
--  device(['shell','am','start','-n',`${pkg}/com.example.remotepi.MainActivity`,
--    '--ez','enable-dart-profiling','true','--es','dart-flags',
--    '"--timeline_recorder=ring --profile_buffer_size=262144"']);
+@@ -16,6 +16,12 @@
+ const pending = new Map();
+ const streamed = [];
+ let streamGap = false, requestId = 0;
++const evidence = new Map(), saved = new Set();
++function preserve(name, value) {
++  evidence.set(name,value);
++  save(name,value);saved.add(name);
++  return value;
++}
+ function check(ok, label) { if (!ok) throw new Error(label); }
+ function device(args) {
+   const p = spawnSync(adb, ['-s', serial, ...args], {encoding:'utf8',timeout:15000,windowsHide:true,maxBuffer:16*1024*1024});
+@@ -91,9 +97,14 @@
+   // Fresh own-package process, retaining all data. No log-buffer clear, no
+   // uninstall, no global VM service and no production package operations.
+   device(['shell','am','force-stop',pkg]);
 +  // Flutter splits dart-flags on commas and applies an allowlist. Direct
 +  // timeline_recorder/profile_buffer_size flags are forbidden even in profile.
 +  // Use the embedding's recorder switch and the allowed duration-based CPU
 +  // buffer (covers the longest 120s browse window at the requested 1000us rate).
-+  device(['shell','am','start','-n',`${pkg}/com.example.remotepi.MainActivity`,
+   device(['shell','am','start','-n',`${pkg}/com.example.remotepi.MainActivity`,
+-    '--ez','enable-dart-profiling','true','--es','dart-flags',
+-    '"--timeline_recorder=ring --profile_buffer_size=262144"']);
 +    '--ez','enable-dart-profiling','true',
 +    '--ez','endless-trace-buffer','true','--es','dart-flags',
-+    '--sample-buffer-duration=180,--profile_period=1000']);
++    '--sample-buffer-duration=180,--profile_period=1000,--max_profile_depth=255']);
+   const pid = await waitFor(async () => device(['shell','pidof',pkg]),
+     v => /^\d+$/.test(v), 15000,'own_package_pid_missing');
+   let authenticated;
+@@ -117,9 +128,9 @@
+   check(String(vm.pid) === pid, 'vm_pid_does_not_match_own_package');
+   let selected;
+   await waitFor(async () => {
+-    for(const ref of vm.isolates ?? []) {
++    for(const ref of (await rpc('getVM')).isolates ?? []) {
+       const isolate = await rpc('getIsolate',{isolateId:ref.id});
+-      if(isolate.serviceExtensionRPCs?.includes(extension)) {
++      if(isolate.extensionRPCs?.includes(extension)) {
+         selected = isolate;return true;
+       }
+     }
+@@ -140,9 +151,10 @@
+   await rpc('setFlag',{name:'profiler',value:mode==='diagnostic'?'true':'false'});
+   if(mode === 'diagnostic') await rpc('setFlag',{name:'profile_period',value:'1000'});
+   const flags = await rpc('getFlagList');
+-  const cpuEnabled = String(flags.flags?.find(f => f.name==='profiler')?.value) === 'true';
++  const cpuEnabled = String(flags.flags?.find(f => f.name==='profiler')?.valueAsString) === 'true';
+   check(cpuEnabled === (mode==='diagnostic'),'profiler_flag_not_applied');
+   const flagsBefore = await rpc('getVMTimelineFlags');
++  preserve('timeline-flags-before.json',flagsBefore);
+   if(mode === 'diagnostic') await rpc('streamListen',{streamId:'Timeline'});
+   await rpc('clearVMTimeline');
+   await rpc('clearCpuSamples',{isolateId});
+@@ -156,36 +168,59 @@
+     await delay(duration);
+     await gateCall('finish');
+   }
+-  const gate = await waitFor(() => gateCall('captureComplete'),
++  const gate = await waitFor(async () => {
++    const value = await gateCall('captureComplete');
++    evidence.set('capture.json',value);
++    return value;
++  },
+     g => g.state === 'captureComplete', 30000,'capture_completion_timeout');
++  preserve('capture.json',gate);
+   let timeline = {traceEvents:[]}, cpu = {samples:[],functions:[],sampleCount:0};
++  const exportIssues = [];
++  const attempt = async (work, label) => {
++    try { return await work(); }
++    catch { exportIssues.push(label);return undefined; }
++  };
+   if(mode === 'diagnostic') {
+-    await waitFor(async () => streamed.some(e => e.name === 'p87_capture_end'),
+-      Boolean, 10000, 'timeline_endmarker_not_streamed');
+-    // Full recorder snapshot plus the independently streamed loss ledger.
+-    timeline = await rpc('getVMTimeline');
+-    cpu = await rpc('getCpuSamples',{isolateId,timeOriginMicros:gate.begin_us,
+-      timeExtentMicros:gate.end_us-gate.begin_us+1});
+-    await rpc('streamCancel',{streamId:'Timeline'});
++    // Snapshot serialization reclaims per-thread blocks, finishing them and
++    // emitting TimelineEvents. Flush before waiting for the streamed fence.
++    // Persist each successful export even if another RPC or the fence fails.
++    timeline = await attempt(async () => preserve('timeline.json',await rpc('getVMTimeline')),
++      'timeline_export_failed') ?? timeline;
++    cpu = await attempt(async () => preserve('cpu-samples.json',await rpc('getCpuSamples',{
++      isolateId,timeOriginMicros:gate.begin_us,timeExtentMicros:gate.end_us-gate.begin_us+1})),
++      'cpu_export_failed') ?? cpu;
++    await attempt(() => waitFor(async () => streamed.some(e => e.name === 'p87_capture_end'),
++      Boolean, 10000, 'timeline_endmarker_not_streamed'), 'timeline_endmarker_not_streamed');
++    if(!streamed.some(e => e.name === 'p87_capture_end')) streamGap = true;
++    await attempt(() => rpc('streamCancel',{streamId:'Timeline'}),'timeline_stream_cancel_failed');
+   }
+-  const flagsAfter = await rpc('getVMTimelineFlags');
++  const flagsAfter = await attempt(async () => preserve('timeline-flags-after.json',
++    await rpc('getVMTimelineFlags')), 'timeline_flags_export_failed');
+   const coverage = assessCapture({gate,timeline,cpu,timelineBefore:flagsBefore,
+     timelineAfter:flagsAfter,streamEvents:streamed,streamGap,cpuEnabled,
+     expectedBuild:opts.build,mode});
+-  save('capture.json',gate);
+-  save('timeline.json',timeline);
+-  save('cpu-samples.json',cpu);
+-  save('timeline-stream.json',{events:streamed,streamGap});
++  coverage.issues.push(...exportIssues);
++  if(coverage.issues.length) coverage.status = 'incomplete';
++  if(mode === 'unprofiled') {
++    preserve('timeline.json',timeline);
++    preserve('cpu-samples.json',cpu);
++  }
++  preserve('timeline-stream.json',{events:streamed,streamGap,
++    endMarkerReceived:streamed.some(e => e.name === 'p87_capture_end')});
+   const manifest = {schema:1,package:pkg,pid:Number(pid),suite:gate.suite,build:opts.build,
+     apk_sha256:apkHash,mode,cpuEnabled,timelineFlagsBefore:flagsBefore,timelineFlagsAfter:flagsAfter,
+-    enabledProfilerFlags:flags.flags?.filter(f => /^(profiler|profile_period|profile_depth|profile_buffer_size)$/.test(f.name)),
++    enabledProfilerFlags:flags.flags?.filter(f => /^(profiler|profile_period|max_profile_depth|profile_depth|profile_buffer_size)$/.test(f.name)),
+-    coverage,files:Object.fromEntries(['capture.json','timeline.json','cpu-samples.json','timeline-stream.json']
+-      .map(name => [name,{sha256:hash(join(out,name))}])),
++    coverage,files:Object.fromEntries(['capture.json','timeline.json','cpu-samples.json','timeline-stream.json',
++      'timeline-flags-before.json','timeline-flags-after.json']
++      .filter(name => saved.has(name)).map(name => [name,{sha256:hash(join(out,name))}])),
+     limitations:['VM CPU samples cover Dart isolate, not native raster/SwiftShader CPU',
+       'diagnostic capture overhead is not an unprofiled performance budget',
+       'software-GPU results cannot satisfy physical-device verification'],
+     authenticatedVmUriPersisted:false};
+-  save('manifest.json',manifest);
++  preserve('manifest.json',manifest);
++  if(coverage.status !== 'complete') preserve('collector-incomplete.json',{
++    status:'incomplete',reason:coverage.issues[0],issues:coverage.issues,authenticatedVmUriPersisted:false});
+   await gateCall('exportAcknowledged');
+   process.stdout.write(`p87 ${coverage.status}; manifest=${join(out,'manifest.json')}\n`);
+   if(coverage.status !== 'complete') process.exitCode = 2;
+@@ -194,6 +229,18 @@
+   const reason = /^[A-Za-z0-9_]{1,128}$/.test(error?.message ?? '')
+     ? error.message : 'collector_operation_failed';
+   if(out) {
++    // Retain all available raw evidence on unexpected failures too. Never
++    // replace an already written snapshot or invent an unavailable RPC export.
++    if(!saved.has('timeline-stream.json')) evidence.set('timeline-stream.json',{
++      events:streamed,streamGap:true,endMarkerReceived:streamed.some(e => e.name === 'p87_capture_end')});
++    for(const [name,value] of evidence) {
++      if(!saved.has(name)) { try {preserve(name,value);} catch {} }
++    }
++    if(!saved.has('manifest.json')) {
++      try {preserve('manifest.json',{schema:1,mode,coverage:{status:'incomplete',issues:[reason],
++        performanceBudgetEvaluated:false},files:Object.fromEntries([...saved]
++          .map(name => [name,{sha256:hash(join(out,name))}])),authenticatedVmUriPersisted:false});} catch {}
++    }
+     try {save('collector-incomplete.json',{status:'incomplete',reason,
+       authenticatedVmUriPersisted:false});} catch {}
+   }

@@ -213,6 +213,61 @@ export type ClientMessage =
   // host resolves it to a path itself and NEVER accepts a path from the
   // client (that would be an arbitrary-file-read primitive).
   | { type: "session_read"; id: string; session_id: string; limit?: number; before?: string }
+  // ── Plan 86 P1 — host-native workspace history (zero Pi) ─────────────────
+  //
+  // These frames are served by `pi-supervisord` on room `host`, directly from
+  // the session bucket on disk. No Pi process is spawned or read from, so they
+  // work while a workspace is stopped, starting or respawning.
+  //
+  // `daemon_id` is resolved against the host's own registered fleet, and the
+  // session bucket is DERIVED host-side from that workspace's cwd. No frame in
+  // this family accepts a filesystem path; `before`, `snapshot`, `if_revision`
+  // and `body_ref` are opaque, host-issued tokens.
+  //
+  // `limit` is an upper bound, not a promise: the host packs pages into one
+  // encoded frame (≤256 KiB after the base64 host envelope) and returns fewer
+  // entries when the budget is exhausted, always with a cursor that advances.
+  | {
+      type: "history_list";
+      id: string;
+      daemon_id: string;
+      /** Default 50, upper bound 100. */
+      limit?: number;
+      /** Opaque cursor from a previous `history_list_ok.next_cursor`. */
+      before?: string;
+      /** Opaque revision from a previous `history_list_ok.revision`; a match
+       *  answers `history_error{code:"not_modified"}` instead of the list. */
+      if_revision?: string;
+    }
+  | {
+      type: "history_read";
+      id: string;
+      daemon_id: string;
+      session_id: string;
+      /** Default 30, upper bound 100 — measured in transcript ENTRIES, not
+       *  wire events (one entry can project to several events). */
+      limit?: number;
+      /** Opaque cursor from a previous `history_read_ok.older_cursor`. */
+      before?: string;
+      /** Opaque snapshot the client is refreshing. A mismatch with the file's
+       *  current generation answers `history_error{code:"stale"}`. */
+      snapshot?: string;
+      /** Opaque content revision; a match answers `not_modified`. */
+      if_revision?: string;
+    }
+  | {
+      type: "history_body";
+      id: string;
+      daemon_id: string;
+      session_id: string;
+      /** Snapshot the `body_ref` belongs to (from `history_read_ok.snapshot`). */
+      snapshot: string;
+      /** Opaque token from `history_read_ok.items[].body_refs[].ref`. */
+      body_ref: string;
+      /** Byte offset into the REFERENCE'S representation (never a UTF-16 index
+       *  and never a JSONL source offset). */
+      offset_bytes: number;
+    }
   // Plan 01 — session tree + branching. The version fields are the double
   // fence from the snapshot the app rendered: `base_snapshot_version` guards
   // entry content, `base_branch_version` guards position, and `base_leaf_id`
@@ -580,6 +635,11 @@ export type ServerMessage =
       older_cursor?: string | null;
       has_older?: boolean;
     }
+  // ── Plan 86 P1 — host-native workspace history replies ───────────────────
+  | HistoryListOkWire
+  | HistoryReadOkWire
+  | HistoryBodyOkWire
+  | HistoryErrorWire
   | {
       type: "workspace_list_ok";
       in_reply_to: string;
@@ -989,6 +1049,205 @@ export interface WireSessionInfo {
   cwd?: string;
 }
 
+// ─── Plan 86 P1 — workspace history wire types ───────────────────────────────
+//
+// Served by the supervisor's host room with zero Pi processes. The vocabulary
+// below is deliberately separate from `WireSessionInfo`/`session_read_ok`:
+//
+//  - no `cwd` and no path field exists anywhere in this family;
+//  - `live` is gone because this service does not know the live branch, and
+//    guessing it from the newest file is exactly what the plan forbids;
+//  - identity is `event_id` (event-level) + `entry_id` (entry-level), so a
+//    client can de-duplicate pages, live sync and tool-parent backfill.
+
+/**
+ * What the host can honestly say about a workspace's session metadata index.
+ *
+ * `building` is a STATE, not an empty answer: `sessions` is empty in that case
+ * because the host refuses to present a partial catalog as complete. The client
+ * re-issues the same request (one in-flight task, no second query path) after
+ * `retry_after_ms`.
+ *
+ * `unavailable` means the host could not read the bucket at all (permission or
+ * IO); it is NOT evidence that the workspace has no history.
+ */
+export type HistoryIndexStateWire = "ready" | "building" | "unavailable";
+
+/** The byte representation a `body_ref` materializes. */
+export type HistoryBodyRepresentationWire = "text_utf8" | "json_utf8" | "binary";
+
+/**
+ * Closed error vocabulary for the `history_*` family.
+ *
+ * `stale` is a directive, not a failure of the transport: the snapshot or
+ * cursor belongs to a file generation that was rewritten/replaced, so the
+ * client must reopen deliberately instead of splicing two generations.
+ * `not_modified` answers `if_revision` and carries the revision back.
+ * `invalid_cursor` is also used for a token whose workspace/session scope does
+ * not match the request (never "here is the other scope's data").
+ */
+export type HistoryErrorCodeWire =
+  | "building"
+  | "stale"
+  | "not_modified"
+  | "unsupported"
+  | "not_found"
+  | "invalid_cursor"
+  | "body_too_large"
+  | "invalid_request"
+  | "internal";
+
+/** One session row in `history_list_ok`. No path, no guessed `live`. */
+export interface HistorySessionWire {
+  /** Pi session id (from the session header). */
+  id: string;
+  /** `session_info.name`, when the transcript carries one. */
+  name: string | null;
+  /** Newest message timestamp inside the transcript (ms since epoch). */
+  mtime: number;
+  /** First user message, bounded host-side. */
+  preview: string | null;
+}
+
+/**
+ * The host's independent runtime snapshot for the workspace — never derived
+ * from disk.
+ *
+ * `source: "unknown"` means the host has no runtime authority for this
+ * workspace (e.g. an added workspace with no supervisor slot). `session_id`
+ * stays `null` rather than pointing at the newest file, and `ready` stays `null`
+ * rather than pretending a stopped/starting Pi can accept a prompt.
+ */
+export interface HistoryCurrentWire {
+  session_id: string | null;
+  ready: boolean | null;
+  /** Supervisor lifecycle state, when it has a slot for this workspace. */
+  state: WorkspaceState | null;
+  source: "runtime" | "unknown";
+}
+
+/**
+ * Opaque reference to one large payload inside one snapshot.
+ *
+ * `ref` is a host-issued token, never a path. `field` names the event member it
+ * materializes (`text`, `args`, `result`, `error`, `summary`, `images.<n>`),
+ * and `representation` fixes the byte stream `offset_bytes` indexes. `preview`
+ * is present only for fields the wire event cannot carry (object `args`,
+ * binary images). An oversized `args` is carried as `{}` in the event and its
+ * bounded JSON preview lives here; the FULL valid JSON value is materializable
+ * with `representation: "json_utf8"`.
+ */
+export interface HistoryBodyRefWire {
+  ref: string;
+  field: string;
+  representation: HistoryBodyRepresentationWire;
+  /** MIME type for `binary` payloads, else null. */
+  mime: string | null;
+  /** Decoded length of the FULL representation. */
+  total_bytes: number;
+  /** Bounded preview for fields whose event value is a placeholder. */
+  preview: string | null;
+  /** True when the event carries only a bounded preview of this field. */
+  preview_truncated: boolean;
+}
+
+/**
+ * One history item.
+ *
+ * `event` keeps the EXISTING `SessionHistoryEvent` vocabulary and required
+ * fields, so a client's renderer does not fork. `event_id` is the stable
+ * de-duplication identity:
+ *   - an entry that projects to exactly one event → `event_id === entry_id`
+ *     (this is the identity the live stream already uses for user messages);
+ *   - an entry that projects to several events (assistant text/toolCall blocks)
+ *     → `event_id === `${entry_id}#${index}`` in projection order.
+ * Identity never depends on the page's array index or on a timestamp.
+ */
+export interface HistoryItemWire {
+  event_id: string;
+  entry_id: string;
+  event: SessionHistoryEvent;
+  /** Present only for payloads cut to the row preview budget. */
+  body_refs?: HistoryBodyRefWire[];
+  /** True when this item was prepended as a tool-call parent (outside the
+   *  primary page cursor); de-duplicate by `event_id`. */
+  parent?: true;
+  /** True when the host omitted part of this item (e.g. ref cap). */
+  truncated?: boolean;
+}
+
+export interface HistoryListOkWire {
+  type: "history_list_ok";
+  in_reply_to: string;
+  daemon_id: string;
+  /** Opaque metadata revision; null while building/unavailable. */
+  revision: string | null;
+  index_state: HistoryIndexStateWire;
+  current: HistoryCurrentWire;
+  sessions: HistorySessionWire[];
+  /** Cursor to the next older page, or null when this page is the tail. */
+  next_cursor: string | null;
+  has_more: boolean;
+  /** Suggested wait before re-issuing the same list while `building`. */
+  retry_after_ms: number | null;
+}
+
+export interface HistoryReadOkWire {
+  type: "history_read_ok";
+  in_reply_to: string;
+  daemon_id: string;
+  session_id: string;
+  /** Opaque snapshot; echo it on `history_body`. */
+  snapshot: string;
+  /** Opaque content revision; feed it back as `if_revision`. */
+  revision: string;
+  /** Projection version of the event ids in `items`. */
+  projection: number;
+  /** Session identity (same row `history_list_ok` reports). */
+  session: HistorySessionWire;
+  /** Chronological; tool parents may precede the primary window. */
+  items: HistoryItemWire[];
+  /** Cursor to the next older page of PRIMARY entries, or null. */
+  older_cursor: string | null;
+  has_older: boolean;
+}
+
+export interface HistoryBodyOkWire {
+  type: "history_body_ok";
+  in_reply_to: string;
+  daemon_id: string;
+  session_id: string;
+  snapshot: string;
+  body_ref: string;
+  representation: HistoryBodyRepresentationWire;
+  mime: string | null;
+  offset_bytes: number;
+  /** End of THIS chunk. Equal to `total_bytes` on the last chunk. */
+  next_offset_bytes: number;
+  /** Decoded length of the full representation. */
+  total_bytes: number;
+  /** Base64 of the representation bytes in
+   *  `[offset_bytes, next_offset_bytes)`. Text clients must decode with a
+   *  STATEFUL UTF-8 decoder: a multi-byte character may straddle two chunks. */
+  data: string;
+}
+
+/** Typed failure for every `history_*` request. No host path and no free text. */
+export interface HistoryErrorWire {
+  type: "history_error";
+  in_reply_to: string;
+  code: HistoryErrorCodeWire;
+  /** Scope echoes; null when the request did not carry that scope. */
+  daemon_id: string | null;
+  session_id: string | null;
+  /** `not_modified`: the revision the client already holds. */
+  revision: string | null;
+  /** `stale`: the generation/… the host currently observes, when known. */
+  snapshot: string | null;
+  /** `building`: suggested wait before retrying. */
+  retry_after_ms: number | null;
+}
+
 export type SessionSwitchErrorCode = "locked" | "unknown" | "no_sdk";
 
 /** Plan/67 — reserved relay room_id for the machine-level supervisor. */
@@ -1107,7 +1366,13 @@ export type HostCapability =
    *  have different threat models (credentials vs. mixed preferences). */
   | "settings"
   /* The host serves the Automations surface (plan/39 cron projected to the web). */
-  | "schedule";
+  | "schedule"
+  /** Plan 86 P1 — the host serves the `history_list`/`history_read`/
+   *  `history_body` family from disk with zero Pi processes running. Clients
+   *  that do not see this capability must fall back to the legacy read-only
+   *  `session_read` path when a Pi happens to be live, and must NEVER upgrade a
+   *  browse action into `session_switch`. */
+  | "workspace_history_v1";
 
 export interface WireWorkspaceInfo {
   cwd: string;

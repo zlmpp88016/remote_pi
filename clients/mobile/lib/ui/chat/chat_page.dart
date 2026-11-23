@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'render_metrics.dart';
+
 import 'package:mobile/data/preferences/preferences.dart';
 import 'package:mobile/domain/session_state.dart';
 import 'package:mobile/domain/transcript_rows.dart';
@@ -203,11 +205,11 @@ class ChatPage extends StatelessWidget {
                     // full runtime-status sheet. Only rendered once the Pi has
                     // reported a real figure, so nothing shifts for a peer that
                     // never sends `runtime_status`.
-                    if (state is ChatReady && state.runtimeStatus.context != null)
+                    if (state is ChatReady &&
+                        state.runtimeStatus.context != null)
                       _ContextChip(
                         status: state.runtimeStatus,
-                        onTap: () =>
-                            showRuntimeStatusSheet(context, vm: vm),
+                        onTap: () => showRuntimeStatusSheet(context, vm: vm),
                       ),
                     const SizedBox(width: 6),
                     Builder(
@@ -277,16 +279,19 @@ class ChatPage extends StatelessWidget {
                 );
                 return;
               }
-              context.push('/dock', extra: {
-                'root': cwd,
-                'device': vm.activePeer?.sessionName,
-                // 工作区没跑时，读工作树的三个面会直接说明原因而不是先发一次
-                // 注定被拒的请求。
-                'live': vm.isRoomLive,
-                // 主机没声明的能力同理：提前禁用并解释，不靠被拒来发现。
-                'models': vm.hostSupports('models_config'),
-                'settings': vm.hostSupports('settings'),
-              });
+              context.push(
+                '/dock',
+                extra: {
+                  'root': cwd,
+                  'device': vm.activePeer?.sessionName,
+                  // 工作区没跑时，读工作树的三个面会直接说明原因而不是先发一次
+                  // 注定被拒的请求。
+                  'live': vm.isRoomLive,
+                  // 主机没声明的能力同理：提前禁用并解释，不靠被拒来发现。
+                  'models': vm.hostSupports('models_config'),
+                  'settings': vm.hostSupports('settings'),
+                },
+              );
             },
           ),
           // Plan 01 — session tree / branching entry point. The sheet asks the
@@ -294,9 +299,7 @@ class ChatPage extends StatelessWidget {
           IconButton(
             icon: Icon(LucideIcons.gitBranch, size: 18, color: colors.muted2),
             tooltip: ChatCopy.sessionTree,
-            onPressed: () => unawaited(
-              showSessionTreeSheet(context, vm: vm),
-            ),
+            onPressed: () => unawaited(showSessionTreeSheet(context, vm: vm)),
           ),
           // Plan/32g follow-up: ALWAYS render the info button. Gating it on the
           // async PeerRecord made it pop in on load → an AppBar layout shift
@@ -451,35 +454,36 @@ class ChatPage extends StatelessWidget {
         :final hasOlder,
         :final isLoadingTranscript,
       ) =>
-          () {
-            final visible = hideToolCalls
-                ? messages.where((m) => m is! ToolEvent).toList()
-                : messages;
-            // Empty body → the default placeholder (Pi brand icon + "Nothing
-            // here"), shown whenever there's nothing to render — including while
-            // reconnecting (the reconnect handshake never swaps the body).
-            if (visible.isEmpty && streaming == null) {
-              // A transcript still on its way is NOT an empty session. Without
-              // this distinction a resumed session rendered "这里还没有内容" and
-              // looked broken for the whole round-trip.
-              if (isLoadingTranscript) {
-                return const _TranscriptSkeleton();
-              }
-              return const _EmptyState(
-                icon: LucideIcons.terminal,
-                message: ChatCopy.nothingHere,
-              );
+        () {
+          final visible = hideToolCalls
+              ? messages.where((m) => m is! ToolEvent).toList()
+              : messages;
+          // Empty body → the default placeholder (Pi brand icon + "Nothing
+          // here"), shown whenever there's nothing to render — including while
+          // reconnecting (the reconnect handshake never swaps the body).
+          if (visible.isEmpty && streaming == null) {
+            // A transcript still on its way is NOT an empty session. Without
+            // this distinction a resumed session rendered "这里还没有内容" and
+            // looked broken for the whole round-trip.
+            if (isLoadingTranscript) {
+              return const _TranscriptSkeleton();
             }
-            return _MessageList(
-              messages: visible,
-              streaming: streaming,
-              onDecide: (id, decision) => vm.approveTool(id, decision),
-              // Paging only makes sense when tool-call rows are not being hidden;
-              // otherwise the "load earlier" spinner would appear to do nothing.
-              hasOlder: hasOlder && !hideToolCalls,
-              onLoadOlder: vm.loadOlder,
+            return const _EmptyState(
+              icon: LucideIcons.terminal,
+              message: ChatCopy.nothingHere,
             );
-          }(),
+          }
+          return ChatTranscriptList(
+            messages: messages,
+            hideToolCalls: hideToolCalls,
+            streaming: streaming,
+            onDecide: (id, decision) => vm.approveTool(id, decision),
+            // Paging only makes sense when tool-call rows are not being hidden;
+            // otherwise the "load earlier" spinner would appear to do nothing.
+            hasOlder: hasOlder && !hideToolCalls,
+            onLoadOlder: vm.loadOlder,
+          );
+        }(),
     };
   }
 
@@ -555,8 +559,9 @@ class ChatPage extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     // Plan/69 W3 — `app_settings` has no Windows implementation; only offer
     // the settings deep-link action when the plugin can serve it.
-    final canOpenSettings =
-        context.read<DeviceCapabilities>().systemSettingsDeepLink;
+    final canOpenSettings = context
+        .read<DeviceCapabilities>()
+        .systemSettingsDeepLink;
     final source = await showAttachSheet(context);
     if (source == null) return;
     AttachHint? hint;
@@ -584,9 +589,7 @@ class ChatPage extends StatelessWidget {
       case AttachHint.cameraPermissionDenied:
         messenger.showSnackBar(
           SnackBar(
-            content: const Text(
-              ChatCopy.cameraOff,
-            ),
+            content: const Text(ChatCopy.cameraOff),
             duration: const Duration(seconds: 5),
             behavior: SnackBarBehavior.floating,
             action: canOpenSettings
@@ -615,8 +618,9 @@ class ChatPage extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
     // Plan/69 W3 — `app_settings` has no Windows implementation; only offer
     // the settings deep-link action when the plugin can serve it.
-    final canOpenSettings =
-        context.read<DeviceCapabilities>().systemSettingsDeepLink;
+    final canOpenSettings = context
+        .read<DeviceCapabilities>()
+        .systemSettingsDeepLink;
     messenger.hideCurrentSnackBar();
     switch (hint) {
       case VoiceHint.holdToTalk:
@@ -630,9 +634,7 @@ class ChatPage extends StatelessWidget {
       case VoiceHint.permissionDenied:
         messenger.showSnackBar(
           SnackBar(
-            content: const Text(
-              ChatCopy.micOff,
-            ),
+            content: const Text(ChatCopy.micOff),
             duration: const Duration(seconds: 5),
             behavior: SnackBarBehavior.floating,
             action: canOpenSettings
@@ -656,15 +658,19 @@ class ChatPage extends StatelessWidget {
 
 // ---------------------------------------------------------------------------
 
-class _MessageList extends StatefulWidget {
+/// Lazy live transcript; owns only session-local render caches.
+class ChatTranscriptList extends StatefulWidget {
   final List<ChatMessage> messages;
+  final bool hideToolCalls;
   final StreamingMessage? streaming;
   final void Function(String, ApproveDecision) onDecide;
   final bool hasOlder;
   final VoidCallback onLoadOlder;
 
-  const _MessageList({
+  const ChatTranscriptList({
+    super.key,
     required this.messages,
+    this.hideToolCalls = false,
     required this.streaming,
     required this.onDecide,
     required this.hasOlder,
@@ -672,11 +678,33 @@ class _MessageList extends StatefulWidget {
   });
 
   @override
-  State<_MessageList> createState() => _MessageListState();
+  State<ChatTranscriptList> createState() => _ChatTranscriptListState();
 }
 
-class _MessageListState extends State<_MessageList> {
+class _ChatTranscriptListState extends State<ChatTranscriptList> {
   final ScrollController _controller = ScrollController();
+  List<ChatMessage>? _groupedMessages;
+  List<TranscriptRow> _rows = const [];
+  bool? _groupedHideTools;
+  final _bubbles = <(Type, String), (ChatMessage, Widget)>{};
+
+  Widget _bubble(ChatMessage message) {
+    // Decision callbacks may change independently of message content.
+    if (message is ToolEvent) {
+      return ToolRequestCard(tool: message, onDecide: widget.onDecide);
+    }
+    final key = (message.runtimeType, message.id);
+    final old = _bubbles[key];
+    if (old != null && identical(old.$1, message)) return old.$2;
+    final child = switch (message) {
+      UserMsg() => UserBubble(message),
+      AssistantMsg() => AssistantBubble(message),
+      ToolEvent() => ToolRequestCard(tool: message, onDecide: widget.onDecide),
+      CompactionMsg() => CompactionBubble(message),
+    };
+    _bubbles[key] = (message, child);
+    return child;
+  }
 
   /// How close to the top (in logical px) triggers the next page. Large enough
   /// that the fetch starts before the user hits the very end, so the older rows
@@ -713,7 +741,7 @@ class _MessageListState extends State<_MessageList> {
   }
 
   @override
-  void didUpdateWidget(_MessageList oldWidget) {
+  void didUpdateWidget(ChatTranscriptList oldWidget) {
     super.didUpdateWidget(oldWidget);
     // A page just landed (or paging became available): re-check in case the
     // list is still short enough that no scroll event will occur.
@@ -724,30 +752,55 @@ class _MessageListState extends State<_MessageList> {
 
   @override
   Widget build(BuildContext context) {
-    final rows = groupTranscriptRows(widget.messages);
+    if (!identical(_groupedMessages, widget.messages) ||
+        _groupedHideTools != widget.hideToolCalls) {
+      _groupedHideTools = widget.hideToolCalls;
+      _groupedMessages = widget.messages;
+      _rows = groupTranscriptRows(
+        widget.hideToolCalls
+            ? widget.messages.where((m) => m is! ToolEvent).toList()
+            : widget.messages,
+      );
+      if (ChatRenderMetrics.enabled) ChatRenderMetrics.groupingPasses++;
+      final live = {for (final m in widget.messages) (m.runtimeType, m.id)};
+      _bubbles.removeWhere((key, _) => !live.contains(key));
+    }
+    final rows = _rows;
     // Reversed list: index 0 = bottom = newest. The "load earlier" row goes
     // last, which renders at the top of the conversation.
     final itemCount =
-        rows.length + (widget.streaming != null ? 1 : 0) + (widget.hasOlder ? 1 : 0);
+        rows.length +
+        (widget.streaming != null ? 1 : 0) +
+        (widget.hasOlder ? 1 : 0);
     final loadOlderIndex = itemCount - 1;
 
     // `reverse: true` anchors the viewport to the bottom (offset 0 = newest)
     // and keeps it there as content arrives — no manual scroll-to-bottom is
     // needed. The previous animateTo-on-every-rebuild fought this and caused
     // overlapping animations (flicker / runaway scroll) during streaming.
+    String rowKey(TranscriptRow row) => switch (row) {
+      SingleMessageRow(:final message) =>
+        '${message.runtimeType}:${message.id}',
+      ToolGroupRow(:final tools) => 'tools_${tools.first.id}',
+    };
+    final indices = <Key, int>{
+      for (var r = 0; r < rows.length; r++)
+        ValueKey(rowKey(rows[r])):
+            rows.length - 1 - r + (widget.streaming != null ? 1 : 0),
+      if (widget.streaming != null) const ValueKey('streaming'): 0,
+    };
     return ListView.separated(
+      findItemIndexCallback: (key) => indices[key],
       controller: _controller,
       reverse: true,
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
       itemCount: itemCount,
       separatorBuilder: (context, idx) => const SizedBox(height: 14),
       itemBuilder: (_, i) {
-        if (i == loadOlderIndex) {
+        if (widget.hasOlder && i == loadOlderIndex) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Center(
-              child: _LoadOlderButton(onTap: widget.onLoadOlder),
-            ),
+            child: Center(child: _LoadOlderButton(onTap: widget.onLoadOlder)),
           );
         }
         // Index 0 = bottom = newest. Stable keys are REQUIRED here: when the
@@ -766,20 +819,9 @@ class _MessageListState extends State<_MessageList> {
             rows.length - 1 - (i - (widget.streaming != null ? 1 : 0));
         final row = rows[rowIdx];
         return KeyedSubtree(
-          key: ValueKey(switch (row) {
-            SingleMessageRow(:final message) => message.id,
-            ToolGroupRow(:final tools) => 'tools_${tools.first.id}',
-          }),
+          key: ValueKey(rowKey(row)),
           child: switch (row) {
-            SingleMessageRow(:final message) => switch (message) {
-              UserMsg() => UserBubble(message),
-              AssistantMsg() => AssistantBubble(message),
-              ToolEvent() => ToolRequestCard(
-                tool: message,
-                onDecide: widget.onDecide,
-              ),
-              CompactionMsg() => CompactionBubble(message),
-            },
+            SingleMessageRow(:final message) => _bubble(message),
             ToolGroupRow(:final tools) => ActivityGroupCard(tools: tools),
           },
         );
@@ -839,10 +881,7 @@ class _TranscriptSkeleton extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 14),
-          Text(
-            '正在载入会话…',
-            style: TextStyle(color: colors.muted, fontSize: 13),
-          ),
+          Text('正在载入会话…', style: TextStyle(color: colors.muted, fontSize: 13)),
         ],
       ),
     );

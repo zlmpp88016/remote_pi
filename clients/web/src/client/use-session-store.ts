@@ -91,6 +91,9 @@ export interface SessionActions {
   /** Opens the viewer IMPLICITLY at click time for the given session, showing
    *  the loading state, so a slow or lost reply cannot look like a dead click. */
   readonly beginRead: (sessionId: string) => void;
+  /** Retires only the foreground legacy read, including its watchdog. */
+  readonly retireRead: () => void;
+  readonly scheduleReadTimeout: (id: string, ms: number, onTimeout: () => void) => void;
   readonly clearViewer: () => void;
   /** Stores a prefetched transcript for `sessionId`, evicting the stalest entry. */
   readonly cacheRead: (sessionId: string, events: readonly WireSessionEvent[]) => void;
@@ -166,6 +169,7 @@ export function useSessionStore(): SessionStore {
 
   const listReq = useRef<ListRequest | null>(null);
   const readReq = useRef<ReadRequest | null>(null);
+  const readTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   /*
    * The single outstanding PREFETCH, if any.
    *
@@ -176,6 +180,28 @@ export function useSessionStore(): SessionStore {
   const prefetchReq = useRef<ReadRequest | null>(null);
   const switchReq = useRef<SwitchRequest | null>(null);
   const newReq = useRef<NewRequest | null>(null);
+
+  const retireRead = useCallback(() => {
+    readReq.current = null;
+    if (readTimeout.current !== null) clearTimeout(readTimeout.current);
+    readTimeout.current = null;
+    setReadLoading(false);
+  }, []);
+
+  const scheduleReadTimeout = useCallback((id: string, ms: number, onTimeout: () => void) => {
+    if (readTimeout.current !== null) clearTimeout(readTimeout.current);
+    readTimeout.current = setTimeout(() => {
+      if (readReq.current?.id !== id) return;
+      retireRead();
+      onTimeout();
+    }, ms);
+  }, [retireRead]);
+
+  useEffect(() => () => {
+    if (readTimeout.current !== null) clearTimeout(readTimeout.current);
+    readTimeout.current = null;
+    readReq.current = null;
+  }, []);
 
   // Relative ages ("2d ago") must not be computed during render: that reads the
   // clock, which makes the component impure. A one-minute tick is enough for
@@ -223,13 +249,14 @@ export function useSessionStore(): SessionStore {
   }, []);
 
   const applyRead = useCallback((sessionId: string, events: readonly WireSessionEvent[]) => {
+    retireRead();
     // READ-ONLY: this populates the viewer and never touches the live chat, so
     // the running session and its transcript are both left alone.
     setViewingId(sessionId);
     setViewedEvents(events);
     setReadLoading(false);
     setNotice(null);
-  }, []);
+  }, [retireRead]);
 
   /*
    * Open the viewer the moment the user clicks, before the host answers.
@@ -243,18 +270,20 @@ export function useSessionStore(): SessionStore {
    * flag makes the click visibly land, and the reply then fills it in.
    */
   const beginRead = useCallback((sessionId: string) => {
+    retireRead();
     setViewingId(sessionId);
     setViewedEvents(null);
     setReadLoading(true);
     setNotice(null);
-  }, []);
+  }, [retireRead]);
 
   const clearViewer = useCallback(() => {
+    retireRead();
     setViewingId(null);
     setViewedEvents(null);
     setReadLoading(false);
     setSwitchLoading(false);
-  }, []);
+  }, [retireRead]);
 
   /*
    * Prefetched transcripts, keyed by session id.
@@ -309,16 +338,15 @@ export function useSessionStore(): SessionStore {
 
   const resetRoom = useCallback(() => {
     listReq.current = null;
-    readReq.current = null;
+    retireRead();
     switchReq.current = null;
     newReq.current = null;
     setBusy(false);
     setNotice(null);
     setViewingId(null);
     setViewedEvents(null);
-    setReadLoading(false);
     setSwitchLoading(false);
-  }, []);
+  }, [retireRead]);
 
   return {
     state: { byRoom, busy, notice, viewingId, viewedEvents, readLoading, switchLoading, now, canSwitch, canNew },
@@ -334,6 +362,8 @@ export function useSessionStore(): SessionStore {
       hasRead,
       clearReadCache,
       setReadLoading,
+      retireRead,
+      scheduleReadTimeout,
       setSwitchLoading,
       resetRoom,
       listReq,

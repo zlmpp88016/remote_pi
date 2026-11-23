@@ -38,10 +38,11 @@ const shell = process.env["REMOTE_PI_SHELL"] === "1";
  * back on.
  */
 const legacyFlag = process.env["NEXT_PUBLIC_REMOTE_PI_WEB_CLIENT"];
+const probe = process.env["REMOTE_PI_HISTORY_TEST_PROBE"] === "1";
 const env =
   legacyFlag === undefined
-    ? {}
-    : { "import.meta.env.VITE_NEXT_PUBLIC_REMOTE_PI_WEB_CLIENT": JSON.stringify(legacyFlag) };
+    ? { "__REMOTE_PI_HISTORY_TEST_BUILD__": JSON.stringify(probe) }
+    : { "__REMOTE_PI_HISTORY_TEST_BUILD__": JSON.stringify(probe), "import.meta.env.VITE_NEXT_PUBLIC_REMOTE_PI_WEB_CLIENT": JSON.stringify(legacyFlag) };
 
 export default defineConfig({
   // Absolute in both modes — see the header. Relative URLs break every route

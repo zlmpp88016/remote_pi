@@ -21,6 +21,32 @@ val keystoreProperties = Properties().apply {
 }
 val hasReleaseKeystore = keystoreProperties.getProperty("storeFile") != null
 
+// Plan 86 #46 — OPT-IN isolated verification identity.
+//
+// Passing `-PremotePiHistoryVerification=true` (from the Flutter tool:
+// `--android-project-arg=remotePiHistoryVerification=true`) appends the FIXED
+// `.p86` suffix to the DEBUG and PROFILE application ids, so the verification
+// build installs side by side with the shipped app and cannot touch its
+// pairing / Hive / Block-Store state (all of which is keyed by the package
+// name). Same rationale as `clients/desktop/android/app/build.gradle.kts`.
+//
+// Opt-in by construction, three properties worth keeping:
+//   * property absent (or anything other than `true`) ⇒ both identifiers are
+//     byte-identical to today's `com.example.remotepi`;
+//   * RELEASE is never suffixed — a store artifact must not carry `.p86`;
+//   * the suffix is fixed, not derived from a branch/SHA, so device scripts can
+//     hardcode the package name.
+//
+// `namespace` (and therefore the activity class and the R/BuildConfig package)
+// stays `com.example.remotepi`: only the install identity changes.
+val historyVerificationId =
+    (project.findProperty("remotePiHistoryVerification") as String?)?.toBoolean() == true
+val historyVerificationSuffix =
+    (project.findProperty("remotePiHistoryVerificationSuffix") as String?) ?: "p86"
+if (historyVerificationId && historyVerificationSuffix !in setOf("p86", "p90")) {
+    throw GradleException("unsupported isolated verification suffix")
+}
+
 android {
     namespace = "com.example.remotepi"
     compileSdk = flutter.compileSdkVersion
@@ -59,6 +85,17 @@ android {
     }
 
     buildTypes {
+        if (historyVerificationId) {
+            // The Flutter Gradle plugin creates `profile` in its own apply()
+            // (with `initWith(debug)`), i.e. BEFORE this block runs — that copy
+            // is by value, so an id set only on `debug` would NOT reach the
+            // profile variant. Both variants are therefore set explicitly.
+            // (`getByName` — not `maybeCreate` — because the plugin guarantees
+            // `profile` exists; a missing one must fail the opt-in build loudly
+            // instead of silently producing an unsuffixed APK.)
+            getByName("debug").applicationIdSuffix = ".$historyVerificationSuffix"
+            getByName("profile").applicationIdSuffix = ".$historyVerificationSuffix"
+        }
         release {
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")

@@ -44,7 +44,7 @@ export interface SessionListProps {
   viewingId: string | null;
   /** The live session, as the host reported it. */
   liveId: string | null;
-  /** Fixed sentence for the last failed action, or null. */
+  /** Fixed client-authored request status or failure sentence, or null. */
   notice: string | null;
   /** "Now" for the relative ages, passed IN so the render stays pure (a
    *  `Date.now()` in the body would be an impure read during render). */
@@ -57,6 +57,18 @@ export interface SessionListProps {
    * mounts. Optional: without it the list behaves exactly as before.
    */
   onPrefetch?: ((id: string) => void) | undefined;
+  /**
+   * Releases that warm-up when the pointer/focus leaves the row (Plan 86 P3).
+   * Required for the single-flight rule to terminate: a hover that is never
+   * released holds the session's only in-flight slot open.
+   */
+  onPrefetchEnd?: ((id: string) => void) | undefined;
+  /** Appends the next page of sessions when the host says more exist. */
+  onLoadMore?: (() => void) | undefined;
+  /** True while that page is in flight. */
+  loadMoreBusy?: boolean;
+  pageStart?: number;
+  pageEnd?: number;
 }
 
 export function SessionList({
@@ -70,6 +82,11 @@ export function SessionList({
   onOpen,
   onRead,
   onPrefetch,
+  onPrefetchEnd,
+  onLoadMore,
+  loadMoreBusy = false,
+  pageStart = 0,
+  pageEnd = 0,
 }: SessionListProps) {
   /*
    * Debounced prefetch.
@@ -110,6 +127,9 @@ export function SessionList({
     <section
       className={css.root}
       aria-label="会话"
+      data-history-list=""
+      data-page-start={pageStart}
+      data-page-end={pageEnd}
     >
       <div className={css.head}>
         <span className={css.title}>
@@ -137,6 +157,9 @@ export function SessionList({
         </button>
       </div>
 
+      {pageStart > 0 ? <p className={css.note} role="status">
+        Session pages {pageStart + 1}–{pageEnd + 1} from newest. Refresh to return to newest sessions.
+      </p> : null}
       {disabledReason !== null ? (
         <div className={css.scroll}>
           <p className={css.note}>{disabledReason}</p>
@@ -152,7 +175,7 @@ export function SessionList({
            */}
           <p className={css.note}>
             {notice !== null
-              ? "无法加载该工作区的会话。点击刷新重试。"
+              ? notice
               : busy
                 ? "正在向主机请求该工作区的会话…"
                 : "该工作区还没有会话。"}
@@ -179,9 +202,16 @@ export function SessionList({
                       type="button"
                       onClick={() => onRead(session.id)}
                       onMouseEnter={() => schedule(session.id)}
-                      onMouseLeave={cancel}
+                      onMouseLeave={() => {
+                        cancel();
+                        onPrefetchEnd?.(session.id);
+                      }}
                       onFocus={() => schedule(session.id)}
-                      onBlur={cancel}
+                      onBlur={() => {
+                        cancel();
+                        onPrefetchEnd?.(session.id);
+                      }}
+                      data-history-session=""
                       aria-label={`Read session ${label}`}
                       title={preview === "" ? "查看该会话" : preview}
                       className={css.readButton}
@@ -220,6 +250,17 @@ export function SessionList({
               );
             })}
           </ul>
+          {onLoadMore === undefined ? null : (
+            <button
+              type="button"
+              onClick={() => onLoadMore()}
+              disabled={loadMoreBusy}
+              className={css.loadMore}
+              title="加载更早的会话"
+            >
+              {loadMoreBusy ? "loading…" : "load older sessions"}
+            </button>
+          )}
         </div>
       )}
 

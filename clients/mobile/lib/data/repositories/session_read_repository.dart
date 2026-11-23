@@ -19,18 +19,42 @@ class SessionReadRepository extends Repository {
   /// snapshot on listen, then an updated list per row change.
   Stream<List<MessageRecord>> watchMessages(String epk, String roomId) {
     final byKey = <int, MessageRecord>{};
+    final batch = _boxes.messageBatch(epk, roomId);
+    StreamSubscription<bool>? batchSub;
+    var cancelled = false;
+    var dirty = false;
     StreamSubscription? sub;
     late final StreamController<List<MessageRecord>> controller;
     controller = StreamController<List<MessageRecord>>(
       onListen: () async {
         final box = await _boxes.msgsBox(epk, roomId);
-        for (final k in box.keys) {
-          byKey[(k as num).toInt()] = MessageRecord.fromJson(
-            _coerce(box.get(k)),
-          );
+        if (cancelled) return;
+        void reload() {
+          byKey.clear();
+          for (final k in box.keys) {
+            byKey[k as int] = MessageRecord.fromJson(_coerce(box.get(k)));
+          }
         }
-        if (!controller.isClosed) controller.add(_sorted(byKey));
+
+        reload();
+        dirty = batch.active || !batch.valid;
+        if (!dirty && !controller.isClosed) controller.add(_sorted(byKey));
+        batchSub = batch.completions.stream.listen((complete) {
+          if (!complete) {
+            dirty = true;
+            return;
+          }
+          if (dirty && !cancelled && !controller.isClosed) {
+            reload();
+            dirty = false;
+            controller.add(_sorted(byKey));
+          }
+        });
         sub = box.watch().listen((event) {
+          if (batch.active || !batch.valid) {
+            dirty = true;
+            return;
+          }
           final key = (event.key as num).toInt();
           if (event.deleted) {
             byKey.remove(key);
@@ -42,7 +66,9 @@ class SessionReadRepository extends Repository {
         });
       },
       onCancel: () async {
+        cancelled = true;
         await sub?.cancel();
+        await batchSub?.cancel();
       },
     );
     return controller.stream;
@@ -76,8 +102,8 @@ class SessionReadRepository extends Repository {
   }
 
   static List<MessageRecord> _sorted(Map<int, MessageRecord> byKey) {
-    final keys = byKey.keys.toList()..sort();
-    return [for (final k in keys) byKey[k]!];
+    final rows = byKey.values.toList()..sort((a, b) => a.seq.compareTo(b.seq));
+    return List<MessageRecord>.unmodifiable(rows);
   }
 
   static Map<String, dynamic> _coerce(dynamic raw) {

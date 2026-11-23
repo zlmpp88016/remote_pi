@@ -32,6 +32,10 @@ import {
   type CronResultWire,
   type ServerMessage,
   type WorkspaceState,
+  type HistoryListOkWire,
+  type HistoryReadOkWire,
+  type HistoryBodyOkWire,
+  type HistoryErrorWire,
 } from "../protocol/types.js";
 import {
   handlePairRequest,
@@ -57,6 +61,8 @@ import {
 } from "./schedule_handlers.js";
 import { logRelayEvent } from "../log.js";
 import { roomIdFor } from "../rooms.js";
+import { HistoryService, type HistoryQueryMetrics, type HistoryServiceOptions } from "../session/history_service.js";
+import { historyErrorReply, parseHistoryRequest } from "../protocol/history.js";
 
 export interface HostBridgeOptions {
   fleet: FleetOps;
@@ -90,6 +96,14 @@ export interface HostBridgeOptions {
    * browser-facing direction is redirectable.
    */
   replySink?: ReplySink;
+  /**
+   * Plan 86 P1 — host history service options.
+   *
+   * The service itself is created LAZILY on the first `history_*` frame and
+   * disposed by `stop()`. Tests use this to point the transcript root at a
+   * scratch tree or to inject a worker transport; production passes nothing.
+   */
+  history?: Omit<HistoryServiceOptions, "resolveWorkspace" | "runtime">;
 }
 
 /**
@@ -251,7 +265,19 @@ function readInnerRequestType(ct: string): string | null {
 }
 
 /** Plan/69 — capabilities this host bridge actually implements. */
-const HOST_CAPABILITIES = ["host_pairing", "workspace_state", "host_forward", "fs_nav", "schedule", "changes", "models_config", "settings"] as const;
+const HOST_CAPABILITIES = [
+  "host_pairing",
+  "workspace_state",
+  "host_forward",
+  "fs_nav",
+  "schedule",
+  "changes",
+  "models_config",
+  "settings",
+  // Plan 86 P1 — `history_list`/`history_read`/`history_body` answered from
+  // disk with zero Pi processes running.
+  "workspace_history_v1",
+] as const;
 
 /**
  * How often the established host-room connection is checked for being ALIVE.
@@ -302,6 +328,8 @@ export class HostBridge {
    *  request's own child room is the only correct value. */
   private pendingReplies = new Map<string, { peer: string; room: string }>();
   private static readonly MAX_PENDING_REPLIES = 256;
+  /** Plan 86 P1 — single lazy owner of the history worker + read domain. */
+  private historyService: HistoryService | null = null;
 
   constructor(private readonly opts: HostBridgeOptions) {}
 
@@ -318,6 +346,17 @@ export class HostBridge {
     this.stopped = true;
     /* Withdraw the injection point so a stopped bridge cannot be called. */
     localInbound = null;
+    /* Plan 86 P1 — the history worker is owned by this bridge; terminate it so
+     * a supervisor shutdown cannot leak a worker thread. */
+    const history = this.historyService;
+    this.historyService = null;
+    if (history !== null) {
+      try {
+        await history.dispose();
+      } catch {
+        /* best-effort: shutdown must proceed */
+      }
+    }
     this._stopConnectWatchdog();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -611,6 +650,16 @@ export class HostBridge {
         }
         break;
       }
+      // ── Plan 86 P1 — host-native workspace history (zero Pi) ──────────────
+      // The service resolves `daemon_id` against the registered fleet and
+      // derives the session bucket itself; no frame here carries a path. The
+      // allow-list check above already ran, so an unknown peer never reaches
+      // this branch.
+      case "history_list":
+      case "history_read":
+      case "history_body":
+        this._handleHistory(inner, sender);
+        break;
       case "workspace_add":
         handleWorkspaceAdd(this.opts.fleet, sender, inner);
         break;
@@ -913,6 +962,136 @@ export class HostBridge {
   }
 
   /**
+   * Lazily create the ONE history service this bridge owns.
+   *
+   * Authorization lives here, not in the worker: `daemon_id` is resolved
+   * against the registered fleet (daemons ∪ added workspaces), and the session
+   * bucket is derived from THAT entry's cwd. A client cannot address a path,
+   * and an unregistered id is `not_found` before any disk work happens.
+   */
+  private _historyService(): HistoryService {
+    if (this.historyService !== null) return this.historyService;
+    const fleet = this.opts.fleet;
+    this.historyService = new HistoryService({
+      ...this.opts.history,
+      resolveWorkspace: (daemonId: string) => {
+        let entries;
+        try {
+          entries = fleet.list();
+        } catch {
+          return null;
+        }
+        const entry = entries.find((candidate) => candidate.id === daemonId);
+        if (entry === undefined) return null;
+        return { daemon_id: entry.id, cwd: entry.cwd, name: entry.name };
+      },
+      runtime: (daemonId: string) => {
+        const snapshot = fleet.runtime?.(daemonId) ?? null;
+        if (snapshot === null) return null;
+        /*
+         * Plan 86 P2 correction (R1/R2) — pass the child's OWN writer notice
+         * through verbatim. The supervisor only ever fills `session_file` and
+         * `append_authority` from a live child of the CURRENT incarnation; the
+         * history service refuses to trust an append without that chain, and the
+         * worker re-verifies the file it actually holds the row for.
+         */
+        return {
+          state: snapshot.state,
+          session_id: snapshot.session_id,
+          ready: snapshot.ready,
+          session_file: snapshot.session_file ?? null,
+          session_span: snapshot.session_span ?? null,
+          append_authority: snapshot.append_authority === true,
+        };
+      },
+    });
+    return this.historyService;
+  }
+
+  /**
+   * Plan 86 P1 — dispatch one history frame.
+   *
+   * The request is validated by the protocol guard BEFORE it reaches the
+   * service, and every reply is a typed `history_*` frame — never silence. The
+   * log line carries ids, counts and times only: no paths, no ct, no payloads.
+   */
+  private _handleHistory(
+    inner: Extract<ClientMessage, { type: "history_list" | "history_read" | "history_body" }>,
+    sender: HostReplySender,
+  ): void {
+    // A bridge that is shutting down must not lazily recreate a worker.
+    if (this.stopped) return;
+    const scope = historyFrameScope(inner);
+    if (scope.id === "") {
+      logRelayEvent("history: frame without a correlation id dropped");
+      return;
+    }
+    const guarded = parseHistoryRequest(inner);
+    if (!guarded.ok) {
+      sender.send(historyErrorReply(scope.id, guarded.code, scope));
+      return;
+    }
+
+    let service: HistoryService;
+    try {
+      service = this._historyService();
+    } catch (error) {
+      logRelayEvent(`history: service unavailable (${error instanceof Error ? error.name : "error"})`);
+      sender.send(historyErrorReply(guarded.value.id, "internal", scope));
+      return;
+    }
+
+    const request = guarded.value;
+    const task =
+      request.type === "history_list"
+        ? service.list(request)
+        : request.type === "history_read"
+          ? service.read(request)
+          : service.body(request);
+    void task
+      .then(({ reply, metrics }) => {
+        this._logHistory(request.type, request.daemon_id, metrics, reply);
+        sender.send(reply);
+      })
+      .catch((error: unknown) => {
+        logRelayEvent(`history ${request.type} internal (${error instanceof Error ? error.name : "error"})`);
+        sender.send(
+          historyErrorReply(request.id, "internal", {
+            daemon_id: request.daemon_id,
+            session_id: "session_id" in request ? request.session_id : null,
+          }),
+        );
+      });
+  }
+
+  /** Scalar-only observability, using P0's metric names verbatim. */
+  private _logHistory(
+    type: string,
+    daemonId: string,
+    metrics: HistoryQueryMetrics,
+    reply: HistoryListOkWire | HistoryReadOkWire | HistoryBodyOkWire | HistoryErrorWire,
+  ): void {
+    const result =
+      reply.type === "history_error"
+        ? `error=${reply.code}`
+        : reply.type === "history_list_ok"
+          ? `state=${reply.index_state} sessions=${reply.sessions.length} has_more=${reply.has_more}`
+          : reply.type === "history_read_ok"
+            ? `items=${reply.items.length} has_older=${reply.has_older}`
+            : `total_bytes=${reply.total_bytes}`;
+    const num = (value: number | null): string => (value === null ? "null" : value.toFixed(3));
+    logRelayEvent(
+      `history ${type} daemon=${daemonId} ${result} query_ms=${num(metrics.query_ms)} queue_ms=${num(metrics.queue_ms)} ` +
+        `read_bytes=${metrics.read_bytes === null ? "null" : metrics.read_bytes} ` +
+        `parsed_entries=${metrics.parsed_entries === null ? "null" : metrics.parsed_entries} ` +
+        `cache_hit=${metrics.cache_hit === null ? "null" : String(metrics.cache_hit)} worker=${metrics.worker_mode} ` +
+        `cold_ms=${num(metrics.cold_build_ms)} cold_bytes=${metrics.cold_build_bytes === null ? "null" : metrics.cold_build_bytes} ` +
+        `body_ms=${num(metrics.body_decode_ms)} body_bytes=${metrics.body_source_bytes === null ? "null" : metrics.body_source_bytes} ` +
+        `stats=${metrics.stat_count === null ? "null" : metrics.stat_count}`,
+    );
+  }
+
+  /**
    * Plan/69 — host-room pairing. Validates the persisted token, persists
    * the peer, answers `pair_ok`/`pair_error`. On success the new peer joins
    * the allow-list so its subsequent host-room traffic (workspace_list,
@@ -1019,4 +1198,23 @@ export class HostBridge {
     /* Consumed either way: never let the caller replay it through the relay. */
     return true;
   }
+}
+
+/**
+ * Plan 86 P1 — correlation/scope fields of a history frame, for building a
+ * typed error when the guard rejects it. Values are only echoed back when the
+ * client actually sent non-empty strings; nothing is inferred.
+ */
+function historyFrameScope(value: unknown): {
+  id: string;
+  daemon_id: string | null;
+  session_id: string | null;
+} {
+  const record = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  const id = typeof record["id"] === "string" ? record["id"] : "";
+  const daemonId =
+    typeof record["daemon_id"] === "string" && record["daemon_id"] !== "" ? record["daemon_id"] : null;
+  const sessionId =
+    typeof record["session_id"] === "string" && record["session_id"] !== "" ? record["session_id"] : null;
+  return { id, daemon_id: daemonId, session_id: sessionId };
 }

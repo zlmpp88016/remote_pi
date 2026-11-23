@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:mobile/domain/history/history_stage_metrics.dart';
 import 'package:mobile/data/sessions/session_catalog.dart';
 import 'package:mobile/data/transport/connection_manager.dart';
 import 'package:mobile/protocol/protocol.dart';
@@ -30,9 +31,7 @@ class WorkspaceListViewModel extends ViewModel<WorkspaceListState> {
     : _conn = conn,
       super(const WorkspaceListLoading()) {
     if (_conn != null) {
-      _states = Map<String, WorkspaceState>.from(
-        _conn.workspaceStatesSnapshot,
-      );
+      _states = Map<String, WorkspaceState>.from(_conn.workspaceStatesSnapshot);
       // ignore: discarded_futures
       _statesSub = _conn.workspaceStatesStream.listen(_onStates);
     }
@@ -48,16 +47,23 @@ class WorkspaceListViewModel extends ViewModel<WorkspaceListState> {
   /// kept here so `reload` can re-attach it to a fresh Ready state).
   Map<String, WorkspaceState> _states = const {};
 
+  HistoryStageSpan? viewportStage;
+
   Future<void> reload() async {
+    final stage = HistoryStageMetrics.begin('registered_workspace_directory');
     emit(const WorkspaceListLoading());
     try {
-      final ok = await _catalog.listWorkspaces();
-      emit(
-        WorkspaceListReady(workspaces: ok.workspaces, statesByCwd: _states),
+      final ok = await HistoryStageMetrics.request(
+        stage,
+        _catalog.listWorkspaces,
       );
+      viewportStage = stage?..applied(ok.workspaces.length);
+      emit(WorkspaceListReady(workspaces: ok.workspaces, statesByCwd: _states));
     } on WorkspaceControlFailure catch (e) {
+      stage?.failed = true;
       emit(WorkspaceListError(_human(e)));
     } catch (e) {
+      stage?.failed = true;
       emit(WorkspaceListError('无法列出工作区：$e'));
     }
   }
@@ -114,7 +120,10 @@ class WorkspaceListViewModel extends ViewModel<WorkspaceListState> {
     final cur = state;
     if (cur is WorkspaceListReady) {
       emit(
-        cur.copyWith(restartingCwd: null, restartError: (cwd: cwd, message: message)),
+        cur.copyWith(
+          restartingCwd: null,
+          restartError: (cwd: cwd, message: message),
+        ),
       );
     }
   }
@@ -128,7 +137,11 @@ class WorkspaceListViewModel extends ViewModel<WorkspaceListState> {
     if (s is! WorkspaceListReady) return;
     try {
       await _catalog.removeWorkspace(cwd);
-      emit(WorkspaceListReady(workspaces: s.workspaces.where((w) => w.cwd != cwd).toList()));
+      emit(
+        WorkspaceListReady(
+          workspaces: s.workspaces.where((w) => w.cwd != cwd).toList(),
+        ),
+      );
     } on WorkspaceControlFailure catch (e) {
       emit(WorkspaceListError(_human(e)));
     } catch (e) {

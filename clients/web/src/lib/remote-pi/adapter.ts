@@ -39,9 +39,13 @@
  *     stored pairing stays on disk for the next mount.
  */
 
+import { historyProbeMark } from "./history-probe.ts";
 import {
   RemotePiWebClient,
   TransportError,
+  type HistoryBarrierSignal,
+  type HistoryRequestPriority,
+  type HistoryWireRequest,
   type TransportCloseCode,
   type TransportDiagnosticCode,
   type TransportTimeouts,
@@ -355,8 +359,19 @@ export interface RemotePiTransport {
   ): string;
   sendSessionSwitch(hostEpk: string, roomId: string, sessionId: string): string;
   sendSessionNew(hostEpk: string, roomId: string): string;
+  /** Plan 86 P3 — host-native history ON THE HOST ROOM (no workspace proxy).
+   *  `priority` only matters for a transport that can POST independently. */
+  sendHistory(
+    hostEpk: string,
+    request: HistoryWireRequest,
+    priority?: HistoryRequestPriority,
+  ): string;
   onServerMessage(listener: (msg: ServerMessage, room: string) => void): () => void;
   onClose(listener: (code: TransportCloseCode) => void): () => void;
+  /** OPTIONAL: write-barrier epochs from a lane-aware transport (SSE). */
+  onHistoryBarrier?(listener: (event: HistoryBarrierSignal) => void): () => void;
+  /** OPTIONAL promotion of a queued history read (lane-aware transports). */
+  reprioritizeHistory?(requestId: string, priority: HistoryRequestPriority): boolean;
   /** OPTIONAL: the real client has it; a structural double may omit it. The
    *  adapter forwards these fixed codes and never reads a payload from them. */
   onDiagnostic?(listener: (code: TransportDiagnosticCode) => void): () => void;
@@ -728,6 +743,8 @@ export class RemotePiAdapter {
    * would make every chat consumer responsible for recognising and ignoring them.
    */
   private readonly scheduleFiredListeners = new Set<(push: ScheduleFiredPush) => void>();
+  /** Plan 86 P3 — write-barrier subscribers (fan-out from the transport). */
+  private readonly historyBarrierListeners = new Set<(event: HistoryBarrierSignal) => void>();
   /** Coalesced catalog invalidation requested by a `workspace_state` push. It
    *  owns its flow id, so a timer armed before a newer pair can never relist
    *  on the new connection. */
@@ -814,6 +831,17 @@ export class RemotePiAdapter {
    *  (a raw spread would carry a canary such as `host.token` into the UI) and
    *  the mutable copies are deep copies, so a caller's mutation of a snapshot
    *  never reaches adapter state. */
+  /**
+   * Plan 86 P3 — the bound host peer key (the host's signing identity).
+   *
+   * Public on purpose: it is already on the wire in every envelope and it is the
+   * “host” half of a history cache scope. It is NOT a credential — the pairing
+   * token is never exposed here.
+   */
+  get boundHostPeer(): string | null {
+    return this.credential?.hostEpk ?? null;
+  }
+
   getSnapshot(): AdapterSnapshot {
     return {
       phase: this.state.phase,
@@ -1059,6 +1087,8 @@ export class RemotePiAdapter {
     this.assertCurrent(live);
     if (owner !== this.refreshOwner) throw new AdapterStateError("superseded");
     this.setCatalog(list.workspaces);
+    historyProbeMark("directory", "applied", list.in_reply_to, list.workspaces.length);
+    historyProbeMark("directory", "full-page", list.in_reply_to, list.workspaces.length);
     this.notify();
     return this.workspaces === null ? [] : this.workspaces.map(projectWorkspace);
   }
@@ -1523,6 +1553,40 @@ export class RemotePiAdapter {
     return transport.sendSessionNew(credential.hostEpk, roomId);
   }
 
+  /**
+   * Plan 86 P3 — send ONE host-native history request.
+   *
+   * Addressed to the HOST room, not a workspace room: the read is served from
+   * disk with zero Pi processes, so it works while a workspace is stopped,
+   * starting or respawning. Fire-and-forget; the reply is correlated by request
+   * id in the application layer.
+   */
+  sendHistory(request: HistoryWireRequest, priority: HistoryRequestPriority = "foreground"): string {
+    const { transport, credential } = this.requireLive();
+    return transport.sendHistory(credential.hostEpk, request, priority);
+  }
+
+  /**
+   * Plan 86 P3 — write-barrier epochs (lane-aware transports only).
+   *
+   * A WebSocket transport has none, and then this call simply never fires: the
+   * application layer's epoch guard is then a constant, which is exactly the
+   * pre-P3 behaviour.
+   */
+  onHistoryBarrier(listener: (event: HistoryBarrierSignal) => void): () => void {
+    this.historyBarrierListeners.add(listener);
+    return () => this.historyBarrierListeners.delete(listener);
+  }
+
+  /** Plan 86 P3 — promote a queued history read (no-op without a lane). */
+  reprioritizeHistory(requestId: string, priority: HistoryRequestPriority): boolean {
+    const transport = this.transport;
+    if (transport === null) return false;
+    const reprioritize = transport.reprioritizeHistory;
+    if (typeof reprioritize !== "function") return false;
+    return reprioritize.call(transport, requestId, priority);
+  }
+
   // ── internals: catalogue cache ───────────────────────────────────────────
 
   /**
@@ -1729,6 +1793,8 @@ export class RemotePiAdapter {
 
       this.host = projectHello(hello);
       this.setCatalog(list.workspaces);
+      historyProbeMark("directory", "applied", list.in_reply_to, list.workspaces.length);
+      historyProbeMark("directory", "full-page", list.in_reply_to, list.workspaces.length);
       this.backend = transport.backend;
       this.retries = 0; // success resets the reconnect budget
       if (persist) {
@@ -1914,6 +1980,22 @@ export class RemotePiAdapter {
         transport.onDiagnostic((code) => {
           if (this.stale(seq)) return;
           for (const listener of [...this.diagnosticListeners]) listener(code);
+        }),
+      );
+    }
+    /*
+     * Plan 86 P3 — write-barrier epochs.
+     *
+     * A barrier that arrives from a SUPERSEDED flow is dropped with the same
+     * discipline as every other listener above: the new connection has its own
+     * epoch counter starting at zero, and applying an old generation's epoch
+     * would make every fresh read look outdated.
+     */
+    if (typeof transport.onHistoryBarrier === "function") {
+      unsubscribers.push(
+        transport.onHistoryBarrier((event) => {
+          if (this.stale(seq)) return;
+          for (const listener of [...this.historyBarrierListeners]) listener(event);
         }),
       );
     }

@@ -298,6 +298,12 @@ export interface RightRailProps {
   onSessionsRefresh: () => void;
   onSessionRead: (id: string) => void;
   onSessionPrefetch?: ((id: string) => void) | undefined;
+  /** Releases a row's warm-up when the pointer/focus leaves it (Plan 86 P3). */
+  onSessionPrefetchEnd?: ((id: string) => void) | undefined;
+  /** Appends the next page of sessions (host-native list only). */
+  onSessionsLoadMore?: (() => void) | undefined;
+  sessionsPageStart?: number;
+  sessionsPageEnd?: number;
 }
 
 export function RightRail({
@@ -396,6 +402,10 @@ export function RightRail({
   onSessionsRefresh,
   onSessionRead,
   onSessionPrefetch,
+  onSessionPrefetchEnd,
+  onSessionsLoadMore,
+  sessionsPageStart,
+  sessionsPageEnd,
 }: RightRailProps) {
   const [dragging, setDragging] = useState(false);
 
@@ -584,6 +594,10 @@ export function RightRail({
             onOpen={onSessionsRefresh}
             onRead={onSessionRead}
             onPrefetch={onSessionPrefetch}
+            onPrefetchEnd={onSessionPrefetchEnd}
+            onLoadMore={onSessionsLoadMore}
+            pageStart={sessionsPageStart}
+            pageEnd={sessionsPageEnd}
           />
         </div>
       ) : tab === "plan" ? (

@@ -1,7 +1,7 @@
 import 'package:mobile/domain/session_state.dart';
 
 /// Plan/31 — one persisted chat message (row-granular SSOT). Stored in the
-/// per-session `msgs:<epk>:<roomId>` box, keyed by [seq]. Maps to the domain
+/// per-session `msgs:<epk>:<roomId>` box, keyed by a stable nonnegative physical key. Maps to the domain
 /// [ChatMessage] the UI widgets already render.
 enum MsgRole { user, assistant, tool, compaction }
 
@@ -9,7 +9,8 @@ class MessageRecord {
   /// Protocol id — the dedupe key (optimistic send ↔ Pi echo share it).
   final String id;
 
-  /// Monotonic order within the session (the box key).
+  /// Signed persistent display order, independent of the physical Hive key.
+  /// Prepending allocates below the minimum. Never use seq as an index/key.
   final int seq;
   final MsgRole role;
   final String text;

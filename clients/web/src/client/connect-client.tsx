@@ -54,7 +54,7 @@ import {
 } from "@/lib/remote-pi/usage-stats";
 
 import { joinRemotePath } from "@/lib/remote-pi/remote-path";
-import { ATTACH_MODEL_REQUIRED, ATTACH_VISION_REQUIRED, CHAT_TIMEOUT_MS, COMPOSER_WORKSPACE_NOT_RUNNING, STOP_FAILED, REMOVE_FAILED, DEVICE_NAME, EMPTY_SESSIONS, EMPTY_SKILLS, EMPTY_PACKAGES, EMPTY_PLUGIN_SKILLS, FS_FAILED, FS_NAV_UNAVAILABLE, PLAN_READ_FAILED, PLAN_REFUSED, PLAN_TRUNCATED, MODELS_FAILED, MODELS_FOR_LIVE_WORKSPACE, MODEL_NOT_CONNECTED, MODEL_SET_FAILED, RESTART_FAILED, REAUTH_REQUIRED, RELAY_REQUIRED, SEND_FAILED, SKILLS_FAILED, SKILL_FAILED, PACKAGE_FAILED, CHANGES_UNAVAILABLE, CHANGES_FAILED, SETTINGS_UNREADABLE, SETTINGS_SAVED, SETTINGS_ERROR, SETTINGS_UNAVAILABLE, SETTINGS_SURFACE_UNAVAILABLE, SCHEDULE_FAILED, SCHEDULE_NO_WORKSPACE, PACKAGE_OP_TIMEOUT_MS, PLUGINS_FOR_LIVE_WORKSPACE, SESSIONS_FAILED, SESSIONS_FOR_LIVE_WORKSPACE, SESSIONS_LIST_TIMEOUT_MS, HOST_STALE_MS, SESSIONS_RELIST_ATTEMPTS, SESSIONS_RELIST_MS, SESSIONS_RETRY_BUDGET, SESSIONS_NOT_READY_BUDGET, SESSION_NEW_TIMEOUT_MS, SESSION_READ_TIMEOUT_MS, SWITCH_RESPAWN_GRACE_MS, SWITCH_TIMEOUT_MS, SESSION_NEW_FAILED, SESSION_READ_FAILED, START_FAILED, STORAGE_WARNING, SWITCH_FAILED, THINKING_SET_FAILED, WORKSPACES_FAILED, ADD_FAILED, chatItemStatus, chatNoticeForTurn, isSuperseded, pairFailureText, phaseBusyLabel, relayNotice } from "./notices";
+import { ATTACH_MODEL_REQUIRED, ATTACH_VISION_REQUIRED, CHAT_TIMEOUT_MS, COMPOSER_WORKSPACE_NOT_RUNNING, STOP_FAILED, REMOVE_FAILED, DEVICE_NAME, EMPTY_SESSIONS, EMPTY_SKILLS, EMPTY_PACKAGES, EMPTY_PLUGIN_SKILLS, FS_FAILED, FS_NAV_UNAVAILABLE, PLAN_READ_FAILED, PLAN_REFUSED, PLAN_TRUNCATED, MODELS_FAILED, MODELS_FOR_LIVE_WORKSPACE, MODEL_NOT_CONNECTED, MODEL_SET_FAILED, RESTART_FAILED, REAUTH_REQUIRED, RELAY_REQUIRED, SEND_FAILED, SKILLS_FAILED, SKILL_FAILED, PACKAGE_FAILED, CHANGES_UNAVAILABLE, CHANGES_FAILED, SETTINGS_UNREADABLE, SETTINGS_SAVED, SETTINGS_ERROR, SETTINGS_UNAVAILABLE, SETTINGS_SURFACE_UNAVAILABLE, SCHEDULE_FAILED, SCHEDULE_NO_WORKSPACE, PACKAGE_OP_TIMEOUT_MS, PLUGINS_FOR_LIVE_WORKSPACE, SESSIONS_FAILED, SESSIONS_FOR_LIVE_WORKSPACE, SESSIONS_LIST_TIMEOUT_MS, HOST_STALE_MS, HISTORY_BUILDING, historyNotice, SESSIONS_RELIST_ATTEMPTS, SESSIONS_RELIST_MS, SESSIONS_RETRY_BUDGET, SESSIONS_NOT_READY_BUDGET, SESSION_NEW_TIMEOUT_MS, SWITCH_RESPAWN_GRACE_MS, SWITCH_TIMEOUT_MS, SESSION_NEW_FAILED, START_FAILED, STORAGE_WARNING, SWITCH_FAILED, THINKING_SET_FAILED, WORKSPACES_FAILED, ADD_FAILED, chatItemStatus, chatNoticeForTurn, isSuperseded, pairFailureText, phaseBusyLabel, relayNotice } from "./notices";
 import { applyPreset, readStoredPreset, type ThemePreset } from "@/lib/theme-presets";
 import {
   applyMode,
@@ -74,7 +74,18 @@ import { useSkillStore } from "./use-skill-store";
 import { useWorkspaceStore } from "./use-workspace-store";
 import { toAutomationRow } from "./automation-row";
 import { dispatchServerMessage, type DispatcherPorts } from "./dispatcher";
+import { useHostHistory, type HistoryHostApi } from "./use-history";
+import { openLegacySessionRead } from "./legacy-session-read";
+import { supportsWorkspaceHistory } from "@/lib/remote-pi/history";
+import type { BodyLoad } from "@/components/remote-pi/sessions/session-viewer";
 import { fileToWireImage } from "./attachment";
+import type { BodyResult } from "@/lib/remote-pi/history-query";
+
+/** Narrow the controller's body result onto the viewer's prop shape. */
+function toBodyLoad(result: BodyResult): BodyLoad {
+  if (result.ok) return { ok: true, text: result.text };
+  return { ok: false, code: result.code, ...(result.detail === undefined ? {} : { detail: result.detail }) };
+}
 
 /**
  * Project one wire model onto a picker row.
@@ -252,7 +263,6 @@ export function ConnectClient() {
   const beginRead = sessionStore.actions.beginRead;
   const clearViewer = sessionStore.actions.clearViewer;
   const cacheRead = sessionStore.actions.cacheRead;
-  const takeRead = sessionStore.actions.takeRead;
   const hasRead = sessionStore.actions.hasRead;
   /** Opens the viewer for READING. Written as ONE store call: two separate
    *  setters that read each other's state would overwrite one another, because
@@ -302,6 +312,7 @@ export function ConnectClient() {
   const sessionsNotReadyLeftRef = useRef(0);
   const requestSessionsRef = useRef<(adapterOverride?: RemotePiAdapter, isRetry?: boolean) => void>(() => {});
   const sessionReadReqRef = sessionStore.actions.readReq;
+  const retireSessionRead = sessionStore.actions.retireRead;
   const prefetchReqRef = sessionStore.actions.prefetchReq;
   const sessionSwitchReqRef = sessionStore.actions.switchReq;
   const sessionNewReqRef = sessionStore.actions.newReq;
@@ -313,6 +324,25 @@ export function ConnectClient() {
   const setAttachmentError = attach.actions.setError;
 
   const bindingRef = useRef<{ adapter: RemotePiAdapter; unsubs: (() => void)[] } | null>(null) as MutableRefObject<{ adapter: RemotePiAdapter; unsubs: (() => void)[] } | null>;
+  /**
+   * The bound adapter as STATE, not only as a ref.
+   *
+   * Render-time consumers (the history hook) must not read a ref during render —
+   * React would not re-render when it changed, which is the exact failure the
+   * hooks lint rule protects against. Handlers keep using the ref, where a stale
+   * value is impossible.
+   */
+  const [boundAdapter, setBoundAdapter] = useState<RemotePiAdapter | null>(null);
+  /**
+   * Plan 86 P3 — host-native history surface, behind a ref so the session
+   * handlers defined ABOVE the workspace projection can still reach it.
+   *
+   * The hook is called once, after `activeWorkspace` is known; every handler
+   * here reads the CURRENT value through this ref rather than closing over a
+   * render-time object.
+   */
+  const historyApiRef = useRef<HistoryHostApi | null>(null);
+  const historyBindingRef = useRef<{ adapter: RemotePiAdapter | null; generation: number } | null>(null);
   /** Room the transcript is showing, readable from the message listener
    *  without re-subscribing on every room switch. */
   const activeRoomRef = useRef<string | null>(null) as MutableRefObject<string | null>;
@@ -320,19 +350,27 @@ export function ConnectClient() {
    *  Used only to detect that a re-list actually LANDED (identity changes when
    *  the store applies a new listing). */
   const byRoomRef = useRef<Record<string, readonly unknown[]>>({}) as MutableRefObject<Record<string, readonly unknown[]>>;
-  // Mirrored for the re-list timer, which must see the CURRENT store value
-  // without being re-created on every listing.
-  byRoomRef.current = sessionStore.state.byRoom;
   /** Same mirror, for the post-resume re-read: it must observe the viewer's
    *  CURRENT content to know when the history has actually arrived. */
   const viewerRef = useRef<{ viewingId: string | null; viewedEvents: readonly unknown[] | null }>({
     viewingId: null,
     viewedEvents: null,
   });
-  viewerRef.current = {
-    viewingId: sessionStore.state.viewingId,
-    viewedEvents: sessionStore.state.viewedEvents,
-  };
+  /*
+   * Mirrors for the TIMERS, refreshed after every commit.
+   *
+   * Written in an effect rather than inline: a ref write during render is a
+   * React anti-pattern (and is flagged by the hooks rule), and nothing here is
+   * read during render — only by the re-list and post-resume timers, which run
+   * after the commit that filled them.
+   */
+  useEffect(() => {
+    byRoomRef.current = sessionStore.state.byRoom;
+    viewerRef.current = {
+      viewingId: sessionStore.state.viewingId,
+      viewedEvents: sessionStore.state.viewedEvents,
+    };
+  }, [sessionStore.state]);
   /** Pending turn timer, bounded to the EXACT turn it was scheduled for:
    *  room + turn id + binding generation + adapter identity. A late firing for
    *  any other room/turn/generation/binding is ignored, and any room switch,
@@ -372,6 +410,10 @@ export function ConnectClient() {
 
   /** A session transcript read is cheap, so the first page is a generous size. */
   const SESSION_READ_LIMIT = 50;
+  /** Stable subscriber tokens: hover and the open viewer are distinct interests,
+   *  so a click can promote the hover's request instead of replacing it. */
+  const HISTORY_VIEW_SUBSCRIBER = "viewer";
+  const HISTORY_PREFETCH_SUBSCRIBER = "hover";
 
   /** `session_list` for the room on screen. Declared before the message
    *  listener that the `session_switch_ok` path re-lists through. */
@@ -397,6 +439,31 @@ export function ConnectClient() {
       : undefined;
     const adapter = override ?? bindingRef.current?.adapter ?? null;
     const roomId = activeRoomRef.current;
+    /*
+     * Plan 86 P3 — the host-native list, when the host offers it.
+     *
+     * `session_list` is proxied to the workspace Pi, so it cannot answer while
+     * that Pi is stopped, starting or respawning — and it queues behind unrelated
+     * POSTs. `history_list` is answered by the host from its own index, keyed by
+     * `daemon_id`, so the sidebar no longer depends on a running agent. The legacy
+     * path below stays EXACTLY as it was for an older host.
+     */
+    const history = historyApiRef.current;
+    if (supportsWorkspaceHistory(adapter?.getSnapshot().host?.capabilities)) {
+      // Binding/openRoom can precede the hook commit. Its workspace effect opens
+      // the list; capability support must never fall through to legacy Pi.
+      const daemonId = adapter?.getSnapshot().workspaces?.find((ws) => ws.room_id === roomId)?.daemon_id;
+      if (history?.available && history.scope?.daemon_id === daemonId &&
+          historyBindingRef.current?.adapter === adapter &&
+          historyBindingRef.current?.generation === adapter?.getSnapshot().generation &&
+          adapter !== null && adapter.getSnapshot().phase === "connected") {
+        history.actions.refreshList();
+        setSessionsBusy(true);
+        setSessionsNotice(null);
+        return true;
+      }
+      return false;
+    }
     if (adapter === null || roomId === null || adapter.getSnapshot().phase !== "connected") {
       /*
        * Not ready yet — PENDING, not failed.
@@ -530,11 +597,13 @@ export function ConnectClient() {
    *
    * The timeout callback is created inside `requestSessions`, which is a
    * `useCallback`; reading it directly there would capture whichever closure
-   * existed when the callback was built. A ref assignment after definition keeps
-   * the timer using the live function without adding it to the dependency list
-   * (which would rebuild the callback on every render).
+   * existed when the callback was built. An EFFECT keeps the ref current without
+   * adding it to the callback's dependency list (which would rebuild it on every
+   * render) and without writing a ref during render.
    */
-  requestSessionsRef.current = requestSessions;
+  useEffect(() => {
+    requestSessionsRef.current = requestSessions;
+  }, [requestSessions]);
 
   /** `session_read` — READ one session's transcript. Never switches. */
   const handleSessionRead = useCallback((sessionId: string) => {
@@ -542,73 +611,30 @@ export function ConnectClient() {
     const roomId = activeRoomRef.current;
     if (adapter === null || roomId === null) return;
     /*
-     * Consume a prefetched transcript when one is waiting.
+     * Plan 86 P3 — the host-native path.
      *
-     * This is the whole point of prefetching: the round trip already happened
-     * while the pointer was over the row, so the click can render immediately
-     * instead of showing a spinner. Without this branch the prefetch would only
-     * warm an unused cache.
+     * The click JOINS whatever the hover already started (`open` is
+     * single-flight per session) and promotes it to foreground. That is the whole
+     * "one click, at most one identical query" rule: a pointer that crossed the
+     * row 120 ms ago already paid for the request, and promoting it means the
+     * click neither duplicates it nor waits behind a second one.
+     *
+     * `beginRead` still runs so the click is VISIBLE immediately (the viewer
+     * mounts on the loading state) even before any reply lands.
      */
-    const cached = takeRead(sessionId);
-    if (cached !== null) {
-      openViewer(sessionId, cached);
+    const history = historyApiRef.current;
+    if (supportsWorkspaceHistory(adapter?.getSnapshot().host?.capabilities)) {
+      if (viewerRef.current.viewingId !== sessionId) history?.actions.leaveViewing();
+      retireSessionRead();
+      beginRead(sessionId);
+      history?.actions.openSession(sessionId, "foreground", HISTORY_VIEW_SUBSCRIBER);
+      history?.actions.promoteSession(sessionId, HISTORY_VIEW_SUBSCRIBER);
+      setSessionsNotice(null);
       return;
     }
-    /*
-     * Mount the viewer BEFORE the request goes out.
-     *
-     * `setSessionReadLoading(true)` alone was invisible: the viewer only mounts
-     * from `applyRead`, which runs when the reply arrives, so during the wait
-     * there was nothing on screen consuming the loading flag. Clicking a session
-     * therefore produced no visible change at all until the host answered --
-     * seconds of nothing, or forever if the room had dropped.
-     */
-    beginRead(sessionId);
-    try {
-      const id = adapter.readSession(roomId, sessionId, { limit: SESSION_READ_LIMIT });
-      sessionReadReqRef.current = { id, room: roomId, sessionId };
-      setSessionReadLoading(true);
-      setSessionsNotice(null);
-
-      /*
-       * Give up on a reply that never arrives.
-       *
-       * Chat has had this (`scheduleChatTimeout`) from the start; session reads
-       * did not, and the difference is visible: the relay drops a frame, the host
-       * replies into a room nobody is subscribed to, and `sessionReadReqRef` is
-       * left holding a request that will never settle. From then on the viewer
-       * ignores every later read — it compares each new `in_reply_to` against the
-       * stale id and returns — so the panel freezes on whichever session was open
-       * and clicking other sessions looks like it does nothing at all. That is
-       * exactly the intermittent `ui=<previous id>` the E2E kept reporting.
-       *
-       * The guard mirrors the chat timer: only clear the ref if it still holds
-       * THIS request, so a reply that did arrive (and already nulled it) is never
-       * overwritten by a late timeout.
-       *
-       * The budget is `SESSION_READ_TIMEOUT_MS`, NOT `CHAT_TIMEOUT_MS`: a read is
-       * a disk read on the host, not a model turn, and the chat's ten minutes is
-       * why one lost frame could leave the viewer on "Reading this session…" with
-       * no way out but closing the tab. The lost-frame case itself is repaired
-       * one layer down (sse-transport.ts `IDEMPOTENT_READ_FRAMES` re-sends a READ
-       * whose POST failed); this timer is the bound for a loss that outlives
-       * those re-sends, e.g. the whole inbound stream stalling.
-       */
-      const readTimeout = setTimeout(() => {
-        const pending = sessionReadReqRef.current;
-        if (pending === null || pending.id !== id) return;
-        sessionReadReqRef.current = null;
-        setSessionReadLoading(false);
-        setSessionsNotice(SESSION_READ_FAILED);
-      }, SESSION_READ_TIMEOUT_MS);
-      // The handle is intentionally not stored: unlike the chat timer there is no
-      // "supersede the previous turn" case here. The ref comparison above is the
-      // only guard needed, and it makes a stale timer a no-op on its own.
-      void readTimeout;
-    } catch {
-      setSessionsNotice(SESSION_READ_FAILED);
-    }
-  }, [openViewer, takeRead]);
+    openLegacySessionRead(sessionStore.actions, roomId, sessionId, () =>
+      adapter.readSession(roomId, sessionId, { limit: SESSION_READ_LIMIT }));
+  }, [sessionStore.actions, retireSessionRead, beginRead, setSessionsNotice]);
 
   /**
    * Prefetch a transcript without opening the viewer.
@@ -630,6 +656,19 @@ export function ConnectClient() {
       const adapter = bindingRef.current?.adapter ?? null;
       const roomId = activeRoomRef.current;
       if (adapter === null || roomId === null) return;
+      /*
+       * Plan 86 P3 — the SAME controller task the click will join.
+       *
+       * The legacy prefetch stored a whole transcript in a separate cache and
+       * the click then found it (or did not); here there is ONE in-flight task
+       * per session, so hovering and clicking cannot produce two requests and a
+       * slow prefetch cannot hold a slot the click needs.
+       */
+      const history = historyApiRef.current;
+      if (supportsWorkspaceHistory(adapter.getSnapshot().host?.capabilities)) {
+        history?.actions.openSession(sessionId, "prefetch", HISTORY_PREFETCH_SUBSCRIBER);
+        return;
+      }
       if (hasRead(sessionId)) return;
       if (prefetchReqRef.current !== null) return;
       try {
@@ -642,6 +681,18 @@ export function ConnectClient() {
     },
     [hasRead],
   );
+
+  /**
+   * Release the hover's interest (pointer left / focus lost).
+   *
+   * "Leave releases" is a REQUIRED termination path, not a nicety: without it a
+   * swept pointer would leave interest behind for every row, and a later click on
+   * a different session would still find the controller holding a request that
+   * nobody is waiting for.
+   */
+  const handleSessionPrefetchEnd = useCallback((sessionId: string) => {
+    historyApiRef.current?.actions.leaveSession(sessionId, HISTORY_PREFETCH_SUBSCRIBER);
+  }, []);
 
   /**
    * Re-list after a switch, RETRYING.
@@ -661,6 +712,18 @@ export function ConnectClient() {
   const relistAfterSwitch = useCallback(() => {
     const roomId = activeRoomRef.current;
     if (roomId === null) return;
+    /*
+     * Plan 86 P3 — no respawn race on the host-native path.
+     *
+     * The retry loop below exists because `session_list` is answered by the Pi the
+     * switch is respawning. `history_list` is answered by the HOST, so it survives
+     * that window and one refresh is enough — looping would only spend requests.
+     */
+    const history = historyApiRef.current;
+    if (supportsWorkspaceHistory(bindingRef.current?.adapter.getSnapshot().host?.capabilities)) {
+      history?.actions.refreshList();
+      return;
+    }
     /*
      * STOP CONDITION: the list for this room actually CHANGED.
      *
@@ -777,7 +840,7 @@ export function ConnectClient() {
      * so the pending read is stale by definition: dropping the reference makes
      * its reply fail the correlation check and get ignored.
      */
-    sessionReadReqRef.current = null;
+    retireSessionRead();
     setSessionReadLoading(false);
     try {
       const id = adapter.switchSession(roomId, sessionId);
@@ -901,7 +964,7 @@ export function ConnectClient() {
       setSessionsNotice(null);
       setSessionsBusy(false);
       sessionsReqRef.current = null;
-      sessionReadReqRef.current = null;
+      retireSessionRead();
       sessionSwitchReqRef.current = null;
       requestSessions(adapterOverride);
       /*
@@ -1332,6 +1395,7 @@ export function ConnectClient() {
     setSessionsBusy,
     setSessionsNotice,
     setSessionReadLoading,
+    retireSessionRead,
     setSwitchLoading,
     setConfirmedByRoom,
     setSessionsByRoom,
@@ -1343,7 +1407,16 @@ export function ConnectClient() {
       bindingRef.current?.adapter.confirmCachedModel(room2, provider, modelId),
     openViewer,
     cacheRead,
-    clearViewer,
+    clearViewer: () => {
+      /*
+       * A resume makes the session LIVE, so the read-only page for it is no
+       * longer the authority: the live transcript takes over and the cached page
+       * is dropped rather than kept as a second, diverging copy.
+       */
+      historyApiRef.current?.actions.leaveViewing();
+      retireSessionRead();
+      clearViewer();
+    },
     relistAfterSwitch,
     resyncLive,
     resetChatState,
@@ -1353,6 +1426,15 @@ export function ConnectClient() {
   };
 
   const onServerMessage = useCallback((msg: ServerMessage, room: string) => {
+    /*
+     * Plan 86 P3 — host-native history first.
+     *
+     * These frames are answerable ONLY by the history controllers (they correlate
+     * by their own request ids), and the legacy dispatcher knows nothing about
+     * them. Routing them first also keeps a stray `history_error` out of the chat
+     * error path.
+     */
+    if (historyApiRef.current?.actions.feed(msg) === true) return;
     const ports = portsRef.current;
     if (ports === null) return;
     dispatchServerMessage(msg, room, ports);
@@ -1362,6 +1444,7 @@ export function ConnectClient() {
   const releaseBinding = useCallback(() => {
     const binding = bindingRef.current;
     bindingRef.current = null;
+    setBoundAdapter(null);
     // A new adapter starts a fresh snapshot history: the first immediate
     // snapshot of the next binding is not an "edge".
     // NOTE: this ONLY unsubscribes. An explicit unpair/forget must first
@@ -1431,7 +1514,7 @@ export function ConnectClient() {
       setModelSwitchTo(null);
       setModelNotice(null);
       sessionsReqRef.current = null;
-      sessionReadReqRef.current = null;
+      retireSessionRead();
       sessionSwitchReqRef.current = null;
       setSessionsBusy(false);
       setSessionReadLoading(false);
@@ -1442,6 +1525,16 @@ export function ConnectClient() {
       skillInvokeRef.current = null;
       setSkillsBusy(false);
       setSkillsNotice(null);
+      /*
+       * Plan 86 P3 — a new generation owns a new history scope.
+       *
+       * Both controllers are dropped WHOLE: in-flight requests belong to a socket
+       * that no longer exists, and their replies (if they ever arrive) must not be
+       * applied to pages rendered from the new connection's cache. The host peer
+       * is part of every cache key, but the generation is the cheaper, stronger
+       * fence here.
+       */
+      historyApiRef.current?.actions.reset();
       return;
     }
     // A FRESH CONNECTION (or the first catalog of one) means nothing is
@@ -1527,7 +1620,7 @@ export function ConnectClient() {
     setModelBusy(false);
     setModelSwitchTo(null);
     sessionsReqRef.current = null;
-    sessionReadReqRef.current = null;
+    retireSessionRead();
     sessionSwitchReqRef.current = null;
     setSessionsBusy(false);
     setSessionReadLoading(false);
@@ -1555,6 +1648,7 @@ export function ConnectClient() {
     // null at that instant those calls found no adapter and silently returned,
     // leaving an empty transcript and a spinner that never resolved.
     bindingRef.current = { adapter, unsubs: [] };
+    setBoundAdapter(adapter);
     const unsubs = [
       adapter.subscribe(onSnapshot),
       adapter.onServerMessage(onServerMessage),
@@ -1775,6 +1869,83 @@ export function ConnectClient() {
       : localError ?? connectionError;
 
   const activeWorkspace = workspaces.find((ws) => ws.room_id === activeRoom) ?? null;
+
+  /* ── Plan 86 P3 — host-native history ──────────────────────────────────────
+   *
+   * One controller pair per adapter BINDING (generation), scoped by the bound
+   * host peer and the active workspace's `daemon_id`. Nothing here decides when
+   * to read: the two call sites that matter are a pointer crossing a row
+   * (`handleSessionPrefetch`) and a click (`handleSessionRead`), which is what
+   * makes hover → click a single request.
+   */
+  const historyAdapter = connected ? boundAdapter : null;
+  const historyApi = useHostHistory({
+    adapter: historyAdapter,
+    generation: snapshot?.generation ?? 0,
+    capabilities: host?.capabilities ?? null,
+    daemonId: activeWorkspace?.daemon_id ?? null,
+    viewingSessionId: sessionStore.state.viewingId,
+  });
+  useEffect(() => {
+    /* Written in an EFFECT, not during render: handlers run after commit, so they
+     * always observe the current pair, and the hooks lint rule's "no refs during
+     * render" holds. */
+    historyApiRef.current = historyApi;
+    historyBindingRef.current = { adapter: historyAdapter, generation: snapshot?.generation ?? 0 };
+  }, [historyApi, historyAdapter, snapshot?.generation]);
+
+  const historyListView = historyApi.listView;
+  /**
+   * Session rows as the rail renders them (the host-native path).
+   *
+   * `live` comes from the host's INDEPENDENT runtime snapshot and only when it
+   * names a session: a null `current.session_id` leaves every row without a badge
+   * rather than guessing from the newest file on disk.
+   */
+  const historySessions: readonly WireSessionInfo[] | null = useMemo(
+    () =>
+      historyListView === null
+        ? null
+        : historyListView.rows.map((row) => ({
+            id: row.id,
+            mtime: row.mtime,
+            live: historyListView.current?.session_id === row.id,
+            ...(row.name === null ? {} : { name: row.name }),
+            ...(row.preview === null ? {} : { preview: row.preview }),
+          })),
+    [historyListView],
+  );
+
+  /*
+   * Open the list as soon as a workspace is on screen, and mirror the
+   * controller's snapshot into the session store so every existing consumer
+   * (the rail, `viewingSessionFor`, the live-session draft key) keeps working
+   * unchanged.
+   */
+  const { available: historyAvailable, scope: historyScope, actions: historyActions } = historyApi;
+  useEffect(() => {
+    if (!historyAvailable || historyScope === null || activeRoom === null) return;
+    historyActions.openList();
+  }, [historyAvailable, historyScope, historyActions, activeRoom]);
+
+  /*
+   * Busy/notice mirror the LIST controller's snapshot.
+   *
+   * The session ROWS do not need mirroring: `sessions` above prefers
+   * `historySessions` directly, so the store stays the legacy path's owner and no
+   * effect copies state into it.
+   */
+  useEffect(() => {
+    if (!historyAvailable || historyListView === null) return;
+    setSessionsBusy(historyListView.loading || historyListView.loadingMore);
+    setSessionsNotice(
+      historyListView.failure === null
+        ? historyListView.index_state === "building"
+          ? HISTORY_BUILDING
+          : null
+        : historyNotice(historyListView.failure),
+    );
+  }, [historyAvailable, historyListView, setSessionsBusy, setSessionsNotice]);
 
   /**
    * Changes (plan/78) — asks the host for this workspace's working-tree STATUS.
@@ -2282,6 +2453,9 @@ export function ConnectClient() {
     setWorkspacesBusy(true);
     try {
       await adapter.removeWorkspace(path);
+      // Plan 86 P3 — a removed workspace's cached history must not linger and be
+      // painted if the same cwd id ever comes back under a new daemon id.
+      historyApiRef.current?.actions.invalidateWorkspace();
       if (token !== workspaceSeqRef.current || !owner.current()) return;
       await adapter.refreshWorkspaces();
       if (token !== workspaceSeqRef.current || !owner.current()) return;
@@ -2744,7 +2918,8 @@ export function ConnectClient() {
      is the Pi that owns the transcript files), and switching needs one even
      more so. */
   const sessions: readonly WireSessionInfo[] =
-    activeRoom === null ? EMPTY_SESSIONS : (sessionsByRoom[activeRoom] ?? EMPTY_SESSIONS);
+    historySessions ??
+    (activeRoom === null ? EMPTY_SESSIONS : (sessionsByRoom[activeRoom] ?? EMPTY_SESSIONS));
   /*
    * Point the composer at THIS session's draft.
    *
@@ -2761,16 +2936,34 @@ export function ConnectClient() {
     ? MODEL_NOT_CONNECTED
     : activeRoom === null
       ? SESSIONS_FOR_LIVE_WORKSPACE
-      : // Same gate the model picker uses: a workspace that is not live has no Pi
-        // to answer `session_list`, so asking would leave the panel spinning.
-        (activeWorkspace?.live ?? false)
+      : // Plan 86 P3: the host answers `history_list` from its own index, so a
+        // STOPPED workspace is listable. Only the legacy `session_list` path
+        // needs a live Pi, and only it keeps that gate.
+        historyApi.available
         ? null
-        : SESSIONS_FOR_LIVE_WORKSPACE;
+        : (activeWorkspace?.live ?? false)
+          ? null
+          : SESSIONS_FOR_LIVE_WORKSPACE;
   /** The session open for READING, or null. Resolved from the CURRENT list, so
    *  a row the host no longer reports closes the viewer instead of showing a
    *  stale transcript. */
   const viewingSession =
     viewingId === null ? null : (sessions.find((s) => s.id === viewingId) ?? null);
+  /*
+   * Plan 86 P3 — the viewer's rows, from whichever transport is in use.
+   *
+   * Both paths produce the SAME row shape (`event_id` key + PARTIAL flag), so the
+   * renderer has one code path. The legacy fold is memoised so its identity is
+   * stable while the events are: the viewer keys its window and its scroll anchor
+   * off this array.
+   */
+  const loadViewedBody = useCallback((ref: Parameters<typeof historyActions.loadBodyForViewing>[0], mode: "preview" | "full") =>
+    historyActions.loadBodyForViewing(ref, mode).then(toBodyLoad), [historyActions]);
+  const historyView = historyApi.available ? historyApi.view : null;
+  const viewerNotice =
+    historyView !== null && historyView.failure !== null
+      ? historyNotice(historyView.failure)
+      : sessionsNotice;
 
   /** `list_models` for the room on screen. Fire-and-forget like chat; the
    *  reply is correlated by (room + id) in `onServerMessage`.
@@ -3282,15 +3475,32 @@ export function ConnectClient() {
         viewingSession === null
           ? null
           : {
+              identity: `${historyScope?.host ?? ""} ${historyScope?.daemon_id ?? ""} ${viewingSession.id}`,
               session: viewingSession,
-              events: viewedEvents,
-              loading: sessionReadLoading,
-              notice: sessionsNotice,
+              items: historyView === null ? null : historyView.items,
+              legacyEvents: viewedEvents,
+              loading: historyView === null ? sessionReadLoading : historyView.loading,
+              notice: viewerNotice,
               isLive: viewingSession.live,
               switchBusy: switchLoading,
               canSwitch: sessionCanSwitch,
+              stale: historyView?.stale ?? false,
+              hasOlder: historyView?.has_older ?? false,
+              loadingOlder: historyView?.loadingOlder ?? false,
+              theme: resolvedMode,
+              hasNewer: historyView?.has_newer ?? false,
+              loadingNewer: historyView?.loadingNewer ?? false,
+              pageStart: historyView?.page_start ?? 0,
+              pageEnd: historyView?.page_end ?? 0,
+              onLoadOlder: historyView === null ? undefined : historyActions.loadOlderForViewing,
+              onLoadNewer: historyView === null ? undefined : historyActions.loadNewerForViewing,
+              onShowHead: historyView === null ? undefined : historyActions.showHeadForViewing,
+              onLoadBody: historyView === null ? undefined : loadViewedBody,
             },
       onCloseSessionView: () => {
+        /* Releasing the interest is what lets a released single-flight slot free
+         * up for the NEXT click instead of being held by a closed viewer. */
+        historyApi.actions.leaveViewing();
         setViewingId(null);
         setViewedEvents(null);
       },
@@ -3421,6 +3631,13 @@ export function ConnectClient() {
       onSessionsRefresh: requestSessions,
       onSessionRead: handleSessionRead,
       onSessionPrefetch: handleSessionPrefetch,
+      onSessionPrefetchEnd: handleSessionPrefetchEnd,
+      sessionsPageStart: historyListView?.page_start ?? 0,
+      sessionsPageEnd: historyListView?.page_end ?? 0,
+      onSessionsLoadMore:
+        historyApi.available && historyListView?.has_more === true
+          ? () => historyApi.actions.loadMoreSessions()
+          : undefined,
       now: sessionClockRef,
     },
   };

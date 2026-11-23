@@ -29,20 +29,17 @@ import path from "node:path";
 import os from "node:os";
 import { createInterface } from "node:readline";
 import { createReadStream } from "node:fs";
+import { sessionDirFor as deriveSessionDirFor } from "../session/session_paths.js";
+import { readSessionFile, type IndexedSession } from "../session/session_reader.js";
+
+/** Re-exported so existing index callers/tests keep one import site. */
+export { readSessionFile };
+export type { IndexedSession };
 
 /** Where the index lives. Honours `REMOTE_PI_HOME` like every other state file. */
 export function indexDbPath(): string {
   const home = process.env["REMOTE_PI_HOME"] || os.homedir();
   return path.join(home, ".pi", "remote", "index.sqlite");
-}
-
-export interface IndexedSession {
-  id: string;
-  path: string;
-  name?: string;
-  mtime: number;
-  preview?: string;
-  cwd?: string;
 }
 
 /** What `(path, mtime, size)` is compared against. */
@@ -116,112 +113,10 @@ function statOf(file: string): FileStamp | null {
 }
 
 // ---------------------------------------------------------------------------
-// JSONL parsing — mirrors what the SDK derives, kept in one place so the
-// contract test can compare the two directly.
+// JSONL parsing lives in `session/session_reader.ts` (Plan 86 P1) so the host
+// history worker can reuse the ONE parser definition without importing this
+// module's `node:sqlite` dependency. The function is re-exported above.
 // ---------------------------------------------------------------------------
-
-/**
- * Parses one session file into the fields the list needs.
- *
- * This intentionally reproduces the SDK's rules rather than inventing new
- * ones, because the index must be indistinguishable from a cold scan. Two
- * details are easy to get wrong and are pinned by tests:
- *
- *  - `mtime` is NOT the file's mtime. It is the newest message timestamp
- *    inside the file, falling back to the header timestamp and only then to
- *    the filesystem mtime.
- *  - the preview is the FIRST *user* message, not the first message overall.
- *
- * Returns null for a file that is not a session (no `type: "session"` header),
- * matching `SessionManager.list`, which drops those silently.
- */
-export async function readSessionFile(file: string): Promise<IndexedSession | null> {
-  let header: Record<string, unknown> | null = null;
-  let lastActivityTime: number | undefined;
-  let firstMessage = "";
-  let name: string | undefined;
-
-  try {
-    const rl = createInterface({
-      input: createReadStream(file, { encoding: "utf8" }),
-      crlfDelay: Infinity,
-    });
-    for await (const line of rl) {
-      if (line.trim() === "") continue;
-      let entry: Record<string, unknown>;
-      try {
-        entry = JSON.parse(line) as Record<string, unknown>;
-      } catch {
-        continue;
-      }
-      if (!header) {
-        if (entry["type"] !== "session") return null;
-        header = entry;
-        continue;
-      }
-      if (entry["type"] === "session_info") {
-        const n = entry["name"];
-        name = typeof n === "string" && n.trim() !== "" ? n.trim() : undefined;
-        continue;
-      }
-      if (entry["type"] !== "message") continue;
-      const message = entry["message"];
-      if (!message || typeof message !== "object") continue;
-      const msg = message as Record<string, unknown>;
-      const role = msg["role"];
-      if (role !== "user" && role !== "assistant") continue;
-      if (!("content" in msg)) continue;
-
-      const ts = msg["timestamp"];
-      const activity = typeof ts === "number"
-        ? ts
-        : new Date(String(entry["timestamp"])).getTime();
-      if (!Number.isNaN(activity)) {
-        lastActivityTime = Math.max(lastActivityTime ?? 0, activity);
-      }
-
-      if (firstMessage === "") {
-        const text = textOf(msg["content"]);
-        if (text !== "" && role === "user") firstMessage = text;
-      }
-    }
-  } catch {
-    return null;
-  }
-
-  if (!header) return null;
-
-  const headerTime = new Date(String(header["timestamp"])).getTime();
-  const fallback = fs.existsSync(file) ? fs.statSync(file).mtimeMs : 0;
-  const mtime =
-    typeof lastActivityTime === "number" && lastActivityTime > 0
-      ? lastActivityTime
-      : !Number.isNaN(headerTime)
-        ? headerTime
-        : fallback;
-
-  const cwd = typeof header["cwd"] === "string" ? header["cwd"] : "";
-  const id = typeof header["id"] === "string" ? header["id"] : path.basename(file, ".jsonl");
-
-  return {
-    id,
-    path: file,
-    name,
-    mtime,
-    preview: firstMessage === "" ? undefined : firstMessage.slice(0, 200),
-    cwd,
-  };
-}
-
-function textOf(content: unknown): string {
-  if (typeof content === "string") return content;
-  if (!Array.isArray(content)) return "";
-  return content
-    .filter((b): b is { type: string; text: string } =>
-      typeof b === "object" && b !== null && (b as { type?: string }).type === "text")
-    .map((b) => b.text)
-    .join(" ");
-}
 
 // ---------------------------------------------------------------------------
 // Directory enumeration — uses the SDK's own bucket derivation so the index can
@@ -242,11 +137,7 @@ function textOf(content: unknown): string {
  * every `/`, `\` and `:` with `-` → wrap in `--…--`.
  */
 export function sessionDirFor(cwd: string, agentDir: string): string {
-  const resolved = path.resolve(cwd);
-  const safe = `--${resolved
-    .replace(/^[/\\]/, "")
-    .replace(/[/\\:]/g, "-")}--`;
-  return path.join(agentDir, "sessions", safe);
+  return deriveSessionDirFor(cwd, agentDir);
 }
 
 /**

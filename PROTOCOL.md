@@ -291,6 +291,107 @@ Pairing is **machine-level**. Inside a workspace room the app lists and switches
 
 `session_switch_ok` **resets the transcript mirror** the same way as `session_new` (empty `session_history` + new `session_started_at`). `locked` means the SDK hook cancelled the switch (do not steal a TUI session). `no_sdk` means there is no command ctx (`switchSession` unavailable — typical of a daemon until `--resume` spawn).
 
+### Workspace history — host-native, zero Pi (plan 86)
+
+Capability `workspace_history_v1` in `host_hello_ok`. Send these read-only frames
+on room `host` over the existing paired connection, directly rather than through
+`host_forward`. The supervisor reads the registered workspace's disk history
+without starting, resuming or switching a Pi. Missing capability permits legacy
+read-only `session_read` when a Pi is live; it never permits an automatic switch
+or spawn just to browse. The App's separate read-only viewer keeps history out
+of live Hive; explicit “continue conversation” owns the existing switch flow.
+
+The host resolves `daemon_id` against its registered fleet and derives the
+session bucket itself. No history frame accepts a filesystem path. Cursors,
+snapshots, revisions and body refs are opaque to clients. Scope is checked
+against the request's workspace/session; cross-scope tokens are rejected with
+`invalid_cursor`. These tokens are not authentication credentials and never
+replace paired-connection authorization.
+
+Requests (`id` correlates with reply `in_reply_to`; fields ending in `?` are optional):
+
+| Type | Fields after `type` |
+|---|---|
+| `history_list` | `id, daemon_id, limit?, before?, if_revision?` |
+| `history_read` | `id, daemon_id, session_id, limit?, before?, snapshot?, if_revision?` |
+| `history_body` | `id, daemon_id, session_id, snapshot, body_ref, offset_bytes` |
+
+Replies:
+
+| Type | Fields after `type` |
+|---|---|
+| `history_list_ok` | `in_reply_to, daemon_id, revision, index_state, current, sessions, next_cursor, has_more, retry_after_ms` |
+| `history_read_ok` | `in_reply_to, daemon_id, session_id, snapshot, revision, projection, session, items, older_cursor, has_older` |
+| `history_body_ok` | `in_reply_to, daemon_id, session_id, snapshot, body_ref, representation, mime, offset_bytes, next_offset_bytes, total_bytes, data` |
+| `history_error` | `in_reply_to, code, daemon_id, session_id, revision, snapshot, retry_after_ms` |
+
+- A session row is `{id, name, mtime, preview}`. `name` and `preview` can be
+  `null`; `mtime` is the newest message timestamp in milliseconds. No path or
+  guessed live flag is included.
+- `current` is `{session_id, ready, state, source}` from the independent runtime
+  snapshot. Unknown identity/readiness stays `null`; `source` is `runtime` or
+  `unknown`, and `state` is `stopped`, `starting`, `running`, `crashed` or `null`.
+  The newest disk file is never evidence of the active session.
+- `index_state` is `ready`, `building` or `unavailable`; list `revision` can be
+  `null` while not ready. `building` is not an empty history: retain one in-flight
+  task and retry after `retry_after_ms`. Read/body use `history_error` for this
+  state. Unavailable data is not proof that no history exists.
+- `history_error.code` is one of `building`, `stale`, `not_modified`,
+  `unsupported`, `not_found`, `invalid_cursor`, `body_too_large`, `invalid_request`
+  or `internal`. Scope, revision, snapshot and retry fields can be `null`; errors
+  contain no host path or free-form exception text.
+
+Pagination, identity and freshness:
+
+- `history_list` defaults to 50 rows, at most 100, ordered by
+  `(mtime DESC, id DESC)`. `history_read` defaults to 30 transcript entries, at
+  most 100. Larger limits are clamped. These are upper bounds: encoded-frame
+  fitting can return less, with a cursor that makes progress.
+- A read item is `{event_id, entry_id, event, body_refs?, parent?, truncated?}`.
+  `event` preserves the existing `SessionHistoryEvent` vocabulary. One-event
+  entries use the entry ID; multi-event entries use `entry_id#index`. Items are
+  chronological; `parent:true` tool declarations are outside the primary cursor.
+  Never deduplicate or order by page array index or timestamp alone.
+- Each wire item carries at most 16 body refs. A wide entry continues through
+  the opaque `older_cursor`, retaining its `event_id`. Merge refs by `(field, ref)`
+  when that ID repeats; do not discard its continuation as a duplicate. This
+  includes field manifests beyond 1024 refs. Follow `has_older` to termination.
+- HEAD/refresh/cache revalidation sends `if_revision` without `snapshot` or
+  `before`, so it can discover the newest head. `not_modified` echoes the matching
+  revision. A changed head replaces the whole loaded sequence, never splices
+  new-generation rows into the old one.
+- Older-page and body requests retain the original opaque snapshot and cursor.
+  They fix file generation and complete-line byte high-water, including primary
+  entries, tool parents and seed lookups. Rewritten/deleted/replaced generations
+  return `stale`; reopen deliberately. Production writer trust is fail-closed:
+  detected file changes rebuild a new generation with O(file) cost, including
+  appends. Production O(delta) append is deferred; runtime identity alone does
+  not authorize it. Do not promise that an old page survives a production append.
+
+Body representations and budgets:
+
+- A ref is `{ref, field, representation, mime, total_bytes, preview,
+  preview_truncated}`. Representations are `text_utf8`, `json_utf8` (the complete
+  valid JSON value for tool arguments), or `binary` with MIME. A bounded event
+  preview is not the full value; object placeholders and omitted image bytes are
+  recovered using their refs. Very wide image events can omit inline images and
+  expose their values through the same manifest continuation.
+- Row/field previews are bounded to 4 KiB. Every fully encoded host frame,
+  including the base64 envelope, fits 256 KiB. Event count can exceed the entry
+  limit because of multi-event projection or tool-parent backfill.
+- `history_body` returns at most 64 KiB decoded bytes per chunk; `data` is base64
+  for `[offset_bytes, next_offset_bytes)`. Offsets belong to the representation's
+  byte stream, never UTF-16 indices or JSONL source offsets. Continue until
+  `next_offset_bytes == total_bytes`; text requires a stateful UTF-8 decoder.
+- First explicit expansion can answer `building` while the worker streams and
+  materializes the body once, with single-flight. Its O(body bytes) cost is
+  separate from subsequent bounded chunk reads.
+- P2 replaces P1's temporary 16 MiB in-memory body cap with a generation-scoped
+  **256 MiB total disk sidecar budget**, LRU. A single body that cannot fit answers
+  `body_too_large`; the source remains intact and is never silently truncated.
+  Evicted sidecars can be rematerialized for a still-valid generation. Host page
+  cache has a 32 MiB budget; client caches remain scope/revision-aware and bounded.
+
 ### Host room (`room=host`, plan 67)
 
 `pi-supervisord` opens a second WS on the same Pi-key with reserved `room_id = "host"`. Catalog = registered daemons ∪ workspaces added by the app (plan/68 — **no recursive disk scan**; the listing is always explicit).
@@ -316,7 +417,7 @@ O daemon residente (`pi-supervisord`) é a **porta única** de conexão: app, we
 { "type": "host_hello", "id": "<uuid>" }
 { "type": "host_hello_ok", "in_reply_to": "<uuid>",
   "daemon": { "version": "…", "hostname": "…", "platform": "…" },
-  "capabilities": ["host_pairing", "workspace_state", "fs_nav"] }
+  "capabilities": ["host_pairing", "workspace_state", "fs_nav", "workspace_history_v1"] }
 ```
 
 `host_hello` é enviado no boot/reconnect do cliente; o host responde com versão/hostname reais e as capacidades suportadas (nunca fabrica valor — campo indisponível vem `null` com motivo).

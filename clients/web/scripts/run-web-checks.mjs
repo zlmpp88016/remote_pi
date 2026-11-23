@@ -24,6 +24,18 @@ const SUITE = [
   "verify-web-foundations",
   "verify-web-transport",
   "verify-web-sse-read-retry",
+  /*
+   * Plan 86 P3 — the host-native history surface.
+   *
+   * All four are pure Node checks over the SHIPPED modules (no browser, no host),
+   * so they run here in the fast suite instead of needing a live server. Order is
+   * cheapest-first and independent: protocol → cache → query → lane → render.
+   */
+  "verify-web-history-protocol",
+  "verify-web-history-cache",
+  "verify-web-history-query",
+  "verify-web-history-lane",
+  "verify-web-history-window",
   "verify-web-recovery",
   "verify-web-workspaces",
   "verify-web-client",

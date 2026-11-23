@@ -39,7 +39,14 @@ import {
 } from "./cron_registry.js";
 import { appendCronLog, readCronLog, type CronResult } from "./cron_log.js";
 import { HostBridge, deliverSseReply } from "./host_bridge.js";
-import { hostSessionName, type FleetEntry, type FleetOps } from "./host_control.js";
+import { WriterAuthorityRegistry } from "./history_writer_authority.js";
+import type { HistoryNotice } from "../session/history_notice.js";
+import {
+  hostSessionName,
+  type FleetEntry,
+  type FleetOps,
+  type FleetRuntimeSnapshot,
+} from "./host_control.js";
 import { roomIdFor } from "../rooms.js";
 import type { RelayRoomInfo } from "../transport/embedded_relay.js";
 import { HostPairingSession } from "../pairing/host_pairing.js";
@@ -142,7 +149,7 @@ export function decideFireAction(o: {
   return "send";
 }
 
-interface ChildSlot {
+export interface ChildSlot {
   id: string;
   cwd: string;
   child: RpcChild;
@@ -152,11 +159,29 @@ interface ChildSlot {
    *  `workspace_state.last_error` (never fabricated). Cleared on a fresh
    *  spawn: a running workspace carries no current error. */
   lastError: string | null;
+  /**
+   * Plan 86 P2 correction (R1) — the spawned pid whose stderr notices the
+   * writer-authority registry accepts. Captured synchronously after `spawn()`
+   * so a notice can never be attributed to the PREVIOUS child of this
+   * workspace, and cleared (0) on exit so a dead process holds no authority.
+   */
+  noticePid: number;
 }
 
 export class Supervisor {
   private server: Server | null = null;
   private readonly children = new Map<string, ChildSlot>();
+  /**
+   * Plan 86 P2 correction (R1/R2) — the append-authority registry.
+   *
+   * Populated ONLY from a live child's own stderr notices (session/append/
+   * revoke) and revoked on every lifecycle transition. It is what turns
+   * `session_id: null` into an honest, per-incarnation identity instead of
+   * "newest file on disk = current".
+   */
+  private readonly writerAuthority = new WriterAuthorityRegistry({
+    currentPid: (workspaceId: string) => this.children.get(workspaceId)?.noticePid ?? 0,
+  });
   /** Live croner schedules, keyed by cron job id (plan/39). */
   private readonly cronJobs = new Map<string, Cron>();
   private shuttingDown = false;
@@ -797,15 +822,54 @@ export class Supervisor {
     };
     if (this.opts.piBin !== undefined) childOpts.piBin = this.opts.piBin;
     const child = new RpcChild(childOpts);
-    const slot: ChildSlot = { id, cwd, child, restartTimer: null, restartAttempt: 0, lastError: null };
+    const slot: ChildSlot = {
+      id,
+      cwd,
+      child,
+      restartTimer: null,
+      restartAttempt: 0,
+      lastError: null,
+      noticePid: 0,
+    };
     this.children.set(id, slot);
 
     child.on("exit", (evt: RpcChildExitEvent) => this._onChildExit(id, evt));
+    /*
+     * Plan 86 P2 correction (R1/R2) — the child's OWN writer notices.
+     *
+     * `noticePid` is captured right after `spawn()` (which publishes the state
+     * synchronously) so this slot only ever accepts notices from THIS process.
+     * A notice from a previous incarnation therefore cannot resurrect authority
+     * after a restart.
+     */
+    child.on("notice", (notice: HistoryNotice) => this._onWriterNotice(id, notice));
     child.spawn();
+    slot.noticePid = child.pid ?? 0;
+    // A respawn is a NEW writer: the previous incarnation's authority must not
+    // survive the transition, even if the new child never publishes a notice.
+    this.writerAuthority.revoke(id);
     // Plan/69 — the spawn itself is a lifecycle transition (start / restart):
     // mirror the slot to the host room. `state` is `running` on a successful
     // spawn (RpcChild.spawn publishes it synchronously).
     this._pushWorkspaceState(id);
+  }
+
+  /**
+   * Plan 86 P2 correction (R1/R2) — (re)spawn one child and re-key its authority.
+   *
+   * EVERY respawn (recycle, crash backoff, manual restart) goes through here, so
+   * `noticePid` is always the pid of the process whose stderr we listen on, and
+   * the registry is revoked FIRST: a new process must EARN its authority by
+   * publishing its own receipt, and the old one must not survive the transition.
+   */
+  private _respawnChild(slot: ChildSlot): number {
+    slot.noticePid = 0;
+    this.writerAuthority.revoke(slot.id);
+    slot.child.spawn();
+    // spawn() publishes the pid synchronously; a failed spawn leaves it 0,
+    // which the registry reads as "no live child" (never as "trusted").
+    slot.noticePid = slot.child.pid ?? 0;
+    return slot.noticePid;
   }
 
   /**
@@ -814,6 +878,40 @@ export class Supervisor {
    * its restart counter, `last_error` the recorded crash reason (null when
    * none / freshly spawned). No-op without a host bridge (skipHost).
    */
+  /**
+   * Plan 86 P2 correction (R1/R2) — accept (or refuse) one child writer notice.
+   *
+   * Only the CURRENT incarnation of the CURRENT child of a workspace can move
+   * the authority registry. Everything else is dropped and logged by code only:
+   * the log line carries ids/counters, never a path or a payload.
+   */
+  private _onWriterNotice(id: string, notice: HistoryNotice): void {
+    if (!this.children.has(id)) return;
+    // The registry's own pid check is authoritative; this only records the
+    // outcome so an operator can see WHY an append was or was not incremental.
+    const result = this.writerAuthority.apply(id, notice);
+    if (result === "foreign_pid" || result === "stale_incarnation") {
+      process.stderr.write(
+        `[remote-pi-supervisord] ${id} ignored writer notice (${result}, inc=${notice.incarnation}, seq=${notice.seq})\n`,
+      );
+      return;
+    }
+    if (result === "accepted_revoke") {
+      process.stderr.write(`[remote-pi-supervisord] ${id} writer authority revoked (inc=${notice.incarnation})\n`);
+    }
+  }
+
+  /**
+   * Plan 86 P2 correction (R2) — is [file] the live writer target of [daemonId]?
+   *
+   * The history service asks this instead of "does the runtime snapshot claim a
+   * session id", because a session id alone cannot distinguish "this file is
+   * being appended by ITS OWNER" from "some process happens to be running".
+   */
+  private _ownsWriterFile(daemonId: string, file: string): boolean {
+    return this.writerAuthority.ownsFile(daemonId, file);
+  }
+
   private _pushWorkspaceState(id: string): void {
     const slot = this.children.get(id);
     if (!slot || !this.host) return;
@@ -829,6 +927,13 @@ export class Supervisor {
     if (this.shuttingDown) return;
     const slot = this.children.get(id);
     if (!slot) return;
+    /*
+     * Plan 86 P2 correction (R1/R2) — a dead child holds no append authority.
+     * Revoked BEFORE any restart decision so a backoff respawn cannot inherit
+     * the previous incarnation's trust while it boots.
+     */
+    slot.noticePid = 0;
+    this.writerAuthority.revoke(id);
 
     if (evt.isCrash) {
       slot.lastError =
@@ -873,7 +978,7 @@ export class Supervisor {
       slot.restartAttempt = 0;
       slot.lastError = null;  // fresh spawn — no current error
       slot.child.noteRecycle();
-      slot.child.spawn();
+      this._respawnChild(slot);
       this._pushWorkspaceState(id);
       return;
     }
@@ -886,7 +991,7 @@ export class Supervisor {
       slot.restartAttempt = 0;
       slot.lastError = null;
       slot.child.noteRecycle();
-      slot.child.spawn();
+      this._respawnChild(slot);
       this._pushWorkspaceState(id);
       return;
     }
@@ -908,7 +1013,7 @@ export class Supervisor {
       slot.restartAttempt += 1;
       slot.lastError = null;  // fresh spawn — no current error
       slot.child.noteRestart();
-      slot.child.spawn();
+      this._respawnChild(slot);
       // Plan/69 — the backoff respawn is the `restart` transition: restarts
       // counter already bumped by noteRestart(), state now `running`.
       this._pushWorkspaceState(id);
@@ -960,6 +1065,54 @@ export class Supervisor {
   private _fleetOps(): FleetOps {
     return {
       list: () => this._catalogEntries(),
+      /*
+       * Plan 86 P1 — runtime authority for the history API.
+       *
+       * The supervisor knows the workspace lifecycle and nothing about the Pi's
+       * transcript leaf. It therefore reports the state it actually observes and
+       * leaves the live session id and "Pi is ready" UNKNOWN (null) instead of
+       * guessing them from the newest file. A stopped/crashed/starting slot is
+       * definitively not ready; a running slot is up but its readiness is not
+       * something this process can attest.
+       *
+       * Plan 86 P2 correction (R1) — as of the writer notice, the supervisor
+       * DOES know the live session id and file, but only because the child
+       * itself published them for the incarnation it is currently running. It is
+       * still not derived from disk, and it stays `null` until the first notice
+       * arrives (or after a revoke/exit).
+       */
+      runtime: (id: string): FleetRuntimeSnapshot | null => {
+        const slot = this.children.get(id);
+        if (!slot) return null;
+        const state = slot.child.state;
+        const writer = this.writerAuthority.snapshot(id, state);
+        return {
+          state,
+          session_id: writer.session_id,
+          // `ready` is still NOT something the supervisor can attest. Keep it
+          // honest: definitively false when the slot cannot serve, unknown
+          // (null) once it is up.
+          ready: state === "running" ? null : false,
+          session_file: writer.file,
+          /*
+           * R2 — the custody RANGE the child proved. The history writer requires
+           * `span.before` to equal the identity it last indexed, then parses
+           * exactly [before.size, after.size). Without a range the growth is
+           * rebuilt conservatively.
+           */
+          session_span: writer.span,
+          append_authority: writer.append_trusted,
+        };
+      },
+      /**
+       * Plan 86 P2 correction (R2) — is THIS session's file owned by a live
+       * supported Pi writer right now?
+       *
+       * Deliberately file-based: the history service resolves the file from its
+       * own index (never from the child), and an append is only trusted when the
+       * child's own notice names exactly that file for its current incarnation.
+       */
+      writerOwns: (id: string, file: string): boolean => this._ownsWriterFile(id, file),
       // Plan/68 — persist an unregistered cwd in workspaces.json (NOT
       // daemons.json) so `workspace_start` can boot a folder picked by
       // navigating the host filesystem, without promoting it to a supervised
@@ -1101,6 +1254,35 @@ export function _catalogEntriesForTest(s: Supervisor): FleetEntry[] {
  *  `ensure`/`start` directly without a relay round-trip. */
 export function _fleetOpsForTest(s: Supervisor): FleetOps {
   return (s as unknown as { _fleetOps(): FleetOps })._fleetOps();
+}
+
+/**
+ * Test helper — drive ONE child writer notice through the SAME handler the child
+ * stderr pipe uses (`RpcChild._ingestStderrForTest` → `notice` event →
+ * `_onWriterNotice` → registry). Nothing is short-circuited: this is the
+ * production path minus the OS pipe.
+ */
+export function _ingestWriterNoticeForTest(s: Supervisor, id: string, line: string): void {
+  const slot = _childrenForTest(s).get(id);
+  if (!slot) throw new Error(`no child slot for ${id}`);
+  slot.child._ingestStderrForTest(line);
+}
+
+/** Test helper: the supervisor's child slots (read-only view). */
+export function _childrenForTest(s: Supervisor): Map<string, ChildSlot> {
+  return (s as unknown as { children: Map<string, ChildSlot> }).children;
+}
+
+/** Test helper: the current append-authority snapshot for a workspace. */
+export function _writerAuthorityForTest(
+  s: Supervisor,
+  id: string,
+): ReturnType<WriterAuthorityRegistry["snapshot"]> {
+  const slot = _childrenForTest(s).get(id);
+  return (s as unknown as { writerAuthority: WriterAuthorityRegistry }).writerAuthority.snapshot(
+    id,
+    slot?.child.state ?? "stopped",
+  );
 }
 
 /** Exported for the bin/supervisord entry + tests to know where the

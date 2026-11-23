@@ -5,9 +5,11 @@
 // on first boot). The `runtime` box is VOLATILE: wiped on every boot (#3) so
 // connection/presence never report stale online across restarts.
 //
-//   DURABLE  msgs_<epk>__<roomId>   key = seq (int)        → MessageRecord
+//   DURABLE  msgs_<epk>__<roomId>   stable nonnegative key → MessageRecord
 //   DURABLE  sessions_index         key = <epk>:<roomId>   → SessionIndexRecord
 //   VOLATILE runtime  (wiped@boot)  key = <epk>:<roomId>   → RuntimeRecord
+
+import 'dart:async';
 
 import 'package:mobile/data/transport/epk_encoding.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -21,6 +23,45 @@ const String _kRuntime = 'runtime';
 /// the same open box objects (`Hive.openBox` is idempotent).
 class LocalBoxes {
   static bool _initialized = false;
+
+  // Publication boundaries only; SyncService's existing queue owns writes.
+  static final Map<String, MessageBatchState> _messageBatches = {};
+  MessageBatchState messageBatch(String epk, String room) => _messageBatches
+      .putIfAbsent(msgsBoxName(epk, room), MessageBatchState.new);
+
+  Future<void> messageBatchWrite(
+    String epk,
+    String room,
+    Future<void> Function() write, {
+    required bool Function() isCurrent,
+  }) async {
+    final state = messageBatch(epk, room);
+    state.active = true;
+    var complete = false;
+    try {
+      await write();
+      // Drain Hive's asynchronous BoxEvents before the completion boundary.
+      await Future<void>.value();
+      complete = isCurrent();
+    } finally {
+      state.active = false;
+      state.valid = complete;
+      state.completions.add(complete);
+    }
+  }
+
+  /// Schema 2 decouples signed row.seq from the nonnegative Hive key.
+  /// Legacy rows already store seq: adoption needs no row writes. Flush rows
+  /// before the marker so interrupted adoption is safe to repeat.
+  Future<void> ensureMessageSchema(String epk, String room) async {
+    final metadata = await Hive.openBox<int>('message_schema');
+    final name = msgsBoxName(epk, room);
+    if (metadata.get(name) == 2) return;
+    final box = await msgsBox(epk, room);
+    await box.flush();
+    await metadata.put(name, 2);
+    await metadata.flush();
+  }
 
   /// Open the v2 namespace and the always-on boxes; **wipe `runtime`** before
   /// anything subscribes (#3 / Risk 2). Call once during bootstrap, before
@@ -69,4 +110,12 @@ class LocalBoxes {
       'msgs_${toAppEpk(epk)}__$roomId';
 
   static String sessionKey(String epk, String roomId) => '$epk:$roomId';
+}
+
+class MessageBatchState {
+  bool active = false;
+  bool valid = true;
+  final StreamController<bool> completions = StreamController<bool>.broadcast(
+    sync: true,
+  );
 }

@@ -7,15 +7,15 @@
  * AGENT half goes through `./markdown`, which is the single audited place wire
  * text becomes markup: no raw HTML, protocol-checked links, plain code blocks.
  */
-import { useCallback, useEffect, memo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, memo, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { Icon } from "../core/icons";
 import { Slot } from "../core/slots";
 import { Markdown } from "./markdown";
 import { ModelPicker, type ModelOption, type ThinkingLevelId } from "./model-picker";
-import { SessionViewer } from "../sessions/session-viewer";
+import { SessionViewer, toViewerRows, type ViewerRow } from "../sessions/session-viewer";
+import { readFromLegacyEvents } from "@/lib/remote-pi/history";
 import { SlashMenu, filterSkills, slashQueryOf, type SkillOption } from "./slash-menu";
-import type { WireSessionEvent } from "@/lib/remote-pi/protocol";
 import type { WireSessionInfo } from "@/lib/remote-pi/sessions";
 import { EmptyState, StatusPill } from "../layout/states";
 import { MessageFooter } from "./message-footer";
@@ -295,13 +295,43 @@ export interface TranscriptPanelProps {
   /** When set, the transcript area shows THIS session's history read-only
    *  instead of the live conversation. Reading never changes the live session. */
   viewingSession: {
+    identity?: string;
     session: WireSessionInfo;
-    events: readonly WireSessionEvent[] | null;
+    /**
+     * Plan 86 P3 — the two RAW sources, folded into one row shape HERE.
+     *
+     * The host-native path supplies items with stable `event_id`s plus the
+     * host's PARTIAL flag; the legacy `session_read` path supplies events. Both
+     * are turned into `ViewerRow`s by one memo beside the renderer, so the two
+     * transports cannot drift and the container stays free of that derivation.
+     */
+    items: readonly import("@/lib/remote-pi/history").HistoryItem[] | null;
+    legacyEvents: readonly import("@/lib/remote-pi/protocol").WireSessionEvent[] | null;
     loading: boolean;
     notice: string | null;
     isLive: boolean;
     switchBusy: boolean;
     canSwitch: boolean;
+    /** Painted from cache; the host has not confirmed it yet. */
+    stale: boolean;
+    /** The host reported an older page. */
+    hasOlder: boolean;
+    /** An older page is in flight. */
+    loadingOlder: boolean;
+    /** Resolved palette for the Markdown render cache. */
+    theme: string;
+    onLoadOlder?: (() => void) | undefined;
+    hasNewer?: boolean;
+    loadingNewer?: boolean;
+    pageStart?: number;
+    pageEnd?: number;
+    onLoadNewer?: (() => void) | undefined;
+    onShowHead?: (() => void) | undefined;
+    onLoadBody?:
+      | ((ref: import("@/lib/remote-pi/history").HistoryBodyRef, mode: "preview" | "full") => Promise<
+          import("../sessions/session-viewer").BodyLoad
+        >)
+      | undefined;
   } | null;
   onCloseSessionView: () => void;
   onSwitchToViewedSession: () => void;
@@ -388,6 +418,23 @@ export function TranscriptPanel({
   onSkillsOpen,
   onSkillPick,
 }: TranscriptPanelProps) {
+  /*
+   * Plan 86 P3 — ONE row shape for both transports, derived next to the renderer.
+   *
+   * The host-native path supplies items with stable `event_id`s plus the host's
+   * PARTIAL flag; the legacy read-only path supplies events. Folding them here
+   * (rather than in the container) keeps the derivation memoised on the prop it
+   * depends on, and keeps the container's render free of session-store reads.
+   */
+  const viewingItems = viewingSession?.items ?? null;
+  const viewingLegacy = viewingSession?.legacyEvents ?? null;
+  const viewingSessionId = viewingSession?.session.id ?? "";
+  const viewingRows: readonly ViewerRow[] | null = useMemo(() => {
+    if (viewingItems !== null) return toViewerRows(viewingItems);
+    if (viewingLegacy === null) return null;
+    return toViewerRows(readFromLegacyEvents(viewingSessionId, viewingLegacy).items);
+  }, [viewingItems, viewingLegacy, viewingSessionId]);
+
   const hasTurns = chat.length > 0;
   const userTurns = chat.filter((item) => item.kind === "user").length;
   /* Composer lock, in order of what the user must fix first:
@@ -604,13 +651,26 @@ export function TranscriptPanel({
          * because the viewer paints all of its own surface. */
         <div className={css.trajectorySlot}>
           <SessionViewer
+            key={viewingSession.identity ?? viewingSession.session.id}
             session={viewingSession.session}
-            events={viewingSession.events}
+            rows={viewingRows}
             loading={viewingSession.loading}
             notice={viewingSession.notice}
             isLive={viewingSession.isLive}
             switchBusy={viewingSession.switchBusy}
             canSwitch={viewingSession.canSwitch}
+            stale={viewingSession.stale}
+            hasOlder={viewingSession.hasOlder}
+            loadingOlder={viewingSession.loadingOlder}
+            theme={viewingSession.theme}
+            onLoadOlder={viewingSession.onLoadOlder}
+            hasNewer={viewingSession.hasNewer}
+            loadingNewer={viewingSession.loadingNewer}
+            pageStart={viewingSession.pageStart}
+            pageEnd={viewingSession.pageEnd}
+            onLoadNewer={viewingSession.onLoadNewer}
+            onShowHead={viewingSession.onShowHead}
+            onLoadBody={viewingSession.onLoadBody}
             onClose={onCloseSessionView}
             onSwitch={onSwitchToViewedSession}
           />

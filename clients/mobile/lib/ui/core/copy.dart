@@ -15,6 +15,7 @@ abstract final class Term {
   static const host = '主机';
   static const workspace = '工作区';
   static const session = '会话';
+
   /// 不是「该轮次」—— 那是会议纪要中文，在对话界面里读着生硬。
   static const turn = '这轮对话';
   static const relay = '中继';
@@ -97,11 +98,9 @@ abstract final class PlanCopy {
   static const noDocuments = '未找到计划文档';
   static const noDirectory = '该工作区没有 plan/ 目录，所以还没有计划文档。';
   static const couldNotRead = '无法读取该文档。';
-  static const refused =
-      '主机拒绝读取该文件。只有 plan/、.workflow/ 或 docs/ 下的文档可读。';
+  static const refused = '主机拒绝读取该文件。只有 plan/、.workflow/ 或 docs/ 下的文档可读。';
   static const truncated = '文档超过读取上限，仅显示开头部分。';
-  static const intro =
-      '打开该工作区 plan/ 目录中的计划文档。由主机读取，客户端负责渲染 Markdown。';
+  static const intro = '打开该工作区 plan/ 目录中的计划文档。由主机读取，客户端负责渲染 Markdown。';
 }
 
 /// 文件面板。对应 web 的 `right-rail.tsx` 里的 files 分支。
@@ -117,8 +116,7 @@ abstract final class FilesCopy {
   static const listFailed = '文件系统列表失败';
   static const emptyDir = '该目录为空。';
   static const nothingListed = '尚未列出任何内容。';
-  static const emptyHint =
-      '在上方输入路径（如 ~/projects）后点「列出」。目录可以打开，也可以作为 Pi 工作区启动。';
+  static const emptyHint = '在上方输入路径（如 ~/projects）后点「列出」。目录可以打开，也可以作为 Pi 工作区启动。';
   static const addToCatalog = '加入目录';
   static const startHere = '在此启动 Pi';
   static const removeFromCatalog = '移除';
@@ -266,8 +264,7 @@ abstract final class AppSettingsCopy {
   // 中继归属每个配对自身，不是 App 的全局设置。#34 删掉可编辑的全局输入框后，
   // 这里只剩「新增配对时的预填地址」以及每个配对各自的（只读）地址。
   static const defaultRelay = '新配对默认中继';
-  static const defaultRelayDetail =
-      '只用于新增配对时预填地址。已有配对各自记住自己的中继，改这里不会影响它们。';
+  static const defaultRelayDetail = '只用于新增配对时预填地址。已有配对各自记住自己的中继，改这里不会影响它们。';
   static const defaultRelayReset = '恢复默认';
   static const relayOfPairing = '中继';
   static const relayNotRecorded = '未记录（该配对建立时未保存地址）';
@@ -286,6 +283,7 @@ abstract final class HomeCopy {
   static const nothingHere = '这里还没有内容…';
   static const nothingHint = '当已配对的 Pi 打开一个会话，它会出现在这里。';
   static const noPairings = '还没有配对';
+
   /// 不写「Mac」：Android 用户看到 Mac 会以为配错了平台。主机才重要，不是它的品牌。
   static const noPairingsHint = '扫描主机上显示的二维码即可开始。';
   static const connected = '已连接';
@@ -431,4 +429,74 @@ abstract final class WorkspaceReason {
   /// 主机没声明对应能力时的说明。绝不返回空白面板。
   static const noModelsCapability = '这台主机不支持在此客户端上修改模型配置。';
   static const noSettingsCapability = '这台主机不支持在此客户端上修改设置。';
+}
+
+/// Plan 86 P4 — read-only workspace history.
+///
+/// One place for every sentence this feature shows. The protocol literals
+/// (`building`, `stale`, `body_too_large`, …) stay in code; only the client-
+/// owned sentence lives here. A host never supplies prose to this screen.
+abstract final class HistoryCopy {
+  static const title = '历史会话';
+  static const readOnly = '只读';
+  static const cached = '缓存';
+  static const verifying = '正在校验…';
+  static const building = '主机正在整理这个工作区的历史…';
+  static const buildingLong = '历史索引仍在构建，请稍后重试。';
+  static const indexUnavailable = '主机暂时读不到这个工作区的历史索引，请重试。';
+  static const startFailed = '无法启动这个工作区的 Pi，继续对话已取消；浏览历史不受影响。';
+  static const startingWorkspace = '正在启动这个工作区的 Pi…';
+  static const startingShort = '启动中…';
+  static const waitingShort = '等待确认…';
+  static const unavailable = '这个工作区暂时无法浏览历史。';
+  static const unavailableOldHost = '这台主机的主机版本较旧，历史浏览需要它的 Pi 正在运行；它当前没有运行。';
+  static const unavailableNoRoom = '找不到这个工作区在主机上的房间。';
+  static const offline = '未连接到该机器。';
+  static const timeout = '主机没有响应，请稍后重试。';
+  static const internal = '读取历史时主机出错了，请重试。';
+  static const notFound = '这个会话已不在主机上。';
+  static const stale = '这个会话在主机上已更新，请重新打开。';
+  static const invalidCursor = '历史分页已失效，请重新加载。';
+  static const bodyTooLarge = '这段内容超过主机允许的完整加载大小，只能查看预览。';
+  static const bodyClientBudget = '这段内容超过 App 的加载上限（8 MiB），只能查看预览。';
+  static const bodyMalformed = '这段内容不是有效的 UTF-8，无法完整显示。';
+  static const unsupported = '这台 Pi 不支持读取这段内容。';
+  static const retry = '重试';
+  static const refresh = '刷新';
+  static const empty = '这个工作区还没有历史会话。';
+  static const emptyFiltered = '没有匹配的历史会话。';
+  static const loadOlder = '加载更早的消息';
+  static const loadingOlder = '正在加载更早的消息…';
+  static const loadingBody = '正在加载完整内容…';
+  static const loadFull = '加载完整内容';
+  static const showPreview = '收起为预览';
+  static const imageTooLarge = '图片过大，无法在只读视图内加载。';
+  static const readFailure = '无法显示这段内容。';
+
+  static const continueTitle = '继续对话';
+  static const continueBody =
+      '继续对话会把这个会话切换为该工作区的实时会话。其他已配对的客户端也会看到这次切换，并从这里继续。';
+  static const continueConfirm = '继续对话';
+  static const continueCancel = '取消';
+  static const continuing = '正在继续…';
+  static const continueWatching = '已发送切换，正在等待主机确认目标会话…';
+  static const continueAlreadyCurrent = '这个会话已经是当前会话。';
+  static const continueLocked = '这个会话正在桌面端使用。Remote Pi 不会抢占它。';
+  static const continueNoSdk = '这个工作区没有可用的命令上下文，无法切换。';
+  static const continueFailed = '无法继续这个会话。';
+  static const affectsOtherClients = '会影响其他已配对客户端';
+  static const currentSession = '当前';
+  static const liveRunning = 'Pi 运行中';
+  static const liveStopped = 'Pi 未运行';
+  static const liveUnknown = 'Pi 状态未知';
+  static const readOnlyHint = '只是查看。继续对话前不会启动或切换 Pi。';
+  static const unknownEvent = '（未知事件类型）';
+  static const partialContent = '这条消息被主机截断，这里只显示可用的部分。';
+  static const toolCall = '工具调用';
+  static const toolResult = '工具结果';
+  static const compaction = '上下文已压缩';
+  static const you = '你';
+  static const agent = '助手';
+  static const olderSession = '更早的会话';
+  static const ended = '没有更多消息';
 }

@@ -264,6 +264,14 @@ class ConnectionManager extends Service {
   /// The focused server's channel, when it is online.
   IChannel? get channel => _focused?.channel;
 
+  /// Channel of ONE server, without changing focus.
+  ///
+  /// Plan/86 — the history browser addresses the machine it came from, not
+  /// whichever peer the live chat happens to focus. Requests still go through
+  /// that peer's own WS, so a background peer is never silently swapped.
+  IChannel? channelFor(String epk) =>
+      _connections[toStandardB64(epk)]?.channel;
+
   /// Status of ONE server, online or not. This is the accessor the UI needs
   /// once several servers can be connected at once — `status` only ever
   /// describes whichever one the user is currently looking at.
